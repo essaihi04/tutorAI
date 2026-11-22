@@ -1,0 +1,403 @@
+# Exercice SVT ch. 2 (rôle du muscle strié squelettique), niveau moyen : le sarcomère relâché puis contracté.
+# Ce qu'il entraîne : décrire et comparer un tableau de mesures ligne par ligne (deux valeurs + unité par constat),
+# calculer un raccourcissement relatif, MONTRER à partir des mesures que les filaments gardent leur longueur (bande A =
+# myosine ; actine = (sarcomère − zone H)/2) et en déduire le glissement de l'actine vers le centre, schématiser le
+# sarcomère contracté avec ses longueurs, expliquer le rôle du Ca²⁺ puis celui de l'ATP (cycle d'une tête de myosine).
+# Sources comparées (lecture seulement, rien de copié) :
+# - exploration du cours : cas_types « qcm_sarcomere », « legender », « ordre_etapes », « associer_roles » ; pièges « fait
+#   raccourcir la bande sombre ou les filaments », « confond la zone H et la bande sombre », « dit que la myosine glisse »,
+#   « fixe le Ca²⁺ sur l'actine ou la tropomyosine », « dit que le Ca²⁺ donne l'énergie » ; a_ne_pas_dire (filaments qui
+#   raccourcissent, relâchement par l'hydrolyse, coup de force) ;
+# - vidéos des profs via l'exploration : Elboukhari (comparaison relâché / contracté en quatre réponses), Faress (dessin du
+#   sarcomère), Ouissam (série de restitution, ordre du QCM national 2018 N) ;
+# - nationaux du chapitre (backend/data/exams/svt) : QCM du sarcomère contracté (2017 N, 2020 R, 2022 N, 2024 N), ordre des
+#   étapes (2018 N), associations Ca²⁺ / ATP (2021 N, 2022 N, 2024 R) : on garde les verbes (décrire, comparer, montrer,
+#   expliquer), avec notre propre tableau de mesures (aucun national ne donne ce tableau chiffré) ;
+# - séries en ligne : recherche du 22/11/2026 (moutamadris, alloschool, dreamjob.ma « muscle strié cours exercices
+#   corrigés ») : seuls les extraits des résultats ont pu être lus (moutamadris.ma et dreamjob.ma bloqués par le réseau
+#   de la session) : sarcomère d'environ 2,5 µm, définition entre deux stries Z ; comparaison faite plutôt avec les
+#   exercices des vidéos (exploration) et les nationaux.
+# Valeurs choisies pour coller à la simulation sarcomere.html?vue=contraction : actine 1,0 µm, myosine 1,5 µm, relâché
+# 2,5 µm ; contracté 2,1 µm = réglage contraction 0,8 (L = 2,5 − 0,5 × 0,8 ; I = L − 1,5 ; H = L − 2,0).
+# Pas de recouvrement : svt_ex_ch2_sarcomere_1 (autre agent, facile) fait légender un schéma ; ici on mesure et on raisonne.
+import sys
+sys.path.insert(0, __import__("os").path.dirname(__file__))
+from _commun import rep, qcm_facile, vrai_faux, association, ecrire
+
+D = "/media/simulations/svt/role_muscle_strie_squelettique-tableau/"
+SARC = D + "sarcomere.html?vue=contraction&attente=1"
+CALC = D + "calcium.html?vue=acces&attente=1"
+CYCLE = D + "cycle.html?vue=cycle&attente=1"
+
+
+def fv(x):
+    s = f"{x:.2f}".rstrip("0")
+    if s.endswith("."):
+        s += "0"
+    return s.replace(".", ",")
+
+
+def tableau(titre, legende, entetes, lignes, larg, h_ligne=0.8):
+    """Un tableau dessiné (schema à cadre) : rect + lignes + texte. Une cellule peut tenir sur deux lignes (« \\n »)."""
+    toutes = [entetes] + lignes
+    hs = [h_ligne * max(len(c.split("\n")) for c in r) for r in toutes]
+    l, h = sum(larg), sum(hs)
+    el = [{"f": "rect", "de": [0, 0], "a": [l, h], "couleur": "blanc"}]
+    y = h
+    for k, r in enumerate(toutes):
+        y_bas = y - hs[k]
+        if k < len(toutes) - 1:
+            el.append({"f": "ligne", "pts": [[0, round(y_bas, 3)], [l, round(y_bas, 3)]], "couleur": "blanc" if k == 0 else "faible"})
+        x = 0
+        for j, cel in enumerate(r):
+            morceaux = cel.split("\n")
+            for m, t in enumerate(morceaux):
+                yc = y - hs[k] / 2 + (len(morceaux) - 1) * h_ligne * 0.32 - m * h_ligne * 0.64
+                el.append({"f": "texte", "at": [round(x + larg[j] / 2, 3), round(yc, 3)], "t": t, "taille": "petit",
+                           "couleur": "cyan" if k == 0 or j == 0 else "blanc", "ancre": "centre"})
+            x += larg[j]
+        y = y_bas
+    x = 0
+    for w in larg[:-1]:
+        x += w
+        el.append({"f": "ligne", "pts": [[round(x, 3), 0], [round(x, 3), h]], "couleur": "faible"})
+    return {"type": "schema", "titre": titre, "legende": legende, "cadre": {"l": l, "h": round(h, 3)}, "elements": el}
+
+
+def doc_mesures(rel, con, titre):
+    """rel / con : (sarcomère, bande A, bande I, zone H) en µm."""
+    noms = ["Sarcomère", "Bande sombre (A)", "Bande claire (I)", "Zone H"]
+    return tableau(titre, "Bande claire (I) : les deux demi-bandes claires d'un sarcomère, mises bout à bout. Mesures sur des électronographies.",
+                   ["Longueur (µm)", "relâché", "contracté"],
+                   [[n, fv(a), fv(b)] for n, a, b in zip(noms, rel, con)], [4.4, 2.8, 2.8])
+
+
+REL, CON = (2.5, 1.5, 1.0, 0.5), (2.1, 1.5, 0.6, 0.1)
+REL_B, CON_B = (2.3, 1.5, 0.8, 0.3), (2.0, 1.5, 0.5, 0.0)
+# contrôles : I = L − A ; H = L − 2 × actine ; actine = (L − H)/2 = 1,0 ; contracté = réglage 0,8 de la simulation
+for r in (REL, CON, REL_B, CON_B):
+    assert abs(r[2] - (r[0] - r[1])) < 1e-9 and abs((r[0] - r[3]) / 2 - 1.0) < 1e-9
+assert abs(CON[0] - (2.5 - 0.5 * 0.8)) < 1e-9
+R1 = round((REL[0] - CON[0]) / REL[0] * 100, 1)       # 16,0
+R1B = round((REL_B[0] - CON_B[0]) / REL_B[0] * 100, 1)  # 13,0
+assert R1 == 16.0 and R1B == 13.0
+
+EX = {
+  "id": "svt_ex_ch2_glissement_1", "type": "exercice", "version": 1, "status": "published",
+  "matiere": "svt", "chapitre": "role_muscle_strie_squelettique", "cours": "svt_ch2_role_muscle_strie_squelettique",
+  "titre": "Le sarcomère relâché puis contracté : les filaments glissent", "niveau": "moyen", "duree_min": 30,
+  "origine": "Exercice original écrit pour Moalim (ni sujet du national, ni copie d'un livre).",
+  "competences": ["Décrire et comparer un tableau de mesures", "Montrer que les filaments gardent leur longueur",
+                  "Schématiser un sarcomère contracté", "Expliquer le rôle du Ca²⁺ et de l'ATP dans la contraction"],
+  "enonce": {
+    "intro": "Pour comprendre comment une myofibrille raccourcit, on a mesuré, sur des électronographies de myofibrilles d'un muscle squelettique de grenouille, la longueur d'un sarcomère, de ses bandes et de sa zone H, d'abord à l'état relâché, puis à l'état contracté. Le document 1 donne les résultats.",
+    "intro_dit": "دابا نقراو l'énoncé. على des électronographies ديال des myofibrilles، قسنا الطول ديال le sarcomère، و les bandes ديالو، و la zone H. مرة ف l'état relâché، ومرة ف l'état contracté. le document un فيه les résultats، ب les micromètres.",
+    "figures": [doc_mesures(REL, CON, "Document 1 : longueurs mesurées dans un sarcomère")],
+    "donnees": ["Longueurs en micromètres (µm)",
+                "Un sarcomère va d'une strie Z à la strie Z suivante",
+                "Bande claire (I) du tableau : les deux demi-bandes claires d'un sarcomère"],
+    "questions": [
+      {"id": "1", "texte": "Décrire puis comparer l'évolution des longueurs du sarcomère, des bandes et de la zone H lors du passage de l'état relâché à l'état contracté.",
+       "texte_dit": "Question un : وصف وقارن كيفاش تبدلات les longueurs ديال le sarcomère، و les bandes، و la zone H، ملي دوزنا من l'état relâché ل l'état contracté.",
+       "reponse": {"type": "phrase", "attendu": "Du relâché au contracté : le sarcomère passe de 2,5 à 2,1 µm (il raccourcit de 0,4 µm) ; la bande claire (I) passe de 1,0 à 0,6 µm (elle raccourcit de 0,4 µm) ; la zone H passe de 0,5 à 0,1 µm (elle raccourcit de 0,4 µm) ; la bande sombre (A) reste constante à 1,5 µm. Le sarcomère, la bande claire et la zone H raccourcissent de la même longueur, 0,4 µm, alors que la bande sombre ne change pas."},
+       "clavier": {"aides": ["passe de … à … µm", "raccourcit de 0,4 µm", "reste constante", "bande sombre (A)", "zone H"], "pieges": ["la bande sombre raccourcit", "s'allonge"]},
+       "aides": [
+         {"texte": "Lis le tableau ligne par ligne : pour chaque ligne, la valeur relâchée, puis la valeur contractée.",
+          "dit": "قرا le tableau سطر ب سطر: ف كل سطر، la valeur ف relâché، ومن بعد la valeur ف contracté."},
+         {"texte": "Pour chaque ligne : « passe de … à … µm », puis calcule de combien elle raccourcit (relâché − contracté). Compare enfin ces raccourcissements entre eux.",
+          "dit": "ف كل سطر، قول passe de، à، ب les micromètres. ومن بعد حسب شحال نقص: relâché moins contracté. وف اللخر، قارن هاد les résultats بيناتهم."}],
+       "correction": {"lignes": [
+           {"texte": "1 : sarcomère : 2,5 → 2,1 µm, raccourcit de 0,4 µm", "mot": "le sarcomère passe de deux virgule cinq"},
+           {"texte": "bande claire (I) : 1,0 → 0,6 µm ; zone H : 0,5 → 0,1 µm (− 0,4 µm chacune)", "mot": "la bande claire passe de un"},
+           {"texte": "bande sombre (A) : reste 1,5 µm", "mot": "la bande sombre كتبقى"},
+           {"texte": "trois longueurs raccourcissent de 0,4 µm ; la bande sombre ne change pas", "mot": "نقصو كاملين de zéro virgule quatre"}],
+         "parole": "Question un. le sarcomère passe de deux virgule cinq à deux virgule un micromètres: نقص de zéro virgule quatre micromètre. la bande claire passe de un à zéro virgule six micromètre، و la zone H passe de zéro virgule cinq à zéro virgule un micromètre: حتى هوما نقصو de zéro virgule quatre. أما la bande sombre كتبقى à un virgule cinq micromètre: ما تبدلاتش. إذن le sarcomère، la bande claire و la zone H، نقصو كاملين de zéro virgule quatre micromètre."},
+       "explication": "ex_s1", "facile": "fa_s1"},
+      {"id": "2", "texte": "Calculer, en pourcentage, le raccourcissement relatif r du sarcomère.",
+       "texte_dit": "Question deux : حسب le raccourcissement relatif r ديال le sarcomère، ب le pourcentage.",
+       "reponse": {"type": "valeur", "grandeur": "r", "valeur": R1, "unite": "%", "tolerance": 0.02,
+                   "attendu": "r = (2,5 − 2,1)/2,5 × 100 = 0,4/2,5 × 100 = 16 %"},
+       "clavier": {"aides": ["r = (L relâché − L contracté)/L relâché × 100", "2,5 − 2,1", "%"], "pieges": ["0,4/2,1 × 100", "2,1/2,5 × 100"]},
+       "aides": [
+         {"texte": "Le raccourcissement relatif compare ce que le sarcomère a perdu à sa longueur de départ (relâchée).",
+          "dit": "le raccourcissement relatif كيقارن شحال نقص le sarcomère، مع الطول ديالو ف البداية، يعني relâché."},
+         {"texte": "r = (L relâché − L contracté) / L relâché × 100.",
+          "dit": "r égale L relâché moins L contracté، sur L relâché، fois cent."}],
+       "correction": {"lignes": [
+           {"texte": "2 : r = (L relâché − L contracté)/L relâché × 100", "mot": "r égale L relâché moins L contracté"},
+           {"texte": "r = (2,5 − 2,1)/2,5 × 100 = 0,4/2,5 × 100", "mot": "zéro virgule quatre sur deux virgule cinq"},
+           {"texte": "r = 16 %", "mot": "r égale seize pour cent"}],
+         "parole": "Question deux. r égale L relâché moins L contracté، sur L relâché، fois cent. deux virgule cinq moins deux virgule un، égale zéro virgule quatre. donc zéro virgule quatre sur deux virgule cinq، fois cent. r égale seize pour cent: le sarcomère نقص de seize pour cent."},
+       "explication": "ex_s2", "facile": "fa_s2"},
+      {"id": "3", "texte": "Montrer, à partir du tableau, que les filaments de myosine et d'actine gardent leur longueur pendant la contraction, puis en déduire comment le sarcomère raccourcit.",
+       "texte_dit": "Question trois : بين، من le tableau، بلي les filaments de myosine و d'actine كيبقاو ب نفس الطول ف la contraction، ومن بعد استنتج كيفاش le sarcomère كيقصر.",
+       "reponse": {"type": "phrase", "attendu": "La bande sombre (A) correspond à toute la longueur d'un filament de myosine : elle reste 1,5 µm, donc la myosine garde sa longueur. Un filament d'actine va d'une strie Z au bord de la zone H : sa longueur vaut (sarcomère − zone H)/2 = (2,5 − 0,5)/2 = 1,0 µm à l'état relâché et (2,1 − 0,1)/2 = 1,0 µm à l'état contracté : l'actine garde aussi sa longueur. Les filaments ne raccourcissent donc pas : les filaments d'actine glissent entre les filaments de myosine, vers le centre du sarcomère, et entraînent les stries Z, qui se rapprochent."},
+       "clavier": {"aides": ["bande sombre = longueur de la myosine", "(sarcomère − zone H)/2", "1,0 µm", "glissent", "vers le centre du sarcomère"], "pieges": ["la myosine glisse", "les filaments raccourcissent"]},
+       "aides": [
+         {"texte": "La bande sombre (A), c'est toute la longueur de la myosine. Et l'actine va de la strie Z jusqu'au bord de la zone H, des deux côtés.",
+          "dit": "la bande sombre هي الطول كامل ديال la myosine. و l'actine كتمشي من la strie Z حتى ل le bord ديال la zone H، من جوج الجهات."},
+         {"texte": "Longueur d'un filament d'actine = (sarcomère − zone H)/2 : calcule-la dans les deux états et compare.",
+          "dit": "الطول ديال filament d'actine égale le sarcomère moins la zone H، sur deux. حسبو ف جوج الحالات، وقارن."}],
+       "correction": {"lignes": [
+           {"texte": "3 : bande sombre = myosine : 1,5 µm dans les deux états → la myosine garde sa longueur", "mot": "la bande sombre هي الطول ديال la myosine"},
+           {"texte": "actine = (2,5 − 0,5)/2 = 1,0 µm (relâché) ; (2,1 − 0,1)/2 = 1,0 µm (contracté)", "mot": "deux virgule cinq moins zéro virgule cinq"},
+           {"texte": "les filaments ne raccourcissent pas : l'actine glisse entre la myosine, vers le centre", "mot": "l'actine كتزلق بين la myosine"},
+           {"texte": "les stries Z se rapprochent : le sarcomère raccourcit", "mot": "les stries Z كيتقربو"}],
+         "parole": "Question trois. la bande sombre هي الطول ديال la myosine: كتبقى à un virgule cinq micromètre، إذن la myosine ما قصراتش. و l'actine: deux virgule cinq moins zéro virgule cinq، sur deux، égale un micromètre ف relâché. et deux virgule un moins zéro virgule un، sur deux، égale un micromètre ف contracté. حتى l'actine ما قصراتش. إذن les filaments ما كيقصروش: l'actine كتزلق بين la myosine، نحو الوسط ديال le sarcomère. وكتجر معاها les stries Z: les stries Z كيتقربو، و le sarcomère كيقصر."},
+       "explication": "ex_s3", "facile": "fa_s3"},
+      {"id": "4", "texte": "Réaliser un schéma légendé du sarcomère à l'état contracté du document 1 (stries Z, filaments d'actine et de myosine, bande claire, bande sombre, zone H), en indiquant les longueurs.",
+       "texte_dit": "Question quatre : رسم واحد le schéma فيه les légendes، ديال le sarcomère ف l'état contracté ديال le document un، مع les longueurs.",
+       "reponse": {"type": "phrase", "attendu": "Schéma : deux stries Z distantes de 2,1 µm (accolade « sarcomère ») ; au centre, un filament de myosine de 1,5 µm (la bande sombre A = 1,5 µm) ; de chaque strie Z part un filament d'actine de 1,0 µm vers le centre, qui s'engage entre la myosine ; au centre, entre les extrémités des filaments d'actine, la zone H de 0,1 µm (myosine seule) ; de part et d'autre de chaque strie Z, une demi-bande claire de 0,3 µm (actine seule ; bande claire I = 0,6 µm)."},
+       "clavier": {"aides": ["strie Z", "2,1 µm", "myosine 1,5 µm", "actine 1,0 µm", "zone H 0,1 µm", "demi-bande claire 0,3 µm"], "pieges": ["bande sombre 1,1 µm", "zone H 0,5 µm"]},
+       "aides": [
+         {"texte": "Commence par les deux stries Z, à 2,1 µm l'une de l'autre, puis place la myosine (1,5 µm) au centre, puis l'actine (1,0 µm) accrochée à chaque strie Z.",
+          "dit": "بدا ب les deux stries Z، l'écart est de deux virgule un micromètres. ومن بعد حط la myosine ف الوسط، elle mesure un virgule cinq micromètre، ومن بعد l'actine، elle mesure un micromètre، لاصقة ف كل strie Z."},
+         {"texte": "Puis les bandes : bande sombre = toute la myosine ; zone H = la myosine seule au centre ; demi-bande claire = l'actine seule, près de chaque strie Z. Écris chaque longueur.",
+          "dit": "ومن بعد les bandes: la bande sombre هي la myosine كاملة. la zone H هي la myosine بوحدها ف الوسط. و la demi-bande claire هي l'actine بوحدها، حدا كل strie Z. وكتب كل longueur."}],
+       "correction": {"lignes": [
+           {"texte": "4 : deux stries Z à 2,1 µm (accolade : sarcomère)", "mot": "l'écart est de deux virgule un"},
+           {"texte": "myosine 1,5 µm au centre = bande sombre (A) ; actine 1,0 µm sur chaque strie Z", "mot": "la myosine ف الوسط"},
+           {"texte": "zone H = 0,1 µm (myosine seule)", "mot": "la zone H de zéro virgule un"},
+           {"texte": "demi-bande claire = 0,3 µm de chaque côté d'une strie Z (I = 0,6 µm)", "mot": "zéro virgule trois micromètre"}],
+         "parole": "Question quatre. كترسم les deux stries Z، l'écart est de deux virgule un micromètres، وفوقهم l'accolade: le sarcomère. حط la myosine ف الوسط، elle mesure un virgule cinq micromètre: هادي هي la bande sombre. من كل strie Z، كيخرج filament d'actine d'un micromètre، وكيدخل بين la myosine. ف الوسط كتبقى la zone H de zéro virgule un micromètre، فيها غير la myosine. وحدا كل strie Z، demi-bande claire de zéro virgule trois micromètre: l'actine بوحدها."},
+       "explication": "ex_s4", "facile": "fa_s4"},
+      {"id": "5", "texte": "Expliquer le rôle des ions Ca²⁺ dans le déclenchement de ce glissement.",
+       "texte_dit": "Question cinq : شرح الدور ديال les ions calcium، ف البداية ديال هاد le glissement.",
+       "reponse": {"type": "phrase", "attendu": "L'excitation de la fibre libère les ions Ca²⁺ stockés dans le réticulum sarcoplasmique. Les ions Ca²⁺ se fixent sur la troponine ; la tropomyosine se déplace et libère les sites de fixation de l'actine. Les têtes de myosine peuvent alors se fixer sur l'actine (complexe actomyosine). Le Ca²⁺ autorise la fixation, il ne fournit pas l'énergie."},
+       "clavier": {"aides": ["réticulum sarcoplasmique", "troponine", "tropomyosine", "sites de fixation de l'actine", "complexe actomyosine"], "pieges": ["le Ca²⁺ se fixe sur la tropomyosine", "le Ca²⁺ fournit l'énergie"]},
+       "aides": [
+         {"texte": "Au repos, qu'est-ce qui empêche les têtes de myosine de se fixer sur l'actine ? Et où sont les ions Ca²⁺ ?",
+          "dit": "ف الراحة، شنو اللي كيمنع les têtes de myosine يتشدو ف l'actine؟ وفين كاينين les ions calcium؟"},
+         {"texte": "Suis la chaîne : excitation → libération du Ca²⁺ → fixation sur … → déplacement de … → sites libérés → complexe actomyosine.",
+          "dit": "تبع السلسلة: l'excitation، من بعد le calcium كيتطلق، كيتلصق على واحد la protéine، واحد la protéine أخرى كتزاح، les sites كيتحررو، و le complexe actomyosine كيتكون."}],
+       "correction": {"lignes": [
+           {"texte": "5 : l'excitation libère les ions Ca²⁺ du réticulum sarcoplasmique", "mot": "l'excitation كتطلق les ions calcium"},
+           {"texte": "Ca²⁺ fixé sur la troponine → la tropomyosine se déplace → sites de l'actine libérés", "mot": "كيتلصقو على la troponine"},
+           {"texte": "les têtes de myosine se fixent sur l'actine : complexe actomyosine", "mot": "le complexe actomyosine"},
+           {"texte": "le Ca²⁺ autorise ; il ne fournit pas l'énergie", "mot": "le calcium autorise"}],
+         "parole": "Question cinq. l'excitation كتطلق les ions calcium من le réticulum sarcoplasmique. les ions calcium كيتلصقو على la troponine. إذن la tropomyosine كتزاح، و les sites de fixation ديال l'actine كيتحررو. دابا les têtes de myosine يقدرو يتشدو ف l'actine: هادا هو le complexe actomyosine. رد البال: le calcium autorise، ولكن ما كيعطيش l'énergie."},
+       "explication": "ex_s5", "facile": "fa_s5"},
+      {"id": "6", "texte": "Expliquer le double rôle de l'ATP dans le glissement des filaments d'actine, au cours du cycle d'une tête de myosine.",
+       "texte_dit": "Question six : شرح جوج الأدوار ديال l'A T P ف le glissement ديال l'actine، ف le cycle ديال la tête de myosine.",
+       "reponse": {"type": "phrase", "attendu": "1) La tête de myosine, fixée à l'actine, hydrolyse son ATP (ATP + H₂O → ADP + Pi + énergie) : c'est une ATPase. L'énergie libérée fait tourner (pivoter) la tête, qui tire le filament d'actine d'un cran vers le centre du sarcomère. 2) La fixation d'un nouvel ATP sur la tête la détache de l'actine ; la tête revient et se fixe plus loin : le cycle recommence. Sans ATP, la tête reste fixée à l'actine."},
+       "clavier": {"aides": ["hydrolyse de l'ATP", "ATP + H₂O → ADP + Pi + énergie", "rotation de la tête", "nouvel ATP", "détachement"], "pieges": ["le Ca²⁺ fait tourner la tête", "l'hydrolyse détache la tête"]},
+       "aides": [
+         {"texte": "L'ATP intervient deux fois dans un tour de la tête : une fois quand il est hydrolysé, une fois quand un nouvel ATP arrive.",
+          "dit": "l'A T P a deux rôles، ف كل دورة ديال la tête: مرة ملي كيوقع ليه l'hydrolyse، ومرة ملي كيجي A T P جديد."},
+         {"texte": "Hydrolyse → énergie → rotation de la tête → l'actine avance d'un cran. Nouvel ATP fixé → la tête se détache.",
+          "dit": "l'hydrolyse كتعطي l'énergie، l'énergie كتدور la tête، و l'actine كتزيد لقدام. و A T P جديد كيلصق، و la tête كتطلق l'actine."}],
+       "correction": {"lignes": [
+           {"texte": "6 : la tête (ATPase) hydrolyse l'ATP : ATP + H₂O → ADP + Pi + énergie", "mot": "A T P plus H deux O donne A D P plus P i plus énergie"},
+           {"texte": "l'énergie fait tourner la tête, qui tire l'actine vers le centre du sarcomère", "mot": "هاد l'énergie كتدور la tête"},
+           {"texte": "un nouvel ATP se fixe : la tête se détache, puis se fixe plus loin", "mot": "A T P جديد كيلصق"},
+           {"texte": "sans ATP, la tête reste fixée à l'actine", "mot": "بلا A T P"}],
+         "parole": "Question six. الدور اللول: la tête de myosine، وهي لاصقة ف l'actine، كتدير l'hydrolyse ديال l'A T P: A T P plus H deux O donne A D P plus P i plus énergie. la tête est une A T P ase. هاد l'énergie كتدور la tête، و la tête كتجر l'actine نحو الوسط ديال le sarcomère. الدور الثاني: A T P جديد كيلصق على la tête، و la tête كتطلق l'actine، وكتتشد شوية لقدام. بلا A T P، la tête كتبقى لاصقة ف l'actine."},
+       "explication": "ex_s6", "facile": "fa_s6"}
+    ]
+  },
+  "explication": {"activities": [{"id": "explication", "title": "Explication animée", "slides": [
+    {"id": "ex_s1", "slide_type": "simulation", "title": "Question 1 : du relâché au contracté, ligne par ligne",
+     "screen_content": {"lead": "Trois longueurs raccourcissent de 0,4 µm ; la bande sombre reste 1,5 µm."},
+     "visual": {"kind": "simulation", "url": SARC, "caption": "Le sarcomère relâché (en haut, en gris) et le sarcomère du document, contracté (en bas)"},
+     "speech_text": {"mixed": "شوف الفوق: le sarcomère relâché، deux virgule cinq micromètres. دابا كيتقلص بحال le document. التحت: le sarcomère contracté، deux virgule un micromètres. شوف les stries Z: كيتقربو. la bande claire كتقصر، و la zone H كتقصر حتى هي، ولات صغيرة بزاف. ولكن la bande sombre كتبقى à un virgule cinq micromètre. شوف le tableau: ف كل سطر، الطول relâché، والطول contracté. le sarcomère، la bande claire و la zone H، نقصو كاملين de zéro virgule quatre micromètre."},
+     "concentration": {"demarrer": "reset",
+       "centre": [{"texte": "sarcomère : 2,5 → 2,1 µm", "mot": "deux virgule un micromètres"},
+                  {"texte": "bande I : 1,0 → 0,6 µm ; zone H : 0,5 → 0,1 µm", "mot": "و la zone H كتقصر"},
+                  {"texte": "bande A : 1,5 µm, constante", "mot": "ولكن la bande sombre كتبقى"},
+                  {"texte": "même raccourcissement : 0,4 µm", "mot": "نقصو كاملين de zéro virgule quatre"}],
+       "pointage": [{"mot": "شوف الفوق", "commande": "set_parameters", "parametres": {"contraction": 0.8}},
+                    {"mot": "شوف الفوق", "commande": "set_time", "parametres": {"time_s": 5.0}},
+                    {"mot": "le sarcomère relâché", "repere": "etat_relache"},
+                    {"mot": "دابا كيتقلص", "commande": "resume"},
+                    {"mot": "التحت: le sarcomère contracté", "repere": "sarcomere"},
+                    {"mot": "شوف les stries Z", "repere": "strie_z_droite"},
+                    {"mot": "la bande claire كتقصر", "repere": "bande_claire"},
+                    {"mot": "و la zone H كتقصر", "repere": "zone_h"},
+                    {"mot": "ولكن la bande sombre كتبقى", "repere": "bande_sombre"},
+                    {"mot": "شوف le tableau", "repere": "tableau"}]}},
+    {"id": "ex_s2", "slide_type": "simulation", "title": "Question 2 : le raccourcissement relatif",
+     "screen_content": {"lead": "Ce qui est perdu, rapporté à la longueur de départ : r = 0,4/2,5 × 100 = 16 %."},
+     "visual": {"kind": "simulation", "url": SARC, "caption": "La règle en micromètres sous le sarcomère"},
+     "speech_text": {"mixed": "شوف la règle، ب les micromètres. le sarcomère relâché: deux virgule cinq micromètres. le sarcomère contracté: deux virgule un micromètres. نقص de zéro virgule quatre micromètre. le raccourcissement relatif هو هاد الفرق، على الطول ديال البداية، fois cent. zéro virgule quatre sur deux virgule cinq، fois cent، égale seize pour cent."},
+     "concentration": {"demarrer": "reset",
+       "centre": [{"texte": "2,5 − 2,1 = 0,4 µm", "mot": "نقص de zéro virgule quatre"},
+                  {"texte": "r = (L relâché − L contracté)/L relâché × 100", "mot": "le raccourcissement relatif هو"},
+                  {"texte": "r = 0,4/2,5 × 100 = 16 %", "mot": "égale seize pour cent"}],
+       "pointage": [{"mot": "شوف la règle", "commande": "set_parameters", "parametres": {"contraction": 0.8}},
+                    {"mot": "شوف la règle", "repere": "regle"},
+                    {"mot": "le sarcomère relâché: deux", "repere": "etat_relache"},
+                    {"mot": "le sarcomère contracté: deux", "repere": "sarcomere"}]}},
+    {"id": "ex_s3", "slide_type": "simulation", "title": "Question 3 : les filaments gardent leur longueur, ils glissent",
+     "screen_content": {"lead": "Myosine = bande sombre = 1,5 µm ; actine = (sarcomère − zone H)/2 = 1,0 µm dans les deux états."},
+     "visual": {"kind": "simulation", "url": SARC, "caption": "L'actine glisse vers le centre ; la myosine ne bouge pas"},
+     "speech_text": {"mixed": "la bande sombre هي الطول كامل ديال la myosine. هي كتبقى à un virgule cinq micromètre، إذن la myosine ما قصراتش. و l'actine؟ كتمشي من la strie Z حتى ل le bord ديال la zone H. الطول ديالها: le sarcomère moins la zone H، sur deux. ف relâché، deux virgule cinq moins zéro virgule cinq، sur deux، égale un micromètre. ف contracté، deux virgule un moins zéro virgule un، sur deux، égale un micromètre. نفس الطول. شوف دابا: l'actine كتزلق بين la myosine، نحو الوسط، وكتجر معاها les stries Z. la myosine ما كتتحركش."},
+     "concentration": {"demarrer": "reset",
+       "centre": [{"texte": "myosine = bande A = 1,5 µm (constante)", "mot": "إذن la myosine ما قصراتش"},
+                  {"texte": "actine = (2,5 − 0,5)/2 = 1,0 µm", "mot": "ف relâché، deux virgule cinq"},
+                  {"texte": "actine = (2,1 − 0,1)/2 = 1,0 µm", "mot": "ف contracté، deux virgule un"},
+                  {"texte": "l'actine glisse vers le centre du sarcomère", "mot": "l'actine كتزلق بين la myosine"}],
+       "pointage": [{"mot": "la bande sombre هي", "commande": "set_parameters", "parametres": {"contraction": 0.8}},
+                    {"mot": "la bande sombre هي", "repere": "bande_sombre"},
+                    {"mot": "و l'actine؟", "repere": "actine"},
+                    {"mot": "le bord ديال la zone H", "repere": "zone_h"},
+                    {"mot": "شوف دابا", "commande": "set_time", "parametres": {"time_s": 5.0}},
+                    {"mot": "l'actine كتزلق بين la myosine", "commande": "resume"},
+                    {"mot": "وكتجر معاها les stries Z", "repere": "strie_z_droite"},
+                    {"mot": "la myosine ما كتتحركش", "repere": "myosine"}]}},
+    {"id": "ex_s4", "slide_type": "simulation", "title": "Question 4 : dessiner le sarcomère contracté",
+     "screen_content": {"lead": "Stries Z à 2,1 µm ; myosine 1,5 µm ; actine 1,0 µm ; zone H 0,1 µm ; demi-bande claire 0,3 µm."},
+     "visual": {"kind": "simulation", "url": SARC, "caption": "Le modèle du schéma : le sarcomère contracté et ses cotes"},
+     "speech_text": {"mixed": "هاد le sarcomère contracté هو اللي غادي ترسم. بدا ب les deux stries Z، l'écart est de deux virgule un micromètres. ف الوسط، la myosine، elle mesure un virgule cinq micromètre: هادي هي la bande sombre. من كل strie Z، filament d'actine d'un micromètre، داخل بين la myosine. ف الوسط، la zone H: zéro virgule un micromètre، فيها غير la myosine. وحدا كل strie Z، demi-bande claire: deux virgule un moins un virgule cinq، sur deux، égale zéro virgule trois micromètre. ما تنساش l'accolade ديال le sarcomère، من strie Z ل strie Z."},
+     "concentration": {"demarrer": "reset",
+       "centre": [{"texte": "stries Z à 2,1 µm", "mot": "l'écart est de deux virgule un"},
+                  {"texte": "myosine 1,5 µm = bande A ; actine 1,0 µm", "mot": "هادي هي la bande sombre"},
+                  {"texte": "zone H = 0,1 µm", "mot": "la zone H: zéro virgule un"},
+                  {"texte": "demi-bande I = (2,1 − 1,5)/2 = 0,3 µm", "mot": "égale zéro virgule trois micromètre"}],
+       "pointage": [{"mot": "هاد le sarcomère contracté", "commande": "set_parameters", "parametres": {"contraction": 0.8}},
+                    {"mot": "بدا ب les deux stries Z", "repere": "strie_z_gauche"},
+                    {"mot": "ف الوسط، la myosine", "repere": "myosine"},
+                    {"mot": "من كل strie Z، filament", "repere": "actine"},
+                    {"mot": "la zone H: zéro virgule un", "repere": "zone_h"},
+                    {"mot": "demi-bande claire", "repere": "bande_claire"},
+                    {"mot": "l'accolade ديال le sarcomère", "repere": "sarcomere"}]}},
+    {"id": "ex_s5", "slide_type": "simulation", "title": "Question 5 : le Ca²⁺ ouvre l'accès aux sites de l'actine",
+     "screen_content": {"lead": "Excitation → Ca²⁺ libéré → troponine → la tropomyosine se déplace → sites libérés."},
+     "visual": {"kind": "simulation", "url": CALC, "caption": "Le réticulum sarcoplasmique, le Ca²⁺, la troponine et la tropomyosine"},
+     "speech_text": {"mixed": "ف الراحة، la tropomyosine كتغطي les sites ديال l'actine: les têtes de myosine ما يقدروش يتشدو. l'excitation كتوصل. le réticulum sarcoplasmique كيطلق les ions calcium. les ions calcium كيتلصقو على la troponine. إذن la tropomyosine كتزاح، و les sites ديال l'actine كيتحررو. دابا les têtes يقدرو يتشدو: le complexe actomyosine. le calcium autorise، ولكن ما كيعطيش l'énergie."},
+     "concentration": {"demarrer": "reset",
+       "centre": [{"texte": "Ca²⁺ libéré par le réticulum sarcoplasmique", "mot": "كيطلق les ions calcium"},
+                  {"texte": "Ca²⁺ fixé sur la troponine", "mot": "كيتلصقو على la troponine"},
+                  {"texte": "tropomyosine déplacée : sites libérés", "mot": "إذن la tropomyosine كتزاح"},
+                  {"texte": "le Ca²⁺ autorise, l'ATP donne l'énergie", "mot": "le calcium autorise"}],
+       "pointage": [{"mot": "ف الراحة، la tropomyosine", "commande": "play_until", "parametres": {"moment": "repos_sites_caches"}},
+                    {"mot": "ف الراحة، la tropomyosine", "repere": "tropomyosine"},
+                    {"mot": "l'excitation كتوصل", "commande": "play_until", "parametres": {"moment": "excitation"}},
+                    {"mot": "le réticulum sarcoplasmique كيطلق", "commande": "play_until", "parametres": {"moment": "ca_libere"}},
+                    {"mot": "le réticulum sarcoplasmique كيطلق", "repere": "reticulum"},
+                    {"mot": "كيتلصقو على la troponine", "commande": "play_until", "parametres": {"moment": "ca_sur_troponine"}},
+                    {"mot": "كيتلصقو على la troponine", "repere": "troponine"},
+                    {"mot": "إذن la tropomyosine كتزاح", "commande": "play_until", "parametres": {"moment": "sites_liberes"}},
+                    {"mot": "و les sites ديال l'actine كيتحررو", "repere": "site_actine"}]}},
+    {"id": "ex_s6", "slide_type": "simulation", "title": "Question 6 : l'ATP fait tourner la tête, puis la détache",
+     "screen_content": {"lead": "Hydrolyse de l'ATP → rotation de la tête → l'actine avance ; nouvel ATP → détachement."},
+     "visual": {"kind": "simulation", "url": CYCLE, "caption": "Un tour de la tête de myosine"},
+     "speech_text": {"mixed": "la tête de myosine هازة A T P. كتلصق ف l'actine: le complexe actomyosine. دابا l'A T P كيوقع ليه l'hydrolyse: A T P plus H deux O donne A D P plus P i plus énergie. هاد l'énergie كتدور la tête، و la tête كتجر l'actine نحو الوسط ديال le sarcomère. هادا هو الدور اللول. من بعد، A T P جديد كيلصق على la tête، و la tête كتطلق l'actine: هادا هو الدور الثاني. وكتعاود الدورة، شوية لقدام. بلا A T P، la tête كتبقى لاصقة."},
+     "concentration": {"demarrer": "reset",
+       "centre": [{"texte": "ATP + H₂O → ADP + Pi + énergie", "mot": "A T P plus H deux O"},
+                  {"texte": "rôle 1 : énergie de la rotation de la tête", "mot": "هادا هو الدور اللول"},
+                  {"texte": "rôle 2 : un nouvel ATP détache la tête", "mot": "هادا هو الدور الثاني"}],
+       "pointage": [{"mot": "la tête de myosine هازة", "commande": "play_until", "parametres": {"moment": "tete_en_attente"}},
+                    {"mot": "la tête de myosine هازة", "repere": "tete_myosine"},
+                    {"mot": "كتلصق ف l'actine", "commande": "play_until", "parametres": {"moment": "attachement"}},
+                    {"mot": "دابا l'A T P كيوقع", "commande": "play_until", "parametres": {"moment": "hydrolyse_atp"}},
+                    {"mot": "دابا l'A T P كيوقع", "repere": "adp_pi"},
+                    {"mot": "هاد l'énergie كتدور la tête", "commande": "play_until", "parametres": {"moment": "rotation"}},
+                    {"mot": "و la tête كتجر l'actine", "commande": "play_until", "parametres": {"moment": "glissement"}},
+                    {"mot": "و la tête كتجر l'actine", "repere": "sens_glissement"},
+                    {"mot": "A T P جديد كيلصق", "commande": "play_until", "parametres": {"moment": "nouvel_atp"}},
+                    {"mot": "و la tête كتطلق l'actine", "commande": "play_until", "parametres": {"moment": "detachement"}},
+                    {"mot": "وكتعاود الدورة", "commande": "play_until", "parametres": {"moment": "tour_suivant"}}]}}
+  ]}]},
+  "facile": {"activities": [{"id": "facile", "title": "Plus facile, pour s'entraîner", "slides": [
+    vrai_faux("fa_s1", "Plus facile : ce qui change, ce qui ne change pas", "Vrai ou faux, d'après le tableau du document 1.",
+      "نتمرنو: قول واش صحيح ولا خطأ، حسب le tableau.",
+      [("Le sarcomère passe de 2,5 µm à 2,1 µm.", True, "Vrai : il raccourcit de 0,4 µm."),
+       ("La bande sombre (A) raccourcit pendant la contraction.", False, "Faux : elle reste à 1,5 µm, la longueur de la myosine."),
+       ("La zone H raccourcit de 0,4 µm, comme la bande claire.", True, "Vrai : 0,5 − 0,1 = 0,4 µm et 1,0 − 0,6 = 0,4 µm."),
+       ("La bande claire (I) s'allonge pendant la contraction.", False, "Faux : elle passe de 1,0 à 0,6 µm, elle raccourcit.")]),
+    qcm_facile("fa_s2", "Plus facile : la relation du raccourcissement relatif", "سؤال ساهل: اختار la relation.",
+      "Le raccourcissement relatif du sarcomère s'écrit…", ["r = 2,1/2,5 × 100", "r = (2,5 − 2,1)/2,5 × 100", "r = (2,5 − 2,1)/2,1 × 100"], 1, {
+        "1": {"juste": rep("برافو! ما نقص، على الطول ديال البداية، fois cent. r égale seize pour cent.", "Juste : r = 0,4/2,5 × 100 = 16 %.")},
+        "0": {"1": rep("ما تقلقش. هاد القسمة كتعطي شحال بقا، ماشي شحال نقص. عاود اختار.", "Ce rapport donne ce qui reste, pas ce qui est perdu. Réessaie."),
+              "2": rep("الجواب: r égale deux virgule cinq moins deux virgule un، sur deux virgule cinq، fois cent. r égale seize pour cent.", "Réponse : r = (2,5 − 2,1)/2,5 × 100 = 16 %.")},
+        "2": {"1": rep("قريب! ولكن كنقسمو على الطول ديال البداية، يعني relâché. عاود اختار.", "Presque : on divise par la longueur de départ (relâchée). Réessaie."),
+              "2": rep("الجواب: كنقسمو sur deux virgule cinq، الطول relâché، et non sur deux virgule un.", "Réponse : on divise par 2,5 µm, la longueur relâchée.")}},
+      "Le raccourcissement relatif du sarcomère s'écrit ?"),
+    qcm_facile("fa_s3", "Plus facile : que dit la bande sombre ?", "سؤال ساهل على la bande sombre.",
+      "La bande sombre (A) reste à 1,5 µm. On en déduit que…", ["l'actine raccourcit", "la myosine raccourcit", "la myosine garde sa longueur"], 2, {
+        "2": {"juste": rep("برافو! la bande sombre هي الطول ديال la myosine: ما تبدلاتش، إذن la myosine ما قصراتش.", "Juste : bande sombre = longueur de la myosine, constante.")},
+        "0": {"1": rep("ما تقلقش. la bande sombre كتبين الطول ديال شمن filament؟ عاود اختار.", "La bande sombre mesure quel filament ? Réessaie."),
+              "2": rep("الجواب هو la myosine كتبقى ب نفس الطول. la bande sombre هي la myosine، و l'actine حتى هي ما كتقصرش.", "Réponse : la myosine garde sa longueur (et l'actine aussi).")},
+        "1": {"1": rep("لا، la bande sombre ما تبدلاتش. يلا la myosine قصرات، la bande sombre غادي تقصر. عاود اختار.", "Si la myosine raccourcissait, la bande sombre raccourcirait. Réessaie."),
+              "2": rep("الجواب هو la myosine كتبقى ب نفس الطول، حيت la bande sombre ثابتة.", "Réponse : la myosine garde sa longueur.")}},
+      "La bande sombre reste à un virgule cinq micromètre. On en déduit que ?"),
+    association("fa_s4", "Plus facile : chaque bande et ce qu'elle contient", "Relie chaque partie du sarcomère à ce qu'elle contient.",
+      "سؤال ساهل باش ترسم مزيان: ربط كل partie مع شنو فيها.", "Relie chaque partie à son contenu.",
+      [("1", "Bande sombre (A)"), ("2", "Demi-bande claire (I)"), ("3", "Zone H")],
+      [("a", "Toute la longueur de la myosine"), ("b", "L'actine seule, près d'une strie Z"), ("c", "La myosine seule, au centre")],
+      {"1": "a", "2": "b", "3": "c"},
+      {"1-a": (True, "Oui : la bande sombre, c'est toute la myosine (1,5 µm).", "برافو: la bande sombre هي la myosine كاملة."),
+       "1-b": (False, "Non : près de la strie Z, sans myosine, c'est clair, pas sombre.", "لا، حدا la strie Z بلا myosine، كيبان clair ماشي sombre."),
+       "1-c": (False, "Non : la myosine seule n'est que le centre de la bande sombre.", "لا، la myosine بوحدها هي غير الوسط ديال la bande sombre."),
+       "2-a": (False, "Non : la bande claire ne contient pas de myosine.", "لا، la bande claire ما فيهاش la myosine."),
+       "2-b": (True, "Oui : la demi-bande claire, c'est l'actine seule, de part et d'autre de la strie Z.", "برافو: la bande claire هي l'actine بوحدها، حدا la strie Z."),
+       "2-c": (False, "Non : au centre, c'est la zone H, pas la bande claire.", "لا، ف الوسط كاينة la zone H، ماشي la bande claire."),
+       "3-a": (False, "Non : la zone H n'est qu'une partie de la bande sombre.", "لا، la zone H غير جزء من la bande sombre."),
+       "3-b": (False, "Non : la zone H est au centre, là où l'actine n'arrive pas.", "لا، la zone H ف الوسط، فين ما كتوصلش l'actine."),
+       "3-c": (True, "Oui : la zone H, c'est la myosine seule, au centre.", "برافو: la zone H هي la myosine بوحدها ف الوسط.")},
+      ("(1 ; a) (2 ; b) (3 ; c) : sombre = myosine ; clair = actine seule ; zone H = myosine seule.",
+       "la bande sombre هي la myosine، la bande claire هي l'actine بوحدها، و la zone H هي la myosine بوحدها.")),
+    qcm_facile("fa_s5", "Plus facile : où se fixe le Ca²⁺ ?", "سؤال ساهل على le calcium.",
+      "Les ions Ca²⁺ libérés se fixent sur…", ["la tropomyosine", "la troponine", "l'actine"], 1, {
+        "1": {"juste": rep("برافو! le calcium كيلصق على la troponine، و la tropomyosine كتزاح.", "Juste : le Ca²⁺ se fixe sur la troponine.")},
+        "0": {"1": rep("قريب! la tropomyosine هي اللي كتزاح، ولكن le calcium ماشي عليها كيلصق. عاود اختار.", "La tropomyosine se déplace, mais le Ca²⁺ ne se fixe pas sur elle. Réessaie."),
+              "2": rep("الجواب هو la troponine. le calcium كيلصق عليها، ومن بعد la tropomyosine كتزاح.", "Réponse : la troponine.")},
+        "2": {"1": rep("لا، l'actine فيها les sites ديال la myosine، ماشي ديال le calcium. عاود اختار.", "Les sites de l'actine sont pour la myosine. Réessaie."),
+              "2": rep("الجواب هو la troponine، ماشي l'actine.", "Réponse : la troponine.")}},
+      "Les ions calcium libérés se fixent sur ?"),
+    qcm_facile("fa_s6", "Plus facile : le nouvel ATP", "سؤال ساهل على l'A T P.",
+      "La fixation d'un nouvel ATP sur la tête de myosine…", ["détache la tête de l'actine", "fait tourner la tête", "libère les sites de l'actine"], 0, {
+        "0": {"juste": rep("برافو! A T P جديد كيطلق la tête من l'actine.", "Juste : le nouvel ATP détache la tête.")},
+        "1": {"1": rep("ما تقلقش. la rotation كتجي من l'hydrolyse ديال l'A T P، ماشي من A T P جديد. عاود اختار.", "La rotation vient de l'hydrolyse. Réessaie."),
+              "2": rep("الجواب هو كيطلق la tête. la rotation كتجي من l'hydrolyse.", "Réponse : il détache la tête.")},
+        "2": {"1": rep("لا، les sites كيتحررو ب le calcium. عاود اختار.", "Les sites sont libérés grâce au Ca²⁺. Réessaie."),
+              "2": rep("الجواب هو كيطلق la tête من l'actine.", "Réponse : il détache la tête de l'actine.")}},
+      "La fixation d'un nouvel ATP sur la tête de myosine ?")
+  ]}]},
+  "similaire": {
+    "id": "svt_ex_ch2_glissement_1_b", "titre": "Même exercice, autres données",
+    "enonce": {
+      "intro": "Mêmes mesures sur un autre muscle : un sarcomère relâché, puis le même sarcomère contracté au maximum. Le document 1 donne les longueurs.",
+      "intro_dit": "نفس القياسات، على muscle آخر: sarcomère relâché، ومن بعد نفس le sarcomère contracté. le document un فيه les longueurs.",
+      "figures": [doc_mesures(REL_B, CON_B, "Document 1 : longueurs mesurées dans un sarcomère")],
+      "donnees": ["Longueurs en micromètres (µm)", "Bande claire (I) du tableau : les deux demi-bandes claires d'un sarcomère"],
+      "questions": [
+        {"id": "1", "texte": "Décrire puis comparer l'évolution des longueurs du sarcomère, des bandes et de la zone H.",
+         "reponse": {"type": "phrase", "attendu": "Le sarcomère passe de 2,3 à 2,0 µm (− 0,3 µm) ; la bande claire passe de 0,8 à 0,5 µm (− 0,3 µm) ; la zone H passe de 0,3 µm à 0 (elle disparaît, − 0,3 µm) ; la bande sombre reste 1,5 µm. Le sarcomère, la bande claire et la zone H raccourcissent de 0,3 µm ; la bande sombre ne change pas."},
+         "clavier": {"aides": ["passe de … à …", "raccourcit de 0,3 µm", "disparaît", "reste constante"], "pieges": ["la bande sombre raccourcit"]},
+         "correction": {"lignes": [{"texte": "1 : sarcomère 2,3 → 2,0 µm ; bande I 0,8 → 0,5 µm ; zone H 0,3 → 0 µm", "mot": "le sarcomère passe de deux virgule trois"},
+                                   {"texte": "bande sombre : 1,5 µm, constante ; trois raccourcissements de 0,3 µm", "mot": "la bande sombre كتبقى"}],
+                        "parole": "Question un. le sarcomère passe de deux virgule trois à deux micromètres، la bande claire de zéro virgule huit à zéro virgule cinq، و la zone H de zéro virgule trois à zéro: كتختفي. كلهم نقصو de zéro virgule trois micromètre. la bande sombre كتبقى à un virgule cinq micromètre."}},
+        {"id": "2", "texte": "Calculer, en pourcentage, le raccourcissement relatif r du sarcomère.",
+         "reponse": {"type": "valeur", "grandeur": "r", "valeur": R1B, "unite": "%", "tolerance": 0.02, "attendu": "r = (2,3 − 2,0)/2,3 × 100 = 0,3/2,3 × 100 ≈ 13 %"},
+         "clavier": {"aides": ["(2,3 − 2,0)/2,3", "× 100", "%"], "pieges": ["0,3/2,0 × 100"]},
+         "correction": {"lignes": [{"texte": "2 : r = (2,3 − 2,0)/2,3 × 100 = 0,3/2,3 × 100", "mot": "zéro virgule trois sur deux virgule trois"},
+                                   {"texte": "r ≈ 13 %", "mot": "environ treize pour cent"}],
+                        "parole": "Question deux. r égale zéro virgule trois sur deux virgule trois، fois cent. r égale environ treize pour cent."}},
+        {"id": "3", "texte": "Montrer, à partir du tableau, que les filaments de myosine et d'actine gardent leur longueur, puis en déduire comment le sarcomère raccourcit.",
+         "reponse": {"type": "phrase", "attendu": "La bande sombre (longueur de la myosine) reste 1,5 µm : la myosine garde sa longueur. Actine = (sarcomère − zone H)/2 = (2,3 − 0,3)/2 = 1,0 µm (relâché) et (2,0 − 0)/2 = 1,0 µm (contracté) : l'actine garde sa longueur. Les filaments ne raccourcissent pas : l'actine glisse entre la myosine vers le centre du sarcomère et les stries Z se rapprochent."},
+         "clavier": {"aides": ["(sarcomère − zone H)/2", "glissent", "vers le centre"], "pieges": ["la myosine glisse"]},
+         "correction": {"lignes": [{"texte": "3 : myosine = bande A = 1,5 µm ; actine = (2,3 − 0,3)/2 = (2,0 − 0)/2 = 1,0 µm", "mot": "deux virgule trois moins zéro virgule trois"},
+                                   {"texte": "l'actine glisse vers le centre ; les stries Z se rapprochent", "mot": "l'actine كتزلق"}],
+                        "parole": "Question trois. la myosine كتبقى à un virgule cinq micromètre. l'actine: deux virgule trois moins zéro virgule trois، sur deux، égale un micromètre، et deux moins zéro، sur deux، égale un micromètre. إذن les filaments ما قصروش: l'actine كتزلق نحو الوسط، و les stries Z كيتقربو."}},
+        {"id": "4", "texte": "Réaliser un schéma légendé du sarcomère contracté du document 1, en indiquant les longueurs.",
+         "reponse": {"type": "phrase", "attendu": "Schéma : deux stries Z à 2,0 µm ; myosine de 1,5 µm au centre (bande sombre A) ; un filament d'actine de 1,0 µm part de chaque strie Z vers le centre : les extrémités des deux filaments d'actine se touchent au centre, la zone H a disparu (0 µm) ; une demi-bande claire de 0,25 µm de chaque côté d'une strie Z (I = 0,5 µm)."},
+         "clavier": {"aides": ["2,0 µm", "zone H = 0", "demi-bande claire 0,25 µm"], "pieges": ["zone H 0,3 µm"]},
+         "correction": {"lignes": [{"texte": "4 : stries Z à 2,0 µm ; myosine 1,5 µm ; actine 1,0 µm de chaque côté", "mot": "deux stries Z"},
+                                   {"texte": "zone H = 0 ; demi-bande claire = 0,25 µm", "mot": "zéro virgule vingt-cinq"}],
+                        "parole": "Question quatre. deux stries Z، l'écart est de deux micromètres. la myosine ف الوسط، elle mesure un virgule cinq، و l'actine mesure un micromètre من كل جهة. les filaments d'actine كيتلاقاو ف الوسط: la zone H égale zéro. و la demi-bande claire égale zéro virgule vingt-cinq micromètre."}},
+        {"id": "5", "texte": "Expliquer le rôle des ions Ca²⁺ dans le déclenchement de ce glissement.",
+         "reponse": {"type": "phrase", "attendu": "L'excitation libère les ions Ca²⁺ du réticulum sarcoplasmique ; ils se fixent sur la troponine ; la tropomyosine se déplace et libère les sites de fixation de l'actine ; les têtes de myosine se fixent sur l'actine (complexe actomyosine). Le Ca²⁺ autorise, il ne fournit pas l'énergie."},
+         "clavier": {"aides": ["troponine", "tropomyosine", "complexe actomyosine"], "pieges": ["tropomyosine (fixation du Ca²⁺)"]},
+         "correction": {"lignes": [{"texte": "5 : Ca²⁺ libéré par le réticulum sarcoplasmique → fixé sur la troponine", "mot": "la troponine"},
+                                   {"texte": "tropomyosine déplacée → sites libérés → complexe actomyosine", "mot": "le complexe actomyosine"}],
+                        "parole": "Question cinq. le calcium كيخرج من le réticulum sarcoplasmique وكيلصق على la troponine. la tropomyosine كتزاح، les sites كيتحررو، وكيتكون le complexe actomyosine."}},
+        {"id": "6", "texte": "Expliquer le double rôle de l'ATP au cours du cycle d'une tête de myosine.",
+         "reponse": {"type": "phrase", "attendu": "Hydrolyse de l'ATP par la tête de myosine (ATPase) : ATP + H₂O → ADP + Pi + énergie ; l'énergie fait tourner la tête, qui tire l'actine vers le centre du sarcomère. Fixation d'un nouvel ATP : la tête se détache de l'actine et se fixe plus loin. Sans ATP, la tête reste fixée."},
+         "clavier": {"aides": ["hydrolyse", "rotation", "nouvel ATP", "détachement"], "pieges": ["le Ca²⁺ donne l'énergie"]},
+         "correction": {"lignes": [{"texte": "6 : hydrolyse de l'ATP → énergie → rotation de la tête → l'actine avance", "mot": "l'hydrolyse"},
+                                   {"texte": "nouvel ATP → détachement de la tête", "mot": "A T P جديد"}],
+                        "parole": "Question six. l'hydrolyse ديال l'A T P كتعطي l'énergie اللي كتدور la tête، و l'actine كتزلق. و A T P جديد كيطلق la tête من l'actine."}}
+      ]}}
+}
+ecrire(EX, sys.argv[1])
