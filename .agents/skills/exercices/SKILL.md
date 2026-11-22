@@ -23,9 +23,17 @@ User rules (22/11/2026): « pourquoi ne pas chercher sur internet les exercices 
 3. **The national exams** of the chapter (`sources.examens`, `erreurs_examen`, `redaction_nationale` of the exploration file; `backend/data/exams/<mat>/<année>-<session>/exam.json`): which question types fall, how they are worded, where points are lost. The exercise trains exactly these gestures (one line per period with values for a SVT description; « interpréter géométriquement » after a limit; the unit on every result).
 4. Write down in the generator's header which sources were compared (one line each).
 
-## 3. Levels
+## 3. Levels — always the exam's way of asking
 
-`niveau`: `facile` (one relation, one step, data given directly), `moyen` (two steps, or a reading of a document / curve before the calculation), `difficile` (a reasoning in several steps at the level of the national, with a document to exploit). Start each chapter with one `facile` or `moyen`; add the others after the user's validation. Inside an exercise, the questions go from the simplest to the hardest.
+User rule (22 November 2026): « penser à un niveau moyen comme les sujets d'examen, et un niveau supérieur des exercices, comme niveau aussi examen, mais toujours faire des exercices comme chez examen ; les exercices faciles seront pour s'entraîner ».
+
+Every exercise, whatever its level, is written **like an exam exercise**: a situation with a document (figure, curve, table, montage), numbered questions (« 1 », « 2-1 », « 2-2 »), the exam's verbs (« Calculer », « Déterminer », « Montrer que », « Décrire… puis déduire », « Justifier »), the expected writing (relation, A.N., result with unit, conclusion). Never a national subject itself (§ 1).
+
+- `facile` — **to train**: the gestures of the chapter one at a time (one relation, one reading, data given directly), short; it prepares the student for the two other levels. Its own easy version is still the QCM / true-false / association of each question.
+- `moyen` — **the level of the national**: the length, chaining and difficulty of a real exam exercise of the chapter (compare with the exam questions listed in the exploration file: same types, same number of steps, same traps); 4 to 6 questions, at least one « décrire / lire puis déduire » or « montrer que ».
+- `difficile` (shown « Supérieur ») — **above the national, still in its form**: more steps per question, two notions of the chapter combined, a less guided document, a « montrer que » before the calculation, a critical reading of a result; never outside the cadre (`controler_cadre.py`, `exclus_hors_programme`).
+
+Each chapter ends up with three exercises: one `facile`, one `moyen`, one `difficile`, shown in that order. Inside an exercise, questions go from the simplest to the hardest. The similar exercise keeps the level of its exercise.
 
 ## 4. The JSON (`frontend/public/media/exercices/<id>.json`, listed in `index.json`)
 

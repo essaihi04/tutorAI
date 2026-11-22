@@ -9,7 +9,7 @@ User's request (22 November 2026): « si l'élève veut avoir de l'aide de notre
 
 ## 1. When the tutor proposes an exercise
 
-- After a course block or a course: the exercise whose `cours` is that course (one per chapter first, then by level `facile` → `moyen` → `difficile`).
+- After a course block or a course: the exercises whose `cours` is that course, in order of level: `facile` (to train), then `moyen` (the level of the national), then `difficile` (« Supérieur », above the national, same form). Move to the next level when the similar exercise of the current one is right alone.
 - From the student profile (`/course-player/profil`, `a_faire` items `type: "exercice"`): a competence not acquired or partial → the exercise of its chapter.
 - In free mode (« تمرين », « exercice »): the tutor opens `/exercices/<id>` of the chapter being studied. Never a national subject here: for those, the Examen part.
 
