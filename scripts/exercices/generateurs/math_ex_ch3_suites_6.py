@@ -67,7 +67,7 @@ QUESTIONS = [
      "correction": correction([
          ("2 : 1 + 4/(uₙ + 2) = (uₙ + 2 + 4)/(uₙ + 2) = (uₙ + 6)/(uₙ + 2) = uₙ₊₁", "même dénominateur"),
          ("Initialisation : u₀ = 1 ≥ 1", "u zéro égale un"),
-         ("Hérédité : supposons uₙ ≥ 1 : uₙ + 2 ≥ 3 > 0, donc 4/(uₙ + 2) > 0 et uₙ₊₁ > 1 ≥ … donc uₙ₊₁ ≥ 1", "supposons que u indice n"),
+         ("Hérédité : supposons uₙ ≥ 1 : uₙ + 2 ≥ 3 > 0, donc 4/(uₙ + 2) > 0 et uₙ₊₁ = 1 + 4/(uₙ + 2) > 1, donc uₙ₊₁ ≥ 1", "supposons que u indice n"),
          ("Conclusion : d'après le principe de récurrence, uₙ ≥ 1 pour tout n", "d'après le principe de récurrence")],
          "السؤال deux. même dénominateur: u indice n plus deux plus quatre، sur u indice n plus deux، يعني u indice n plus six، sur u indice n plus deux: هادي u indice n plus un. initialisation: u zéro égale un. hérédité: supposons que u indice n supérieur ou égal à un. u indice n plus deux positif، إذن quatre sur، u indice n plus deux، positif، وu indice n plus un أكبر من un. d'après le principe de récurrence، u indice n supérieur ou égal à un pour tout n."),
      "explication": "ex_2", "facile": "fa_2"},

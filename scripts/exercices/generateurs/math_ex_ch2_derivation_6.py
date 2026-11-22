@@ -96,7 +96,7 @@ Q4 = {"id": "4", "texte": "Calculer f″(x) pour x > 0 et en déduire la concavi
       "explication": "ex_d6_4", "facile": "fa_d6_4"}
 
 Q5 = {"id": "5", "texte": "Soit g la restriction de f à l'intervalle I = [1 ; +∞[. Montrer que g admet une fonction réciproque g⁻¹ définie sur un intervalle J à déterminer.",
-      "texte_dit": "السؤال cinq: g هي la restriction ديال f على I، من un حتى plus l'infini. بين بلي g عندها fonction réciproque، معرفة على intervalle J، حدد J.",
+      "texte_dit": "السؤال cinq: g هي la restriction ديال f sur I، من un حتى plus l'infini. بين بلي g عندها fonction réciproque، معرفة على intervalle J، حدد J.",
       "reponse": phrase("g est continue et strictement croissante sur I = [1 ; +∞[ (question 2), donc g admet une fonction réciproque g⁻¹ définie sur J = g(I) = [g(1) ; lim g[ = [−1 ; +∞[."),
       "clavier": {"aides": ["continue et strictement croissante sur I", "J = g(I)", "[−1 ; +∞[", "g(1) = −1"], "pieges": ["]−1 ; +∞[", "[0 ; +∞[", "bijective"]},
       "aides": [aide("Deux conditions sur I : continue et strictement monotone. Lis-les dans le tableau de la question 2.",
@@ -122,7 +122,7 @@ Q6 = {"id": "6", "texte": "Vérifier que g(9) = 3, puis montrer que g⁻¹ est d
           ("6 : g(9) = 9 − 2√9 = 9 − 6 = 3, donc g⁻¹(3) = 9", "g de neuf égale trois"),
           ("g est dérivable en 9 et g′(9) = (√9 − 1)/√9 = 2/3 ≠ 0", "g prime de neuf égale deux tiers"),
           ("donc g⁻¹ est dérivable en 3 et (g⁻¹)′(3) = 1/g′(9) = 3/2", "un sur g prime de neuf")],
-          "السؤال six. g de neuf égale neuf moins deux fois trois، يعني trois. إذن g moins un de trois égale neuf. g prime de neuf égale، trois moins un، sur trois، يعني g prime de neuf égale deux tiers، وماشي zéro. إذن g moins un dérivable en trois، و g moins un prime de trois، égale un sur g prime de neuf، يعني trois demis."),
+          "السؤال six. neuf moins deux fois trois، كيعطي trois: إذن g de neuf égale trois. إذن g moins un de trois égale neuf. g prime de neuf égale، trois moins un، sur trois، يعني g prime de neuf égale deux tiers، وماشي zéro. إذن g moins un dérivable en trois، و g moins un prime de trois، égale un sur g prime de neuf، يعني trois demis."),
       "explication": "ex_d6_6", "facile": "fa_d6_6"}
 
 ETUDE = D + "trace.html?vue=etude_pas"
@@ -154,7 +154,7 @@ SIM3 = sim("ex_d6_3", "Question 3 : deux limites pour la branche infinie",
 SIM4 = sim("ex_d6_4", "Question 4 : f″ > 0, courbe convexe",
            "f″ positive : la courbe est au-dessus de ses tangentes.",
            D + "concavite.html?vue=roule", "Une tangente roule sur la courbe de x³ − 3x",
-           "نشوفو على هاد l'exemple: x au cube moins trois x. فين f seconde positive، la courbe فوق les tangentes ديالها: convexe. شوف الجهة اليمنى: la tangente كتزلق، و la courbe ديما فوقها. وفين f seconde négative، la courbe تحت: concave. فالتمرين ديالك: f seconde ديما positive على zéro، plus l'infini، إذن ما كاينش point d'inflexion.",
+           "نشوفو على هاد l'exemple: x au cube moins trois x. فين f seconde positive، la courbe فوق les tangentes ديالها: convexe. شوف الجهة اليمنى: la tangente كتزلق، و la courbe ديما فوقها. وفين f seconde négative، la courbe تحت: concave. فالتمرين ديالك: f seconde ديما positive sur zéro، plus l'infini، إذن ما كاينش point d'inflexion.",
            [("f″ > 0 : convexe", "convexe"), ("f″ de signe constant : pas d'inflexion", "ما كاينش point d'inflexion")],
            [jusqua("نشوفو على هاد l'exemple", "courbe_tracee"), montre("convexe", "centre:0"), jusqua("شوف الجهة اليمنى", "courbe_au_dessus"),
             jusqua("وفين f seconde négative", "ligne_f_seconde"), montre("ما كاينش point d'inflexion", "centre:1")])
@@ -162,7 +162,7 @@ SIM4 = sim("ex_d6_4", "Question 4 : f″ > 0, courbe convexe",
 SIM5 = sim("ex_d6_5", "Question 5 : la restriction et l'intervalle J",
            "Continue et strictement monotone sur I : réciproque sur J = f(I).",
            D + "miroir.html?vue=restriction", "x² + 1 : on ne garde que la partie sur I = [0 ; +∞[",
-           "نشوفو على هاد l'exemple: x carré plus un، كتهبط ومن بعد كتطلع، إذن ماشي monotone على R. كناخدو غير la partie على I، من zéro حتى plus l'infini: continue et strictement croissante. هاد la partie بوحدها هي اللي عندها réciproque. J هو f de I: من un حتى plus l'infini. فالتمرين ديالك: I من un حتى plus l'infini، و J كيبدا من g de un.",
+           "نشوفو على هاد l'exemple: x carré plus un، كتهبط ومن بعد كتطلع، إذن ماشي monotone sur R. كناخدو غير la partie sur I، من zéro حتى plus l'infini: continue et strictement croissante. هاد la partie بوحدها هي اللي عندها réciproque. J هو f de I: من un حتى plus l'infini. فالتمرين ديالك: I من un حتى plus l'infini، و J كيبدا من g de un.",
            [("continue + strictement monotone sur I", "continue et strictement croissante"), ("J = f(I)", "J هو f de I")],
            [jusqua("نشوفو على هاد l'exemple", "parabole_entiere"), jusqua("continue et strictement croissante", "partie_sur_i"), montre("continue et strictement croissante", "centre:0"),
             jusqua("هاد la partie بوحدها", "reflet_de_la_partie"), jusqua("J هو f de I", "intervalle_j"), montre("J هو f de I", "centre:1")])
@@ -180,7 +180,7 @@ FA1 = qcm("fa_d6_1", "Plus facile : simplifier le taux", "سؤال ساهل عل
               (("قريب! racine de x sur x ماشي racine de x. عاود اختار.", "√x/x = 1/√x. Réessaie."),
                ("الجواب: un moins deux sur racine de x.", "Réponse : 1 − 2/√x.")),
               ("برافو! racine de x sur x، égale un sur racine de x.", "Juste : (x − 2√x)/x = 1 − 2/√x."),
-              (("ما تقلقش. خاصك تقسم كل terme على x. عاود اختار.", "Divise chaque terme par x. Réessaie."),
+              (("ما تقلقش. خاصك تقسم كل terme sur x. عاود اختار.", "Divise chaque terme par x. Réessaie."),
                ("الجواب: un moins deux sur racine de x.", "Réponse : 1 − 2/√x."))],
           "x moins deux racine de x، sur x، est égal à ?")
 
