@@ -186,3 +186,21 @@ les courbes »), « les deux courbes » (pas « بجوج »), « deux fois » (p
 Avant de générer : `python -X utf8 scripts/voix/nombres_fr.py <deck…>` liste ce qui reste, `--ecrire` le convertit dans
 les fichiers des cours (les deux copies ; les mots du pointage sont réalignés). Les pistes dont le texte change sont
 régénérées (§ 4). Le 21/11/2026 : 1 165 phrases converties, 687 pistes à refaire dans les 23 cours.
+
+**Élargie le 22/11/2026** (l'utilisateur : « ne pas mélanger arabe et français dans deux mots successifs ») :
+- les **opérateurs** d'une formule aussi : « x plus un », « k égale trois », « dix puissance moins cinq », « deux sur
+  sept », « supérieur ou égal à », jamais « x زائد واحد », « k يساوي trois », « dix أس ناقص خمسة », « deux على sept »,
+  « كبر ولا يساوي » ; les **centaines en un mot** (« تسعمية nanomètre » → « neuf cents nanomètre ») ; les **décimales
+  chiffre par chiffre** après « virgule » (« un virgule خمسة سبعة » → « un virgule cinq sept ») ;
+- les **mots cassés** : un mot français entièrement en lettres latines, un mot darija entièrement en lettres arabes
+  (« فالنoyau » → « فالnoyau », « زéro » → « zéro », « مètre » → « mètre », « Mزيان » → « مزيان », « fين » → « فين ») ;
+- un comptage tout en darija (« جوج طرق ») reste : la règle ne vise que deux mots successifs, l'un darija, l'autre
+  français.
+**Forcée dans le code** : `parle` applique `nombres_darija_fr` (dans `backend/kaggle_tts/texte_parle.py`) en premier, pour
+toutes les voix, y compris les **réponses libres du tuteur** (voix en direct) ; le prompt du tuteur (`llm_service.py`)
+donne la même consigne. Tests : `backend/app/tests/test_texte_parle.py` et `scripts/voix/test_nombres_fr.py`. Après
+une modification, repousser le kernel en direct (il embarque `texte_parle.py`) et copier le fichier dans
+`/srv/corpus_v4/voix_lot/_stt_tous/texte_parle_depot.py` (§ 7). Le 22/11/2026 : 833 pistes corrigées et revoisées (v25).
+- **Contrôle après génération** : comparer les nombres du texte et ceux de la transcription (MoulSot). La voix peut
+  déformer un nombre pourtant bien écrit (« huit cents » entendu « deux cent vingt » dans `ol_l8_ordre_grandeur`) :
+  une piste dont les nombres entendus diffèrent est écoutée, puis régénérée.

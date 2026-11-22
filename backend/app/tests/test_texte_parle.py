@@ -102,7 +102,7 @@ def test_ecritures_sures(ecrit, dit):
     ("Ln(x)", "ln de (x)"),
     ("ln(e^x) = x", "ln de (e puissance x) égale x"),
     ("ln(1/2) = -ln2", "ln de (un sur deux) égale moins ln deux"),
-    ("uₙ₊₁ على uₙ", "u n plus un على u n"),
+    ("uₙ₊₁ على uₙ", "u n plus un sur u n"),
     ("6x²", "six x au carré"),
     ("f⁻¹", "f moins un"),
     ("u′/u²", "u prime sur u au carré"),
@@ -120,7 +120,7 @@ def test_notation_maths(ecrit, dit):
     # 21/11/2026 : « Xe » lu lettre par lettre ; « le xénon » choisi à l'écoute (ecoute/xenon/2) ; un symbole SEUL se lit
     # par défaut par le nom de l'élément (skill prononciation § 5)
     ("m de Xe", "m de xénon"),
-    ("A ديال Xe زائد A ديال Sr", "A ديال xénon زائد A ديال strontium"),
+    ("A ديال Xe زائد A ديال Sr", "A ديال xénon plus A ديال strontium"),
     ("le noyau Cd cent sept", "le noyau cadmium cent sept"),
     ("une particule Ag", "une particule argent"),
     ("quatre deux He", "quatre deux hélium"),
@@ -148,3 +148,23 @@ def test_notation_maths(ecrit, dit):
 ])
 def test_symboles_elements(ecrit, dit):
     assert tp.parle(ecrit) == dit
+
+
+# 22/11/2026 : règle de l'utilisateur, jamais darija et français collés dans un nombre ou une formule ; `parle` l'applique
+# d'office, donc aussi aux réponses libres du tuteur (voix en direct) et aux lots.
+@pytest.mark.parametrize("ecrit, dit", [
+    ("جوج noyaux", "deux noyaux"),
+    ("حتى x زائد واحد ما كيتبدل", "حتى x plus un ما كيتبدل"),
+    ("k يساوي trois", "k égale trois"),
+    ("six virgule cinq fois dix أس ناقص خمسة", "six virgule cinq fois dix puissance moins cinq"),
+    ("تسعمية nanomètre", "neuf cents nanomètre"),
+    ("x كبر ولا يساوي moins un", "x supérieur ou égal à moins un"),
+    ("فالنoyau، زéro", "فالnoyau، zéro"),
+])
+def test_nombres_sans_darija_collee_au_francais(ecrit, dit):
+    assert tp.parle(ecrit) == dit
+
+
+@pytest.mark.parametrize("ecrit", ["عندنا جوج طرق", "واحد la courbe", "ماشي dérivable في zéro"])
+def test_darija_seule_ou_article_inchanges(ecrit):
+    assert tp.parle(ecrit) == ecrit

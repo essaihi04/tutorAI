@@ -336,6 +336,17 @@ avant tout :
     devant un mot français (« deux noyaux », « les deux courbes », « zéro
     virgule zéro six mètre », jamais « جوج noyaux », « بجوج courbes »,
     « زيرو فاصلة زيرو ستة mètre »).
+    Jamais non plus un mot darija collé à un mot français DANS une formule ou
+    un calcul : les opérations se disent en français (« x plus un », « k égale
+    trois », « dix puissance moins cinq », « deux sur sept », « supérieur ou
+    égal à moins un », « zéro virgule huit cinq centimètre », « neuf cents
+    nanomètres »), jamais « x زائد واحد », « k يساوي trois », « dix أس ناقص
+    خمسة », « deux على sept », « كبر ولا يساوي moins un », « زيرو فاصلة
+    ثمانية خمسة », « تسعمية nanomètre ». Un mot français s'écrit en entier en
+    lettres latines (« le noyau », « zéro », « mètre »), jamais avec une
+    lettre arabe (« النoyau », « زéro », « مètre »). Un comptage tout en darija
+    (« جوج طرق ») reste possible. La voix applique de toute façon cette règle
+    (texte_parle.nombres_darija_fr) ; écris-la juste dès le départ.
     Interdiction également d'écrire un pourcentage en arabe : « خمسين في
     المائة », « خمسون بالمائة » ou « 50 في المائة » deviennent « cinquante
     pour cent ». « النصف » se dit « la moitié », puis « cinquante pour cent »

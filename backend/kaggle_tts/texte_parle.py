@@ -51,6 +51,7 @@ def ponctuation_modele(q):
 
 
 def parle(p):
+    p = nombres_darija_fr(p)                      # 22/11/2026 : nombres et formules sans darija collée au français
     p = _DARIJA_RE.sub(lambda m: DARIJA_DU_CORPUS[m.group(1)], p.translate(TYPO))
     p = re.sub(r"\s+([,،.])", r"\1", p)          # « important , » (tiret retiré) -> « important, »
     p = re.sub(r"NADH\s*,\s*H\s*(?:[+⁺]|plus\b)", "NADH H plus", p)
@@ -545,3 +546,304 @@ if __name__ == "__main__":
                 if q != ph:
                     n += 1; print("-", ph, "\n+", q, "\n")
     print(n, "phrases changées")
+
+
+# ── Nombres et formules : jamais darija et français collés (22 novembre 2026) ──────────────────────────────────────
+# Règle de l'utilisateur (21-22/11/2026) : dans un nombre ou une formule, jamais un mot darija et un mot français
+# successifs. « جوج noyaux » -> « deux noyaux », « x زائد واحد » -> « x plus un », « dix أس ناقص خمسة » -> « dix
+# puissance moins cinq », « تسعمية nanomètre » -> « neuf cents nanomètre ». Un comptage tout en darija (« جوج طرق »)
+# reste. Répare aussi les mots cassés (« فالنoyau », « زéro », « Mزيان »). Appliqué EN PREMIER par `parle` : il vaut
+# donc pour les cours, les réactions, les lots ET les réponses libres du tuteur (voix en direct). Outil des cours et
+# tests : scripts/voix/nombres_fr.py, scripts/voix/test_nombres_fr.py.
+
+_nd_U = {'زيرو': 0, 'صفر': 0, 'واحد': 1, 'وحدة': 1, 'جوج': 2, 'زوج': 2, 'اثنان': 2, 'اثنين': 2, 'جوجة': 2, 'تلاتة': 3, 'ثلاثة': 3, 'تلت': 3, 'ثلاث': 3,
+     'ربعة': 4, 'أربعة': 4, 'اربعة': 4, 'ربع': None, 'خمسة': 5, 'خمس': 5, 'ستة': 6, 'ست': 6, 'سبعة': 7, 'سبع': 7,
+     'تمنية': 8, 'ثمانية': 8, 'ثمان': 8, 'تمن': 8, 'تسعة': 9, 'تسع': 9, 'عشرة': 10, 'عشر': 10,
+     'حداش': 11, 'طناش': 12, 'تلطاش': 13, 'ربعطاش': 14, 'خمسطاش': 15, 'سطاش': 16, 'سبعطاش': 17, 'تمنطاش': 18, 'تسعطاش': 19}
+_nd_U = {k: v for k, v in _nd_U.items() if v is not None}
+_nd_D = {'عشرين': 20, 'تلاتين': 30, 'ثلاثين': 30, 'ربعين': 40, 'أربعين': 40, 'اربعين': 40, 'خمسين': 50, 'ستين': 60,
+     'سبعين': 70, 'تمانين': 80, 'ثمانين': 80, 'تسعين': 90}
+_nd_C = {'مية': 100, 'ميا': 100, 'مائة': 100, 'مئة': 100, 'ميتين': 200}
+# centaines en un seul mot (« تسعمية nanomètre ») : 22/11/2026
+_nd_CENTS = {p + s: v * 100 for p, v in (('تلت', 3), ('ثلاث', 3), ('ربع', 4), ('أربع', 4), ('اربع', 4), ('خمس', 5), ('ست', 6),
+                                      ('سبع', 7), ('تمن', 8), ('ثمان', 8), ('تسع', 9)) for s in ('مية', 'ميا', 'مائة', 'مئة')}
+_nd_M = {'ألف': 1000, 'الف': 1000, 'آلاف': 1000, 'الاف': 1000, 'ألفين': 2000, 'مليون': 10 ** 6}
+_nd_NOMBRE = set(_nd_U) | set(_nd_D) | set(_nd_C) | set(_nd_CENTS) | set(_nd_M)
+_nd_LAT = re.compile(r"[A-Za-zÀ-ÿœŒ]")
+_nd_ARA = re.compile(r'[؀-ۿ]')
+_nd_MATHS = {'virgule', 'fois', 'puissance', 'au', 'sur', 'plus', 'moins', 'égale', 'divisé', 'racine', 'pour', 'cent', 'mille',
+         'zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze', 'treize',
+         'quatorze', 'quinze', 'seize', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'cents', 'x', 'n'}
+# « واحد virgule », « moins واحد » : le nombre ; « كل واحد zéro… » ou « وحدة: deux » : pas un nombre
+_nd_MATHS_APRES = {'virgule', 'fois', 'puissance', 'au', 'sur', 'pour', 'divisé', 'mille', 'cent', 'cents', 'égale', 'plus', 'moins'}
+_nd_MATHS_AVANT = {'virgule', 'fois', 'puissance', 'sur', 'plus', 'moins', 'égale', 'divisé', 'racine', 'de', 'à', 'et'}
+_nd_SEP = {'فاصلة': 'virgule', 'فاصل': 'virgule', 'في': 'fois', 'أس': 'puissance'}
+
+
+def _nd_valeur(mots):
+    """Valeur d'une suite de mots-nombres (sans « و »), ou None si la suite n'est pas un nombre bien formé."""
+    total, courant = 0, 0
+    for i, m in enumerate(mots):
+        if m in _nd_U:
+            v = _nd_U[m]
+            if courant % 100 and v < 10 and m not in ('عشر',):
+                # « خمسة عشر » : unité puis عشر = 15 ; sinon deux unités de suite : pas un nombre
+                return None
+            courant += v
+        elif m == 'عشر' or m == 'عشرة':
+            courant += 10
+        elif m in _nd_D:
+            courant += _nd_D[m]
+        elif m in _nd_C:
+            courant = (courant or 1) * 100 if _nd_C[m] == 100 else courant + 200
+        elif m in _nd_CENTS:
+            if courant:
+                return None
+            courant = _nd_CENTS[m]
+        elif m in _nd_M:
+            total += (courant or 1) * _nd_M[m] if _nd_M[m] in (1000, 10 ** 6) and m not in ('ألفين',) else 2000
+            courant = 0
+        else:
+            return None
+    return total + courant
+
+
+def _nd_un_seul_(parties):
+    return [m for p in parties for m in p] in (['واحد'], ['وحدة'])
+
+
+def _nd_fr(v):
+    return nombre_fr(v)
+
+
+_nd_JETON = re.compile(r'\S+|\s+')
+
+
+#: Opérateurs darija d'une formule (22/11/2026, règle de l'utilisateur : jamais un mot darija et un mot français
+#: successifs dans un nombre ou une formule) : traduits quand ils touchent un mot français (ou un nombre déjà traduit).
+_nd_OPERATEURS = {'زائد': 'plus', 'ناقص': 'moins', 'سالب': 'moins', 'يساوي': 'égale', 'أس': 'puissance', 'فاصلة': 'virgule',
+              'فاصل': 'virgule'}
+#: « على » (sur) est aussi une préposition (« Pi على l'ADP ») : traduit seulement entre un mot français et un nombre
+#: ou un symbole (« croissante على I », « millimole على une minute ») ; « في » (fois) : voir la fin de `_convertir_nombres`.
+_nd_ENTRE_DEUX = {'على': 'sur'}
+_nd_NOMBRES_FR = {'zéro', 'un', 'une', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze',
+              'treize', 'quatorze', 'quinze', 'seize', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'cent', 'mille'}
+_nd_COMPARAISON = re.compile(r"(و)?(?:أ?كبر|أ?صغر|أقل|أكثر)(?: من)? (?:ولا|أو|او) يساوي(?= [A-Za-zÀ-ÿ])")
+
+
+_nd_ARTICLES = {'le', 'la', 'l', "l'", 'de', 'du', 'des', 'en', 'et', 'au', 'à', 'un', 'une', 'les'}
+
+
+def _nd__nombre_ou_symbole(j):
+    """« trois », « R », « x » : oui ; « le », « la », « un » (articles) : non."""
+    n = _nd__nu(j)[0]
+    return _nd__latin(j) and n.lower() not in _nd_ARTICLES and (n.lower() in _nd_NOMBRES_FR or len(n) <= 2)
+
+
+def _nd__latin(j):
+    n = _nd__nu(j)[0]
+    return bool(n) and bool(_nd_LAT.search(n)) and not _nd_ARA.search(n)
+
+
+def _nd__operateurs(texte):
+    texte = _nd_COMPARAISON.sub(lambda m: ('و ' if m.group(1) else '')
+                            + ('supérieur' if ('كبر' in m.group(0) or 'أكثر' in m.group(0)) else 'inférieur')
+                            + ' ou égal à', texte)
+    jetons = _nd_JETON.findall(texte)
+    mots = [i for i, j in enumerate(jetons) if not j.isspace()]
+    for k, i in enumerate(mots):
+        nu, p = _nd__nu(jetons[i])
+        w = nu[1:] if nu.startswith('و') and nu[1:] in _nd_OPERATEURS else nu
+        coupe_av = k == 0 or bool(_nd__nu(jetons[mots[k - 1]])[1])
+        av = jetons[mots[k - 1]] if not coupe_av else ''
+        ap = jetons[mots[k + 1]] if k + 1 < len(mots) and not p else ''
+        if w in _nd_OPERATEURS and (_nd__latin(av) or _nd__latin(ap)):
+            jetons[i] = ('و ' if w != nu else '') + _nd_OPERATEURS[w] + p
+        elif nu in _nd_ENTRE_DEUX and _nd__latin(av) and (_nd__nombre_ou_symbole(ap)
+                                                  or (_nd__nu(av)[0].lower() in _nd_NOMBRES_FR - _nd_ARTICLES and _nd__latin(ap))):
+            jetons[i] = _nd_ENTRE_DEUX[nu] + p
+        elif (nu.startswith('و') and nu[1:] in _nd_NOMBRE and nu not in _nd_NOMBRE and nu[1:] not in ('واحد', 'وحدة')
+              and (_nd__latin(ap) or _nd__latin(av))):
+            # « وجوج récepteurs » : « و » à part, puis le nombre est traduit (« و deux récepteurs »)
+            jetons[i] = 'و ' + nu[1:] + p
+    # décimales dites chiffre par chiffre après « virgule » : « un virgule خمسة سبعة » -> « un virgule cinq sept »
+    k = 0
+    while k < len(mots):
+        if _nd__nu(jetons[mots[k]])[0] == 'virgule' and not _nd__nu(jetons[mots[k]])[1]:
+            t = k + 1
+            while t < len(mots):
+                nu, p = _nd__nu(jetons[mots[t]])
+                if nu in _nd_U and _nd_U[nu] < 10:
+                    jetons[mots[t]] = _nd_fr(_nd_U[nu]) + p
+                    if p:
+                        break
+                    t += 1
+                else:
+                    break
+            k = t
+        k += 1
+    return ''.join(jetons)
+
+
+#: Mots cassés (22/11/2026) : première lettre d'un mot français écrite en arabe (« فالنoyau », « زéro », « مètre »),
+#: ou d'un mot darija écrite en latin (« Mزيان », « fين »). Les verbes français conjugués en darija (« نétablir »,
+#: « كيprédomine ») et les articles collés (« فla », « الcourbe ») sont le style du corpus : on n'y touche pas.
+_nd_TRANSLIT = {'م': 'm', 'د': 'd', 'ن': 'n', 'ف': 'f', 'ت': 't', 'ر': 'r', 'ه': 'h', 'ب': 'b', 'ز': 'z', 'ل': 'l',
+            'س': 's', 'ك': 'c', 'ق': 'q', 'ج': 'j'}
+_nd__PRE_AL = re.compile(r"(?<![\wء-ي])([وفبلك]?(?:ال|لل))([مدنفترهبزلسكقج])([a-zàâéèêîôûç][a-zàâäéèêëîïôöùûüç'’-]+)")
+_nd_CASSES = {'زéro': 'zéro', 'زero': 'zéro', 'زeroو': 'zéro', 'مètre': 'mètre', 'نul': 'nul', 'دyal': 'ديال',
+          'fـ': 'فـ', 'ghير': 'غير', 'tتأكد': 'تتأكد', 'Mزيان': 'مزيان', 'mزيانة': 'مزيانة', 'fين': 'فين',
+          'yلا': 'يلا', 'nفسها': 'نفسها', 'dاما': 'ديما', 'dtملي': 'dt ملي'}
+_nd__CASSES = re.compile(r"(?<![\wء-ي])(" + "|".join(sorted(map(re.escape, _nd_CASSES), key=len, reverse=True))
+                     + r")(?![\wء-ي])")
+_nd__NB_COLLE = re.compile(r"(?<![\wء-ي])([وفلب])(" + "|".join(sorted(
+    ['zéro', 'un', 'une', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze',
+     'treize', 'quatorze', 'quinze', 'seize', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'cent', 'mille',
+     'moins', 'plus'], key=len, reverse=True)) + r")(?![A-Za-zÀ-ÿ])")
+
+
+def _nd_reparer_mots(texte):
+    """« فالنoyau » -> « فالnoyau », « Mزيان » -> « مزيان », « وtrois » -> « و trois »."""
+    texte = _nd__CASSES.sub(lambda m: _nd_CASSES[m.group(1)], texte)
+    texte = _nd__PRE_AL.sub(lambda m: m.group(1) + _nd_TRANSLIT[m.group(2)] + m.group(3), texte)
+    return _nd__NB_COLLE.sub(r"\1 \2", texte)
+
+
+def nombres_darija_fr(texte):
+    """Nombres et opérateurs darija qui touchent du français -> français, jusqu'à ce que plus rien ne change
+    (« dix أس ناقص خمسة » -> « dix puissance moins خمسة » -> « dix puissance moins cinq »)."""
+    texte = _nd_reparer_mots(texte)
+    for _ in range(6):
+        neuf = _nd__convertir_nombres(_nd__operateurs(texte))
+        if neuf == texte:
+            return neuf
+        texte = neuf
+    return texte
+
+
+def _nd__convertir_nombres(texte):
+    jetons = _nd_JETON.findall(texte)
+    mots = [(i, j) for i, j in enumerate(jetons) if not j.isspace()]
+    out = list(jetons)
+    k = 0
+    while k < len(mots):
+        i, j = mots[k]
+        nu, ponct = _nd__nu(j)
+        prefixe_b = False
+        if nu.startswith('ب') and nu[1:] in ('جوج', 'زوج'):
+            prefixe_b = True
+        if not (nu in _nd_NOMBRE or prefixe_b or nu in ('فاصلة', 'فاصل')):
+            k += 1
+            continue
+        # étendre la suite : nombres, « و » collé (« وستين »), « فاصلة »
+        fin = k
+        parties = []  # liste de (mots_du_nombre) séparés par فاصلة
+        cour = []
+        seps = []
+        t = k
+        while t < len(mots):
+            w, p = _nd__nu(mots[t][1])
+            ww = w[1:] if (w.startswith('و') and w[1:] in _nd_NOMBRE and w not in _nd_NOMBRE) else w
+            if t == k and prefixe_b:
+                cour.append(w[1:]); fin = t
+                if p: break
+                t += 1; continue
+            if ww in _nd_NOMBRE:
+                cour.append(ww); fin = t
+            elif w == 'و' and cour and t + 1 < len(mots) and _nd__nu(mots[t + 1][1])[0] in _nd_NOMBRE:
+                pass
+            elif w in _nd_SEP and cour and t + 1 < len(mots) and _nd__nu(mots[t + 1][1])[0] in _nd_NOMBRE:
+                parties.append(cour); seps.append(_nd_SEP[w]); cour = []; fin = t
+            else:
+                break
+            if p:
+                break
+            t += 1
+        if cour:
+            parties.append(cour)
+        if not parties or not all(parties):
+            k = fin + 1
+            continue
+        vals = [_nd_valeur(p) for p in parties]
+        if any(v is None for v in vals):
+            k = fin + 1
+            continue
+        seq = [m for p in parties for m in p]
+        _, pfin = _nd__nu(mots[fin][1])
+        # contexte (une ponctuation coupe le contexte : « فجهة وحدة: deux » n'est pas un nombre de deux)
+        apres = mots[fin + 1][1] if fin + 1 < len(mots) and not pfin else ''
+        apres2 = mots[fin + 2][1] if fin + 2 < len(mots) and not pfin else ''
+        avant = mots[k - 1][1] if k > 0 else ''
+        if _nd__nu(avant)[1]:
+            avant = ''
+        an_, ap_ = _nd__nu(avant)[0].lower(), _nd__nu(apres)[0].lower()
+        dial = ap_ == 'ديال'
+        cible = apres2 if dial else apres
+        cn = _nd__nu(cible or '')[0]
+        lat_apres = bool(_nd_LAT.match(cn)) and not _nd_ARA.search(cn)
+        arabe_apres = bool(_nd_ARA.search(cn)) or (dial and not lat_apres)
+        lat_avant = bool(_nd_LAT.search(an_)) and not _nd_ARA.search(an_) and not arabe_apres
+        maths = ap_ in _nd_MATHS_APRES or an_ in _nd_MATHS_AVANT or (ap_ == 'مرات' and not _nd_un_seul_(parties))
+        un_seul = seq in (['واحد'], ['وحدة'])
+        # « جوج بجوج » : deux par deux
+        if seq in (['جوج'], ['زوج']) and not prefixe_b and _nd__nu(apres)[0] in ('بجوج', 'بزوج'):
+            i0, i1 = mots[k][0], mots[fin + 1][0]
+            for x in range(i0, i1 + 1): out[x] = ''
+            out[i0] = 'deux par deux' + _nd__nu(apres)[1]
+            k = fin + 2
+            continue
+        if un_seul and not (maths or len(parties) > 1):
+            k = fin + 1
+            continue
+        if not (lat_apres or lat_avant or maths or len(parties) > 1):
+            k = fin + 1
+            continue
+        morceaux = [_nd_fr(vals[0])]
+        for sep_, p_, v_ in zip(seps, parties[1:], vals[1:]):
+            zeros = 0
+            if sep_ == 'virgule':
+                for m_ in p_:
+                    if m_ in ('زيرو', 'صفر'): zeros += 1
+                    else: break
+            morceaux.append(sep_ + ' ' + ' '.join(['zéro'] * zeros + ([_nd_fr(v_)] if len(p_) > zeros else [])))
+        texte_fr = ' '.join(morceaux)
+        if prefixe_b:
+            texte_fr = 'les ' + texte_fr
+        # « جوج les voies » : « les deux voies » ; « جوج مرات » : « deux fois »
+        if not dial and not pfin and ap_ in ('les', 'des') and not prefixe_b:
+            texte_fr = 'les ' + texte_fr
+            j_ = mots[fin + 1][0]; out[j_] = ''; out[j_ - 1] = ''
+        elif not dial and not pfin and ap_ == 'مرات':
+            j_ = mots[fin + 1][0]; out[j_] = 'fois' + _nd__nu(mots[fin + 1][1])[1]
+        # remplacer les jetons k..fin
+        i0, i1 = mots[k][0], mots[fin][0]
+        for x in range(i0, i1 + 1):
+            out[x] = ''
+        # « ديال les X » / « ديال des X » / « ديال l'X » après le nombre : « deux X »
+        if dial and not pfin:
+            jd = mots[fin + 1][0]
+            art = mots[fin + 2] if fin + 2 < len(mots) else None
+            if art and _nd__nu(art[1])[0].lower() in ('les', 'des') and fin + 3 < len(mots):
+                out[jd] = ''; out[jd - 1] = ''
+                out[art[0]] = ''; out[art[0] - 1] = ''
+            elif art and _nd_LAT.match(art[1]):
+                out[jd] = ''; out[jd - 1] = ''
+        out[i0] = texte_fr + pfin
+        k = fin + 1
+    r = re.sub(r'[ ]{2,}', ' ', ''.join(out))
+    # « dix أس moins trois » : l'exposant dit en français entre deux mots français
+    r = re.sub(r"(?<=[A-Za-zÀ-ÿ]) أس (?=[A-Za-zÀ-ÿ])", ' puissance ', r)
+    # « six virgule cinq في dix » : « في » entre deux nombres français = fois
+    nb = r"(?:zéro|un|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt|trente|quarante|cinquante|soixante|cent|cents|mille)"
+    r = re.sub(r"(\b" + nb + r") في (?=" + nb + r"\b)", r"\1 fois ", r)
+    return r
+
+
+_nd_PONCT = '،,.:;!?)»؟'
+
+
+def _nd__nu(j):
+    p = ''
+    while j and j[-1] in _nd_PONCT:
+        p = j[-1] + p; j = j[:-1]
+    return j, p
