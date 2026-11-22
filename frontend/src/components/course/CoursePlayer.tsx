@@ -76,6 +76,8 @@ interface CoursePlayerProps {
   tuteur3D?: boolean;
   /** La diapositive affichée change (relecture des profs sur le lien libre, 10 novembre 2026). */
   onSlideChange?: (slide: { id: string; title: string; position: number; total: number }) => void;
+  /** (22 novembre 2026, partie Exercices) la diapositive part tout de suite : l'élève vient de cliquer « Explication animée » */
+  demarrerSeul?: boolean;
 }
 
 interface FlatSlide {
@@ -129,6 +131,7 @@ export default function CoursePlayer({
   mode = 'tableau',
   tuteur3D = false,
   onSlideChange,
+  demarrerSeul = false,
 }: CoursePlayerProps) {
   const COLONNE_TUTEUR = useColonneTuteur();   // plus étroite sur téléphone en paysage
   const flatSlides = useMemo<FlatSlide[]>(() =>
@@ -162,7 +165,7 @@ export default function CoursePlayer({
   }, [flatSlides, progress?.current_slide_id, progress?.status, storageKey]);
 
   const [index, setIndex] = useState(initialIndex);
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(demarrerSeul);
   const [completedSlideIds, setCompletedSlideIds] = useState<string[]>(progress?.completed_slide_ids || []);
   const [courseCompleted, setCourseCompleted] = useState(false);
   /**

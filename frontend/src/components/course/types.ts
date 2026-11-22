@@ -17,6 +17,9 @@ export interface CourseQuestion extends EnonceLu {
   type?: 'qcm' | 'prediction' | 'true_false' | 'select' | 'open' | 'ordering' | 'association';
   prompt?: string;
   options?: string[];
+  /** QCM repris du national (22 novembre 2026) : les lettres du sujet (« a », « b »… ou « A », « B »…), dans l'ordre
+   *  des `options` ; sans elles, A, B, C… */
+  lettres?: string[];
   timeout_seconds?: number;
   advance_on_timeout?: boolean;
   /** Index de la bonne option (mode concentration : correction immédiate et réaction préparée). */
@@ -156,6 +159,8 @@ export interface CourseExercise extends EnonceLu {
   prompt: string;
   /** `qcm` : les propositions, et l'index de la bonne. */
   choices?: string[];
+  /** QCM repris du national : les lettres du sujet, dans l'ordre des `choices` (voir `CourseQuestion.lettres`). */
+  lettres?: string[];
   correct?: number;
   /** `vrai_faux` : les affirmations à trancher une par une. */
   statements?: ({ text: string; correct: boolean; explanation?: string } & EnonceLu)[];

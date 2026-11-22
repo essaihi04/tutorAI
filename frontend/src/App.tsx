@@ -13,6 +13,8 @@ import RegisterInterest from './pages/RegisterInterest';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Progress = lazy(() => import('./pages/Progress'));
 const CourseLibrary = lazy(() => import('./pages/CourseLibrary'));
+const ExercicesHub = lazy(() => import('./pages/ExercicesHub'));
+const ExercicePage = lazy(() => import('./pages/ExercicePage'));
 const LearningSession = lazy(() => import('./pages/LearningSession'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const ExamExtractor = lazy(() => import('./pages/ExamExtractor'));
@@ -75,6 +77,7 @@ export default function App() {
           {import.meta.env.DEV && <Route path="/dev/course-player" element={<CoursePlayerAudit />} />}
           {import.meta.env.DEV && <Route path="/dev/memoire" element={<MemoireAudit />} />}
           {import.meta.env.DEV && <Route path="/dev/professeur-labo" element={<ProfesseurLaboAudit />} />}
+          {import.meta.env.DEV && <Route path="/dev/exercices/:exerciceId" element={<ExercicePage />} />}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/inscription" element={<RegisterInterest />} />
@@ -108,6 +111,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <CourseLibrary />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/exercices"
+            element={
+              <ProtectedRoute>
+                <ExercicesHub />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/exercices/:exerciceId"
+            element={
+              <ProtectedRoute>
+                <ExercicePage />
               </ProtectedRoute>
             }
           />

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BarChart3, BookOpen, Home, LogOut, MessageCircle } from 'lucide-react';
+import { BarChart3, BookOpen, Home, LogOut, MessageCircle, PencilLine } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useLearningContextStore } from '../stores/learningContextStore';
@@ -7,11 +7,12 @@ import type { LearningSubject } from '../stores/learningContextStore';
 import { MoalimLogo } from './MoalimShell';
 import { reveillerVoix } from '../services/api';
 
-export type StudentNavKey = 'today' | 'courses' | 'tutor' | 'progress';
+export type StudentNavKey = 'today' | 'courses' | 'exercices' | 'tutor' | 'progress';
 
 const NAV_ITEMS = [
   { key: 'today' as const, label: "Aujourd'hui", icon: Home, path: '/dashboard' },
   { key: 'courses' as const, label: 'Mes cours', icon: BookOpen, path: '/courses' },
+  { key: 'exercices' as const, label: 'Exercices', icon: PencilLine, path: '/exercices' },
   { key: 'tutor' as const, label: 'Mon tuteur', icon: MessageCircle, path: '/tutor' },
   { key: 'progress' as const, label: 'Mes progrès', icon: BarChart3, path: '/progress' },
 ];

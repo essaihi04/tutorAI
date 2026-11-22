@@ -1,10 +1,11 @@
-import { BarChart3, BookOpen, Home, MessageCircle } from 'lucide-react';
+import { BarChart3, BookOpen, Home, MessageCircle, PencilLine } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { StudentNavKey } from './StudentNavigation';
 
 const ITEMS = [
   { key: 'today' as const, icon: Home, label: "Aujourd'hui", path: '/dashboard' },
   { key: 'courses' as const, icon: BookOpen, label: 'Cours', path: '/courses' },
+  { key: 'exercices' as const, icon: PencilLine, label: 'Exercices', path: '/exercices' },
   { key: 'tutor' as const, icon: MessageCircle, label: 'Mon tuteur', path: '/tutor' },
   { key: 'progress' as const, icon: BarChart3, label: 'Mes progrès', path: '/progress' },
 ];

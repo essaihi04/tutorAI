@@ -2610,7 +2610,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 }
 
 /** Une question de la diapositive, telle que l'élève y répond (la clé `bonne` n'existe que pour les exercices). */
-type QuestionDiapo = { cle: string; type: 'qcm' | 'vrai_faux' | 'directe' | 'association' | 'glisser'; enonce: string; choix?: string[]; bonne?: number; explication?: string;
+type QuestionDiapo = { cle: string; type: 'qcm' | 'vrai_faux' | 'directe' | 'association' | 'glisser'; enonce: string; choix?: string[]; lettres?: string[]; bonne?: number; explication?: string;
   /** `association` : les deux colonnes, les bonnes paires et le retour de chaque paire (19 novembre 2026) */
   association?: AssociationQuestion;
   /** La démonstration manuscrite, écrite après la réaction (pour un vrai/faux : portée par sa dernière affirmation). */
@@ -2629,14 +2629,14 @@ function questionsDeLaDiapo(slide: CourseSlide): QuestionDiapo[] {
   if (q?.prompt) {
     // une association du national reste une association, jamais découpée en QCM (19 novembre 2026)
     if (q.type === 'association' && q.association?.gauche?.length) out.push({ cle: 'q', type: 'association', enonce: q.prompt, association: q.association, demonstration: q.demonstration, lu: luDe(q), code: q.tableau_code });
-    else if ((q.options || []).length >= 2) out.push({ cle: 'q', type: 'qcm', enonce: q.prompt, choix: q.options, bonne: q.correct, demonstration: q.demonstration, lu: luDe(q), code: q.tableau_code });
+    else if ((q.options || []).length >= 2) out.push({ cle: 'q', type: 'qcm', enonce: q.prompt, choix: q.options, lettres: q.lettres, bonne: q.correct, demonstration: q.demonstration, lu: luDe(q), code: q.tableau_code });
     else out.push({ cle: 'q', type: 'directe', enonce: q.prompt, demonstration: q.demonstration, lu: luDe(q), code: q.tableau_code });
   }
   (slide.exercises || []).forEach((ex, i) => {
     const gl = (ex as { glisser?: GlisserCodeData }).glisser;
     if ((ex.type as string) === 'glisser' && (gl?.sequence || gl?.texte)) out.push({ cle: `e${i}`, type: 'glisser', enonce: ex.prompt, glisser: gl, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex) });
     if (ex.type === 'association' && ex.association?.gauche?.length) out.push({ cle: `e${i}`, type: 'association', enonce: ex.prompt, association: ex.association, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex), code: (ex as { tableau_code?: string[] }).tableau_code });
-    if (ex.type === 'qcm' && (ex.choices || []).length >= 2) out.push({ cle: `e${i}`, type: 'qcm', enonce: ex.prompt, choix: ex.choices, bonne: ex.correct ?? 0, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex), code: (ex as { tableau_code?: string[] }).tableau_code });
+    if (ex.type === 'qcm' && (ex.choices || []).length >= 2) out.push({ cle: `e${i}`, type: 'qcm', enonce: ex.prompt, choix: ex.choices, lettres: ex.lettres, bonne: ex.correct ?? 0, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex), code: (ex as { tableau_code?: string[] }).tableau_code });
     if (ex.type === 'vrai_faux') (ex.statements || []).forEach((st, j, tout) => {
       out.push({ cle: `e${i}s${j}`, type: 'vrai_faux', enonce: st.text, choix: ['Vrai', 'Faux'], bonne: st.correct ? 0 : 1, explication: st.explanation,
         demonstration: j === tout.length - 1 ? ex.demonstration : undefined, lu: luDe(st) });
@@ -2972,7 +2972,7 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
               <button key={i} disabled={attente || finie || fausse} onClick={() => void envoyer(c, i)}
                 className={`${q.type === 'vrai_faux' ? 'px-4' : 'block w-full px-3 text-left'} rounded-lg border ${compact ? 'py-1' : 'py-2'} ${grand} disabled:cursor-default ${
                   bonneMontree ? 'border-emerald-400 bg-emerald-500/20' : fausse ? 'border-rose-400/60 bg-rose-500/15 line-through opacity-70' : pris === i && attente ? 'border-cyan-300 bg-white/10' : 'border-white/15 hover:bg-white/5'}`}>
-                {q.type === 'qcm' ? `${String.fromCharCode(65 + i)}. ` : ''}<Formule t={c} />
+                {q.type === 'qcm' ? `${q.lettres?.[i] ?? String.fromCharCode(65 + i)}. ` : ''}<Formule t={c} />
               </button>
             );
           })}
