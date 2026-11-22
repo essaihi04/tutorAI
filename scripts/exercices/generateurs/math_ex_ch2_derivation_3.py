@@ -230,7 +230,7 @@ EX = {
                                        ("g(2) = −4√2 ; g : 0 ↘ −4√2 ↗ +∞", "g de deux égale moins quatre racine de deux")],
                                       "le signe ديال g prime هو le signe ديال x moins deux. g de deux égale moins quatre racine de deux. g décroissante من zéro حتى moins quatre racine de deux، ومن بعد croissante حتى plus l'infini.")},
             {"id": "4", "texte": "En déduire la valeur minimale de g sur [0 ; +∞[ (valeur exacte et valeur approchée à 10⁻² près).",
-             "reponse": valeur("valeur minimale", -5.657, "la valeur minimale est g(2) = −4√2 ≈ −5,66", tolerance=0.003),
+             "reponse": phrase("la valeur minimale est g(2) = −4√2 ≈ −5,66"),
              "clavier": {"aides": ["g(2) = −4√2", "≈"], "pieges": ["−4"]},
              "correction": correction([("4 : valeur minimale g(2) = −4√2 ≈ −5,66 ; pour tout x ≥ 0, (x − 6)√x ≥ −4√2", "la valeur minimale égale moins quatre racine de deux")],
                                       "la valeur minimale égale moins quatre racine de deux، يعني environ moins cinq virgule soixante-six.")},

@@ -9,6 +9,5 @@ for f in sorted(glob.glob(str(D / "*.json"))):
         continue
     e = json.load(open(f, encoding="utf-8"))
     L.append({k: e.get(k) for k in ("id", "matiere", "chapitre", "cours", "titre", "niveau", "duree_min")} | {"questions": len(e["enonce"]["questions"])})
-open(D / "index.json", "w", encoding="utf-8", newline="
-").write(json.dumps({"version": 1, "exercices": L}, ensure_ascii=False, indent=1))
+open(D / "index.json", "w", encoding="utf-8", newline="\n").write(json.dumps({"version": 1, "exercices": L}, ensure_ascii=False, indent=1))
 print(len(L), "exercices")

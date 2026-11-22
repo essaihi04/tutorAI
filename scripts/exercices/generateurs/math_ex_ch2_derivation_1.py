@@ -62,7 +62,7 @@ Q2 = {"id": "2", "texte": "Déterminer une équation de la tangente (T) à (C) a
 
 Q3 = {"id": "3", "texte": "Calculer f′(x) pour tout x de ℝ, puis déterminer l'abscisse du point de (C) où la tangente est horizontale.",
       "texte_dit": "السؤال trois: حسب f prime de x لكل x من R، ومن بعد لقا l'abscisse ديال النقطة من la courbe، فين la tangente horizontale.",
-      "reponse": valeur("x", -0.5, "f′(x) = 2x + 1 ; tangente horizontale ⇔ f′(x) = 0 ⇔ 2x + 1 = 0 ⇔ x = −0,5"),
+      "reponse": phrase("f′(x) = 2x + 1 ; tangente horizontale ⇔ f′(x) = 0 ⇔ 2x + 1 = 0 ⇔ x = −0,5"),
       "clavier": {"aides": ["f′(x) =", "2x + 1", "f′(x) = 0", "x ="], "pieges": ["x = 0,5", "f′(x) = 2x"]},
       "aides": [aide("Dérive terme à terme : (x²)′ = 2x, (x)′ = 1, la constante donne 0.",
                      "derive كل terme بوحدو: x carré كتعطي deux x، و x كتعطي un، و la constante كتعطي zéro."),

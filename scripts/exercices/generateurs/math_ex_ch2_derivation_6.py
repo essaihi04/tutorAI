@@ -112,7 +112,7 @@ Q5 = {"id": "5", "texte": "Soit g la restriction de f à l'intervalle I = [1 ; +
 
 Q6 = {"id": "6", "texte": "Vérifier que g(9) = 3, puis montrer que g⁻¹ est dérivable en 3 et calculer (g⁻¹)′(3).",
       "texte_dit": "السؤال six: تحقق بلي g de neuf égale trois، ومن بعد بين بلي g moins un dérivable en trois، وحسب g moins un prime de trois.",
-      "reponse": valeur("(g⁻¹)′(3)", 1.5, "g(9) = 9 − 2 × 3 = 3, donc g⁻¹(3) = 9 ; g′(9) = (3 − 1)/3 = 2/3 ≠ 0, donc g⁻¹ est dérivable en 3 et (g⁻¹)′(3) = 1/g′(9) = 3/2 = 1,5"),
+      "reponse": phrase("g(9) = 9 − 2 × 3 = 3, donc g⁻¹(3) = 9 ; g′(9) = (3 − 1)/3 = 2/3 ≠ 0, donc g⁻¹ est dérivable en 3 et (g⁻¹)′(3) = 1/g′(9) = 3/2 = 1,5"),
       "clavier": {"aides": ["g⁻¹(3) = 9", "g′(9) = 2/3 ≠ 0", "(g⁻¹)′(3) = 1/g′(9)", "= 1,5"], "pieges": ["1/g′(3)", "(g⁻¹)′(3) = 2/3"]},
       "aides": [aide("3 est une image : son antécédent est 9 (g(9) = 3). C'est en 9 qu'on dérive g, pas en 3.",
                      "trois هي image: l'antécédent ديالها هو neuf، حيت g de neuf égale trois. ف neuf كنشتقو g، ماشي ف trois."),
@@ -282,7 +282,7 @@ EX = {
              "correction": correction([("5 : k continue et strictement croissante sur I : réciproque sur J = [k(4) ; +∞[ = [−4 ; +∞[", "J égale moins quatre، plus l'infini")],
                                       "k continue et strictement croissante sur I، إذن عندها fonction réciproque، و J égale moins quatre، plus l'infini.")},
             {"id": "6", "texte": "Vérifier que k(25) = 5, puis calculer (k⁻¹)′(5).",
-             "reponse": valeur("(k⁻¹)′(5)", 5 / 3, "k(25) = 25 − 20 = 5 ; k′(25) = (5 − 2)/5 = 3/5 ≠ 0 ; (k⁻¹)′(5) = 1/k′(25) = 5/3 ≈ 1,67", tolerance=0.003),
+             "reponse": phrase("k(25) = 25 − 20 = 5 ; k′(25) = (5 − 2)/5 = 3/5 ≠ 0 ; (k⁻¹)′(5) = 1/k′(25) = 5/3 ≈ 1,67"),
              "clavier": {"aides": ["k⁻¹(5) = 25", "1/k′(25)"], "pieges": ["1/k′(5)"]},
              "correction": correction([("6 : k(25) = 25 − 4 × 5 = 5 ; k′(25) = 3/5 ≠ 0", "k prime de vingt-cinq égale trois cinquièmes"),
                                        ("(k⁻¹)′(5) = 1/k′(25) = 5/3", "cinq tiers")],
