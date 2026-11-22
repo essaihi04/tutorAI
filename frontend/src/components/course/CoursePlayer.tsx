@@ -175,6 +175,27 @@ export default function CoursePlayer({
   const completedSlideIdsRef = useRef(completedSlideIds);
   const current = flatSlides[index];
   /**
+   * L'énoncé du national que cette diapositive traite (22 novembre 2026, demande de l'utilisateur : « quand l'élève veut
+   * répondre à une question d'examen, il aura peut-être besoin de revoir la question ; un bouton dans l'écran de la
+   * simulation, voir l'examen papier »). La diapositive d'énoncé (feuille d'examen) la plus proche AVANT celle-ci, du même
+   * sujet et du même exercice (titre « National 2021 N, exercice 2 … »).
+   */
+  const enonceExamen = useMemo(() => {
+    const cle = (titre?: string) => {
+      const m = /National\s+(\d{4})\s*([NR])\b.*?exercice\s+(\d+)/i.exec(titre || '');
+      return m ? `${m[1]}${m[2].toUpperCase()}-${m[3]}` : '';
+    };
+    const estFeuille = (s?: CourseSlide) => /\/shared\/examen\/feuille\.html/.test(s?.visual?.url || '');
+    const ici = current?.slide;
+    const k = cle(ici?.title);
+    if (!ici || !k || estFeuille(ici)) return undefined;
+    for (let j = index - 1; j >= 0; j--) {
+      const s = flatSlides[j].slide;
+      if (estFeuille(s) && cle(s.title) === k) return { url: s.visual!.url!, titre: s.title || '' };
+    }
+    return undefined;
+  }, [current, flatSlides, index]);
+  /**
    * Les rappels déjà sus (`concentration.rappel`, 18 novembre 2026) : en concentration, « Suite → » saute un rappel
    * dont le diagnostic a été réussi du premier coup. `sautes` : où l'élève est arrivé et ce qui a été sauté (le bouton
    * « 🔁 Revoir le rappel » y reste) ; `revus` : les rappels rouverts à la demande, jamais resautés.
@@ -559,6 +580,7 @@ export default function CoursePlayer({
             onFermerBloc={memoire.fermerBloc}
             onReponseJugee={memoire.signalerReponse}
             entete={enteteDuCahier(deck, current.slide.id)}
+            enonce={enonceExamen}
           />
         )}
         {/* le clavier scientifique flottant, à droite (diapositives, cahier, retrouver, exercices, rappels) */}

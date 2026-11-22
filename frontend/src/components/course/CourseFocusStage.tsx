@@ -69,6 +69,9 @@ interface Props {
   onReponseJugee?: (r: { correct: boolean | null }) => void;
   /** Le cahier organisé (12 novembre 2026) : titre du cours au premier écran, partie numérotée en y entrant, diapositive numérotée. */
   entete?: EnteteCahier;
+  /** L'énoncé du national traité par cette diapositive (feuille d'examen d'une diapositive précédente) : le bouton
+   *  « 📄 Voir l'énoncé » le rouvre par-dessus la simulation (22 novembre 2026). */
+  enonce?: { url: string; titre: string };
 }
 
 const premier = <T,>(champ: Record<string, T> | undefined, langue: Langue): T | undefined =>
@@ -395,7 +398,7 @@ async function appelerApi<T>(chemin: string, corps: unknown): Promise<T> {
   return r.json() as Promise<T>;
 }
 
-export default function CourseFocusStage({ slide, language, deckControls, tuteur3D = false, deckId, onSuivant, libelleSuite = 'Suite →', finDeBloc = false, onFermerBloc, onReponseJugee, entete }: Props) {
+export default function CourseFocusStage({ slide, language, deckControls, tuteur3D = false, deckId, onSuivant, libelleSuite = 'Suite →', finDeBloc = false, onFermerBloc, onReponseJugee, entete, enonce }: Props) {
   const parole = (premier(slide.speech_text, language) || '').trim();
   const pisteEnregistree = premier(slide.audio, language);
   /** Sans voix enregistrée, la piste muette de la durée de lecture (voir `pisteMuette`). */
@@ -423,6 +426,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const [enLecture, setEnLecture] = useState(false);
   const [finie, setFinie] = useState(!piste?.url);
   const [panneau, setPanneau] = useState<'cahier' | 'explication' | 'exercices' | 'questions' | 'question_eleve' | null>(null);
+  /** L'énoncé de l'examen rouvert par l'élève, par-dessus la scène (22 novembre 2026). */
+  const [voirEnonce, setVoirEnonce] = useState(false);
+  useEffect(() => { setVoirEnonce(false); }, [slide.id]);
   const [labControl, setLabControl] = useState<LabControlCommand | null>(null);
   const [simPrete, setSimPrete] = useState(false);
   /** L'URL de la simulation chargée dans l'iframe. L'iframe a pour clé son URL : deux diapositives de suite sur la même
@@ -854,6 +860,23 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     if (audio && !audio.paused) { audio.pause(); coursEnPause.current = true; if (demarree.current) envoyerASim('pause'); }
     setPanneau(p => p === 'question_eleve' ? null : 'question_eleve');
   }, [envoyerASim]);
+
+  /** « 📄 Voir l'énoncé » : la feuille de l'examen par-dessus la scène ; la voix et la simulation attendent l'élève. */
+  const enonceEnPause = useRef(false);
+  const ouvrirEnonce = useCallback(() => {
+    const audio = audioRef.current;
+    enonceEnPause.current = false;
+    if (audio && !audio.paused) { audio.pause(); enonceEnPause.current = true; if (demarree.current) envoyerASim('pause'); }
+    setVoirEnonce(true);
+  }, [envoyerASim]);
+  const fermerEnonce = useCallback(() => {
+    setVoirEnonce(false);
+    if (enonceEnPause.current) { enonceEnPause.current = false; void audioRef.current?.play(); if (demarree.current) envoyerASim('resume'); }
+  }, [envoyerASim]);
+  const boutonEnonce = enonce && !voirEnonce ? (
+    <button onClick={ouvrirEnonce} className="rounded-full border border-amber-200/50 bg-[#0f2219]/90 px-3 py-1 text-sm text-amber-100 shadow-lg hover:bg-amber-200/15"
+      style={{ fontFamily: CRAIE }} title={enonce.titre} aria-label="Voir l'énoncé de l'examen">📄 Voir l’énoncé</button>
+  ) : null;
 
   const lireFichier = (f: File) => new Promise<string>((ok, ko) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.onerror = ko; fr.readAsDataURL(f); });
 
@@ -2200,6 +2223,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
               <div className="flex items-center gap-3">
                 {/* le tableau des questions couvre la scène : le bouton du résultat clignote dans son en-tête */}
                 {resultat && !reaction && <BoutonResultat onClick={() => void ouvrirResultat()} />}
+                {boutonEnonce}
                 <button onClick={fermerPanneau} className="text-white/50 hover:text-white text-xl" aria-label="Revenir à la scène">×</button>
               </div>
             </div>
@@ -2246,6 +2270,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                 onLoad={() => { const url = visuel.url || null; window.setTimeout(() => { urlChargee.current = url; setSimPrete(true); }, 700); }}
               />
             )}
+            {/* en haut à droite : en haut à gauche, la simulation a son bouton (Lancer, Pause, Reprendre) */}
+            {surSim && boutonEnonce && <div className="absolute right-2 top-2 z-20">{boutonEnonce}</div>}
             {visuel.kind === 'image' && visuel.url && (
               <img src={visuel.url} alt={visuel.alt || contenu.alt || ''} className="max-h-full max-w-full object-contain" />
             )}
@@ -2260,6 +2286,19 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         {obs && observation && !demoSurFigure && (
           <BandeObservation o={observation} e={obs} etroit={etroit} onCarte={repondreCarte} onCartes={() => setObs(x => x && { ...x, cartes: true })}
             onMicro={() => void demarrerMicroReponse()} onMicroFin={arreterMicroReponse} onPasser={fermerObservation} />
+        )}
+
+        {/* ── L'énoncé de l'examen rouvert par l'élève (22 novembre 2026) ── */}
+        {voirEnonce && enonce && (
+          <div className="absolute inset-y-0 left-3 z-40 flex flex-col pb-2" style={{ right: tuteur3D ? COLONNE_TUTEUR + 4 : 12 }}>
+            <div className="tableau-questions flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border-2 border-amber-200/40 bg-[#0f2219] shadow-2xl">
+              <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-2" style={{ fontFamily: CRAIE }}>
+                <p className="truncate text-base text-amber-100">📄 {enonce.titre || 'L’énoncé de l’examen'}</p>
+                <button onClick={fermerEnonce} className="shrink-0 rounded-full border border-white/30 px-3 py-1 text-sm text-white/85 hover:bg-white/10">× Revenir</button>
+              </div>
+              <iframe key={enonce.url} title="Énoncé de l'examen" src={enonce.url} sandbox="allow-scripts allow-same-origin" className="min-h-0 w-full flex-1 border-0 bg-white" />
+            </div>
+          </div>
         )}
 
         {/* ── La question de l'élève expliquée au tableau ── */}
