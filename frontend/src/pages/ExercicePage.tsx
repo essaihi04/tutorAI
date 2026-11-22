@@ -41,16 +41,18 @@ function jouer(url?: string) {
 }
 
 const jeton = () => { try { return localStorage.getItem('token') || ''; } catch { return ''; } };
-async function corrigerParLeTuteur(titre: string, contexte: string, q: QuestionExercice, reponse: string, tentative: number) {
+async function corrigerParLeTuteur(titre: string, contexte: string, q: QuestionExercice, reponse: string, tentative: number, matiere: string) {
   const r = await fetch('/api/v1/course-player/answer-reaction', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton()}` },
-    body: JSON.stringify({ diapo: { title: titre, speech: contexte }, question: { type: 'open', enonce: q.texte, attendu: q.reponse.attendu }, reponse, tentative, verdict: null }),
+    body: JSON.stringify({ diapo: { title: titre, speech: contexte }, question: { type: 'open', enonce: q.texte, attendu: q.reponse.attendu, matiere }, reponse, tentative, verdict: null }),
   });
   if (!r.ok) throw new Error(String(r.status));
-  return r.json() as Promise<{ correct: boolean | null; parole: string; ecrit: string }>;
+  return r.json() as Promise<{ correct: boolean | null; partiel?: boolean; parole: string; ecrit: string }>;
 }
 
-type Etat = { essais: number; juste: boolean | null; retour?: string; note?: string; correction: boolean; texte?: string; autoEval?: boolean };
+type Etat = { essais: number; juste: boolean | null; retour?: string; note?: string; correction: boolean; texte?: string; autoEval?: boolean;
+  /** le verdict du dernier essai, toujours affiché (22/11/2026) : juste, en partie, faux, ou non jugé */
+  verdict?: 'juste' | 'partiel' | 'faux' | 'nonjuge' | 'lecture'; partiel?: boolean };
 type Ouvert = null | { genre: 'explication' | 'facile'; slide: CourseSlide } | { genre: 'feuille' };
 
 function deckDe(ex: Exercice, genre: 'explication' | 'facile', slide: CourseSlide): CourseDeck {
@@ -103,16 +105,19 @@ export default function ExercicePage() {
       const v = jugerValeur(q.reponse, texte);
       const finie = v.juste || similaire || essais >= 2;
       poser(q.id, { essais, juste: v.juste ? true : finie ? false : null, texte, note: v.note, correction: finie,
-        retour: v.juste ? 'Juste !' : finie ? `Pas tout à fait : la réponse est ${q.reponse.attendu}.`
+        verdict: v.juste ? 'juste' : v.lu == null && !finie ? undefined : 'faux',
+        retour: v.juste ? 'Le résultat est bon.' : finie ? `Pas tout à fait : la réponse est ${q.reponse.attendu}.`
           : (v.lu == null ? (v.note || 'Écris la valeur.') : 'Pas encore juste. Relis la question ; tu peux demander l’aide du tuteur.') });
       if (finie) jouer(q.correction.audio);
       return;
     }
-    poser(q.id, { essais, texte, retour: 'Le tuteur lit ta réponse…' });
+    poser(q.id, { essais, texte, retour: 'Le tuteur lit ta réponse…', verdict: 'lecture' });
     try {
-      const r = await corrigerParLeTuteur(ex.titre, enonce.intro, q, texte, similaire ? 2 : essais);
+      const r = await corrigerParLeTuteur(ex.titre, enonce.intro, q, texte, similaire ? 2 : essais, ex.matiere);
       const finie = r.correct === true || similaire || essais >= 2;
-      poser(q.id, { juste: r.correct === true ? true : finie ? false : null, retour: r.ecrit, correction: finie });
+      const verdict = r.correct === true ? 'juste' : r.partiel ? 'partiel' : r.correct === false ? 'faux' : 'nonjuge';
+      poser(q.id, { juste: r.correct === true ? true : finie ? false : null, retour: r.ecrit || r.parole, correction: finie,
+        verdict, partiel: !!r.partiel });
     } catch {
       // sans le tuteur en ligne : l'élève compare lui-même avec la réponse attendue
       poser(q.id, { retour: '', autoEval: true, correction: true });
@@ -144,9 +149,10 @@ export default function ExercicePage() {
   const conseilSemblable = mode === 'exercice' && fini && (bilan.justes < bilan.total || bilan.aidesTotal >= bilan.total || vues.explications > 0);
 
   const total = enonce.questions.reduce((n, x) => n + pointsDe(x), 0);
-  const note = enonce.questions.reduce((n, x) => n + (etats[cle(x.id)]?.juste === true ? pointsDe(x) : 0), 0);
+  const gagne = (x: QuestionExercice, e?: Etat) => e?.juste === true ? pointsDe(x) : e?.juste === false && e.partiel ? pointsDe(x) / 2 : 0;
+  const note = enonce.questions.reduce((n, x) => n + gagne(x, etats[cle(x.id)]), 0);
   const ptsQ = pointsDe(q);
-  const noteQ = etat.juste === true ? ptsQ : etat.juste === false ? 0 : null;
+  const noteQ = etat.juste === null ? null : gagne(q, etat);
   const BTN = 'rounded-md border border-slate-400 bg-white px-3 py-1.5 text-sm text-slate-900 hover:bg-slate-100';
   const LIGNES = { lineHeight: '36px', backgroundImage: 'repeating-linear-gradient(transparent 0 35px, #9bb3d6 35px 36px)' };
 
@@ -249,7 +255,17 @@ export default function ExercicePage() {
                 </div>)}
               {etat.texte && (etat.correction || etat.juste === true) && (
                 <p className="mt-3 whitespace-pre-wrap text-[21px] text-black" style={{ fontFamily: CRAIE, ...LIGNES }}>{etat.texte}</p>)}
-              {etat.retour && <p className={`mt-3 border p-2 text-[18px] ${etat.juste === true ? 'border-emerald-700 text-emerald-800' : etat.juste === false ? 'border-rose-700 text-rose-800' : 'border-slate-400 text-slate-800'}`} style={{ fontFamily: CRAIE }}><Formule t={etat.retour} /></p>}
+              {etat.retour && (() => {
+                const V = { juste: ['✔ Juste', 'border-emerald-700 text-emerald-800'], partiel: ['◐ Juste en partie : complète ta réponse', 'border-amber-600 text-amber-800'],
+                  faux: [etat.correction ? '✘ Faux' : '✘ Pas encore juste', 'border-rose-700 text-rose-800'], nonjuge: ['? Le tuteur n’a pas pu juger : précise ta réponse', 'border-slate-500 text-slate-800'],
+                  lecture: ['…', 'border-slate-400 text-slate-600'] } as const;
+                const [titre, couleur] = V[etat.verdict || (etat.juste === true ? 'juste' : etat.juste === false ? 'faux' : 'lecture')];
+                return (
+                  <div className={`mt-3 border-2 p-2 ${couleur}`}>
+                    {etat.verdict !== 'lecture' && <p className="text-[15px] font-bold" style={{ fontFamily: 'system-ui, sans-serif' }}>{titre}</p>}
+                    <p className="text-[18px]" style={{ fontFamily: CRAIE }}><Formule t={etat.retour} /></p>
+                  </div>);
+              })()}
               {etat.note && <p className="mt-2 text-[16px] text-amber-800">{etat.note}</p>}
 
               {/* La correction : la rédaction attendue, à l'encre rouge du correcteur */}

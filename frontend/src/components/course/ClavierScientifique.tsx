@@ -27,6 +27,7 @@ const DECRIRE_SVT: Touche[] = [
 const EXPLIQUER_SVT: Touche[] = [
   { l: 'en présence de', t: ' en présence de ' }, { l: 'en absence de', t: ' en absence de ' }, { l: 'car', t: ' car ' }, { l: 'donc', t: ' donc ' },
   { l: 'On en déduit que', t: 'On en déduit que ' }, { l: 'On conclut que', t: 'On conclut que ' }, { l: 'hypothèse :', t: 'Hypothèse : ' }, { l: 'ce qui montre que', t: ', ce qui montre que ' },
+  { l: 'correspond à', t: ' correspond à ' }, { l: 'du côté de', t: ' du côté de ' }, { l: 'sont tournées vers', t: ' sont tournées vers ' }, { l: 'en effet', t: 'En effet, ' }, { l: 'contrairement à', t: ' contrairement à ' }, { l: 'grâce à', t: ' grâce à ' },
   '→', '⇒', '=', '+', '×', { l: 'a/b', t: '/' }, '%', '≈', '(', ')'];
 
 const ONGLETS: Record<Onglet, { titre: string; touches: Touche[] }[]> = {

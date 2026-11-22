@@ -25,6 +25,10 @@ naturelle en darija, adaptée à la situation, puis l'explication. Exemples de c
 Jamais de reproche ni d'ironie ; ne félicite pas une réponse fausse."""
 
 
+MATIERES = {"physique": "physique-chimie", "physique-chimie": "physique-chimie", "chimie": "physique-chimie",
+            "mathematiques": "mathématiques", "maths": "mathématiques", "svt": "SVT"}
+
+
 def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, verdict: Optional[bool]) -> str:
     choix = question.get("choix") or []
     lignes_choix = "\n".join(f"  {chr(65 + i)}. {c}" for i, c in enumerate(choix))
@@ -36,10 +40,17 @@ def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, ve
         cle = cle_attendue(question['attendu'])
     impose = "" if verdict is None else (
         f"VERDICT IMPOSÉ (la clé est connue) : la réponse est {'JUSTE' if verdict else 'FAUSSE'}. Ne le rejuge pas, explique-le.")
+    matiere = MATIERES.get(str(question.get("matiere") or "").lower(), "physique-chimie")
+    libre = not choix
     if verdict is None:
-        consigne_juge = ("Juge d'abord la réponse avec le cours ci-dessus (le fond compte, pas l'orthographe). "
-                         "« correct » : true si elle est juste, false si elle est fausse, null seulement si une réponse "
-                         "LIBRE est trop coupée ou ambiguë pour être jugée.")
+        consigne_juge = ("Juge d'abord la réponse avec le cours ci-dessus (le fond compte, pas l'orthographe ni les accents). "
+                         "« correct » : true si elle est juste et complète, false si elle est fausse ou incomplète, null "
+                         "seulement si une réponse LIBRE est trop coupée ou ambiguë pour être jugée.")
+        if libre:
+            # 22/11/2026 : une réponse au fond juste mais sans la justification demandée n'est ni « juste » ni « fausse »
+            consigne_juge += (" « partiel » : true quand le fond est juste mais la réponse incomplète (justification "
+                              "demandée absente, une des parties de la question manque) ; alors « correct » vaut false, "
+                              "tu dis d'abord clairement ce qui est juste, puis ce qui manque, sans donner ce qui manque.")
     else:
         consigne_juge = "« correct » reprend le verdict imposé."
     if tentative <= 1:
@@ -49,7 +60,7 @@ def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, ve
     else:
         geste = ("S'il se trompe encore : donne la bonne réponse et sa justification en deux phrases, "
                  "sans le décourager.")
-    return f"""Tu es le professeur de physique d'un élève de 2e Bac PC BIOF au Maroc. Diapositive « {diapo.get('title', '')} ».
+    return f"""Tu es le professeur de {matiere} d'un élève de 2e Bac PC BIOF au Maroc. Diapositive « {diapo.get('title', '')} ».
 Ce que tu viens d'expliquer à voix haute : {str(diapo.get('speech') or '')[:1200]}
 
 Question posée ({question.get('type', 'qcm')}) : {question.get('enonce', '')}
@@ -66,7 +77,7 @@ S'il a juste : dis précisément ce qui est juste et pourquoi, en une ou deux ph
 {REGLES_VOIX}
 
 Réponds UNIQUEMENT par ce JSON :
-{{"correct": true, "parole": "ce que tu dis (règles de la voix)", "ecrit": "la même chose en français écrit, court, avec les valeurs"}}"""
+{{"correct": true, "partiel": false, "parole": "ce que tu dis (règles de la voix)", "ecrit": "la même chose en français écrit, court, avec les valeurs"}}"""
 
 
 def reaction_reponse(texte_llm: str, verdict: Optional[bool]) -> Optional[dict]:
@@ -81,4 +92,5 @@ def reaction_reponse(texte_llm: str, verdict: Optional[bool]) -> Optional[dict]:
     parole = parole_propre(d.get("parole"))
     if not parole:
         return None
-    return {"correct": correct, "parole": parole, "ecrit": str(d.get("ecrit") or "").strip()[:600]}
+    partiel = d.get("partiel") is True and correct is not True
+    return {"correct": correct, "partiel": partiel, "parole": parole, "ecrit": str(d.get("ecrit") or "").strip()[:600]}

@@ -30,3 +30,12 @@ def test_reponse_libre_injugeable_et_json_bancal():
 def test_ton_chaleureux_dans_le_prompt():
     p = re_.prompt_reponse({"title": "Retard"}, Q, "B", 1, None)
     assert "برافو عليك" in p and "ne félicite pas une réponse fausse" in p
+
+
+def test_reponse_libre_partielle_et_matiere():
+    q = {"type": "open", "enonce": "Justifier", "attendu": "la matrice", "matiere": "svt"}
+    p = re_.prompt_reponse({"title": "Vésicules"}, q, "matrice", 1, None)
+    assert "professeur de SVT" in p and "« partiel »" in p
+    r = re_.reaction_reponse('{"correct": false, "partiel": true, "parole": "مزيان", "ecrit": "il manque la justification"}', None)
+    assert r["partiel"] is True and r["correct"] is False
+    assert re_.reaction_reponse('{"correct": true, "partiel": true, "parole": "x"}', None)["partiel"] is False

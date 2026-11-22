@@ -163,7 +163,7 @@ async def answer_reaction(body: AnswerReactionRequest, student: dict = Depends(g
     for _ in range(2):
         try:
             texte = await llm_service.chat(messages=[{"role": "user", "content": prompt}],
-                                           system_prompt="Tu es un professeur de physique bienveillant et exigeant. Tu réponds uniquement en JSON valide.",
+                                           system_prompt="Tu es un professeur bienveillant et exigeant. Tu réponds uniquement en JSON valide.",
                                            temperature=0.4, max_tokens=500, student_id=_compte(student),
                                            session_type="course_player")
         except Exception as e:  # noqa: BLE001
