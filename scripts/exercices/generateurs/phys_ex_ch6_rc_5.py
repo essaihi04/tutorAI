@@ -81,7 +81,7 @@ EX = {
                   "Calculer l'énergie E_e = ½·C·u_C²"],
   "enonce": {
     "intro": "On réalise le montage de la figure 1 : un générateur idéal de tension (E = 10 V), un conducteur ohmique de résistance R = 2 kΩ, un condensateur de capacité C = 50 µF et un inverseur K. L'inverseur est d'abord en position 1 assez longtemps pour que le condensateur soit complètement chargé. À la date t = 0, on bascule K en position 2. Le sens positif choisi pour i est indiqué sur la figure 1. La figure 2 donne u_C(t) pendant la décharge.",
-    "intro_dit": "دابا نقراو l'énoncé. عندنا le montage ديال la figure un: un générateur، E égale dix volts، un conducteur ohmique، R égale deux kiloohms، un condensateur، C égale cinquante microfarads، و l'interrupteur K بdeux positions. الأول K فla position un، حتى تشارجا le condensateur مزيان. فt égale zéro، كنديرو K فla position deux. le sens ديال i مرسوم فla figure un. و la figure deux كتعطي u C فla décharge.",
+    "intro_dit": "دابا نقراو l'énoncé. عندنا le montage ديال la figure un: un générateur، E égale dix volts، un conducteur ohmique، R égale deux kiloohms، un condensateur، C égale cinquante microfarads، و l'interrupteur K، عندو deux positions. الأول K فla position un، حتى تشارجا le condensateur مزيان. فt égale zéro، كنديرو K فla position deux. le sens ديال i مرسوم فla figure un. و la figure deux كتعطي u C فla décharge.",
     "figures": [montage("Figure 1 : le montage à inverseur"), decharge(10, 0.1, 0.6, 0.05, 1, "Figure 2 : la décharge u_C(t)")],
     "donnees": ["E = 10 V", "R = 2 kΩ = 2·10³ Ω", "C = 50 µF = 50·10⁻⁶ F", "t = 0 : bascule de K de la position 1 à la position 2"],
     "questions": [
@@ -222,7 +222,7 @@ EX = {
                 {"mot": "i égale moins E sur R، fois exponentielle", "cible": "centre:1"}]),
     diapo_sim("ex_d6", "Question 6 : l'énergie du condensateur", "E_e = ½·C·E² = ½ × 50·10⁻⁶ × 10² = 2,5·10⁻³ J.",
       SIMD + "energie.html?vue=calcul", "C = 50 µF, u_C = 10 V : l'énergie stockée au début de la décharge",
-      "le condensateur مشارجي: u C égale dix volts، و C égale cinquante microfarads. l'énergie ديالو: E e égale un demi fois C fois u C au carré. رد البال لle carré. un demi fois cinquante fois dix puissance moins six، fois cent. E e égale deux virgule cinq fois dix puissance moins trois joule. فla décharge، u C كتمشي لzéro، إذن l'énergie كتمشي لzéro: تصرفات كلها فla résistance، par effet Joule.",
+      "le condensateur مشارجي: u C égale dix volts، و C égale cinquante microfarads. l'énergie ديالو: E e égale un demi fois C fois u C au carré. رد البال لle carré. un demi fois cinquante fois dix puissance moins six، fois cent. E e égale deux virgule cinq fois dix puissance moins trois joule. فla décharge، u C كتمشي vers zéro، إذن l'énergie كتمشي vers zéro: تصرفات كلها فla résistance، par effet Joule.",
       centre=[("E_e = ½·C·u_C²", "E e égale un demi fois C fois u C au carré"), ("E_e = ½ × 50·10⁻⁶ × 10² = 2,5·10⁻³ J", "E e égale deux virgule cinq fois dix puissance moins trois joule")],
       pointage=[avec(REGE, "le condensateur مشارجي"),
                 {"mot": "l'énergie ديالو", "commande": "play_until", "parametres": {"moment": "regime_permanent"}},
@@ -262,8 +262,8 @@ EX = {
         "1": {"juste": rep("برافو! فla décharge، فt égale tau، كيبقى trente-sept pour cent من E.", "Juste : en décharge, u_C(τ) = 0,37·E.")},
         "0": {"1": rep("ما تقلقش. soixante-trois pour cent هي ديال la charge. هنا u C كتهبط. عاود اختار.", "63 % sert pour la charge ; ici u_C descend. Réessaie."),
               "2": rep("الجواب هو zéro virgule trente-sept fois E. la charge: soixante-trois، la décharge: trente-sept.", "Réponse : 0,37·E (charge → 0,63 ; décharge → 0,37).")},
-        "2": {"1": rep("لا، فtau مازال le condensateur ما تفرغش. خاص تقريبا cinq tau. عاود اختار.", "À τ, le condensateur n'est pas vide : il faut environ 5τ. Réessaie."),
-              "2": rep("الجواب هو zéro virgule trente-sept fois E. u C كتوصل لzéro غير من بعد cinq tau تقريبا.", "Réponse : 0,37·E ; u_C ≈ 0 seulement vers 5τ.")}},
+        "2": {"1": rep("لا، فtau مازال le condensateur ما تفرغش. خاص environ cinq tau. عاود اختار.", "À τ, le condensateur n'est pas vide : il faut environ 5τ. Réessaie."),
+              "2": rep("الجواب هو zéro virgule trente-sept fois E. u C كتوصل à zéro غير من بعد environ cinq tau.", "Réponse : 0,37·E ; u_C ≈ 0 seulement vers 5τ.")}},
       "Pendant la décharge, à t égale tau, u C vaut ?"),
     qcm_facile("fa_d5", "Plus facile : le signe de i", "سؤال ساهل على le signe ديال i فla décharge.",
       "On garde pour i le même sens positif qu'à la charge. Pendant la décharge, i est…",
