@@ -136,7 +136,7 @@ EX = {
   ]),
   "facile": deck("facile", "Plus facile, pour s'entraîner", [
     qcm_facile("fa_n1_1", "Plus facile : la formule du défaut de masse", "نتمرنو بسؤال ساهل. اختار la bonne formule.",
-      "Pour un noyau ᴬ_ZX de masse m, le défaut de masse s'écrit :",
+      "Pour un noyau X de nombre de masse A, de nombre de charge Z et de masse m, le défaut de masse s'écrit :",
       ["Δm = m − [Z·m_p + (A − Z)·m_n]", "Δm = Z·m_p + (A − Z)·m_n − m", "Δm = Z·m_p + A·m_n − m"], 1, {
         "1": {"juste": rep("برافو! la masse ديال les nucléons بعاد، ناقص la masse ديال النواة. delta m كيجي positif.", "Juste : nucléons séparés moins noyau ; Δm > 0.")},
         "0": {"1": rep("ما تقلقش. فكر: النواة خف ولا تقل من les nucléons بعاد؟ واش هاد الفرق غادي يجي positif؟ عاود اختار.", "Le noyau est plus léger que ses nucléons : cette différence serait négative. Réessaie."),

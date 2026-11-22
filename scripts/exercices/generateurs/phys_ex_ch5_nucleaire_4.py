@@ -78,7 +78,7 @@ EX = {
   "competences": ["Écrire l'équation d'une fission avec les lois de Soddy", "Calculer Δm d'une réaction et l'énergie libérée E_lib = |ΔE|",
                   "Convertir des MeV en joule", "Comparer fission et fusion par nucléon"],
   "enonce": {
-    "intro": "Dans le cœur d'une centrale nucléaire, un neutron lent provoque la fission d'un noyau d'uranium 235 selon l'équation :\n²³⁵₉₂U + ¹₀n → ⁹⁴_ZSr + ¹⁴⁰₅₄Xe + x ¹₀n",
+    "intro": "Dans le cœur d'une centrale nucléaire, un neutron lent provoque la fission d'un noyau d'uranium 235 selon l'équation :\n²³⁵₉₂U + ¹₀n → ⁹⁴Sr + ¹⁴⁰₅₄Xe + x ¹₀n\nLe nombre de charge Z du strontium ⁹⁴Sr est à déterminer.",
     "intro_dit": "دابا نقراو l'énoncé. فقلب une centrale nucléaire، un neutron lent كيضرب le noyau ديال l'uranium deux cent trente-cinq، وكيدير la fission. l'équation: l'uranium deux cent trente-cinq plus un neutron، كيعطيو le strontium quatre-vingt-quatorze، Z ما عارفينهش، plus le xénon cent quarante، plus x neutrons.",
     "figures": [fission("Figure : la fission d'un noyau d'uranium 235", "⁹⁴Sr", "¹⁴⁰Xe", 2)],
     "donnees": ["m(²³⁵₉₂U) = 234,9935 u ; m(⁹⁴Sr) = 93,8945 u ; m(¹⁴⁰₅₄Xe) = 139,8920 u", "m(¹₀n) = 1,00866 u",
@@ -242,7 +242,7 @@ EX = {
   "similaire": {
     "id": ID + "_b", "titre": "Même exercice, une autre fission : baryum et krypton",
     "enonce": {
-      "intro": "Une autre fission possible de l'uranium 235 :\n²³⁵₉₂U + ¹₀n → ¹⁴¹₅₆Ba + ⁹²_ZKr + x ¹₀n",
+      "intro": "Une autre fission possible de l'uranium 235 :\n²³⁵₉₂U + ¹₀n → ¹⁴¹₅₆Ba + ⁹²Kr + x ¹₀n\nLe nombre de charge Z du krypton ⁹²Kr est à déterminer.",
       "intro_dit": "fission أخرى: l'uranium deux cent trente-cinq plus un neutron، كيعطيو le baryum cent quarante et un، plus le krypton quatre-vingt-douze، plus x neutrons.",
       "figures": [fission("Figure : une autre fission de l'uranium 235", "⁹²Kr", "¹⁴¹Ba", 3)],
       "donnees": ["m(²³⁵₉₂U) = 234,9935 u ; m(¹⁴¹₅₆Ba) = 140,88367 u ; m(⁹²Kr) = 91,90639 u", "m(¹₀n) = 1,00866 u",

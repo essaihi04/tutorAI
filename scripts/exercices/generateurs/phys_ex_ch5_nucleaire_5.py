@@ -73,7 +73,7 @@ EX = {
   "competences": ["Écrire l'équation d'une fusion (lois de Soddy)", "Calculer E_ℓ = A·(E_ℓ/A)", "Exploiter un diagramme énergétique",
                   "Calculer ΔE = ΣE_ℓ(réactifs) − ΣE_ℓ(produits)", "Vérifier un bilan par les masses"],
   "enonce": {
-    "intro": "Dans certaines étoiles, deux noyaux de deutérium fusionnent selon l'équation :\n²₁H + ²₁H → ᴬ_ZX + ¹₀n\nLa figure représente le diagramme énergétique de cette réaction (l'échelle n'est pas respectée).",
+    "intro": "Dans certaines étoiles, deux noyaux de deutérium fusionnent selon l'équation :\n²₁H + ²₁H → ᴬX + ¹₀n\nLe noyau ᴬX a pour nombre de masse A et pour nombre de charge Z.\nLa figure représente le diagramme énergétique de cette réaction (l'échelle n'est pas respectée).",
     "intro_dit": "دابا نقراو l'énoncé. فبعض النجوم، deux noyaux de deutérium كيديرو la fusion. l'équation: le deutérium plus le deutérium، كيعطيو noyau X، A و Z ما عارفينهمش، plus un neutron. la figure هي le diagramme énergétique ديال هاد la réaction، و l'échelle ماشي محترمة.",
     "figures": [diagramme("Figure : diagramme énergétique de la fusion", "2 ¹₁p + 2 ¹₀n", "2 ²₁H", "^{A}_{Z}X + ¹₀n", 4.44, 7.71)],
     "donnees": ["E_ℓ/A(²₁H) = 1,11 MeV/nucléon ; E_ℓ/A(³₂He) = 2,57 MeV/nucléon",
@@ -185,7 +185,7 @@ EX = {
   ]),
   "facile": deck("facile", "Plus facile, pour s'entraîner", [
     qcm_facile("fa_n5_1", "Plus facile : identifier X", "نتمرنو: شنو هي النواة X؟",
-      "²₁H + ²₁H → ᴬ_ZX + ¹₀n. Le noyau X est :",
+      "²₁H + ²₁H → ᴬX + ¹₀n (X : nombre de masse A, nombre de charge Z). Le noyau X est :",
       ["⁴₂He", "³₂He", "³₁H"], 1, {
         "1": {"juste": rep("برافو! A égale trois، و Z égale deux: l'hélium trois.", "Juste : A = 3, Z = 2 : ³₂He.")},
         "0": {"1": rep("ما تقلقش. حسب A: deux plus deux égale A plus un. واش نسيتي le neutron؟ عاود اختار.", "As-tu compté le neutron dans la conservation de A ? Réessaie."),
@@ -236,7 +236,7 @@ EX = {
   "similaire": {
     "id": ID + "_b", "titre": "Même exercice, une autre fusion : deutérium et hélium 3",
     "enonce": {
-      "intro": "Une autre fusion : ²₁H + ³₂He → ⁴₂He + ᴬ_ZY. La figure donne son diagramme énergétique (échelle non respectée).",
+      "intro": "Une autre fusion : ²₁H + ³₂He → ⁴₂He + ᴬY (Y : nombre de masse A, nombre de charge Z). La figure donne son diagramme énergétique (échelle non respectée).",
       "intro_dit": "fusion أخرى: le deutérium plus l'hélium trois، كيعطيو l'hélium quatre، plus particule Y.",
       "figures": [diagramme("Figure : diagramme énergétique de la fusion", "3 ¹₁p + 2 ¹₀n", "²₁H + ³₂He", "⁴₂He + ^{A}_{Z}Y", 9.93, 28.28)],
       "donnees": ["E_ℓ/A : ²₁H : 1,11 ; ³₂He : 2,57 ; ⁴₂He : 7,07 MeV/nucléon",
