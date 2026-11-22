@@ -26,15 +26,19 @@ interface Progression {
   pertes_frequentes: { perte: string; fois: number }[];
 }
 
-const MATIERES: { cle: MatiereExercice; nom: string; icone: string; teinte: string }[] = [
-  { cle: 'mathematiques', nom: 'Mathématiques', icone: '∑', teinte: 'from-sky-500/30 to-indigo-500/20' },
-  { cle: 'physique', nom: 'Physique-chimie', icone: '⚛', teinte: 'from-amber-500/30 to-orange-500/20' },
-  { cle: 'svt', nom: 'SVT', icone: '🧬', teinte: 'from-emerald-500/30 to-teal-500/20' },
+// une couleur par matière, partout sur la page (anneaux, puces, cartes)
+const MATIERES: { cle: MatiereExercice; nom: string; icone: string; teinte: string; bord: string; texte: string; fond: string; accent: string }[] = [
+  { cle: 'mathematiques', nom: 'Mathématiques', icone: '∑', teinte: 'from-sky-500/30 to-indigo-500/20',
+    bord: 'border-sky-400/30 hover:border-sky-300/70', texte: 'text-sky-200', fond: 'from-sky-500/15 via-indigo-500/10 to-transparent', accent: '#38bdf8' },
+  { cle: 'physique', nom: 'Physique-chimie', icone: '⚛', teinte: 'from-amber-500/30 to-orange-500/20',
+    bord: 'border-amber-400/30 hover:border-amber-300/70', texte: 'text-amber-200', fond: 'from-amber-500/15 via-orange-500/10 to-transparent', accent: '#fbbf24' },
+  { cle: 'svt', nom: 'SVT', icone: '🧬', teinte: 'from-emerald-500/30 to-teal-500/20',
+    bord: 'border-emerald-400/30 hover:border-emerald-300/70', texte: 'text-emerald-200', fond: 'from-emerald-500/15 via-teal-500/10 to-transparent', accent: '#34d399' },
 ];
 const NIVEAUX = [
-  { cle: 'facile', nom: 'Facile', aide: 'pour s’entraîner', barres: 1, couleur: 'border-emerald-600 bg-emerald-50 text-emerald-800' },
-  { cle: 'moyen', nom: 'Moyen', aide: 'le niveau de l’examen', barres: 2, couleur: 'border-amber-600 bg-amber-50 text-amber-800' },
-  { cle: 'difficile', nom: 'Supérieur', aide: 'plus exigeant que l’examen', barres: 3, couleur: 'border-rose-600 bg-rose-50 text-rose-800' },
+  { cle: 'facile', nom: 'Facile', aide: 'pour s’entraîner', barres: 1, couleur: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' },
+  { cle: 'moyen', nom: 'Moyen', aide: 'le niveau de l’examen', barres: 2, couleur: 'border-amber-400/50 bg-amber-500/15 text-amber-200' },
+  { cle: 'difficile', nom: 'Supérieur', aide: 'plus exigeant que l’examen', barres: 3, couleur: 'border-rose-400/50 bg-rose-500/15 text-rose-200' },
 ];
 const STATUTS: { cle: Statut | 'tous'; nom: string }[] = [
   { cle: 'tous', nom: 'Tous' }, { cle: 'a_faire', nom: 'À faire' }, { cle: 'en_cours', nom: 'En cours' },
@@ -191,7 +195,9 @@ export default function ExercicesHub() {
         <section className="exo-carte mt-5 space-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3" style={{ animationDelay: '90ms' }}>
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => { setMatiere('toutes'); setCours(''); }} className={puce(matiere === 'toutes')}>Toutes</button>
-            {MATIERES.map(m => <button key={m.cle} onClick={() => { setMatiere(m.cle); setCours(''); }} className={puce(matiere === m.cle)}>{m.icone} {m.nom}</button>)}
+            {MATIERES.map(m => <button key={m.cle} onClick={() => { setMatiere(m.cle); setCours(''); }}
+              className={matiere === m.cle ? `rounded-full border px-3 py-1 text-xs font-semibold text-slate-900 transition` : puce(false)}
+              style={matiere === m.cle ? { background: m.accent, borderColor: m.accent } : undefined}>{m.icone} {m.nom}</button>)}
             <input value={cherche} onChange={e => setCherche(e.target.value)} placeholder="🔍 Chercher un exercice…"
               className="ml-auto min-w-[180px] flex-1 rounded-full border border-white/15 bg-black/30 px-3 py-1.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-amber-200/60 sm:flex-none" />
           </div>
@@ -234,26 +240,27 @@ export default function ExercicesHub() {
               const style: CSSProperties = { animationDelay: `${Math.min(i % PAGE, 11) * 45}ms` };
               return (
                 <button key={f.id} onClick={() => navigate(`/exercices/${f.id}`)} style={style}
-                  className="exo-carte group flex flex-col overflow-hidden rounded-xl bg-white text-left text-black shadow-lg ring-1 ring-black/10 transition duration-200 hover:-translate-y-1 hover:shadow-2xl hover:ring-2 hover:ring-amber-400">
-                  {/* miniature : la figure de l'énoncé, dessinée en noir sur la feuille */}
-                  <div className={`relative h-32 w-full overflow-hidden border-b border-slate-200 ${f.figure ? 'bg-white' : `bg-gradient-to-br ${m?.teinte || ''}`}`}>
+                  className={`exo-carte group flex flex-col overflow-hidden rounded-2xl border bg-[#12122a]/90 text-left text-white shadow-lg shadow-black/30 transition duration-200 hover:-translate-y-1 hover:shadow-2xl ${m?.bord || 'border-white/10'}`}>
+                  {/* miniature : la figure de l'énoncé, à la craie, sur un fond teinté de la couleur de la matière */}
+                  <div className={`relative h-32 w-full overflow-hidden border-b border-white/10 bg-gradient-to-br ${m?.fond || ''}`}>
+                    <div className="absolute inset-x-0 top-0 h-1" style={{ background: m?.accent }} />
                     {f.figure
-                      ? <div className="pointer-events-none mx-auto w-[86%] origin-top scale-[0.62] transition duration-300 group-hover:scale-[0.66]" style={{ filter: 'invert(1) hue-rotate(180deg)' }}><FigureCahier fig={{ ...f.figure, titre: undefined, legende: undefined }} compact /></div>
-                      : <div className="grid h-full place-items-center text-5xl opacity-70">{m?.icone}</div>}
-                    <span className={`absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${n?.couleur || ''}`}><Barres n={n?.barres || 1} /> {n?.nom}</span>
-                    {e.statut !== 'a_faire' && <span className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white`} style={{ background: couleurNote(e.p) }}>{e.acquis ? '✔ Acquis' : NOM_STATUT[e.statut]}</span>}
+                      ? <div className="pointer-events-none mx-auto w-[86%] origin-top scale-[0.62] opacity-90 transition duration-300 group-hover:scale-[0.66] group-hover:opacity-100"><FigureCahier fig={{ ...f.figure, titre: undefined, legende: undefined }} compact /></div>
+                      : <div className="grid h-full place-items-center text-5xl opacity-60">{m?.icone}</div>}
+                    <span className={`absolute left-2 top-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold backdrop-blur ${n?.couleur || ''}`}><Barres n={n?.barres || 1} /> {n?.nom}</span>
+                    {e.statut !== 'a_faire' && <span className="absolute right-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-semibold text-slate-900" style={{ background: couleurNote(e.p) }}>{e.acquis ? '✔ Acquis' : NOM_STATUT[e.statut]}</span>}
                   </div>
                   <div className="flex flex-1 flex-col p-3">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">{m?.nom} · {f.cours_titre}</p>
-                    <p className="mt-0.5 line-clamp-2 font-semibold leading-snug" style={{ fontFamily: "'Times New Roman', Georgia, serif" }}>{f.titre}</p>
-                    <p className="mt-1 text-xs text-slate-500">{f.duree_min ? `~${f.duree_min} min · ` : ''}{f.questions} questions · {pts(f.bareme || 0)} pts</p>
+                    <p className={`text-[11px] font-medium uppercase tracking-wide ${m?.texte || 'text-white/60'}`}>{m?.icone} {m?.nom} · <span className="normal-case text-white/55">{f.cours_titre}</span></p>
+                    <p className="mt-1 line-clamp-2 font-semibold leading-snug text-white">{f.titre}</p>
+                    <p className="mt-1 text-xs text-white/50">{f.duree_min ? `~${f.duree_min} min · ` : ''}{f.questions} questions · {pts(f.bareme || 0)} pts</p>
                     <div className="mt-auto pt-3">
-                      <div className="flex items-center justify-between text-[11px] text-slate-600">
+                      <div className="flex items-center justify-between text-[11px] text-white/60">
                         <span>{e.faites} / {f.questions} questions</span>
                         <span className="font-semibold" style={{ color: couleurNote(e.p) }}>{e.note != null ? `${pts(e.note)} / ${pts(e.sur || f.bareme || 0)}` : ''}</span>
                       </div>
-                      <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                        <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.round(avance * 100)}%`, background: couleurNote(e.p ?? (e.faites ? 0.6 : null)) }} />
+                      <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.round(avance * 100)}%`, background: e.faites ? couleurNote(e.p ?? 0.6) : m?.accent }} />
                       </div>
                     </div>
                   </div>
