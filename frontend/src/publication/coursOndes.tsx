@@ -110,7 +110,9 @@ window.fetch = (entree: RequestInfo | URL, init?: RequestInit) => {
   else if (chemin.startsWith('/api/v1/course-player/')) {
     const reste = chemin.slice('/api/v1/course-player/'.length);
     if (ROUTES.some(r => reste === r || reste.startsWith(`${r}/`))) cible = `${PUBLIC}/${reste}`;
-    else return Promise.resolve(new Response('{}', { status: 204 }));
+    // 22/11/2026 : `new Response('{}', { status: 204 })` lève une erreur (un 204 n'a pas de corps) AVANT la promesse :
+    // l'appel des statistiques à l'ouverture d'un cours (noterStats) faisait planter tout le lien libre (écran noir).
+    else return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
   }
   if (!cible) return fetchOriginal(entree, init);
   const entetes = new Headers(init?.headers || {});
