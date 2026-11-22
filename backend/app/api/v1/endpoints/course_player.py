@@ -165,10 +165,11 @@ async def answer_reaction(body: AnswerReactionRequest, student: dict = Depends(g
             texte = await llm_service.chat(messages=[{"role": "user", "content": prompt}],
                                            system_prompt="Tu es un professeur bienveillant et exigeant. Tu réponds uniquement en JSON valide.",
                                            temperature=0.4, max_tokens=900, student_id=_compte(student),
-                                           session_type="course_player")
+                                           session_type="course_player",
+                                           model=reponse_eleve.MODELE_NOTATION if body.question.get("bareme") else None)
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=503, detail=f"LLM indisponible : {e}") from e
-        resultat = reponse_eleve.reaction_reponse(texte, body.verdict, body.question)
+        resultat = reponse_eleve.reaction_reponse(texte, body.verdict, body.question, body.reponse)
         if resultat:
             return resultat
     raise HTTPException(status_code=502, detail="Réponse du LLM inutilisable")

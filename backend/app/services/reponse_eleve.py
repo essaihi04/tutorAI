@@ -25,6 +25,9 @@ naturelle en darija, adaptée à la situation, puis l'explication. Exemples de c
 Jamais de reproche ni d'ironie ; ne félicite pas une réponse fausse."""
 
 
+# la notation d'une réponse rédigée, élément par élément, demande plus de rigueur que la réaction courte (22/11/2026)
+MODELE_NOTATION = "claude-sonnet-5-5"
+
 MATIERES = {"physique": "physique-chimie", "physique-chimie": "physique-chimie", "chimie": "physique-chimie",
             "mathematiques": "mathématiques", "maths": "mathématiques", "svt": "SVT"}
 
@@ -83,13 +86,17 @@ def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, ve
     consigne_note = "" if not bar else (
         "Note aussi la réponse comme un correcteur du bac. Barème de la question, élément par élément :\n"
         + "\n".join(f"  {i + 1}. {e['element']} ({e['sur']:g} pt)" for i, e in enumerate(bar))
+        + "\nD'abord, « propositions » : découpe la réponse de l'élève en ses affirmations, recopiées telles quelles. "
+          "Ensuite, pour chaque élément du barème, cherche parmi ces affirmations celle qui le traite (même avec d'autres "
+          "mots : « les têtes sont tournées vers la matrice » traite « les têtes sont côté matrice »)."
         + "\nLis la réponse de l'élève mot à mot (souvent sans accents ni apostrophes : « linterieure » = « l'intérieur », "
           "« extrieur » = « extérieur ») et ne lui prête rien qu'il n'a pas écrit. Pour CHAQUE élément, dans l'ordre : « n » = "
           "son numéro ; « cite » = l'extrait EXACT de la réponse de l'élève qui traite cet élément (vide s'il n'en parle pas) ; "
           "« obtenu » = ses points si l'extrait est juste, la moitié s'il est incomplet, 0 s'il est faux ou absent ; « perte » "
           "= en quelques mots ce qui manque ou est faux (vide si tout est obtenu). Note d'abord (« details »), puis écris "
           "« parole » et « ecrit » d'accord avec ta note. Le fond compte, pas l'orthographe.")
-    json_note = "" if not bar else ", ".join(f'{{"n": {i + 1}, "cite": "", "obtenu": 0, "perte": ""}}' for i in range(len(bar)))
+    json_note = "" if not bar else '"propositions": ["…"], "details": [' + ", ".join(
+        f'{{"n": {i + 1}, "cite": "", "obtenu": 0, "perte": ""}}' for i in range(len(bar))) + "]"
     return f"""Tu es le professeur de {matiere} d'un élève de 2e Bac PC BIOF au Maroc. Diapositive « {diapo.get('title', '')} ».
 Ce que tu viens d'expliquer à voix haute : {str(diapo.get('speech') or '')[:1200]}
 
@@ -108,10 +115,24 @@ S'il a juste : dis précisément ce qui est juste et pourquoi, en une ou deux ph
 {consigne_note}
 
 Réponds UNIQUEMENT par ce JSON :
-{{{('"details": [' + json_note + '], ') if json_note else ''}"correct": true, "partiel": false, "parole": "ce que tu dis (règles de la voix)", "ecrit": "la même chose en français écrit, court, avec les valeurs"}}"""
+{{{(json_note + ', ') if json_note else ''}"correct": true, "partiel": false, "parole": "ce que tu dis (règles de la voix)", "ecrit": "la même chose en français écrit, court, avec les valeurs"}}"""
 
 
-def reaction_reponse(texte_llm: str, verdict: Optional[bool], question: Optional[dict] = None) -> Optional[dict]:
+def _mots(t: str) -> list[str]:
+    import re
+    import unicodedata
+    t = "".join(c for c in unicodedata.normalize("NFD", str(t).lower()) if unicodedata.category(c) != "Mn")
+    return [m for m in re.findall(r"[a-z0-9]+", t.replace("'", " ").replace("’", " ")) if len(m) > 2]
+
+
+def cite_dans(cite: str, reponse: str) -> bool:
+    """La citation vient-elle de la réponse de l'élève ? (au moins 60 % de ses mots s'y trouvent, accents ignorés)"""
+    c, r = _mots(cite), set(_mots(reponse))
+    return bool(c) and sum(m in r for m in c) >= 0.6 * len(c)
+
+
+def reaction_reponse(texte_llm: str, verdict: Optional[bool], question: Optional[dict] = None,
+                     reponse: Optional[str] = None) -> Optional[dict]:
     d = lire_json(texte_llm)
     if not d:
         return None
@@ -142,8 +163,9 @@ def reaction_reponse(texte_llm: str, verdict: Optional[bool], question: Optional
             except (TypeError, ValueError):
                 o = 0.0
             o = round(min(max(o, 0.0), e["sur"]) * 4) / 4
-            if "cite" in r and not str(r.get("cite") or "").strip():
-                o = 0.0                         # l'élève n'en parle pas : pas de points
+            cite = str(r.get("cite") or "").strip()
+            if "cite" in r and (not cite or (reponse is not None and not cite_dans(cite, reponse))):
+                o = 0.0                         # l'élève n'en parle pas (ou citation inventée) : pas de points
             if correct is True:
                 o = e["sur"]                    # juste et complète : tous les points
             details.append({"element": e["element"], "sur": e["sur"], "obtenu": o,

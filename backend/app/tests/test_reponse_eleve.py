@@ -51,3 +51,13 @@ def test_bareme_par_element():
     assert r["note"] == 0.25 and r["bareme"] == 0.75 and r["details"][0]["perte"] == "face extérieure absente"
     assert [e["sur"] for e in re_.elements_bareme({"bareme": 0.5, "elements": ["a", "b", "c", "d"]})] == [0.25, 0.25]
     assert re_.reaction_reponse('{"correct": true, "parole": "x", "details": []}', None, q)["note"] == 0.75
+
+
+def test_citation_controlee():
+    assert re_.cite_dans("têtes des sphères pédonculées sont tournées vers la matrice",
+                         "l'interieur de la vesicule est espace intermembranaire et tetes des spheres pedonculeessont tournees vers la matrice")
+    assert not re_.cite_dans("la face extérieure correspond au côté matrice", "l'intérieur est l'espace intermembranaire")
+    q = {"type": "open", "bareme": 0.5, "elements": ["a", "b"]}
+    r = re_.reaction_reponse('{"correct": false, "parole": "x", "details": [{"n": 1, "cite": "la matrice est dehors", "obtenu": 0.25},'
+                             ' {"n": 2, "cite": "espace intermembranaire", "obtenu": 0.25}]}', None, q, "intérieur = espace intermembranaire")
+    assert [d["obtenu"] for d in r["details"]] == [0.0, 0.25]

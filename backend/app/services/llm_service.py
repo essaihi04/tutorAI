@@ -2491,21 +2491,22 @@ class LLMService:
         self._claude = (anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=1)
                         if anthropic is not None and settings.anthropic_api_key else None)
 
-    def _requete_claude(self, messages: list[dict], system_prompt: str, max_tokens: int) -> dict:
+    def _requete_claude(self, messages: list[dict], system_prompt: str, max_tokens: int, model: Optional[str] = None) -> dict:
         """Paramètres communs d'un appel Claude. Opus 5.5 : la réflexion est toujours active (on règle
         l'effort, pas de temperature) ; max_tokens garde de la marge pour elle, la longueur visible reste
         tenue par le prompt ; fallbacks « default » : un refus est rejoué côté serveur sur un autre modèle."""
         systeme, tours = _messages_claude(messages, system_prompt)
+        modele = model or self.claude_model
         req = {
-            "model": self.claude_model,
+            "model": modele,
             "system": _systeme_claude(systeme),
             "messages": tours,
             "output_config": {"effort": settings.anthropic_effort},
         }
-        if self.claude_model.startswith("claude-haiku"):
+        if modele.startswith("claude-haiku"):
             # Haiku 5.5 : réflexion coupée (permis jusqu'à l'effort high), pas de repli serveur sur refus.
             req.update(thinking={"type": "disabled"}, max_tokens=max(max_tokens, 0) + 1000)
-        elif self.claude_model.startswith("claude-sonnet"):
+        elif modele.startswith("claude-sonnet"):
             # Sonnet 5.5 : réflexion coupée par « between_tools » (effort high au plus), repli « default ».
             req.update(thinking={"type": "between_tools"}, max_tokens=max(max_tokens, 0) + 1000,
                        betas=["server-side-fallback-2026-07-01"], fallbacks="default")
@@ -3397,13 +3398,15 @@ Dans tes tableaux <ui>, ajoute une section "📝 À NOTER" avec les éléments p
         student_id: Optional[str] = None,
         student_email: Optional[str] = None,
         session_type: str = "coaching",
+        model: Optional[str] = None,
     ) -> str:
-        """Claude d'abord (si une clé est posée), DeepSeek en secours sur toute erreur ou réponse vide."""
+        """Claude d'abord (si une clé est posée), DeepSeek en secours sur toute erreur ou réponse vide.
+        `model` : un autre modèle Claude pour cet appel (ex. la notation des réponses, 22/11/2026)."""
         if self._claude is not None:
             debut = token_tracker.start_timer()
             try:
                 r = await self._claude.beta.messages.create(
-                    **self._requete_claude(messages, system_prompt, max_tokens),
+                    **self._requete_claude(messages, system_prompt, max_tokens, model),
                     timeout=90.0 if max_tokens >= 800 else 45.0,
                 )
                 texte = "".join(b.text for b in r.content if getattr(b, "type", "") == "text").strip()
