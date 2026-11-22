@@ -258,7 +258,7 @@ FACILE = [
     [("a", "9 h"), ("b", "6 h"), ("c", "4 h"), ("d", "1 h"), ("e", "20 h")],
     {"1": "a", "2": "b", "3": "c", "4": "d"},
     {**{f"1-{d}": (d == "a", "Oui : G1 va de 0 à 9 h, soit 9 h." if d == "a" else "Non : G1 va de 0 h au début de la montée (9 h).",
-                   "برافو: G un، de zéro à neuf heures: neuf heures." if d == "a" else "لا، G un كتبدا من zéro حتى كتبدا الطلعة، à neuf heures.") for d in "abcde"},
+                   "برافو: G un، de zéro à neuf heures: neuf heures." if d == "a" else "لا، G un كتبدا à zéro، وكتسالى ملي كتبدا الطلعة، à neuf heures.") for d in "abcde"},
      **{f"2-{d}": (d == "b", "Oui : S va de 9 à 15 h, soit 6 h." if d == "b" else "Non : S correspond à la montée de la radioactivité, de 9 à 15 h.",
                    "برافو: la phase S، de neuf à quinze heures: six heures." if d == "b" else "لا، la phase S هي الطلعة ديال la radioactivité، de neuf à quinze heures.") for d in "abcde"},
      **{f"3-{d}": (d == "c", "Oui : G2 va de 15 à 19 h, soit 4 h." if d == "c" else "Non : G2 va de la fin de S (15 h) au début de la mitose (19 h).",
@@ -367,7 +367,7 @@ EX = {
     "intro": ("Même protocole avec d'autres cellules : culture synchronisée au début de G1 à t = 0, thymidine radioactive dans le milieu pendant toute "
               "l'expérience (documents 1a et 1b) ; chromosomes condensés observés de 15 h à 16 h. Document 2 : culture non synchronisée des mêmes "
               "cellules (cycle de 16 h), marquage de 20 minutes puis autoradiographie : 37,5 % des noyaux sont marqués."),
-    "intro_dit": "نفس البروتوكول ب خلايا أخرى. les chromosomes condensés كيبانو de quinze à seize heures. و ف le document deux، le cycle de seize heures، و trente-sept virgule cinq pour cent ديال les noyaux marqués.",
+    "intro_dit": "نفس البروتوكول ب خلايا أخرى. les chromosomes condensés كيبانو de quinze à seize heures. و ف le document deux، le cycle de seize heures، et trente-sept virgule cinq pour cent ديال les noyaux marqués.",
     "figures": courbes(C2, " (autres cellules)"),
     "donnees": ["Chromosomes condensés observés de 15 h à 16 h", "Document 2 (cycle de 16 h) : 37,5 % de noyaux marqués"],
     "questions": SIM_Q}},

@@ -125,7 +125,7 @@ EX = {
          "parole": "السؤال trois. la cellule كتستهلك le glucose، ولكن la mitochondrie ما كتستعملوش. إذن la glycolyse كتوقع فle hyaloplasme، برا من la mitochondrie: le glucose كيعطي deux acides pyruviques. من بعد، l'acide pyruvique كيدخل للmitochondrie، وتما كيتأكسد، فla matrice، مع le dioxygène."},
        "explication": "ex_s3", "facile": "fa_s3"},
       {"id": "4", "texte": "Nommer les éléments 1, 2, 3 et 4 du document 2, puis préciser le compartiment où l'acide pyruvique est dégradé.",
-       "texte_dit": "السؤال quatre: سمي les éléments un، deux، trois، و quatre ديال le document deux، ومن بعد قول فين كيتفكك l'acide pyruvique.",
+       "texte_dit": "السؤال quatre: سمي les éléments un، deux، trois، et quatre ديال le document deux، ومن بعد قول فين كيتفكك l'acide pyruvique.",
        "reponse": {"type": "phrase", "attendu": "1 : membrane externe ; 2 : membrane interne ; 3 : crête ; 4 : matrice. L'acide pyruvique est dégradé dans la matrice (4)."},
        "clavier": {"aides": ["membrane externe", "membrane interne", "crête", "matrice"], "pieges": ["espace intermembranaire", "hyaloplasme", "noyau"]},
        "aides": [
@@ -137,7 +137,7 @@ EX = {
            {"texte": "4 : 1 membrane externe ; 2 membrane interne", "mot": "un la membrane externe"},
            {"texte": "3 crête ; 4 matrice", "mot": "trois la crête"},
            {"texte": "l'acide pyruvique est dégradé dans la matrice (4)", "mot": "كيتفكك فla matrice"}],
-         "parole": "السؤال quatre. un la membrane externe، deux la membrane interne، trois la crête، و quatre la matrice. و l'acide pyruvique كيتفكك فla matrice: le numéro quatre."},
+         "parole": "السؤال quatre. un la membrane externe، deux la membrane interne، trois la crête، et quatre la matrice. و l'acide pyruvique كيتفكك فla matrice: le numéro quatre."},
        "explication": "ex_s4", "facile": "fa_s4"}
     ]
   },
@@ -190,7 +190,7 @@ EX = {
     {"id": "ex_s4", "slide_type": "simulation", "title": "Question 4 : légender la mitochondrie",
      "screen_content": {"lead": "De l'extérieur vers l'intérieur : membrane externe, membrane interne, crêtes, matrice."},
      "visual": {"kind": "simulation", "url": MITO, "caption": "La mitochondrie et ses parties"},
-     "speech_text": {"mixed": "نسميو les parties ديال la mitochondrie، من برا للداخل. اللول، الغشاء اللي برا: la membrane externe. من داخل، غشاء تاني: la membrane interne. شوف كيفاش داخلة وخارجة: هادو les crêtes. وكل داكشي اللي داخل: la matrice. وفla matrice كيتفكك l'acide pyruvique: l'acétyl-CoA و le cycle de Krebs. فle document ديال التمرين: un la membrane externe، deux la membrane interne، trois la crête، و quatre la matrice."},
+     "speech_text": {"mixed": "نسميو les parties ديال la mitochondrie، من برا للداخل. اللول، الغشاء اللي برا: la membrane externe. من داخل، غشاء تاني: la membrane interne. شوف كيفاش داخلة وخارجة: هادو les crêtes. وكل داكشي اللي داخل: la matrice. وفla matrice كيتفكك l'acide pyruvique: l'acétyl-CoA و le cycle de Krebs. فle document ديال التمرين: un la membrane externe، deux la membrane interne، trois la crête، et quatre la matrice."},
      "concentration": {"demarrer": "reset",
        "centre": [{"texte": "1 membrane externe ; 2 membrane interne", "mot": "la membrane externe. من داخل"},
                   {"texte": "3 crête ; 4 matrice", "mot": "وكل داكشي اللي داخل"},
@@ -271,7 +271,7 @@ EX = {
          "clavier": {"aides": ["membrane externe", "membrane interne", "crête", "matrice"], "pieges": ["espace intermembranaire", "hyaloplasme"]},
          "correction": {"lignes": [{"texte": "4 : 1 matrice ; 2 crête ; 3 membrane interne ; 4 membrane externe", "mot": "un la matrice"},
                                    {"texte": "acide pyruvique dégradé dans la matrice (1)", "mot": "كيتفكك فla matrice"}],
-                        "parole": "un la matrice، deux la crête، trois la membrane interne، و quatre la membrane externe. و l'acide pyruvique كيتفكك فla matrice: le numéro un."}}
+                        "parole": "un la matrice، deux la crête، trois la membrane interne، et quatre la membrane externe. و l'acide pyruvique كيتفكك فla matrice: le numéro un."}}
       ]}}
 }
 

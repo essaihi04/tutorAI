@@ -171,7 +171,7 @@ EX = {
               "Document 2 : la protéine CFTR et le mucus chez trois personnes."),
     "intro_dit": ("نقراو l'énoncé. la mucoviscidose هي maladie héréditaire: le mucus اللي ف les bronches كيولي غليظ وكيلصق، les bronches كيتسدو وكيتعفنو. "
                   "la protéine C F T R هي canal ف la membrane ديال les cellules ديال les bronches: كتخرج les ions chlorure، وهادشي كيخلي le mucus خفيف. "
-                  "le document un: جزء من le brin transcrit ديال le gène، ل تلاتة ديال les allèles: l'allèle normal N، و جوج ديال les allèles mutés، m un و m deux. "
+                  "le document un: جزء من le brin transcrit ديال le gène، pour trois allèles: l'allèle normal N، et deux allèles mutés، m un و m deux. "
                   "كل جزء عندو نفس الطول. le document deux: la protéine C F T R و le mucus، عند تلاتة ديال الناس."),
     "figures": enonce_fig(A),
     "donnees": donnees(A, ["AUG", "UAG", "UGA"]),

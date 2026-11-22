@@ -240,7 +240,7 @@ FACILE = [
     {"1": "a", "2": "b", "3": "c"},
     {"1-a": (True, "Oui : en G0, avant le transfert, l'ADN est lourd.", "برافو: ف la génération zéro، قبل الانتقال، l'A D N lourd."),
      "1-b": (False, "Non : 1,717, c'est l'hybride ; en G0 il n'y a pas encore eu de réplication sur ¹⁴N.", "لا، هادي hybride. ف la génération zéro، مازال ما كانتش réplication ف l'azote quatorze."),
-     "1-c": (False, "Non : deux bandes, c'est après deux réplications sur ¹⁴N.", "لا، deux bandes كيبانو غير من بعد deux réplications ف l'azote quatorze."),
+     "1-c": (False, "Non : deux bandes, c'est après deux réplications sur ¹⁴N.", "لا، deux bandes كيبانو غير après deux réplications ف l'azote quatorze."),
      "1-d": (False, "Non : en G0, les bactéries ont poussé sur ¹⁵N : leur ADN est lourd, pas léger.", "لا، ف la génération zéro، les bactéries كانو ف l'azote quinze: l'A D N ديالهم lourd، ماشي léger."),
      "2-a": (False, "Non : après une réplication sur ¹⁴N, chaque molécule a reçu un brin nouveau léger.", "لا، من بعد une seule réplication، كل molécule فيها brin جديد léger."),
      "2-b": (True, "Oui : en G1, une seule bande hybride à 1,717.", "برافو: ف la génération un، une seule bande hybride."),
@@ -336,7 +336,7 @@ EX = {
   "facile": {"activities": [{"id": "facile", "title": "Plus facile, pour s'entraîner", "slides": FACILE}]},
   "similaire": {"id": "svt_ex_ch3_meselson_1_b", "titre": "Même exercice, autres données", "enonce": {
     "intro": "Même expérience avec une autre espèce de bactérie, dont l'ADN a une autre densité : cultures sur ¹⁵N (G0), transfert sur ¹⁴N, centrifugation de l'ADN à chaque génération, avec deux témoins (ADN léger et ADN lourd de cette espèce).",
-    "intro_dit": "نفس التجربة، ب نوع آخر ديال les bactéries، ول l'A D N ديالو densité أخرى: l'azote quinze، من بعد l'azote quatorze، و la centrifugation ف كل génération، مع deux témoins.",
+    "intro_dit": "نفس التجربة، ب نوع آخر ديال les bactéries، ول l'A D N ديالو densité أخرى: l'azote quinze، من بعد l'azote quatorze، و la centrifugation ف كل génération، avec deux témoins.",
     "figures": [figure_tubes(L2, H2, "Document : centrifugation de l'ADN extrait (autre espèce)")],
     "donnees": [f"Témoin léger : {fr(L2)} g·cm⁻³", f"Témoin lourd : {fr(H2)} g·cm⁻³", "Une génération = une réplication suivie d'une division"],
     "questions": SIM_Q}},
