@@ -40,7 +40,7 @@ def doc1(t_adp, t_cya, o2_adp, o2_cya, atp0, atp1):
     return {"type": "courbe", "titre": "Document 1 : [O₂] et ATP dans la suspension de mitochondries",
             "axes": {"x": {"min": 0, "max": 10, "nom": "t", "unite": "min", "graduations": list(range(0, 11))},
                      "y": {"min": 0, "max": 120, "nom": "[O₂] (%) ; ATP (UA)", "graduations": [0, 20, 40, 60, 80, 100]}},
-            "legende": "En bleu : [O₂] en % de la valeur initiale ; en vert : concentration de l'ATP (UA). L'acide pyruvique est présent dès t = 0.",
+            "legende": "En cyan : [O₂] en % de la valeur initiale ; en vert : concentration de l'ATP (UA). L'acide pyruvique est présent dès t = 0.",
             "elements": [
               {"f": "courbe", "expr": f"100-{p1:g}*x", "de": 0, "a": t_adp, "couleur": "cyan"},
               {"f": "courbe", "expr": f"{o2_adp}-{p2:g}*(x-{t_adp})", "de": t_adp, "a": t_cya, "couleur": "cyan"},
