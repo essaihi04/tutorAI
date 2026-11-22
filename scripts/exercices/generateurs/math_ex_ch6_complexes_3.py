@@ -64,7 +64,7 @@ EX = {
         [("Calcule ΩB = |b − ω| et ΩC = |c − ω| comme à la question 2.",
           "حسب oméga B، le module de b moins oméga، و oméga C، le module de c moins oméga، بحال السؤال deux."),
          ("Trois points à la même distance de Ω : ils sont sur un même cercle de centre Ω.",
-          "trois points بنفس la distance على oméga: كاينين على نفس le cercle، le centre ديالو oméga.")],
+          "trois points بنفس la distance من oméga: كاينين على نفس le cercle، le centre ديالو oméga.")],
         [("3 : ΩB = |b − ω| = |−3 − 4i| = √(9 + 16) = 5", "oméga B égale"),
          ("ΩC = |c − ω| = |9 − 4| = |5| = 5", "oméga C égale"),
          ("donc ΩA = ΩB = ΩC = 5", "les trois distances égales cinq"),

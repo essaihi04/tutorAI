@@ -81,7 +81,7 @@ EX = {
         valeur("|b/a|", 1, "|b/a| = |ā|/|a| = 1 (ou √((4/5)² + (3/5)²) = √(16/25 + 9/25) = √1 = 1)"),
         (["|b/a| = |b|/|a|", "|ā| = |a|", "16/25 + 9/25"], ["|b/a| = 4/5 − 3/5", "|b/a| = 1/5"]),
         [("Le module d'un quotient est le quotient des modules : |b/a| = |b|/|a|.", "le module d'un quotient، هو le quotient des modules."),
-         ("b = ā est le reflet de a par rapport à l'axe réel : il est à la même distance de O.", "b égale a barre: هو الصورة ديال a فالمراية ديال l'axe réel. نفس la distance على O.")],
+         ("b = ā est le reflet de a par rapport à l'axe réel : il est à la même distance de O.", "b égale a barre: هو الصورة ديال a فالمراية ديال l'axe réel. نفس la distance من O.")],
         [("3 : |b/a| = |b|/|a| = |ā|/|a|", "le quotient des modules"),
          ("or |ā| = |a|, donc |b/a| = 1", "le module de b sur a égale un"),
          ("vérification : (4/5)² + (3/5)² = 16/25 + 9/25 = 1", "seize sur vingt-cinq")],
@@ -163,7 +163,7 @@ EX = {
       "Trois moins i، au carré، égale ?"),
     qcm("fa_c5_3", "Plus facile : le module du conjugué", "سؤال ساهل: le module ديال z barre.",
       "Pour tout complexe z :", ["|z̄| = |z|", "|z̄| = −|z|", "|z̄| = 1/|z|"], 0, {
-        "0": {"juste": rep("برافو! z barre هو الصورة فالمراية: نفس la distance على O.", "Juste : z̄ est le reflet de z, à la même distance de O.")},
+        "0": {"juste": rep("برافو! z barre هو الصورة فالمراية: نفس la distance من O.", "Juste : z̄ est le reflet de z, à la même distance de O.")},
         "1": {"1": rep("ما تقلقش. le module هو مسافة، عمرو ما يكون négatif. عاود اختار.", "Un module est une distance, jamais négative. Réessaie."),
               "2": rep("الجواب هو le module de z barre، égale le module de z.", "Réponse : |z̄| = |z|.")},
         "2": {"1": rep("قريب! un sur le module، هادا le module ديال l'inverse. عاود اختار.", "1/|z| est le module de l'inverse 1/z. Réessaie."),
