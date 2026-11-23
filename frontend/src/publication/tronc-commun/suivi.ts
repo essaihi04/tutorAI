@@ -10,8 +10,13 @@
 import { useEffect } from 'react';
 
 export interface Eleve { id: string; nom: string; classe: string }
-const CLE = 'moalim:tronc-commun:eleve';
+let CLE = 'moalim:tronc-commun:eleve';
 export const API_TC = '/api/v1/public/tronc-commun';
+/** l'adresse du suivi : celle du Tronc Commun, ou celle d'un autre lien libre (ex. /2bacpcf, `configurerSuivi`) */
+let API = API_TC;
+/** Un autre lien libre avec fiche (23/11/2026 : 2ᵉ Bac PC) : sa route et sa clé de navigateur. À appeler avant tout. */
+export function configurerSuivi(c: { api: string; cle: string }) { API = c.api; CLE = c.cle; }
+export const apiSuivi = () => API;
 const fetchBrut = window.fetch.bind(window);
 
 export function eleveEnregistre(): Eleve | null {
@@ -22,7 +27,7 @@ export function garderEleve(e: Eleve | null) {
 }
 
 export async function inscrire(fiche: { nom: string; prenom: string; classe: string; pere: string; telephone: string }): Promise<Eleve> {
-  const r = await fetchBrut(`${API_TC}/inscription`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fiche) });
+  const r = await fetchBrut(`${API}/inscription`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fiche) });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(typeof d?.detail === 'string' ? d.detail : 'Inscription impossible, réessaie.');
   const e = { id: d.eleve_id, nom: d.nom, classe: d.classe };
@@ -45,7 +50,7 @@ export function suivre(ev: EvenementSuivi) {
   if (!e) return;
   const corps = { ...ev, enonce: ev.enonce?.slice(0, 500), reponse: ev.reponse?.slice(0, 800), titre: ev.titre?.slice(0, 300),
     pertes: ev.pertes?.slice(0, 12).map(p => p.slice(0, 200)) };
-  void fetchBrut(`${API_TC}/suivi`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Eleve': e.id }, body: JSON.stringify(corps) })
+  void fetchBrut(`${API}/suivi`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Eleve': e.id }, body: JSON.stringify(corps) })
     .then(r => { if (r.status === 401) garderEleve(null); })
     .catch(() => { /* hors ligne */ });
 }
@@ -68,12 +73,12 @@ export function useTempsPasse(cours: string, actif = true) {
 
 /** Les questions de l'évaluation déjà rendues par l'élève (une seule réponse compte) : la page les remontre verrouillées. */
 export type Progression = Record<string, { vues: number; total: number }>;
-export async function monExamen(): Promise<{ debut: boolean; fini: boolean; questions: Record<string, Record<string, unknown>>;
+export async function monExamen(cours = 'examen'): Promise<{ debut: boolean; fini: boolean; questions: Record<string, Record<string, unknown>>;
   progression?: Progression; ouvert?: boolean; seuil?: number } | null> {
   const e = eleveEnregistre();
   if (!e) return null;
   try {
-    const r = await fetchBrut(`${API_TC}/examen`, { headers: { 'X-Eleve': e.id } });
+    const r = await fetchBrut(`${API}/examen${cours === 'examen' ? '' : `?cours=${encodeURIComponent(cours)}`}`, { headers: { 'X-Eleve': e.id } });
     return r.ok ? await r.json() : null;
   } catch { return null; }
 }

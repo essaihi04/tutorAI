@@ -32,6 +32,8 @@ export interface ConfigExamen {
   matiere: string;
   /** l'accueil de la page (lien « retour ») */
   retour: string;
+  /** la clé de cette évaluation dans le suivi (« examen » au Tronc Commun ; « examen_physique »… sur /2bacpcf) */
+  cle?: string;
 }
 let CFG: ConfigExamen & { questions: { p: PartieExamen; q: QuestionExamen }[]; total: number } = config({
   sujet: { ...EXAMEN, programme: 'la sortie écologique ; les facteurs édaphiques (texture et structure, propriétés chimiques, propriétés hydriques du sol)' },
@@ -122,15 +124,15 @@ export default function Examen() {
   const [sujetVu, setSujetVu] = useState(true);
   const clavierOuvert = useClavier().ouvert;
   useEffect(() => { clavier.matiere(CFG.matiere === 'svt' ? 'svt' : 'physique-chimie'); }, []);
-  useTempsPasse('examen', commence && CFG.suivi);
-  useEffect(() => { if (commence && CFG.suivi) suivre({ type: 'examen_debut', cours: 'examen' }); }, [commence]);
+  useTempsPasse(CFG.cle || 'examen', commence && CFG.suivi);
+  useEffect(() => { if (commence && CFG.suivi) suivre({ type: 'examen_debut', cours: CFG.cle || 'examen' }); }, [commence]);
   // une seule réponse compte (23/11/2026) : les questions déjà rendues reviennent du serveur, verrouillées
   const [repris, setRepris] = useState<'attente' | 'neuf' | 'suite' | 'fini'>('attente');
   // l'évaluation s'ouvre après la révision ou un des deux cours (23/11/2026) ; hors ligne, sans réponse du serveur : ouverte
   const [acces, setAcces] = useState<{ ouvert: boolean; progression?: Progression; seuil?: number }>({ ouvert: true });
   useEffect(() => {
     if (!CFG.suivi) { setRepris('neuf'); return; }
-    void monExamen().then(d => {
+    void monExamen(CFG.cle || 'examen').then(d => {
       const qs = d?.questions || {};
       const ids = Object.keys(qs).filter(id => CFG.questions.some(x => x.q.id === id));
       if (ids.length) {
@@ -214,7 +216,7 @@ export default function Examen() {
       const sig = `${e.note}|${e.verdict}`;
       if (envoyes.current[x.id] === sig) continue;
       envoyes.current[x.id] = sig;
-      suivre({ type: 'examen_question', cours: 'examen', question_id: x.id, partie: pa.titre, note: e.note || 0, sur: x.points,
+      suivre({ type: 'examen_question', cours: CFG.cle || 'examen', question_id: x.id, partie: pa.titre, note: e.note || 0, sur: x.points,
         verdict: e.verdict, enonce: x.texte, reponse: e.texte || (e.choix || []).map(c => String(c)).join(' ; '),
         pertes: (e.details || []).filter(d => d.obtenu < d.sur).map(d => `${d.element} : ${d.perte || 'manque'}`),
         // ce qu'il faut pour remontrer la question telle quelle si l'élève revient
@@ -223,7 +225,7 @@ export default function Examen() {
     }
     if (CFG.questions.every(x => etats[x.q.id]?.fait) && !envoyes.current.__fin) {
       envoyes.current.__fin = '1';
-      suivre({ type: 'examen_fin', cours: 'examen', note: Object.values(etats).reduce((n, e) => n + (e.note || 0), 0), sur: CFG.total });
+      suivre({ type: 'examen_fin', cours: CFG.cle || 'examen', note: Object.values(etats).reduce((n, e) => n + (e.note || 0), 0), sur: CFG.total });
     }
   }, [etats]);
 

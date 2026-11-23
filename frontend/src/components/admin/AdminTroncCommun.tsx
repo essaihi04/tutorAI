@@ -291,7 +291,7 @@ export default function AdminTroncCommun() {
 }
 
 
-function Tuile({ titre, valeur, sous }: { titre: string; valeur: string; sous: string }) {
+export function Tuile({ titre, valeur, sous }: { titre: string; valeur: string; sous: string }) {
   return (
     <div className="rounded-xl border bg-white p-3">
       <p className="text-xs text-gray-500">{titre}</p>
@@ -300,7 +300,7 @@ function Tuile({ titre, valeur, sous }: { titre: string; valeur: string; sous: s
     </div>);
 }
 
-function Carte({ titre, aide, children }: { titre: string; aide: string; children: React.ReactNode }) {
+export function Carte({ titre, aide, children }: { titre: string; aide: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border bg-white p-4">
       <p className="font-semibold">{titre}</p>
@@ -310,7 +310,7 @@ function Carte({ titre, aide, children }: { titre: string; aide: string; childre
 }
 
 /** une barre horizontale fine, extrémité arrondie, valeur écrite au bout ; la cible de survol est toute la ligne */
-function Barre({ libelle, sous, valeur, max, couleur, texte, titre, clair, alerte }: {
+export function Barre({ libelle, sous, valeur, max, couleur, texte, titre, clair, alerte }: {
   libelle: string; sous?: string; valeur: number; max: number; couleur: string; texte: string; titre: string; clair?: boolean; alerte?: boolean;
 }) {
   const pc = max ? Math.max(0, Math.min(100, (100 * valeur) / max)) : 0;
@@ -326,7 +326,7 @@ function Barre({ libelle, sous, valeur, max, couleur, texte, titre, clair, alert
     </div>);
 }
 
-function Etiquette({ children }: { children: React.ReactNode }) {
+export function Etiquette({ children }: { children: React.ReactNode }) {
   return <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] font-normal text-gray-600">{children}</span>;
 }
 

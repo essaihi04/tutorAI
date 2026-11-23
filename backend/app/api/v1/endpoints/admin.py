@@ -657,6 +657,14 @@ async def get_tronc_commun(admin: bool = Depends(_verify_admin_token)):
     return {"eleves": bilan()}
 
 
+@router.get("/2bacpcf")
+async def get_2bacpcf(admin: bool = Depends(_verify_admin_token)):
+    """Les élèves du lien des révisions de 2ᵉ Bac PC (/2bacpcf, 23/11/2026) : fiche, temps et progression par séance,
+    réponses dans les cours, les deux examens (physique, chimie) et les lacunes."""
+    from app.api.v1.endpoints.public_2bacpcf import bilan
+    return {"eleves": bilan()}
+
+
 # ──────────────────────────────────────────────
 # RÉTENTION (mémoire longue, 11 novembre 2026) : ce qui reste vraiment, par cours, par compétence, par élève
 # ──────────────────────────────────────────────

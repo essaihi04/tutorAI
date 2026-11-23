@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, content, sessions, coaching, libre, exam, admin, exam_extraction, registration, mock_exam, concours, tts, course_player, kaggle_tts, public_cours, public_tronc_commun, memoire, exercices
+from app.api.v1.endpoints import auth, content, sessions, coaching, libre, exam, admin, exam_extraction, registration, mock_exam, concours, tts, course_player, kaggle_tts, public_cours, public_tronc_commun, public_2bacpcf, memoire, exercices
 from app.api import resources
 
 api_router = APIRouter(prefix="/api/v1")
@@ -23,6 +23,7 @@ api_router.include_router(course_player.router)
 api_router.include_router(exercices.router)   # résultats des exercices, progression cours + exercices (22/11/2026)
 api_router.include_router(public_cours.router)   # page publique du cours des ondes (sans compte, plafonnée)
 api_router.include_router(public_tronc_commun.router)   # lien libre du Tronc Commun : fiche de l'élève et suivi
+api_router.include_router(public_2bacpcf.router)   # lien libre /2bacpcf : fiche de l'élève et suivi (23/11/2026)
 
 # Admin resources management
 api_router.include_router(resources.router, prefix="/admin-resources", tags=["admin-resources"])

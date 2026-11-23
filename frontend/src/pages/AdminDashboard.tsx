@@ -20,6 +20,7 @@ import AdminCourseEditor from '../components/admin/AdminCourseEditor';
 import AdminVisualLibrary from '../components/admin/AdminVisualLibrary';
 import AdminAvisProfs from '../components/admin/AdminAvisProfs';
 import AdminTroncCommun from '../components/admin/AdminTroncCommun';
+import Admin2BacPCF from '../components/admin/Admin2BacPCF';
 import AdminRetention from '../components/admin/AdminRetention';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -356,7 +357,7 @@ function ResetPasswordModal({ userId, userName, onClose }: { userId: string; use
 
 // ─── Main Dashboard ──────────────────────────────────────────
 
-type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'courses' | 'visuals' | 'visits' | 'avisProfs' | 'retention' | 'troncCommun';
+type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'courses' | 'visuals' | 'visits' | 'avisProfs' | 'retention' | 'troncCommun' | 'bac2pcf';
 
 // URL de partage public Umami pour le site Moalim
 // Cette URL est publique par nature (genere via Umami: Settings -> Websites -> Moalim -> Edit -> Enable share URL)
@@ -653,6 +654,7 @@ export default function AdminDashboard() {
     { key: 'courses', label: 'Cours', icon: BookOpen },
     { key: 'avisProfs', label: 'Avis des profs', icon: MessageCircle },
     { key: 'troncCommun', label: 'Tronc Commun', icon: Users },
+    { key: 'bac2pcf', label: '2ᵉ Bac PC', icon: Users },
     { key: 'retention', label: 'Rétention', icon: TrendingUp },
     { key: 'visuals', label: 'Bibliothèque', icon: Image },
     { key: 'mockExams', label: 'Examens Blancs', icon: Sparkles },
@@ -1378,6 +1380,7 @@ export default function AdminDashboard() {
         {activeTab === 'avisProfs' && <AdminAvisProfs />}
         {activeTab === 'retention' && <AdminRetention />}
         {activeTab === 'troncCommun' && <AdminTroncCommun />}
+        {activeTab === 'bac2pcf' && <Admin2BacPCF />}
 
         {/* ──── UNIFIED VISUAL LIBRARY TAB ──── */}
         {activeTab === 'visuals' && <AdminVisualLibrary />}

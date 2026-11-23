@@ -596,6 +596,21 @@ export interface EleveTroncCommun {
 }
 export const listTroncCommun = () => adminApi.get<{ eleves: EleveTroncCommun[] }>('/tronc-commun');
 
+// ─── 2ᵉ Bac PC : fiches des élèves du lien libre /2bacpcf et leur suivi (23 novembre 2026) ──────
+export interface Examen2BacPCF { nom: string; note: number; sur_fait: number; sur: number; faites: number; fini: boolean;
+  debut?: string | null; date?: string | null; questions: Record<string, QuestionExamenTC> }
+export interface Eleve2BacPCF {
+  id: string; nom: string; classe: string; pere: string; telephone: string; date: string; derniere: string;
+  test?: boolean; doublon_de?: string | null; classe_ecrite?: string;
+  temps: Record<string, number>;
+  progression: Record<string, { vues: number; total: number }>;
+  reponses_cours: { total: number; justes: number; fausses: number };
+  /** `examen_physique`, `examen_chimie` */
+  examens: Record<string, Examen2BacPCF>;
+  lacunes: string[];
+}
+export const list2BacPCF = () => adminApi.get<{ eleves: Eleve2BacPCF[] }>('/2bacpcf');
+
 /** Mémoire longue (11 novembre 2026) : rétention aux rappels espacés, par cours, compétence et élève. */
 export interface TauxRetention { n: number; reussis: number; taux: number | null }
 export interface Retention {
