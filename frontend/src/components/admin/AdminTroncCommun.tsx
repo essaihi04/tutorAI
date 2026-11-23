@@ -27,6 +27,20 @@ const SUJETS: Record<string, string> = {
   '3-5': 'Tableau → histogramme → courbe', '3-6': 'Interpréter la courbe bimodale',
 };
 const ORDRE = Object.keys(SUJETS);
+/** les parties de l'évaluation (sujet.ts) */
+const PARTIES: { nom: string; ids: string[] }[] = [
+  { nom: 'Connaissances', ids: ['1', '2', '3-a', '3-b'] },
+  { nom: 'Ex. 1 · texture et eau du sol', ids: ['1-1', '1-2', '1-3', '1-4', '1-5', '1-6', '1-7'] },
+  { nom: 'Ex. 2 · complexe argilo-humique', ids: ['2-1', '2-2', '2-3'] },
+  { nom: 'Ex. 3 · relevés d’une sortie', ids: ['3-1', '3-2', '3-3', '3-4', '3-5', '3-6'] },
+];
+/** niveaux, du plus faible au meilleur : une seule teinte, du clair au foncé (ordre = intensité) */
+const NIVEAUX: { nom: string; min: number; c: string }[] = [
+  { nom: 'à soutenir (< 8)', min: 0, c: '#cde2fb' }, { nom: 'fragile (8 à 10)', min: 8, c: '#86b6ef' },
+  { nom: 'correct (10 à 14)', min: 10, c: '#3987e5' }, { nom: 'bon (≥ 14)', min: 14, c: '#1c5cab' },
+];
+const niveauDe = (n: number) => [...NIVEAUX].reverse().find(x => n >= x.min)!;
+const questionsDe = (e: EleveTroncCommun) => e.examens[e.examens.length - 1]?.questions || e.examen_en_cours.questions;
 const pts = (x?: number | null) => (x == null ? '—' : String(Math.round(x * 100) / 100).replace('.', ','));
 const minutes = (s: number) => (!s ? '0 min' : s < 3600 ? `${Math.round(s / 60)} min` : `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)}`);
 const date = (d?: string | null) => (d ? new Date(d).toLocaleString('fr-MA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -70,6 +84,32 @@ export default function AdminTroncCommun() {
   const notes = visibles.map(noteSur20).filter(Boolean) as { n: number; fini: boolean; faites: number }[];
   const moyenne = notes.length ? notes.reduce((s, x) => s + x.n, 0) / notes.length : null;
   const tempsMoyen = visibles.length ? visibles.reduce((s, e) => s + tempsCours(e), 0) / visibles.length : 0;
+
+  // ── par classe (23/11/2026) : effectif, moyenne, niveau, réussite par partie, parcours, lacunes
+  const parClasse = useMemo(() => {
+    const groupes = new Map<string, EleveTroncCommun[]>();
+    for (const e of reels.filter(x => !recherche || `${x.nom} ${x.pere} ${x.telephone}`.toLowerCase().includes(recherche.toLowerCase())))
+      groupes.set(e.classe, [...(groupes.get(e.classe) || []), e]);
+    return [...groupes.entries()].sort((a, b) => a[0].localeCompare(b[0], 'fr', { numeric: true })).map(([nom, es]) => {
+      const ns = es.map(noteSur20).filter(Boolean) as { n: number; fini: boolean }[];
+      const moy = ns.length ? ns.reduce((s, x) => s + x.n, 0) / ns.length : null;
+      const parties = PARTIES.map(pa => {
+        let ob = 0, sur = 0;
+        for (const e of es) { const qs = questionsDe(e); for (const id of pa.ids) if (qs[id]) { ob += qs[id].note || 0; sur += qs[id].sur || 0; } }
+        return { nom: pa.nom, taux: sur ? (100 * ob) / sur : null };
+      });
+      const lacunes = ORDRE.map(id => {
+        let ob = 0, sur = 0, n = 0;
+        for (const e of es) { const q = questionsDe(e)[id]; if (q) { n++; ob += q.note || 0; sur += q.sur || 0; } }
+        return { id, n, taux: sur ? (100 * ob) / sur : null };
+      }).filter(q => q.n && q.taux != null && q.taux < 60).sort((a, b) => a.taux! - b.taux!).slice(0, 3);
+      const parcours = COURS.map(c => es.length ? es.reduce((s, e) => s + Math.min(1, (e.progression[c.id]?.vues || 0) / (e.progression[c.id]?.total || 1)), 0) / es.length : 0);
+      return { nom, n: es.length, commences: ns.length, finis: ns.filter(x => x.fini).length, moy,
+        reussite: ns.length ? ns.filter(x => x.n >= 10).length / ns.length : null,
+        niveaux: NIVEAUX.map(nv => ns.filter(x => niveauDe(x.n) === nv).length), parties, lacunes, parcours,
+        temps: es.length ? es.reduce((s, e) => s + tempsCours(e), 0) / es.length : 0 };
+    });
+  }, [reels, recherche]);
 
   // ── réussite par question (première réponse de chaque élève)
   const parQuestion = useMemo(() => ORDRE.map(id => {
@@ -139,6 +179,53 @@ export default function AdminTroncCommun() {
       </div>
 
       {!visibles.length && !chargement && <p className="text-sm text-gray-500">Aucun élève pour l’instant (lien : https://moalim.online/tronc-commun/).</p>}
+
+      {!!parClasse.length && (
+        <div className="rounded-xl border bg-white p-4">
+          <p className="font-semibold">Par classe</p>
+          <p className="mb-3 text-xs text-gray-500">Moyenne et niveau sur les questions rendues (ramenés sur 20) ; réussite de chaque partie de l’évaluation ; parcours moyen dans les cours. Cliquer sur une classe la filtre.</p>
+          <div className="mb-2 flex flex-wrap gap-3 text-xs text-gray-600">
+            <span className="font-medium text-gray-700">Niveau :</span>
+            {NIVEAUX.map(nv => <span key={nv.nom} className="flex items-center gap-1"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: nv.c }} />{nv.nom}</span>)}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs text-gray-500"><tr>
+                <th className="py-1 pr-3">Classe</th><th className="py-1 pr-3">Élèves</th><th className="py-1 pr-3">Moyenne</th>
+                <th className="py-1 pr-3">Niveau des élèves</th><th className="py-1 pr-3">Réussite par partie</th>
+                <th className="py-1 pr-3">Parcours des cours</th><th className="py-1">Lacunes principales</th></tr></thead>
+              <tbody>{parClasse.map(c => (
+                <tr key={c.nom} onClick={() => setClasse(classe === c.nom ? '' : c.nom)}
+                  className={`cursor-pointer border-t align-top hover:bg-gray-50 ${classe === c.nom ? 'bg-blue-50' : ''}`}>
+                  <td className="py-2 pr-3 font-semibold whitespace-nowrap">{c.nom}</td>
+                  <td className="py-2 pr-3 whitespace-nowrap text-xs text-gray-700"><b className="text-sm text-gray-900">{c.n}</b> inscrits<br />{c.commences} ont commencé · {c.finis} fini</td>
+                  <td className="py-2 pr-3 whitespace-nowrap"><b className="text-base">{c.moy == null ? '—' : `${pts(Math.round(c.moy * 10) / 10)} / 20`}</b>
+                    {c.reussite != null && <span className="block text-xs text-gray-500">{Math.round(c.reussite * 100)} % à 10 ou plus</span>}</td>
+                  <td className="w-44 py-2 pr-3">
+                    {c.commences ? <>
+                      <span className="flex h-3 w-full overflow-hidden rounded bg-gray-100">{c.niveaux.map((k, i) => k ? (
+                        <span key={i} title={`${NIVEAUX[i].nom} : ${k} élève${k > 1 ? 's' : ''}`} style={{ width: `${(100 * k) / c.commences}%`, background: NIVEAUX[i].c }}
+                          className="h-full border-r-2 border-white last:border-r-0" />) : null)}</span>
+                      <span className="mt-0.5 block text-[11px] text-gray-500">{c.niveaux.map((k, i) => (k ? `${k} ${NIVEAUX[i].nom.split(' (')[0]}` : '')).filter(Boolean).join(' · ')}</span>
+                    </> : <span className="text-xs text-gray-400">pas encore d’évaluation</span>}</td>
+                  <td className="w-80 py-2 pr-3">{c.parties.map(pa => (
+                    <span key={pa.nom} className="mb-0.5 flex items-center gap-1.5 text-[11px]" title={`${pa.nom} : ${pa.taux == null ? '—' : Math.round(pa.taux) + ' %'}`}>
+                      <span className="w-48 shrink-0 truncate text-gray-600">{pa.nom}</span>
+                      <span className="h-2 flex-1 rounded-r bg-gray-100"><span className="block h-full rounded-r" style={{ width: `${pa.taux ?? 0}%`, background: BLEU }} /></span>
+                      <span className={`w-9 shrink-0 text-right ${pa.taux != null && pa.taux < 50 ? 'font-semibold' : ''}`} style={pa.taux != null && pa.taux < 50 ? { color: CRITIQUE } : undefined}>{pa.taux == null ? '—' : `${Math.round(pa.taux)} %`}</span>
+                    </span>))}</td>
+                  <td className="w-44 py-2 pr-3">{COURS.map((co, i) => (
+                    <span key={co.id} className="mb-0.5 flex items-center gap-1.5 text-[11px]" title={`${co.nom} : ${Math.round(c.parcours[i] * 100)} % des diapos en moyenne`}>
+                      <span className="h-2 flex-1 rounded-r bg-gray-100"><span className="block h-full rounded-r" style={{ width: `${c.parcours[i] * 100}%`, background: co.c }} /></span>
+                      <span className="w-8 shrink-0 text-right text-gray-600">{Math.round(c.parcours[i] * 100)} %</span></span>))}
+                    <span className="text-[11px] text-gray-500">{minutes(c.temps)} par élève</span></td>
+                  <td className="py-2 text-xs">{c.lacunes.length ? <ul className="space-y-0.5">{c.lacunes.map(q => (
+                    <li key={q.id}><span className="font-semibold" style={{ color: CRITIQUE }}>{Math.round(q.taux!)} %</span> · {q.id} {SUJETS[q.id]} <span className="text-gray-400">({q.n} élève{q.n > 1 ? 's' : ''})</span></li>))}</ul>
+                    : <span className="text-gray-400">—</span>}</td>
+                </tr>))}</tbody>
+            </table>
+          </div>
+        </div>)}
 
       {!!visibles.length && (
         <div className="grid gap-4 lg:grid-cols-2">
