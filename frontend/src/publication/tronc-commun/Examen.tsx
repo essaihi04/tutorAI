@@ -15,6 +15,23 @@ import { lireNombre } from '../../components/exercice/juger';
 import { pts } from '../../components/exercice/types';
 import { EXAMEN, totalPoints, type PartieExamen, type QuestionExamen } from './sujet';
 import { suivre, useTempsPasse } from './suivi';
+import { Histogramme, histoVide, noterHisto, noterTriangle, Triangle, type Histo, type Ligne } from './Traces';
+import { VOIX_EXAMEN } from './voixExamen';
+import { inscrireVoix, taireTout } from '../../components/course/voixUnique';
+
+/** `partie/P1`, `question/1-1`, `correction/1-1` → la piste, si elle existe */
+const piste = (cle: string) => (VOIX_EXAMEN.includes(cle) ? `/media/audio/courses/tc_svt_examen/${cle}.mp3` : undefined);
+let voixCourante: HTMLAudioElement | null = null;
+function jouer(url?: string) {
+  voixCourante?.pause();
+  voixCourante = null;
+  if (!url) return;
+  taireTout();
+  const a = new Audio(url);
+  inscrireVoix(a);
+  voixCourante = a;
+  void a.play().catch(() => { /* lecture refusée avant un geste : l'élève relance */ });
+}
 
 const CRAIE = "'Patrick Hand', 'Caveat', cursive";
 const SUJET = "'Times New Roman', Georgia, serif";
@@ -32,6 +49,8 @@ type Etat = {
   details?: Detail[];
   /** le tuteur n'a pas répondu : l'élève se note lui-même en comparant avec la correction */
   autoEval?: boolean;
+  /** tracés : les lignes du triangle et la texture choisie ; le tableau, les rectangles et la courbe */
+  lignes?: Partial<Record<'argile' | 'limon' | 'sable', Ligne>>; zone?: string; histo?: Histo;
 };
 
 const QUESTIONS = EXAMEN.parties.flatMap(p => p.questions.map(q => ({ p, q })));
@@ -85,12 +104,36 @@ export default function Examen() {
   useEffect(() => { if (commence) suivre({ type: 'examen_debut', cours: 'examen' }); }, [commence]);
 
   const { p, q } = QUESTIONS[i];
+  // la voix se tait quand on change de question ; la correction se dit dès que la réponse est notée
+  useEffect(() => () => jouer(undefined), [i]);
+  const faitIci = !!etats[q.id]?.fait;
+  const dejaFait = useRef<Record<string, boolean>>({});
+  useEffect(() => {
+    if (faitIci && !dejaFait.current[q.id]) { dejaFait.current[q.id] = true; jouer(piste(`correction/${q.id}`)); }
+  }, [faitIci, q.id]);
   const etat: Etat = etats[q.id] || { fait: false };
   const poser = (id: string, e: Partial<Etat>) => setEtats(s => ({ ...s, [id]: { ...(s[id] || { fait: false }), ...e } }));
   const note = Object.values(etats).reduce((n, e) => n + (e.fait && typeof e.note === 'number' ? e.note : 0), 0);
   const faites = QUESTIONS.filter(x => etats[x.q.id]?.fait).length;
   const fini = faites === QUESTIONS.length;
   const pointsFaits = QUESTIONS.filter(x => etats[x.q.id]?.fait).reduce((n, x) => n + x.q.points, 0);
+
+  const rendreTrace = () => {
+    if (q.genre === 'triangle') {
+      const details = noterTriangle(q, etat.lignes || {}, etat.zone || '');
+      const n = details.reduce((s, d) => s + d.obtenu, 0);
+      poser(q.id, { fait: true, note: n, details, verdict: n >= q.points ? 'juste' : n > 0 ? 'partiel' : 'faux',
+        texte: `${Object.entries(etat.lignes || {}).map(([a, l]) => `${a} ${l!.v} % ∥ ${l!.garde}`).join(' ; ')} → ${etat.zone || '?'}`,
+        retour: n >= q.points ? 'Les trois lignes et la texture sont justes.' : 'Compare tes lignes (en couleur) avec les bonnes (en rouge pointillé).' });
+    } else if (q.genre === 'histogramme') {
+      const h = etat.histo || histoVide();
+      const details = noterHisto(q, h);
+      const n = details.reduce((s, d) => s + d.obtenu, 0);
+      poser(q.id, { fait: true, note: n, details, verdict: n >= q.points ? 'juste' : n > 0 ? 'partiel' : 'faux',
+        texte: `tableau ${h.tableau.join('·')} ; rectangles ${h.barres.join('·')} ; courbe ${h.points.join('·')}`,
+        retour: n >= q.points ? 'Tableau, rectangles collés et courbe : tout est juste.' : 'Compare avec la correction en rouge pointillé.' });
+    }
+  };
 
   const validerChoix = () => {
     if (q.genre !== 'qcm' && q.genre !== 'vf') return;
@@ -170,6 +213,7 @@ export default function Examen() {
               })}
             </div>
             <h2 className="text-[17px] font-bold underline underline-offset-4">{p.titre}</h2>
+            {piste(`partie/${p.id}`) && <button onClick={() => jouer(piste(`partie/${p.id}`))} className={`mt-1 ${BTN}`} style={{ fontFamily: 'system-ui, sans-serif' }}>🔊 Écouter</button>}
             <p className="mt-0.5 text-[13px] text-slate-600" style={{ fontFamily: 'system-ui, sans-serif' }}>{pts(p.questions.reduce((n, x) => n + x.points, 0))} points · environ {p.minutes} min</p>
             {p.intro && <p className="mt-2 text-[16px] leading-snug"><Formule t={p.intro} /></p>}
             {p.tableau && (
@@ -223,6 +267,7 @@ export default function Examen() {
 
             <div className="min-w-0 flex-1 p-2 sm:p-4">
               <p className="text-[17px] font-semibold" style={{ fontFamily: SUJET }}><span>{q.id}.</span> <Formule t={q.texte} /></p>
+              {piste(`question/${q.id}`) && <button onClick={() => jouer(piste(`question/${q.id}`))} className={`mt-1 ${BTN}`}>🔊 La question</button>}
 
               {(q.genre === 'qcm' || q.genre === 'vf') && (
                 <Choix q={q} etat={etat} onChoisir={(k, v) => setEtats(s => {
@@ -231,10 +276,33 @@ export default function Examen() {
                   const c = [...(e.choix || q.items.map(() => null))]; c[k] = v;
                   return { ...s, [q.id]: { ...e, choix: c } };
                 })} />)}
+              {(q.genre === 'qcm' || q.genre === 'vf') && etat.fait && piste(`correction/${q.id}`) && (
+                <button onClick={() => jouer(piste(`correction/${q.id}`))} className={`mt-3 ${BTN}`}>🔊 La correction expliquée</button>)}
               {(q.genre === 'qcm' || q.genre === 'vf') && !etat.fait && (
                 <button disabled={(etat.choix || []).filter(x => x !== null && x !== undefined).length < q.items.length} onClick={validerChoix}
                   className="mt-3 rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-40">Valider mes réponses</button>)}
 
+              {q.genre === 'triangle' && (
+                <div className="mt-2">
+                  <Triangle sol={q.sol} actif={!etat.fait} correction={etat.fait} lignes={etat.lignes || {}}
+                    onLigne={(axe, l) => setEtats(s => ({ ...s, [q.id]: { ...(s[q.id] || { fait: false }), lignes: { ...(s[q.id]?.lignes || {}), [axe]: l } } }))} />
+                  <label className="mt-2 flex flex-wrap items-center gap-2 text-[15px]" style={{ fontFamily: 'system-ui, sans-serif' }}>③ La texture du sol C :
+                    <select disabled={etat.fait} value={etat.zone || ''} onChange={e => poser(q.id, { zone: e.target.value })} className="rounded-md border border-slate-400 px-2 py-1">
+                      <option value="">— choisis —</option>{q.choix.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select></label>
+                  {!etat.fait && <button disabled={Object.keys(etat.lignes || {}).length < 3 || !etat.zone} onClick={rendreTrace}
+                    className="mt-3 rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-40">Rendre ma réponse</button>}
+                </div>)}
+              {q.genre === 'histogramme' && (
+                <div className="mt-2">
+                  <div className="mb-2 border border-black p-2 text-[14px]" style={{ fontFamily: 'system-ui, sans-serif' }}>
+                    <p className="mb-1 font-bold">Espèces et indice de fréquence :</p>
+                    <p className="leading-relaxed">{q.especes.map(([e, i]) => `${e} (${i})`).join(' · ')}</p>
+                  </div>
+                  <Histogramme comptes={q.comptes} actif={!etat.fait} correction={etat.fait} h={etat.histo || histoVide()} onH={h => poser(q.id, { histo: h })} />
+                  {!etat.fait && <button disabled={!(etat.histo && [...etat.histo.tableau, ...etat.histo.barres, ...etat.histo.points].every(v => v != null))} onClick={rendreTrace}
+                    className="mt-3 rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-40">Rendre ma réponse</button>}
+                </div>)}
               {(q.genre === 'valeur' || q.genre === 'redaction') && !etat.fait && etat.verdict !== 'lecture' && !etat.autoEval && (
                 <div className="mt-2">
                   <ChampReponse key={q.id} papier onEnvoyer={t => void repondre(t)} libelle="Rendre ma réponse" lignes={q.genre === 'valeur' ? 3 : 6}
@@ -242,14 +310,15 @@ export default function Examen() {
                     contexte={{ title: p.titre, enonce: q.texte, matiere: 'svt', chapitre: EXAMEN.titre }}
                     suggestions={{ slide_id: `examen_${q.id}`, enonce: q.texte, clavier: { aides: [] } }} />
                 </div>)}
-              {etat.texte && (etat.fait || etat.verdict === 'lecture' || etat.autoEval) && (
+              {etat.texte && q.genre !== 'triangle' && q.genre !== 'histogramme' && (etat.fait || etat.verdict === 'lecture' || etat.autoEval) && (
                 <p className="mt-2 whitespace-pre-wrap text-[20px] text-black" style={{ fontFamily: CRAIE, ...LIGNES }}>{etat.texte}</p>)}
 
               {etat.retour && <Verdict etat={etat} />}
 
-              {(etat.fait || etat.autoEval) && (q.genre === 'valeur' || q.genre === 'redaction') && (
+              {(etat.fait || etat.autoEval) && (q.genre === 'valeur' || q.genre === 'redaction' || q.genre === 'triangle' || q.genre === 'histogramme') && (
                 <div className="mt-3 border-2 border-rose-700 p-2 sm:p-3">
-                  <p className="mb-1 font-bold text-rose-800">✍️ Correction</p>
+                  <div className="mb-1 flex items-center gap-2"><p className="flex-1 font-bold text-rose-800">✍️ Correction</p>
+                    {piste(`correction/${q.id}`) && <button onClick={() => jouer(piste(`correction/${q.id}`))} className={BTN}>🔊 Écouter</button>}</div>
                   {q.correction.map((l, k) => <p key={k} className="text-[18px] text-rose-900" style={{ fontFamily: CRAIE }}><Formule t={l} /></p>)}
                   {etat.autoEval && !etat.fait && (
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-[15px]">

@@ -34,7 +34,10 @@ DEST = "/var/www/moalim/tronc-commun"
 #: Dossiers copiés en entier (les pages s'y servent de chemins relatifs, ou le lecteur compose les noms).
 DOSSIERS = ["media/simulations/shared/tableau", "media/audio/reactions", "media/tronc-commun",
             "media/simulations/svt/tc_sortie_ecologique-tableau", "media/simulations/svt/tc_facteurs_edaphiques-tableau",
-            "media/simulations/svt/tc_revision-tableau"]
+            "media/simulations/svt/tc_revision-tableau",
+            # voix Bodi (MP3) : l'évaluation compose ses chemins, les cours les citent
+            "media/audio/courses/tc_svt_examen", "media/audio/courses/tc_svt_revision",
+            "media/audio/courses/tc_svt_sortie_ecologique", "media/audio/courses/tc_svt_facteurs_edaphiques"]
 FICHIERS = ["media/simulations/professor-locate.js", "media/avatar/moalim-professeur.glb", "media/avatar/moalim-professeur.png",
             "media/audio/reactions/manifest.json"]
 TEXTE = {".js", ".html", ".css", ".json", ".mjs"}
