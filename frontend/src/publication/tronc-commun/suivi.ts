@@ -67,7 +67,9 @@ export function useTempsPasse(cours: string, actif = true) {
 }
 
 /** Les questions de l'évaluation déjà rendues par l'élève (une seule réponse compte) : la page les remontre verrouillées. */
-export async function monExamen(): Promise<{ debut: boolean; fini: boolean; questions: Record<string, Record<string, unknown>> } | null> {
+export type Progression = Record<string, { vues: number; total: number }>;
+export async function monExamen(): Promise<{ debut: boolean; fini: boolean; questions: Record<string, Record<string, unknown>>;
+  progression?: Progression; ouvert?: boolean; seuil?: number } | null> {
   const e = eleveEnregistre();
   if (!e) return null;
   try {

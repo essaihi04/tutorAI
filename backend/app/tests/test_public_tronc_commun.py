@@ -98,3 +98,19 @@ def test_premiere_reponse_du_cours_seulement(client):
     client.post("/public/tronc-commun/suivi", headers=H, json=r)
     client.post("/public/tronc-commun/suivi", headers=H, json={**r, "correct": True})
     assert tc.bilan()[0]["reponses_cours"] == {"total": 1, "justes": 0, "fausses": 1}
+
+
+def test_classe_ouverture_tests_doublons(client):
+    assert [tc.classe_normale(c) for c in ("Tc 12", "TCSF-12", "13", "prof")] == ["TCSF 12", "TCSF 12", "TCSF 13", "prof"]
+    a = client.post("/public/tronc-commun/inscription", json={**FICHE, "classe": "12"}).json()["eleve_id"]
+    client.post("/public/tronc-commun/inscription", json={**FICHE, "telephone": "0611111111"})          # même nom, autre téléphone
+    client.post("/public/tronc-commun/inscription", json={**FICHE, "nom": "test", "classe": "prof", "telephone": "0622222222"})
+    H = {"X-Eleve": a}
+    assert client.get("/public/tronc-commun/examen", headers=H).json()["ouvert"] is False
+    for k in range(12):
+        client.post("/public/tronc-commun/suivi", headers=H, json={"type": "diapo", "cours": "tc_svt_revision", "slide_id": f"s{k}", "total": 15})
+    assert client.get("/public/tronc-commun/examen", headers=H).json()["ouvert"] is True      # 12/15 = 80 %
+    b = {e["id"]: e for e in tc.bilan()}
+    assert b[a]["classe"] == "TCSF 12" and not b[a]["test"] and not b[a]["doublon_de"]
+    assert sum(1 for e in b.values() if e["doublon_de"] == a) == 1
+    assert sum(1 for e in b.values() if e["test"]) == 1

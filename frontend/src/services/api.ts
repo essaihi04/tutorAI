@@ -585,6 +585,8 @@ export const setStatutAvisProf = (a: Pick<AvisProf, 'visiteur' | 'deck_id' | 'sl
 export interface QuestionExamenTC { partie?: string; note?: number; sur?: number; verdict?: string; pertes?: string[]; enonce?: string; reponse?: string; date?: string }
 export interface EleveTroncCommun {
   id: string; nom: string; classe: string; pere: string; telephone: string; date: string; derniere: string;
+  /** compte de test (classe sans numéro, nom « test »), doublon d'une autre fiche, et la classe telle que l'élève l'a écrite */
+  test?: boolean; doublon_de?: string | null; classe_ecrite?: string;
   temps: Record<string, number>;
   progression: Record<string, { vues: number; total: number }>;
   reponses_cours: { total: number; justes: number; fausses: number };

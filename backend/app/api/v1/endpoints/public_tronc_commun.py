@@ -34,6 +34,7 @@ router = APIRouter(prefix="/public/tronc-commun", tags=["public"])
 DOSSIER = Path(__file__).resolve().parents[4] / "data" / "tronc_commun"
 ELEVES = DOSSIER / "eleves.jsonl"
 SUIVI = DOSSIER / "suivi.jsonl"
+TOTAL_EXAMEN = 20
 COURS = {"tc_svt_sortie_ecologique": "La sortie écologique", "tc_svt_facteurs_edaphiques": "Les facteurs édaphiques",
          "tc_svt_revision": "Révision avec le tuteur"}
 #: (nombre, fenêtre en secondes) par élève, puis par adresse (large : toute une classe derrière le même wifi), puis total
@@ -136,7 +137,7 @@ async def inscription(body: Inscription, request: Request):
         if e.get("cle") == cle:
             return {"eleve_id": e["id"], "nom": e["nom"], "classe": e["classe"], "deja": True}
     e = {"id": str(uuid.uuid4()), "cle": cle, "nom": complet, "nom_famille": " ".join(body.nom.split()),
-         "prenom": " ".join(body.prenom.split()), "classe": " ".join(body.classe.split()),
+         "prenom": " ".join(body.prenom.split()), "classe": classe_normale(body.classe),
          "pere": " ".join(body.pere.split()), "telephone": tel, "date": _maintenant()}
     _ecrire(ELEVES, e)
     return {"eleve_id": e["id"], "nom": e["nom"], "classe": e["classe"], "deja": False}
@@ -209,7 +210,9 @@ async def mon_examen(request: Request, x_eleve: str | None = Header(default=None
             questions.setdefault(ev.get("question_id", "?"), ev.get("etat") or {"fait": True, "note": ev.get("note", 0)})
         elif ev.get("type") == "examen_fin":
             fini = True
-    return {"debut": debut, "fini": fini, "questions": questions}
+    prog = progression(e["id"])
+    return {"debut": debut, "fini": fini, "questions": questions, "progression": prog,
+            "ouvert": examen_ouvert(prog, bool(questions)), "seuil": SEUIL_OUVERTURE}
 
 
 @router.post("/answer-reaction")
@@ -220,11 +223,40 @@ async def answer_reaction(body: cp.AnswerReactionRequest, request: Request, x_el
     return await cp.answer_reaction(body, {"id": f"public-tc-{e['id']}"})
 
 
+#: 23/11/2026 : les classes de Tronc Commun sciences BIOF ; l'élève ne tape que le numéro (« 12 » → « TCSF 12 »)
+PREFIXE_CLASSE = "TCSF"
+#: nombre de diapositives de chaque cours (quand la page ne l'a pas encore envoyé)
+TOTAUX = {"tc_svt_sortie_ecologique": 35, "tc_svt_facteurs_edaphiques": 34, "tc_svt_revision": 15}
+#: l'évaluation s'ouvre quand la révision OU un des deux cours est parcouru à ce point (diapositives vues / total)
+SEUIL_OUVERTURE = 0.8
+
+
+def classe_normale(c: str) -> str:
+    """« Tc 12 », « TCSF-12 », « tcsf12 », « 12 » → « TCSF 12 » ; sans numéro, la classe telle qu'écrite (ex. « prof »)."""
+    m = re.search(r"\d+", c or "")
+    return f"{PREFIXE_CLASSE} {int(m.group())}" if m else (c or "").strip()
+
+
+def progression(eleve: str) -> dict:
+    vues: dict[str, set] = defaultdict(set)
+    for ev in _lire(SUIVI):
+        if ev.get("eleve") == eleve and ev.get("type") == "diapo" and ev.get("cours") in COURS:
+            vues[ev["cours"]].add(ev.get("slide_id", ""))
+    return {c: {"vues": len(vues.get(c, ())), "total": TOTAUX[c]} for c in COURS}
+
+
+def examen_ouvert(prog: dict, deja_commence: bool) -> bool:
+    """Ouvert après la révision ou un des deux cours (80 % des diapositives vues) ; un élève déjà commencé garde l'accès."""
+    return deja_commence or any(p["vues"] >= SEUIL_OUVERTURE * p["total"] for p in prog.values())
+
+
 def bilan() -> list[dict]:
-    """Une ligne par élève : sa fiche, son temps par cours, sa progression, ses réponses, son évaluation, ses lacunes."""
+    """Une ligne par élève : sa fiche, son temps par cours, sa progression, ses réponses, son évaluation, ses lacunes.
+    Une seule réponse compte (la première), même pour les données d'avant le 23/11/2026 ; les comptes de test (classe
+    sans numéro comme « prof », ou nom contenant « test ») et les doublons (même nom inscrit deux fois) sont signalés."""
     eleves = lire_eleves()
     par: dict[str, dict] = {i: {**{k: v for k, v in e.items() if k != "cle"}, "temps": defaultdict(int), "diapos": defaultdict(set),
-                                "total_diapos": {}, "reponses_cours": [], "examen": {}, "examens": [], "derniere": e.get("date", "")}
+                                "reponses_cours": {}, "questions": {}, "debut": None, "fin": None, "derniere": e.get("date", "")}
                             for i, e in eleves.items()}
     for ev in _lire(SUIVI):
         b = par.get(ev.get("eleve", ""))
@@ -236,32 +268,41 @@ def bilan() -> list[dict]:
             b["temps"][cours] += int(ev.get("secondes", 0))
         elif t == "diapo":
             b["diapos"][cours].add(ev.get("slide_id", ""))
-            if ev.get("total"):
-                b["total_diapos"][cours] = ev["total"]
         elif t == "reponse_cours":
-            b["reponses_cours"].append({k: ev.get(k) for k in ("cours", "slide_id", "titre", "enonce", "reponse", "correct", "date")})
+            b["reponses_cours"].setdefault((cours, ev.get("slide_id"), ev.get("enonce", "")),
+                                           {k: ev.get(k) for k in ("cours", "slide_id", "titre", "enonce", "reponse", "correct", "date")})
         elif t == "examen_debut":
-            b["examen"] = {"debut": ev.get("date"), "questions": {}}
+            b["debut"] = b["debut"] or ev.get("date")
         elif t == "examen_question":
-            b["examen"].setdefault("questions", {})[ev.get("question_id", "?")] = {
-                k: ev.get(k) for k in ("partie", "note", "sur", "verdict", "pertes", "enonce", "reponse", "date")}
+            b["questions"].setdefault(ev.get("question_id", "?"), {
+                k: ev.get(k) for k in ("partie", "note", "sur", "verdict", "pertes", "enonce", "reponse", "date")})
         elif t == "examen_fin":
-            b["examens"].append({"note": ev.get("note"), "sur": ev.get("sur"), "date": ev.get("date"),
-                                 "questions": b["examen"].get("questions", {}), "debut": b["examen"].get("debut")})
-    out = []
-    for b in par.values():
-        qs = b["examen"].get("questions", {}) if b["examen"] else {}
-        en_cours = {"note": sum(q.get("note") or 0 for q in qs.values()), "sur": sum(q.get("sur") or 0 for q in qs.values()),
-                    "faites": len(qs), "questions": qs, "debut": b["examen"].get("debut") if b["examen"] else None}
-        lacunes = [f"Q{qid} : {p}" for qid, q in qs.items() for p in (q.get("pertes") or [])]
-        fausses = [r for r in b["reponses_cours"] if r.get("correct") is False]
+            b["fin"] = b["fin"] or {"note": ev.get("note"), "sur": ev.get("sur"), "date": ev.get("date")}
+    out, vus = [], {}
+    for b in sorted(par.values(), key=lambda x: x.get("date", "")):
+        qs = b["questions"]
+        note = sum(q.get("note") or 0 for q in qs.values())
+        rep = list(b["reponses_cours"].values())
+        fausses = [r for r in rep if r.get("correct") is False]
+        lacunes = [f"Q{qid} : {p}" for qid, q in sorted(qs.items()) for p in (q.get("pertes") or [])]
         lacunes += [f"Cours — {r.get('titre') or r.get('slide_id')} : {r.get('enonce', '')[:120]}" for r in fausses[-15:]]
+        classe = classe_normale(b.get("classe", ""))
+        nom_cle = _cle_nom(b.get("nom", ""))
+        test = not re.search(r"\d", classe) or "test" in nom_cle.split() or classe.lower() == "prof"
+        doublon = vus.get(nom_cle) if nom_cle and not test else None
+        if nom_cle and not test and not doublon:
+            vus[nom_cle] = b["id"]
+        prog = {c: {"vues": len(b["diapos"].get(c, ())), "total": TOTAUX[c]} for c in COURS}
+        examens = [{"note": note, "sur": TOTAL_EXAMEN, "date": b["fin"]["date"], "debut": b["debut"], "questions": qs}] if b["fin"] else []
         out.append({
-            **{k: b[k] for k in ("id", "nom", "classe", "pere", "telephone", "date", "derniere")},
+            **{k: b.get(k, "") for k in ("id", "nom", "pere", "telephone", "date", "derniere")},
+            "classe": classe, "classe_ecrite": b.get("classe", ""), "test": test, "doublon_de": doublon,
             "temps": {c: b["temps"].get(c, 0) for c in [*COURS, "examen"]},
-            "progression": {c: {"vues": len(b["diapos"].get(c, ())), "total": b["total_diapos"].get(c, 0)} for c in COURS},
-            "reponses_cours": {"total": len(b["reponses_cours"]), "justes": sum(1 for r in b["reponses_cours"] if r.get("correct") is True),
-                               "fausses": len(fausses)},
-            "examen_en_cours": en_cours, "examens": b["examens"], "lacunes": lacunes[:40],
+            "progression": prog,
+            "reponses_cours": {"total": len(rep), "justes": sum(1 for r in rep if r.get("correct") is True), "fausses": len(fausses)},
+            "examen_en_cours": {"note": note, "sur": sum(q.get("sur") or 0 for q in qs.values()), "faites": len(qs), "questions": qs,
+                                "debut": b["debut"]},
+            "examens": examens, "lacunes": lacunes[:40],
         })
+    # un doublon montre aussi qui il double (le plus ancien garde la ligne principale)
     return sorted(out, key=lambda x: x.get("derniere", ""), reverse=True)

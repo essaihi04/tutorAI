@@ -163,7 +163,7 @@ function Fiche({ onEntree }: { onEntree: (e: Eleve) => void }) {
   const [envoi, setEnvoi] = useState(false);
   // tout est obligatoire (23/11/2026) : nom ET prénom séparés, et la case qui confirme la vraie identité
   const manque = {
-    nom: f.nom.trim().length < 2, prenom: f.prenom.trim().length < 2, classe: !f.classe.trim(),
+    nom: f.nom.trim().length < 2, prenom: f.prenom.trim().length < 2, classe: !/^\d{1,3}$/.test(f.classe.trim()),
     pere: f.pere.trim().length < 2, telephone: f.telephone.replace(/\D/g, '').length < 9,
   };
   const pret = !Object.values(manque).some(Boolean) && certifie;
@@ -193,7 +193,16 @@ function Fiche({ onEntree }: { onEntree: (e: Eleve) => void }) {
         <div className="mt-3 grid gap-2 sm:grid-cols-2 [@media(max-height:520px)]:grid-cols-2">
           {champ('nom', 'Nom de l’élève', 'ex. El Idrissi')}
           {champ('prenom', 'Prénom de l’élève', 'ex. Salma')}
-          {champ('classe', 'Classe', 'ex. TC 3')}
+          <label className="block">
+            <span className="text-sm text-white/80">Classe : le numéro seulement <span className="text-rose-300">*</span></span>
+            <span className={`mt-0.5 flex items-center overflow-hidden rounded-lg border bg-white/10 ${essaye && manque.classe ? 'border-rose-400' : 'border-white/20'}`}>
+              <span className="select-none border-r border-white/20 bg-white/10 px-3 py-2 font-semibold text-emerald-200 [@media(max-height:520px)]:py-1">TCSF</span>
+              <input value={f.classe} inputMode="numeric" placeholder="ex. 12" autoComplete="off" maxLength={3}
+                onChange={e => { setF(x => ({ ...x, classe: e.target.value.replace(/\D/g, '') })); setErreur(''); }}
+                className="w-full bg-transparent px-3 py-2 text-[16px] text-white outline-none placeholder:text-white/35 [@media(max-height:520px)]:py-1" />
+            </span>
+            {essaye && manque.classe && <span className="text-xs text-rose-300">Écris le numéro de ta classe (ex. 12)</span>}
+          </label>
           {champ('pere', 'Nom du père', 'ex. Ahmed El Idrissi')}
           {champ('telephone', 'Téléphone du père', 'ex. 06 12 34 56 78', 'tel')}
         </div>

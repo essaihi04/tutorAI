@@ -14,7 +14,7 @@ import ClavierFlottant, { clavier, hauteurClavierTelephone, largeurClavier, useC
 import { lireNombre } from '../../components/exercice/juger';
 import { pts } from '../../components/exercice/types';
 import { EXAMEN, totalPoints, type PartieExamen, type QuestionExamen } from './sujet';
-import { monExamen, suivre, useTempsPasse } from './suivi';
+import { monExamen, suivre, useTempsPasse, type Progression } from './suivi';
 import { Histogramme, histoVide, noterHisto, noterTriangle, Triangle, type Histo, type Ligne } from './Traces';
 import { VOIX_EXAMEN } from './voixExamen';
 import { inscrireVoix, taireTout } from '../../components/course/voixUnique';
@@ -104,6 +104,8 @@ export default function Examen() {
   useEffect(() => { if (commence) suivre({ type: 'examen_debut', cours: 'examen' }); }, [commence]);
   // une seule réponse compte (23/11/2026) : les questions déjà rendues reviennent du serveur, verrouillées
   const [repris, setRepris] = useState<'attente' | 'neuf' | 'suite' | 'fini'>('attente');
+  // l'évaluation s'ouvre après la révision ou un des deux cours (23/11/2026) ; hors ligne, sans réponse du serveur : ouverte
+  const [acces, setAcces] = useState<{ ouvert: boolean; progression?: Progression; seuil?: number }>({ ouvert: true });
   useEffect(() => {
     void monExamen().then(d => {
       const qs = d?.questions || {};
@@ -118,6 +120,7 @@ export default function Examen() {
         setI(k < 0 ? QUESTIONS.length - 1 : k);
       }
       setRepris(d?.fini ? 'fini' : ids.length ? 'suite' : 'neuf');
+      if (d) setAcces({ ouvert: d.ouvert !== false, progression: d.progression, seuil: d.seuil });
     });
   }, []);
 
@@ -205,7 +208,19 @@ export default function Examen() {
     note: pa.questions.reduce((n, x) => n + (etats[x.id]?.fait ? etats[x.id].note || 0 : 0), 0),
   })), [etats]);
 
-  if (!commence) return <Accueil etat={repris} onCommencer={() => setCommence(true)} />;
+  if (!commence) return <Accueil etat={repris} acces={acces} onCommencer={() => setCommence(true)} />;
+
+  // « Terminer l'évaluation » : les questions sans réponse comptent 0, verrouillées, puis le bilan
+  const terminer = () => {
+    const reste = QUESTIONS.filter(x => !etats[x.q.id]?.fait);
+    if (reste.length && !window.confirm(`Il reste ${reste.length} question${reste.length > 1 ? 's' : ''} sans réponse : ${reste.length > 1 ? 'elles compteront' : 'elle comptera'} 0 point et tu ne pourras plus y répondre. Terminer quand même ?`)) return;
+    setEtats(s => {
+      const n = { ...s };
+      for (const x of reste) n[x.q.id] = { fait: true, note: 0, verdict: 'faux', retour: 'Pas de réponse : 0 point. Lis la correction.',
+        details: [{ element: 'Réponse', sur: x.q.points, obtenu: 0, perte: 'pas de réponse' }] };
+      return n;
+    });
+  };
 
   const noteQ = etat.fait && typeof etat.note === 'number' ? etat.note : null;
   const LIGNES = { lineHeight: '36px', backgroundImage: 'repeating-linear-gradient(transparent 0 35px, #9bb3d6 35px 36px)' };
@@ -218,6 +233,7 @@ export default function Examen() {
         <h1 className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{EXAMEN.titre}</h1>
         <span className="hidden rounded border border-slate-500 px-2 py-0.5 text-sm text-slate-700 sm:inline" title="Durée conseillée, sans chronomètre">⏳ {EXAMEN.minutes} min conseillées</span>
         <span className="rounded border border-black px-2 py-0.5 text-sm font-semibold">Note : {pts(note)} / {pts(pointsFaits)}{fini ? '' : ` · ${faites}/${QUESTIONS.length}`}</span>
+        {!fini && <button onClick={terminer} className="rounded-md border border-rose-700 bg-rose-50 px-2.5 py-1 text-sm font-semibold text-rose-800 hover:bg-rose-100 [@media(max-height:520px)]:py-0.5">Terminer l’évaluation</button>}
       </header>
 
       <div className="flex min-h-0 flex-1 gap-2 p-2 sm:gap-3 sm:p-3 [@media(max-height:520px)]:p-1"
@@ -441,7 +457,8 @@ function Bilan({ note, parPartie, etats }: { note: number; parPartie: { pa: Part
   );
 }
 
-function Accueil({ onCommencer, etat }: { onCommencer: () => void; etat: 'attente' | 'neuf' | 'suite' | 'fini' }) {
+const NOMS_COURS: Record<string, string> = { tc_svt_revision: 'Révision avec le tuteur', tc_svt_sortie_ecologique: 'La sortie écologique', tc_svt_facteurs_edaphiques: 'Les facteurs édaphiques' };
+function Accueil({ onCommencer, etat, acces }: { onCommencer: () => void; etat: 'attente' | 'neuf' | 'suite' | 'fini'; acces: { ouvert: boolean; progression?: Progression; seuil?: number } }) {
   return (
     <div className="min-h-[100dvh] bg-[#d6d6d0] p-3 text-black sm:p-6" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <div className="mx-auto max-w-3xl bg-white p-4 shadow-md ring-1 ring-black/10 sm:p-6">
@@ -463,7 +480,18 @@ function Accueil({ onCommencer, etat }: { onCommencer: () => void; etat: 'attent
         </table>
         <p className="mt-3 text-[14px] text-slate-600">Programme : la sortie écologique ; les facteurs édaphiques (texture et structure, propriétés chimiques, propriétés hydriques du sol). Pas de chronomètre : la durée est un repère.</p>
         <p className="mt-3 rounded-md border border-amber-500 bg-amber-50 p-2 text-[14px] text-amber-900">Attention : chaque réponse est enregistrée une seule fois. Une question rendue ne peut plus être changée.</p>
-        <button disabled={etat === 'attente'} onClick={onCommencer} className="mt-4 rounded-md bg-black px-5 py-2 font-semibold text-white disabled:opacity-40">
+        {!acces.ouvert && etat !== 'attente' && (
+          <div className="mt-3 rounded-md border border-sky-700 bg-sky-50 p-3 text-[15px] text-sky-950">
+            <p className="font-semibold">L’évaluation s’ouvre quand tu as suivi la révision, ou un des deux cours (au moins {Math.round((acces.seuil || 0.8) * 100)} % des diapositives).</p>
+            <ul className="mt-2 space-y-1.5">{Object.entries(acces.progression || {}).map(([id, p]) => {
+              const pc = p.total ? Math.min(100, Math.round((100 * p.vues) / p.total)) : 0;
+              return (<li key={id} className="flex items-center gap-2">
+                <a href={`?cours=${id}`} className="w-48 shrink-0 text-sky-800 underline">{NOMS_COURS[id] || id}</a>
+                <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-sky-100"><span className="block h-full rounded-full bg-sky-600" style={{ width: `${pc}%` }} /></span>
+                <span className="w-24 shrink-0 text-right text-sm">{p.vues} / {p.total} diapos</span></li>);
+            })}</ul>
+          </div>)}
+        <button disabled={etat === 'attente' || !acces.ouvert} onClick={onCommencer} className="mt-4 rounded-md bg-black px-5 py-2 font-semibold text-white disabled:opacity-40">
           {etat === 'attente' ? 'Chargement…' : etat === 'fini' ? 'Voir mes résultats' : etat === 'suite' ? 'Continuer l’évaluation' : 'Commencer l’évaluation'}</button>
       </div>
     </div>
