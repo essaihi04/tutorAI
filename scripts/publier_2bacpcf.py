@@ -29,6 +29,7 @@ FICHIERS = ["media/simulations/professor-locate.js", "media/avatar/moalim-profes
             "media/audio/reactions/manifest.json"]
 TEXTE = {".js", ".html", ".css", ".json", ".mjs"}
 REF = re.compile(r"/media/[A-Za-z0-9_\-./%]+")
+SUJET = re.compile(r"sujet=([a-z]+/[0-9]{4}-[a-z]+)")
 PISTE = re.compile(r"(/media/audio/(?:courses|exercices)/[a-z0-9_]+/[^\"'`\\\s]+?)\.wav")
 
 
@@ -61,7 +62,17 @@ def copier_medias() -> list[Path]:
         if f in vus or not f.exists():
             continue
         vus.add(f)
-        for ref in REF.findall(f.read_text(encoding="utf-8", errors="ignore")):
+        texte = f.read_text(encoding="utf-8", errors="ignore")
+        # la feuille d'examen charge `/media/examens/<sujet>.json` et ses figures d'après `?sujet=…` (lien calculé) :
+        # le sujet et son dossier de figures sont copiés pour chaque `sujet=` rencontré
+        for sujet in SUJET.findall(texte):
+            rel = Path("media/examens") / f"{sujet}.json"
+            if src(rel).is_file():
+                a_copier.add(rel)
+            dossier = src(Path("media/examens") / sujet)
+            if dossier.is_dir():
+                a_copier |= {Path("media/examens") / sujet / p.relative_to(dossier) for p in dossier.rglob("*") if p.is_file()}
+        for ref in REF.findall(texte):
             rel = Path(ref.lstrip("/").split("?")[0].split("#")[0].rstrip("."))
             if src(rel).is_file() and rel not in a_copier:
                 a_copier.add(rel)
