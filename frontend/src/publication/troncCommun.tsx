@@ -156,22 +156,31 @@ function Cours({ id }: { id: string }) {
 
 /** La fiche d'entrée : remplie une seule fois (le navigateur s'en souvient ; la même fiche redonne le même élève). */
 function Fiche({ onEntree }: { onEntree: (e: Eleve) => void }) {
-  const [f, setF] = useState({ nom: '', classe: '', pere: '', telephone: '' });
+  const [f, setF] = useState({ nom: '', prenom: '', classe: '', pere: '', telephone: '' });
+  const [certifie, setCertifie] = useState(false);
+  const [essaye, setEssaye] = useState(false);
   const [erreur, setErreur] = useState('');
   const [envoi, setEnvoi] = useState(false);
-  const pret = f.nom.trim().length >= 2 && f.classe.trim() && f.pere.trim().length >= 2 && f.telephone.replace(/\D/g, '').length >= 9;
+  // tout est obligatoire (23/11/2026) : nom ET prénom séparés, et la case qui confirme la vraie identité
+  const manque = {
+    nom: f.nom.trim().length < 2, prenom: f.prenom.trim().length < 2, classe: !f.classe.trim(),
+    pere: f.pere.trim().length < 2, telephone: f.telephone.replace(/\D/g, '').length < 9,
+  };
+  const pret = !Object.values(manque).some(Boolean) && certifie;
   const champ = (cle: keyof typeof f, libelle: string, aide: string, type = 'text') => (
     <label className="block">
-      <span className="text-sm text-white/80">{libelle}</span>
+      <span className="text-sm text-white/80">{libelle} <span className="text-rose-300">*</span></span>
       <input type={type} value={f[cle]} placeholder={aide} autoComplete="off" inputMode={type === 'tel' ? 'tel' : undefined}
         onChange={e => { setF(x => ({ ...x, [cle]: e.target.value })); setErreur(''); }}
-        className="mt-0.5 w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[16px] text-white placeholder:text-white/35 [@media(max-height:520px)]:py-1" />
+        className={`mt-0.5 w-full rounded-lg border bg-white/10 px-3 py-2 text-[16px] text-white placeholder:text-white/35 [@media(max-height:520px)]:py-1 ${essaye && manque[cle] ? 'border-rose-400' : 'border-white/20'}`} />
+      {essaye && manque[cle] && <span className="text-xs text-rose-300">Obligatoire</span>}
     </label>);
   const entrer = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!pret || envoi) return;
+    setEssaye(true);
+    if (!pret || envoi) { if (!certifie && !Object.values(manque).some(Boolean)) setErreur('Coche la case pour confirmer ton nom et ton prénom.'); return; }
     setEnvoi(true);
-    try { onEntree(await inscrire({ nom: f.nom.trim(), classe: f.classe.trim(), pere: f.pere.trim(), telephone: f.telephone.trim() })); }
+    try { onEntree(await inscrire({ nom: f.nom.trim(), prenom: f.prenom.trim(), classe: f.classe.trim(), pere: f.pere.trim(), telephone: f.telephone.trim() })); }
     catch (e) { setErreur(e instanceof Error ? e.message : 'Inscription impossible, réessaie.'); }
     finally { setEnvoi(false); }
   };
@@ -182,13 +191,18 @@ function Fiche({ onEntree }: { onEntree: (e: Eleve) => void }) {
         <h1 className="mt-1 text-xl font-bold [@media(max-height:520px)]:text-lg">Avant d’entrer : ta fiche</h1>
         <p className="mt-1 text-[14px] text-white/70">Une seule fois. Ton professeur suit ainsi ton travail : temps passé, évaluation, ce qu’il faut revoir.</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 [@media(max-height:520px)]:grid-cols-2">
-          {champ('nom', 'Nom et prénom de l’élève', 'ex. Salma El Idrissi')}
+          {champ('nom', 'Nom de l’élève', 'ex. El Idrissi')}
+          {champ('prenom', 'Prénom de l’élève', 'ex. Salma')}
           {champ('classe', 'Classe', 'ex. TC 3')}
           {champ('pere', 'Nom du père', 'ex. Ahmed El Idrissi')}
           {champ('telephone', 'Téléphone du père', 'ex. 06 12 34 56 78', 'tel')}
         </div>
+        <label className={`mt-3 flex items-start gap-2 rounded-lg border p-2 text-[14px] ${essaye && !certifie ? 'border-rose-400' : 'border-white/15'}`}>
+          <input type="checkbox" checked={certifie} onChange={e => { setCertifie(e.target.checked); setErreur(''); }} className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Je confirme que j’ai écrit <b>mon vrai nom et mon prénom</b>. Une seule fiche par élève : chaque réponse de l’évaluation est enregistrée une seule fois.</span>
+        </label>
         {erreur && <p className="mt-2 text-sm text-rose-300">{erreur}</p>}
-        <button disabled={!pret || envoi} className="mt-3 w-full rounded-xl bg-emerald-500 py-2 font-semibold text-black disabled:opacity-40 [@media(max-height:520px)]:mt-2 [@media(max-height:520px)]:py-1.5">
+        <button disabled={envoi} className="mt-3 w-full rounded-xl bg-emerald-500 py-2 font-semibold text-black disabled:opacity-40 [@media(max-height:520px)]:mt-2 [@media(max-height:520px)]:py-1.5">
           {envoi ? 'Enregistrement…' : 'Entrer'}</button>
       </form>
     </div>

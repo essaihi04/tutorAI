@@ -73,3 +73,28 @@ def test_correction_par_eleve(client):
         "reponse": "…", "tentative": 2})
     assert r.status_code == 200 and r.json()["correct"] is True
     assert client.post("/public/tronc-commun/answer-reaction", json={"reponse": "x"}).status_code == 401
+
+
+def test_une_seule_reponse_par_question(client):
+    eid = client.post("/public/tronc-commun/inscription", json={**FICHE, "nom": "El Idrissi", "prenom": "Salma"}).json()["eleve_id"]
+    H = {"X-Eleve": eid}
+    q = {"type": "examen_question", "cours": "examen", "question_id": "1-1", "note": 1, "sur": 1, "etat": {"fait": True, "note": 1, "verdict": "juste"}}
+    assert client.post("/public/tronc-commun/suivi", headers=H, json=q).json()["deja"] is False
+    r = client.post("/public/tronc-commun/suivi", headers=H, json={**q, "note": 0, "etat": {"fait": True, "note": 0}}).json()
+    assert r["deja"] is True                      # la deuxième réponse n'est pas gardée
+    d = client.get("/public/tronc-commun/examen", headers=H).json()
+    assert d["questions"]["1-1"]["note"] == 1 and d["fini"] is False
+    for _ in range(2):
+        client.post("/public/tronc-commun/suivi", headers=H, json={"type": "examen_fin", "cours": "examen", "note": 1, "sur": 20})
+    assert client.get("/public/tronc-commun/examen", headers=H).json()["fini"] is True
+    assert len(tc.bilan()[0]["examens"]) == 1
+    assert tc.lire_eleves()[eid]["prenom"] == "Salma" and tc.lire_eleves()[eid]["nom"] == "El Idrissi Salma"
+
+
+def test_premiere_reponse_du_cours_seulement(client):
+    eid = client.post("/public/tronc-commun/inscription", json=FICHE).json()["eleve_id"]
+    H = {"X-Eleve": eid}
+    r = {"type": "reponse_cours", "cours": "tc_svt_revision", "slide_id": "s1", "enonce": "Q ?", "correct": False}
+    client.post("/public/tronc-commun/suivi", headers=H, json=r)
+    client.post("/public/tronc-commun/suivi", headers=H, json={**r, "correct": True})
+    assert tc.bilan()[0]["reponses_cours"] == {"total": 1, "justes": 0, "fausses": 1}

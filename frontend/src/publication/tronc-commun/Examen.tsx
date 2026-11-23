@@ -14,7 +14,7 @@ import ClavierFlottant, { clavier, hauteurClavierTelephone, largeurClavier, useC
 import { lireNombre } from '../../components/exercice/juger';
 import { pts } from '../../components/exercice/types';
 import { EXAMEN, totalPoints, type PartieExamen, type QuestionExamen } from './sujet';
-import { suivre, useTempsPasse } from './suivi';
+import { monExamen, suivre, useTempsPasse } from './suivi';
 import { Histogramme, histoVide, noterHisto, noterTriangle, Triangle, type Histo, type Ligne } from './Traces';
 import { VOIX_EXAMEN } from './voixExamen';
 import { inscrireVoix, taireTout } from '../../components/course/voixUnique';
@@ -102,6 +102,24 @@ export default function Examen() {
   useEffect(() => { clavier.matiere('svt'); }, []);
   useTempsPasse('examen', commence);
   useEffect(() => { if (commence) suivre({ type: 'examen_debut', cours: 'examen' }); }, [commence]);
+  // une seule réponse compte (23/11/2026) : les questions déjà rendues reviennent du serveur, verrouillées
+  const [repris, setRepris] = useState<'attente' | 'neuf' | 'suite' | 'fini'>('attente');
+  useEffect(() => {
+    void monExamen().then(d => {
+      const qs = d?.questions || {};
+      const ids = Object.keys(qs).filter(id => QUESTIONS.some(x => x.q.id === id));
+      if (ids.length) {
+        const restes: Record<string, Etat> = {};
+        for (const id of ids) restes[id] = { ...(qs[id] as Etat), fait: true };
+        for (const id of ids) { envoyes.current[id] = `${restes[id].note}|${restes[id].verdict}`; dejaFait.current[id] = true; }
+        if (d?.fini) envoyes.current.__fin = '1';
+        setEtats(restes);
+        const k = QUESTIONS.findIndex(x => !restes[x.q.id]);
+        setI(k < 0 ? QUESTIONS.length - 1 : k);
+      }
+      setRepris(d?.fini ? 'fini' : ids.length ? 'suite' : 'neuf');
+    });
+  }, []);
 
   const { p, q } = QUESTIONS[i];
   // la voix se tait quand on change de question ; la correction se dit dès que la réponse est notée
@@ -171,7 +189,10 @@ export default function Examen() {
       envoyes.current[x.id] = sig;
       suivre({ type: 'examen_question', cours: 'examen', question_id: x.id, partie: pa.titre, note: e.note || 0, sur: x.points,
         verdict: e.verdict, enonce: x.texte, reponse: e.texte || (e.choix || []).map(c => String(c)).join(' ; '),
-        pertes: (e.details || []).filter(d => d.obtenu < d.sur).map(d => `${d.element} : ${d.perte || 'manque'}`) });
+        pertes: (e.details || []).filter(d => d.obtenu < d.sur).map(d => `${d.element} : ${d.perte || 'manque'}`),
+        // ce qu'il faut pour remontrer la question telle quelle si l'élève revient
+        etat: { fait: true, choix: e.choix, texte: e.texte?.slice(0, 800), note: e.note, verdict: e.verdict, retour: e.retour?.slice(0, 700),
+          details: e.details, lignes: e.lignes, zone: e.zone, histo: e.histo } });
     }
     if (QUESTIONS.every(x => etats[x.q.id]?.fait) && !envoyes.current.__fin) {
       envoyes.current.__fin = '1';
@@ -184,7 +205,7 @@ export default function Examen() {
     note: pa.questions.reduce((n, x) => n + (etats[x.id]?.fait ? etats[x.id].note || 0 : 0), 0),
   })), [etats]);
 
-  if (!commence) return <Accueil onCommencer={() => setCommence(true)} />;
+  if (!commence) return <Accueil etat={repris} onCommencer={() => setCommence(true)} />;
 
   const noteQ = etat.fait && typeof etat.note === 'number' ? etat.note : null;
   const LIGNES = { lineHeight: '36px', backgroundImage: 'repeating-linear-gradient(transparent 0 35px, #9bb3d6 35px 36px)' };
@@ -334,7 +355,7 @@ export default function Examen() {
                 {i < QUESTIONS.length - 1 && <button onClick={() => setI(i + 1)} className={etat.fait ? 'ml-auto rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white' : `ml-auto ${BTN}`}>{etat.fait ? 'Question suivante →' : 'Passer →'}</button>}
               </div>
 
-              {fini && <Bilan note={note} parPartie={parPartie} etats={etats} onRecommencer={() => { envoyes.current = {}; setEtats({}); setI(0); suivre({ type: 'examen_debut', cours: 'examen' }); }} />}
+              {fini && <Bilan note={note} parPartie={parPartie} etats={etats} />}
             </div>
           </div>
         </section>
@@ -400,7 +421,7 @@ function Verdict({ etat }: { etat: Etat }) {
   );
 }
 
-function Bilan({ note, parPartie, etats, onRecommencer }: { note: number; parPartie: { pa: PartieExamen; sur: number; note: number }[]; etats: Record<string, Etat>; onRecommencer: () => void }) {
+function Bilan({ note, parPartie, etats }: { note: number; parPartie: { pa: PartieExamen; sur: number; note: number }[]; etats: Record<string, Etat> }) {
   const aRevoir = QUESTIONS.filter(x => (etats[x.q.id]?.note || 0) < x.q.points);
   return (
     <div className="mt-5 border-2 border-black p-3 sm:p-4">
@@ -414,14 +435,13 @@ function Bilan({ note, parPartie, etats, onRecommencer }: { note: number; parPar
         <p className="mt-2 text-[15px] text-slate-800">À revoir avant la vraie évaluation : {aRevoir.map(x => `question ${x.q.id}`).join(', ')}. Relis leur correction, puis reprends la partie du cours qui leur correspond.</p>
       ) : <p className="mt-2 text-[15px] text-emerald-800">Tout est juste : tu es prêt pour l’évaluation.</p>}
       <div className="mt-3 flex flex-wrap gap-2">
-        <button onClick={onRecommencer} className={BTN}>🔁 Recommencer l’évaluation</button>
         <a href="./" className={BTN}>Revoir les cours</a>
       </div>
     </div>
   );
 }
 
-function Accueil({ onCommencer }: { onCommencer: () => void }) {
+function Accueil({ onCommencer, etat }: { onCommencer: () => void; etat: 'attente' | 'neuf' | 'suite' | 'fini' }) {
   return (
     <div className="min-h-[100dvh] bg-[#d6d6d0] p-3 text-black sm:p-6" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <div className="mx-auto max-w-3xl bg-white p-4 shadow-md ring-1 ring-black/10 sm:p-6">
@@ -442,7 +462,9 @@ function Accueil({ onCommencer }: { onCommencer: () => void }) {
               <td className="w-24 border border-slate-400 px-2 py-1 text-center text-slate-600">≈ {pa.minutes} min</td></tr>))}</tbody>
         </table>
         <p className="mt-3 text-[14px] text-slate-600">Programme : la sortie écologique ; les facteurs édaphiques (texture et structure, propriétés chimiques, propriétés hydriques du sol). Pas de chronomètre : la durée est un repère.</p>
-        <button onClick={onCommencer} className="mt-4 rounded-md bg-black px-5 py-2 font-semibold text-white">Commencer l’évaluation</button>
+        <p className="mt-3 rounded-md border border-amber-500 bg-amber-50 p-2 text-[14px] text-amber-900">Attention : chaque réponse est enregistrée une seule fois. Une question rendue ne peut plus être changée.</p>
+        <button disabled={etat === 'attente'} onClick={onCommencer} className="mt-4 rounded-md bg-black px-5 py-2 font-semibold text-white disabled:opacity-40">
+          {etat === 'attente' ? 'Chargement…' : etat === 'fini' ? 'Voir mes résultats' : etat === 'suite' ? 'Continuer l’évaluation' : 'Commencer l’évaluation'}</button>
       </div>
     </div>
   );

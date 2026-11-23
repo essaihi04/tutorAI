@@ -116,6 +116,8 @@ def _eleve(eleve_id: Optional[str]) -> dict:
 
 class Inscription(BaseModel):
     nom: str = Field(..., min_length=2, max_length=80)
+    #: 23/11/2026 : nom et prénom séparés et obligatoires (les anciennes fiches n'ont que `nom`)
+    prenom: str = Field(default="", max_length=80)
     classe: str = Field(..., min_length=1, max_length=40)
     pere: str = Field(..., min_length=2, max_length=80)
     telephone: str = Field(..., min_length=8, max_length=25)
@@ -127,12 +129,14 @@ async def inscription(body: Inscription, request: Request):
     tel = telephone_normalise(body.telephone)
     if not tel:
         raise HTTPException(422, "Numéro de téléphone invalide (ex. 06 12 34 56 78).")
-    cle = f"{_cle_nom(body.nom)}|{tel}"
+    complet = " ".join(f"{body.nom} {body.prenom}".split())
+    cle = f"{_cle_nom(complet)}|{tel}"
     _autoriser("inscription", cle, request)
     for e in lire_eleves().values():
         if e.get("cle") == cle:
             return {"eleve_id": e["id"], "nom": e["nom"], "classe": e["classe"], "deja": True}
-    e = {"id": str(uuid.uuid4()), "cle": cle, "nom": " ".join(body.nom.split()), "classe": " ".join(body.classe.split()),
+    e = {"id": str(uuid.uuid4()), "cle": cle, "nom": complet, "nom_famille": " ".join(body.nom.split()),
+         "prenom": " ".join(body.prenom.split()), "classe": " ".join(body.classe.split()),
          "pere": " ".join(body.pere.split()), "telephone": tel, "date": _maintenant()}
     _ecrire(ELEVES, e)
     return {"eleve_id": e["id"], "nom": e["nom"], "classe": e["classe"], "deja": False}
@@ -156,6 +160,23 @@ class Evenement(BaseModel):
     sur: float = Field(default=0, ge=0, le=20)
     verdict: str = Field(default="", max_length=20)
     pertes: list[str] = Field(default_factory=list, max_length=12)
+    #: l'état affiché de la question de l'évaluation (verdict, détails du barème, tracés), pour la remontrer telle quelle
+    etat: dict = Field(default_factory=dict)
+
+
+def _deja(eleve: str, body: "Evenement") -> bool:
+    """Une seule réponse compte (23/11/2026) : la première question rendue de l'évaluation, le premier début et la
+    première fin, la première réponse à chaque question d'un cours."""
+    for ev in _lire(SUIVI):
+        if ev.get("eleve") != eleve or ev.get("type") != body.type:
+            continue
+        if body.type in ("examen_debut", "examen_fin"):
+            return True
+        if body.type == "examen_question" and ev.get("question_id") == body.question_id:
+            return True
+        if body.type == "reponse_cours" and ev.get("cours") == body.cours and ev.get("slide_id") == body.slide_id                 and ev.get("enonce", "") == body.enonce:
+            return True
+    return False
 
 
 @router.post("/suivi")
@@ -164,9 +185,31 @@ async def suivi(body: Evenement, request: Request, x_eleve: str | None = Header(
     _autoriser("suivi", e["id"], request)
     if body.cours and body.cours not in COURS and body.cours != "examen":
         raise HTTPException(404, "Cours introuvable")
-    ligne = {k: v for k, v in body.model_dump().items() if v not in ("", None, [], 0) or k in ("note", "correct")}
+    if body.type in ("examen_debut", "examen_question", "examen_fin", "reponse_cours") and _deja(e["id"], body):
+        return {"ok": True, "deja": True}
+    if len(json.dumps(body.etat, ensure_ascii=False)) > 12000:
+        raise HTTPException(413, "État trop grand")
+    ligne = {k: v for k, v in body.model_dump().items() if v not in ("", None, [], 0, {}) or k in ("note", "correct")}
     _ecrire(SUIVI, {**ligne, "eleve": e["id"], "date": _maintenant()})
-    return {"ok": True}
+    return {"ok": True, "deja": False}
+
+
+@router.get("/examen")
+async def mon_examen(request: Request, x_eleve: str | None = Header(default=None)):
+    """Les questions de l'évaluation déjà rendues par cet élève (la page les remontre, verrouillées), et s'il a fini."""
+    e = _eleve(x_eleve)
+    _autoriser("suivi", e["id"], request)
+    questions, debut, fini = {}, False, False
+    for ev in _lire(SUIVI):
+        if ev.get("eleve") != e["id"]:
+            continue
+        if ev.get("type") == "examen_debut":
+            debut = True
+        elif ev.get("type") == "examen_question":
+            questions.setdefault(ev.get("question_id", "?"), ev.get("etat") or {"fait": True, "note": ev.get("note", 0)})
+        elif ev.get("type") == "examen_fin":
+            fini = True
+    return {"debut": debut, "fini": fini, "questions": questions}
 
 
 @router.post("/answer-reaction")

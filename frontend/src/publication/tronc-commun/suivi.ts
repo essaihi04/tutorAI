@@ -21,7 +21,7 @@ export function garderEleve(e: Eleve | null) {
   try { if (e) localStorage.setItem(CLE, JSON.stringify(e)); else localStorage.removeItem(CLE); } catch { /* navigation privée */ }
 }
 
-export async function inscrire(fiche: { nom: string; classe: string; pere: string; telephone: string }): Promise<Eleve> {
+export async function inscrire(fiche: { nom: string; prenom: string; classe: string; pere: string; telephone: string }): Promise<Eleve> {
   const r = await fetchBrut(`${API_TC}/inscription`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fiche) });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(typeof d?.detail === 'string' ? d.detail : 'Inscription impossible, réessaie.');
@@ -35,6 +35,8 @@ export type EvenementSuivi = {
   cours?: string; secondes?: number; slide_id?: string; titre?: string; position?: number; total?: number;
   enonce?: string; reponse?: string; correct?: boolean | null; question_id?: string; partie?: string;
   note?: number; sur?: number; verdict?: string; pertes?: string[];
+  /** l'état affiché d'une question de l'évaluation, pour la remontrer telle quelle (une seule réponse compte) */
+  etat?: Record<string, unknown>;
 };
 
 /** Envoie un événement de suivi (jamais bloquant : hors ligne, il se perd). */
@@ -62,4 +64,14 @@ export function useTempsPasse(cours: string, actif = true) {
     }, 30_000);
     return () => window.clearInterval(id);
   }, [cours, actif]);
+}
+
+/** Les questions de l'évaluation déjà rendues par l'élève (une seule réponse compte) : la page les remontre verrouillées. */
+export async function monExamen(): Promise<{ debut: boolean; fini: boolean; questions: Record<string, Record<string, unknown>> } | null> {
+  const e = eleveEnregistre();
+  if (!e) return null;
+  try {
+    const r = await fetchBrut(`${API_TC}/examen`, { headers: { 'X-Eleve': e.id } });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
 }
