@@ -34,6 +34,10 @@ export interface PartieExamen {
   tableau?: { entetes: string[]; lignes: string[][] };
   donnees?: string[];
   questions: QuestionExamen[];
+  /** nom court de l'onglet (ex. « Ex. 1 ») */
+  court?: string;
+  /** figures de l'énoncé (format des exercices : FiguresCahier) */
+  figures?: unknown[];
 }
 
 export const EXAMEN = {

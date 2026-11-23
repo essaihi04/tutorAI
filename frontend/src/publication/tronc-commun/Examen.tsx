@@ -13,14 +13,38 @@ import ChampReponse from '../../components/course/SaisieReponse';
 import ClavierFlottant, { clavier, hauteurClavierTelephone, largeurClavier, useClavier } from '../../components/course/ClavierFlottant';
 import { lireNombre } from '../../components/exercice/juger';
 import { pts } from '../../components/exercice/types';
-import { EXAMEN, totalPoints, type PartieExamen, type QuestionExamen } from './sujet';
+import { EXAMEN, type PartieExamen, type QuestionExamen } from './sujet';
+import FiguresCahier from '../../components/course/FigureCahier';
 import { monExamen, suivre, useTempsPasse, type Progression } from './suivi';
 import { Histogramme, histoVide, noterHisto, noterTriangle, Triangle, type Histo, type Ligne } from './Traces';
 import { VOIX_EXAMEN } from './voixExamen';
 import { inscrireVoix, taireTout } from '../../components/course/voixUnique';
 
 /** `partie/P1`, `question/1-1`, `correction/1-1` → la piste, si elle existe */
-const piste = (cle: string) => (VOIX_EXAMEN.includes(cle) ? `/media/audio/courses/tc_svt_examen/${cle}.mp3` : undefined);
+/** Ce qui change d'une page à l'autre (23/11/2026) : le Tronc Commun par défaut ; `/2bacpcf` appelle `utiliserSujet`. */
+export interface ConfigExamen {
+  sujet: typeof EXAMEN & { programme?: string };
+  /** la voix d'une clé `partie/<id>`, `question/<id>`, `correction/<id>` */
+  piste: (cle: string) => string | undefined;
+  /** fiche, suivi, une seule réponse, ouverture après le cours : seulement là où il y a une fiche d'élève */
+  suivi: boolean;
+  /** matière donnée au tuteur et au clavier */
+  matiere: string;
+  /** l'accueil de la page (lien « retour ») */
+  retour: string;
+}
+let CFG: ConfigExamen & { questions: { p: PartieExamen; q: QuestionExamen }[]; total: number } = config({
+  sujet: { ...EXAMEN, programme: 'la sortie écologique ; les facteurs édaphiques (texture et structure, propriétés chimiques, propriétés hydriques du sol)' },
+  piste: (cle: string) => (VOIX_EXAMEN.includes(cle) ? `/media/audio/courses/tc_svt_examen/${cle}.mp3` : undefined),
+  suivi: true, matiere: 'svt', retour: 'Tronc Commun',
+});
+function config(c: ConfigExamen) {
+  const questions = c.sujet.parties.flatMap(pa => pa.questions.map(q => ({ p: pa, q })));
+  return { ...c, questions, total: questions.reduce((n, x) => n + x.q.points, 0) };
+}
+/** à appeler avant le premier rendu (une évaluation par page) */
+export function utiliserSujet(c: ConfigExamen) { CFG = config(c); }
+const piste = (cle: string) => CFG.piste(cle);
 let voixCourante: HTMLAudioElement | null = null;
 function jouer(url?: string) {
   voixCourante?.pause();
@@ -53,20 +77,18 @@ type Etat = {
   lignes?: Partial<Record<'argile' | 'limon' | 'sable', Ligne>>; zone?: string; histo?: Histo;
 };
 
-const QUESTIONS = EXAMEN.parties.flatMap(p => p.questions.map(q => ({ p, q })));
-const TOTAL = totalPoints();
 
 function texteDuSujet(p: PartieExamen) {
   const tab = p.tableau ? [p.tableau.entetes.join(' | '), ...p.tableau.lignes.map(l => l.join(' | '))].join(' ; ') : '';
-  return [`Évaluation formative de SVT, ${EXAMEN.niveau} (Maroc) : ${p.titre}.`, p.intro || '', tab, ...(p.donnees || [])].filter(Boolean).join(' ');
+  return [`Évaluation formative de ${CFG.sujet.matiere}, ${CFG.sujet.niveau} (Maroc) : ${p.titre}.`, p.intro || '', tab, ...(p.donnees || [])].filter(Boolean).join(' ');
 }
 
 async function corrigerParLeTuteur(p: PartieExamen, q: Extract<QuestionExamen, { genre: 'redaction' }>, reponse: string) {
   const r = await fetch('/api/v1/course-player/answer-reaction', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      diapo: { title: `${EXAMEN.niveau} — ${p.titre}`, speech: texteDuSujet(p) },
-      question: { type: 'open', enonce: q.texte, attendu: q.attendu, matiere: 'svt', bareme: q.points, elements: q.elements },
+      diapo: { title: `${CFG.sujet.niveau} — ${p.titre}`, speech: texteDuSujet(p) },
+      question: { type: 'open', enonce: q.texte, attendu: q.attendu, matiere: CFG.matiere, bareme: q.points, elements: q.elements },
       // un seul essai, comme en examen : le tuteur corrige et donne la bonne réponse (pas d'indice pour réessayer)
       reponse: reponse.slice(0, 800), tentative: 2, verdict: null,
     }),
@@ -99,32 +121,33 @@ export default function Examen() {
   const [etats, setEtats] = useState<Record<string, Etat>>({});
   const [sujetVu, setSujetVu] = useState(true);
   const clavierOuvert = useClavier().ouvert;
-  useEffect(() => { clavier.matiere('svt'); }, []);
-  useTempsPasse('examen', commence);
-  useEffect(() => { if (commence) suivre({ type: 'examen_debut', cours: 'examen' }); }, [commence]);
+  useEffect(() => { clavier.matiere(CFG.matiere === 'svt' ? 'svt' : 'physique-chimie'); }, []);
+  useTempsPasse('examen', commence && CFG.suivi);
+  useEffect(() => { if (commence && CFG.suivi) suivre({ type: 'examen_debut', cours: 'examen' }); }, [commence]);
   // une seule réponse compte (23/11/2026) : les questions déjà rendues reviennent du serveur, verrouillées
   const [repris, setRepris] = useState<'attente' | 'neuf' | 'suite' | 'fini'>('attente');
   // l'évaluation s'ouvre après la révision ou un des deux cours (23/11/2026) ; hors ligne, sans réponse du serveur : ouverte
   const [acces, setAcces] = useState<{ ouvert: boolean; progression?: Progression; seuil?: number }>({ ouvert: true });
   useEffect(() => {
+    if (!CFG.suivi) { setRepris('neuf'); return; }
     void monExamen().then(d => {
       const qs = d?.questions || {};
-      const ids = Object.keys(qs).filter(id => QUESTIONS.some(x => x.q.id === id));
+      const ids = Object.keys(qs).filter(id => CFG.questions.some(x => x.q.id === id));
       if (ids.length) {
         const restes: Record<string, Etat> = {};
         for (const id of ids) restes[id] = { ...(qs[id] as Etat), fait: true };
         for (const id of ids) { envoyes.current[id] = `${restes[id].note}|${restes[id].verdict}`; dejaFait.current[id] = true; }
         if (d?.fini) envoyes.current.__fin = '1';
         setEtats(restes);
-        const k = QUESTIONS.findIndex(x => !restes[x.q.id]);
-        setI(k < 0 ? QUESTIONS.length - 1 : k);
+        const k = CFG.questions.findIndex(x => !restes[x.q.id]);
+        setI(k < 0 ? CFG.questions.length - 1 : k);
       }
       setRepris(d?.fini ? 'fini' : ids.length ? 'suite' : 'neuf');
       if (d) setAcces({ ouvert: d.ouvert !== false, progression: d.progression, seuil: d.seuil });
     });
   }, []);
 
-  const { p, q } = QUESTIONS[i];
+  const { p, q } = CFG.questions[i];
   // la voix se tait quand on change de question ; la correction se dit dès que la réponse est notée
   useEffect(() => () => jouer(undefined), [i]);
   const faitIci = !!etats[q.id]?.fait;
@@ -135,9 +158,9 @@ export default function Examen() {
   const etat: Etat = etats[q.id] || { fait: false };
   const poser = (id: string, e: Partial<Etat>) => setEtats(s => ({ ...s, [id]: { ...(s[id] || { fait: false }), ...e } }));
   const note = Object.values(etats).reduce((n, e) => n + (e.fait && typeof e.note === 'number' ? e.note : 0), 0);
-  const faites = QUESTIONS.filter(x => etats[x.q.id]?.fait).length;
-  const fini = faites === QUESTIONS.length;
-  const pointsFaits = QUESTIONS.filter(x => etats[x.q.id]?.fait).reduce((n, x) => n + x.q.points, 0);
+  const faites = CFG.questions.filter(x => etats[x.q.id]?.fait).length;
+  const fini = faites === CFG.questions.length;
+  const pointsFaits = CFG.questions.filter(x => etats[x.q.id]?.fait).reduce((n, x) => n + x.q.points, 0);
 
   const rendreTrace = () => {
     if (q.genre === 'triangle') {
@@ -184,7 +207,8 @@ export default function Examen() {
   // chaque question notée part au suivi (onglet admin « Tronc Commun ») : note, verdict, éléments du barème perdus
   const envoyes = useRef<Record<string, string>>({});
   useEffect(() => {
-    for (const { p: pa, q: x } of QUESTIONS) {
+    if (!CFG.suivi) return;
+    for (const { p: pa, q: x } of CFG.questions) {
       const e = etats[x.id];
       if (!e?.fait) continue;
       const sig = `${e.note}|${e.verdict}`;
@@ -197,13 +221,13 @@ export default function Examen() {
         etat: { fait: true, choix: e.choix, texte: e.texte?.slice(0, 800), note: e.note, verdict: e.verdict, retour: e.retour?.slice(0, 700),
           details: e.details, lignes: e.lignes, zone: e.zone, histo: e.histo } });
     }
-    if (QUESTIONS.every(x => etats[x.q.id]?.fait) && !envoyes.current.__fin) {
+    if (CFG.questions.every(x => etats[x.q.id]?.fait) && !envoyes.current.__fin) {
       envoyes.current.__fin = '1';
-      suivre({ type: 'examen_fin', cours: 'examen', note: Object.values(etats).reduce((n, e) => n + (e.note || 0), 0), sur: TOTAL });
+      suivre({ type: 'examen_fin', cours: 'examen', note: Object.values(etats).reduce((n, e) => n + (e.note || 0), 0), sur: CFG.total });
     }
   }, [etats]);
 
-  const parPartie = useMemo(() => EXAMEN.parties.map(pa => ({
+  const parPartie = useMemo(() => CFG.sujet.parties.map(pa => ({
     pa, sur: pa.questions.reduce((n, x) => n + x.points, 0),
     note: pa.questions.reduce((n, x) => n + (etats[x.id]?.fait ? etats[x.id].note || 0 : 0), 0),
   })), [etats]);
@@ -212,7 +236,7 @@ export default function Examen() {
 
   // « Terminer l'évaluation » : les questions sans réponse comptent 0, verrouillées, puis le bilan
   const terminer = () => {
-    const reste = QUESTIONS.filter(x => !etats[x.q.id]?.fait);
+    const reste = CFG.questions.filter(x => !etats[x.q.id]?.fait);
     if (reste.length && !window.confirm(`Il reste ${reste.length} question${reste.length > 1 ? 's' : ''} sans réponse : ${reste.length > 1 ? 'elles compteront' : 'elle comptera'} 0 point et tu ne pourras plus y répondre. Terminer quand même ?`)) return;
     setEtats(s => {
       const n = { ...s };
@@ -224,15 +248,15 @@ export default function Examen() {
 
   const noteQ = etat.fait && typeof etat.note === 'number' ? etat.note : null;
   const LIGNES = { lineHeight: '36px', backgroundImage: 'repeating-linear-gradient(transparent 0 35px, #9bb3d6 35px 36px)' };
-  const debutPartie = QUESTIONS.findIndex(x => x.p === p);
+  const debutPartie = CFG.questions.findIndex(x => x.p === p);
 
   return (
     <div className="flex h-[100dvh] w-screen flex-col bg-[#d6d6d0] text-black" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-400 bg-white px-3 py-1.5 [@media(max-height:520px)]:py-0.5">
-        <a href="./" className={`${BTN} [@media(max-height:520px)]:py-0.5`}>← Tronc Commun</a>
-        <h1 className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{EXAMEN.titre}</h1>
-        <span className="hidden rounded border border-slate-500 px-2 py-0.5 text-sm text-slate-700 sm:inline" title="Durée conseillée, sans chronomètre">⏳ {EXAMEN.minutes} min conseillées</span>
-        <span className="rounded border border-black px-2 py-0.5 text-sm font-semibold">Note : {pts(note)} / {pts(pointsFaits)}{fini ? '' : ` · ${faites}/${QUESTIONS.length}`}</span>
+        <a href="./" className={`${BTN} [@media(max-height:520px)]:py-0.5`}>← {CFG.retour}</a>
+        <h1 className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{CFG.sujet.titre}</h1>
+        <span className="hidden rounded border border-slate-500 px-2 py-0.5 text-sm text-slate-700 sm:inline" title="Durée conseillée, sans chronomètre">⏳ {CFG.sujet.minutes} min conseillées</span>
+        <span className="rounded border border-black px-2 py-0.5 text-sm font-semibold">Note : {pts(note)} / {pts(pointsFaits)}{fini ? '' : ` · ${faites}/${CFG.questions.length}`}</span>
         {!fini && <button onClick={terminer} className="rounded-md border border-rose-700 bg-rose-50 px-2.5 py-1 text-sm font-semibold text-rose-800 hover:bg-rose-100 [@media(max-height:520px)]:py-0.5">Terminer l’évaluation</button>}
       </header>
 
@@ -242,17 +266,18 @@ export default function Examen() {
         {sujetVu && (
           <section className="w-[42%] shrink-0 overflow-y-auto bg-white p-3 text-black shadow-md ring-1 ring-black/10 sm:p-5" style={{ fontFamily: SUJET }}>
             <div className="mb-2 flex flex-wrap gap-1" style={{ fontFamily: 'system-ui, sans-serif' }}>
-              {EXAMEN.parties.map(pa => {
-                const k = QUESTIONS.findIndex(x => x.p === pa);
+              {CFG.sujet.parties.map(pa => {
+                const k = CFG.questions.findIndex(x => x.p === pa);
                 const toutes = pa.questions.every(x => etats[x.id]?.fait);
                 return <button key={pa.id} onClick={() => setI(k)} className={`rounded border px-2 py-0.5 text-xs ${pa === p ? 'border-black bg-black text-white' : toutes ? 'border-emerald-700 text-emerald-800' : 'border-slate-400'}`}>
-                  {pa.id === 'P1' ? 'Partie I' : `Ex. ${Number(pa.id.slice(1)) - 1}`}</button>;
+                  {pa.court || (pa.id === 'P1' ? 'Partie I' : `Ex. ${Number(pa.id.slice(1)) - 1}`)}</button>;
               })}
             </div>
             <h2 className="text-[17px] font-bold underline underline-offset-4">{p.titre}</h2>
             {piste(`partie/${p.id}`) && <button onClick={() => jouer(piste(`partie/${p.id}`))} className={`mt-1 ${BTN}`} style={{ fontFamily: 'system-ui, sans-serif' }}>🔊 Écouter</button>}
             <p className="mt-0.5 text-[13px] text-slate-600" style={{ fontFamily: 'system-ui, sans-serif' }}>{pts(p.questions.reduce((n, x) => n + x.points, 0))} points · environ {p.minutes} min</p>
             {p.intro && <p className="mt-2 text-[16px] leading-snug"><Formule t={p.intro} /></p>}
+            {!!p.figures?.length && <div className="my-2" style={{ filter: 'invert(1) hue-rotate(180deg)' }}><FiguresCahier figures={p.figures as never} /></div>}
             {p.tableau && (
               <div className="mt-2 overflow-x-auto">
                 <table className="w-full border-collapse text-[15px]">
@@ -289,7 +314,7 @@ export default function Examen() {
           </table>
           <div className="flex flex-wrap items-center gap-1 border-b border-slate-300 px-2 py-1 text-sm text-slate-600">
             <button onClick={() => setSujetVu(v => !v)} className="mr-1 rounded border border-slate-400 px-1.5 text-xs">{sujetVu ? '◀ Sujet' : '▶ Sujet'}</button>
-            {QUESTIONS.map((x, k) => {
+            {CFG.questions.map((x, k) => {
               const e = etats[x.q.id];
               const c = k === i ? 'border-black bg-black text-white' : !e?.fait ? 'border-slate-400' : (e.note || 0) >= x.q.points ? 'border-emerald-700 text-emerald-700' : (e.note || 0) > 0 ? 'border-amber-600 text-amber-700' : 'border-rose-700 text-rose-700';
               return <button key={x.q.id} onClick={() => setI(k)} className={`h-6 min-w-7 rounded border px-1 text-xs ${c}`} aria-label={`Question ${x.q.id}`}>{x.q.id}</button>;
@@ -344,7 +369,7 @@ export default function Examen() {
                 <div className="mt-2">
                   <ChampReponse key={q.id} papier onEnvoyer={t => void repondre(t)} libelle="Rendre ma réponse" lignes={q.genre === 'valeur' ? 3 : 6}
                     placeholder={q.genre === 'valeur' ? `${q.grandeur} = … = résultat avec son unité` : 'Ta réponse, rédigée et justifiée…'}
-                    contexte={{ title: p.titre, enonce: q.texte, matiere: 'svt', chapitre: EXAMEN.titre }}
+                    contexte={{ title: p.titre, enonce: q.texte, matiere: CFG.matiere, chapitre: CFG.sujet.titre }}
                     suggestions={{ slide_id: `examen_${q.id}`, enonce: q.texte, clavier: { aides: [] } }} />
                 </div>)}
               {etat.texte && q.genre !== 'triangle' && q.genre !== 'histogramme' && (etat.fait || etat.verdict === 'lecture' || etat.autoEval) && (
@@ -368,7 +393,7 @@ export default function Examen() {
 
               <div className="mt-3 flex flex-wrap gap-2">
                 {i > 0 && <button onClick={() => setI(i - 1)} className={BTN}>← Précédente</button>}
-                {i < QUESTIONS.length - 1 && <button onClick={() => setI(i + 1)} className={etat.fait ? 'ml-auto rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white' : `ml-auto ${BTN}`}>{etat.fait ? 'Question suivante →' : 'Passer →'}</button>}
+                {i < CFG.questions.length - 1 && <button onClick={() => setI(i + 1)} className={etat.fait ? 'ml-auto rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white' : `ml-auto ${BTN}`}>{etat.fait ? 'Question suivante →' : 'Passer →'}</button>}
               </div>
 
               {fini && <Bilan note={note} parPartie={parPartie} etats={etats} />}
@@ -438,10 +463,10 @@ function Verdict({ etat }: { etat: Etat }) {
 }
 
 function Bilan({ note, parPartie, etats }: { note: number; parPartie: { pa: PartieExamen; sur: number; note: number }[]; etats: Record<string, Etat> }) {
-  const aRevoir = QUESTIONS.filter(x => (etats[x.q.id]?.note || 0) < x.q.points);
+  const aRevoir = CFG.questions.filter(x => (etats[x.q.id]?.note || 0) < x.q.points);
   return (
     <div className="mt-5 border-2 border-black p-3 sm:p-4">
-      <p className="text-xl font-bold">Note finale : {pts(note)} / {pts(TOTAL)}</p>
+      <p className="text-xl font-bold">Note finale : {pts(note)} / {pts(CFG.total)}</p>
       <table className="mt-2 w-full border-collapse text-[15px]">
         <tbody>{parPartie.map(({ pa, sur, note: n }) => (
           <tr key={pa.id}><td className="border border-slate-400 px-2 py-1">{pa.titre}</td>
@@ -462,24 +487,24 @@ function Accueil({ onCommencer, etat, acces }: { onCommencer: () => void; etat: 
   return (
     <div className="min-h-[100dvh] bg-[#d6d6d0] p-3 text-black sm:p-6" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <div className="mx-auto max-w-3xl bg-white p-4 shadow-md ring-1 ring-black/10 sm:p-6">
-        <a href="./" className="text-sm text-slate-600 underline">← Tronc Commun</a>
+        <a href="./" className="text-sm text-slate-600 underline">← {CFG.retour}</a>
         <table className="my-3 w-full border-collapse text-[15px]">
           <tbody><tr>
-            <td className="border border-black px-2 py-1 font-semibold">{EXAMEN.matiere}</td>
-            <td className="border border-black px-2 py-1 text-center">{EXAMEN.niveau} · {EXAMEN.minutes} min au plus</td>
-            <td className="border border-black px-2 py-1 text-center font-semibold">{pts(TOTAL)} points</td>
+            <td className="border border-black px-2 py-1 font-semibold">{CFG.sujet.matiere}</td>
+            <td className="border border-black px-2 py-1 text-center">{CFG.sujet.niveau} · {CFG.sujet.minutes} min au plus</td>
+            <td className="border border-black px-2 py-1 text-center font-semibold">{pts(CFG.total)} points</td>
           </tr></tbody>
         </table>
-        <h1 className="text-xl font-bold" style={{ fontFamily: SUJET }}>{EXAMEN.titre}</h1>
-        <p className="mt-2 text-[16px] leading-relaxed text-slate-800">{EXAMEN.consigne}</p>
+        <h1 className="text-xl font-bold" style={{ fontFamily: SUJET }}>{CFG.sujet.titre}</h1>
+        <p className="mt-2 text-[16px] leading-relaxed text-slate-800">{CFG.sujet.consigne}</p>
         <table className="mt-3 w-full border-collapse text-[15px]">
-          <tbody>{EXAMEN.parties.map(pa => (
+          <tbody>{CFG.sujet.parties.map(pa => (
             <tr key={pa.id}><td className="border border-slate-400 px-2 py-1">{pa.titre}</td>
               <td className="w-24 border border-slate-400 px-2 py-1 text-center">{pts(pa.questions.reduce((n, x) => n + x.points, 0))} pts</td>
               <td className="w-24 border border-slate-400 px-2 py-1 text-center text-slate-600">≈ {pa.minutes} min</td></tr>))}</tbody>
         </table>
-        <p className="mt-3 text-[14px] text-slate-600">Programme : la sortie écologique ; les facteurs édaphiques (texture et structure, propriétés chimiques, propriétés hydriques du sol). Pas de chronomètre : la durée est un repère.</p>
-        <p className="mt-3 rounded-md border border-amber-500 bg-amber-50 p-2 text-[14px] text-amber-900">Attention : chaque réponse est enregistrée une seule fois. Une question rendue ne peut plus être changée.</p>
+        <p className="mt-3 text-[14px] text-slate-600">Programme : {CFG.sujet.programme}. Pas de chronomètre : la durée est un repère.</p>
+        {CFG.suivi && <p className="mt-3 rounded-md border border-amber-500 bg-amber-50 p-2 text-[14px] text-amber-900">Attention : chaque réponse est enregistrée une seule fois. Une question rendue ne peut plus être changée.</p>}
         {!acces.ouvert && etat !== 'attente' && (
           <div className="mt-3 rounded-md border border-sky-700 bg-sky-50 p-3 text-[15px] text-sky-950">
             <p className="font-semibold">L’évaluation s’ouvre quand tu as suivi la révision, ou un des deux cours (au moins {Math.round((acces.seuil || 0.8) * 100)} % des diapositives).</p>
