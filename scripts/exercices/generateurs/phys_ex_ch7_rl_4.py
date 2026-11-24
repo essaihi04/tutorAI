@@ -82,7 +82,7 @@ EX = {
     "donnees": ["E = 9 V", "R = 80 Ω", "Bobine : L et r inconnues", "u_b = L·di/dt + r·i"],
     "questions": [
       question("1", "Justifier que l'intensité du courant juste après la bascule est égale à I₀, puis déterminer I₀ à l'aide de la figure 2.",
-        "السؤال un: برر علاش le courant مباشرة من بعد ما حولنا K كيساوي I zéro، ومن بعد لقا I zéro بالفيكور deux.",
+        "السؤال un: برر علاش le courant مباشرة من بعد ما حولنا K كيساوي I zéro، ومن بعد لقا I zéro ف la figure deux.",
         valeur("I₀", 0.1, "A", "i est continue : i(0⁺) = I₀ ; I₀ = u_R(0)/R = 8/80 = 0,1 A"),
         ["i(0⁺) = I₀", "u_R = R·i", "A"], ["i(0⁺) = 0", "I₀ = E/R = 9/80"],
         [aide("Une bobine peut-elle faire passer son courant d'un coup de I₀ à 0 ? Puis lis la valeur de u_R à t = 0 sur la figure 2.",

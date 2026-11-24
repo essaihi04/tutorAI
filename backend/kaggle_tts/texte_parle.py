@@ -252,6 +252,10 @@ PRONONCIATION = [
     (re.compile(r"\b(?:la\s+)?lim\b"), "la limite"),
     (re.compile(r"\b(BBT|LDL|HDL)\b"), lambda mt: " ".join(mt.group(1))),   # sigles lus lettre par lettre
     (re.compile(r"\b([AUGC]{3})\b"), lambda mt: " ".join(mt.group(1))),     # codons : UAA -> U A A
+    # 24/11/2026 (signalé par l'utilisateur) : « أفقي » lu « afaqi » au lieu de « ofoqi » ; « أوفوقي » choisi à l'écoute
+    (re.compile(r"(?<![؀-ۿ])((?:[وفبل]?ال|[وفبل])?)[أا]فقي"), lambda mt: mt.group(1) + "أوفوقي"),
+    # 24/11/2026 : « برر » mal dit (doit sonner « barrir ») ; « بَرِّر » (v3) choisi à l'écoute malgré le tachkil
+    (re.compile(r"(?<![؀-ۿ])([وف]?)برر(?![؀-ۿ])"), lambda mt: mt.group(1) + "بَرِّر"),
 ]
 
 
