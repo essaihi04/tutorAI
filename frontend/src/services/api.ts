@@ -596,6 +596,16 @@ export interface EleveTroncCommun {
 }
 export const listTroncCommun = () => adminApi.get<{ eleves: EleveTroncCommun[] }>('/tronc-commun');
 
+// ─── Mode classe : les séances gardées, avec les photos des feuilles (24 novembre 2026) ──────
+export interface ParticipantClasse { id: string; nom: string; prenom: string; classe: string; telephone: string }
+export interface ReponseClasse { id: string; numero: number; question: string; eleve: string; texte: string; note: number | null; sur: number;
+  verdict: string; pertes: string[]; bien: string[]; retour: string; photo: boolean; heure: number; ordre: number; lu?: string }
+export interface SeanceClasse { uid: string; code: string; sujet: string; debut: string; fin: string | null; maj: string; posees: string[];
+  participants: ParticipantClasse[]; reponses: ReponseClasse[] }
+export const listClasses = () => adminApi.get<{ seances: SeanceClasse[] }>('/classes');
+/** la photo d'une feuille (l'admin envoie son jeton : on la lit en blob) */
+export const photoClasse = (uid: string, rid: string) => adminApi.get<Blob>(`/classes/${uid}/photo/${rid}`, { responseType: 'blob' });
+
 // ─── 2ᵉ Bac PC : fiches des élèves du lien libre /2bacpcf et leur suivi (23 novembre 2026) ──────
 export interface Examen2BacPCF { nom: string; note: number; sur_fait: number; sur: number; faites: number; fini: boolean;
   debut?: string | null; date?: string | null; questions: Record<string, QuestionExamenTC> }

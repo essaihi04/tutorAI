@@ -5,9 +5,12 @@ chacun (ou le prof, avec son téléphone, pour la feuille d'un élève) photogra
 lue (OCR), la réponse corrigée (barème, éléments perdus, correction), puis publiée au mur de la séance, que toute la classe
 voit au tableau et sur son téléphone.
 
-Demande de l'utilisateur : **rien d'enregistré**. Rien sur disque, rien en base, rien dans les comptes d'élèves : une séance
-vit dans la mémoire du serveur (UN seul worker uvicorn en prod, un dictionnaire suffit) et disparaît après 4 h sans
-activité, ou quand le prof la termine (il peut télécharger les résultats en CSV, fabriqué dans son navigateur).
+Une séance vit dans la mémoire du serveur (UN seul worker uvicorn en prod, un dictionnaire suffit) et quitte la mémoire
+après 4 h sans activité ou quand le prof la termine. 24/11/2026 (demande de l'utilisateur, qui remplace « rien
+d'enregistré ») : elle est AUSSI gardée sur disque, pour toujours, avec la photo de chaque feuille
+(`data/classes/<date>_<code>_<id>/seance.json` et `photos/<réponse>.jpg`) ; l'admin la relit (onglet « Mode classe ») et
+une séance en cours reprend après un redémarrage du serveur (déploiement). Pour entraîner plus tard nos propres modèles
+d'OCR, chaque réponse garde la photo que l'IA a lue, le texte lu (`lu`) et le texte relu par l'élève ou le prof (`texte`).
 
 Les élèves (25/11/2026) : en scannant le QR, chacun donne une fois son nom, son prénom et sa classe (facultative) ; un
 téléphone = un élève (l'identifiant tiré au hasard, `X-Telephone`, gardé en sessionStorage, lie le nom). Chaque réponse
@@ -26,11 +29,16 @@ séance et totale, taille des miniatures.
 from __future__ import annotations
 
 import base64
+import json
+import logging
+import os
 import re
 import secrets
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
@@ -42,6 +50,14 @@ from app.api.v1.endpoints import course_player as cp
 from app.api.v1.endpoints.public_relais import _appels, _compter, _ip  # noqa: F401
 
 router = APIRouter(prefix="/public/classe", tags=["public"])
+log = logging.getLogger(__name__)
+
+#: les séances gardées (une par dossier) et la photo de chaque feuille
+DOSSIER = Path(__file__).resolve().parents[4] / "data" / "classes"
+#: une photo gardée (≈ 1000 px, plus nette que la miniature du mur)
+MAX_PHOTO = 400_000
+#: au-delà, les photos ne sont plus gardées (le texte, la note et les pertes, si) : le disque du serveur est petit
+MAX_DISQUE_PHOTOS = 3_000_000_000
 
 #: une séance oubliée disparaît après 4 h sans activité
 EXPIRATION = 4 * 3600
@@ -79,6 +95,11 @@ class Reponse:
     retour: str
     image: Optional[bytes]
     quand: float
+    #: la photo de la feuille est gardée sur disque (photos/<id>.jpg)
+    photo: bool = False
+    #: le texte lu par l'IA sur la photo, tel quel ; `texte` est la version relue (corrigée) par l'élève ou le prof.
+    #: (photo, lu, texte) : les paires pour entraîner plus tard nos propres modèles d'OCR (24/11/2026)
+    lu: str = ""
     #: l'heure (horloge du serveur, secondes) et le rang d'arrivée dans la séance : le fil du prof, le plus récent en haut
     heure: float = 0.0
     ordre: int = 0
@@ -101,6 +122,9 @@ class Seance:
     code: str
     cle_prof: str
     sujet: str
+    #: le dossier de la séance gardée (« 20261124-0830_4821_3fa2c1d0 ») et son début (ISO, UTC)
+    uid: str = ""
+    debut: str = ""
     question: str = ""
     correction: bool = False
     version: int = 1
@@ -142,6 +166,113 @@ class Seance:
 SEANCES: dict[str, Seance] = {}
 
 
+def _maintenant() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _sauver(s: Seance, fin: bool = False) -> None:
+    """La séance sur disque (réécrite à chaque changement ; jamais effacée). Une erreur de disque n'arrête pas la classe."""
+    if not s.uid:
+        return
+    try:
+        d = DOSSIER / s.uid
+        d.mkdir(parents=True, exist_ok=True)
+        ancien = {}
+        if fin and (d / "seance.json").exists():
+            ancien = json.loads((d / "seance.json").read_text(encoding="utf-8"))
+        donnees = {
+            "uid": s.uid, "code": s.code, "sujet": s.sujet, "debut": s.debut, "maj": _maintenant(),
+            "fin": _maintenant() if fin else ancien.get("fin"), "question": s.question, "correction": s.correction,
+            "posees": s.posees, "numeros": s.numeros, "arrivees": s.arrivees,
+            # pour reprendre la séance après un redémarrage (jamais renvoyé à l'admin)
+            "cle_prof": s.cle_prof, "cles_tel": sorted(s.cles_tel),
+            "participants": [asdict(p) for p in s.participants.values()],
+            "reponses": [{k: v for k, v in asdict(r).items() if k != "image"} for rs in s.reponses.values() for r in rs.values()],
+        }
+        tmp = d / "seance.json.tmp"
+        tmp.write_text(json.dumps(donnees, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, d / "seance.json")
+    except Exception:  # noqa: BLE001
+        log.exception("mode classe : séance %s non gardée", s.uid)
+
+
+_occupe: list[int] = []
+
+
+def _place_photos(n: int) -> bool:
+    if not _occupe:
+        _occupe.append(sum(f.stat().st_size for f in DOSSIER.glob("*/photos/*.jpg")) if DOSSIER.exists() else 0)
+    if _occupe[0] + n > MAX_DISQUE_PHOTOS:
+        return False
+    _occupe[0] += n
+    return True
+
+
+def _garder_photo(s: Seance, rid: str, octets_: bytes) -> bool:
+    if not s.uid or not _place_photos(len(octets_)):
+        return False
+    try:
+        d = DOSSIER / s.uid / "photos"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{rid}.jpg").write_bytes(octets_)
+        return True
+    except Exception:  # noqa: BLE001
+        log.exception("mode classe : photo %s non gardée", rid)
+        return False
+
+
+def _oublier_photo(s: Seance, rid: str) -> None:
+    try:
+        (DOSSIER / s.uid / "photos" / f"{rid}.jpg").unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _reprendre(code: str) -> Optional[Seance]:
+    """Après un redémarrage : la séance non terminée de ce code, active il y a moins de 4 h, revient en mémoire."""
+    if not DOSSIER.exists():
+        return None
+    for f in sorted(DOSSIER.glob(f"*_{code}_*/seance.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+        try:
+            if time.time() - f.stat().st_mtime > EXPIRATION:
+                return None
+            d = json.loads(f.read_text(encoding="utf-8"))
+            if d.get("fin") or d.get("code") != code:
+                continue
+            s = Seance(code=code, cle_prof=d["cle_prof"], sujet=d.get("sujet", "tc"), uid=d["uid"], debut=d.get("debut", ""),
+                       question=d.get("question", ""), correction=bool(d.get("correction")), posees=list(d.get("posees", [])),
+                       numeros=dict(d.get("numeros", {})), cles_tel=set(d.get("cles_tel", [])), arrivees=int(d.get("arrivees", 0)))
+            for p in d.get("participants", []):
+                s.participants[p["id"]] = Participant(**p)
+            for r in d.get("reponses", []):
+                s.reponses.setdefault(r["question"], {})[r["id"]] = Reponse(**(r | {"image": None, "quand": time.monotonic()}))
+            return s
+        except Exception:  # noqa: BLE001
+            log.exception("mode classe : reprise de %s impossible", f)
+    return None
+
+
+def seances_gardees() -> list[dict]:
+    """L'admin : chaque séance gardée, la plus récente d'abord (sans les clés du prof)."""
+    out = []
+    for f in DOSSIER.glob("*/seance.json") if DOSSIER.exists() else []:
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            continue
+        d.pop("cle_prof", None)
+        d.pop("cles_tel", None)
+        out.append(d)
+    return sorted(out, key=lambda d: d.get("debut", ""), reverse=True)
+
+
+def photo_gardee(uid: str, rid: str) -> Optional[Path]:
+    if not re.fullmatch(r"[0-9]{8}-[0-9]{4}_\d{4}_[a-f0-9]{8}", uid) or not re.fullmatch(r"[a-f0-9]{16}", rid):
+        return None
+    f = DOSSIER / uid / "photos" / f"{rid}.jpg"
+    return f if f.is_file() else None
+
+
 def _autoriser(quoi: str, seance: Optional[Seance], request: Request) -> None:
     if seance is not None and quoi in LIMITES_SEANCE and not _compter("s:" + seance.code, quoi, LIMITES_SEANCE[quoi]):
         raise HTTPException(429, "La classe a fait beaucoup de demandes : reprends dans un moment.")
@@ -154,12 +285,17 @@ def _autoriser(quoi: str, seance: Optional[Seance], request: Request) -> None:
 def _purger() -> None:
     maintenant = time.monotonic()
     for code in [c for c, s in SEANCES.items() if maintenant - s.actif > EXPIRATION]:
-        SEANCES.pop(code, None)
+        # 4 h sans activité : la séance est close (gardée, elle ne sera plus reprise)
+        _sauver(SEANCES.pop(code), fin=True)
 
 
 def _seance(code: str, request: Request) -> Seance:
     _purger()
     s = SEANCES.get(code) if re.fullmatch(r"\d{4}", code or "") else None
+    if s is None and re.fullmatch(r"\d{4}", code or ""):
+        s = _reprendre(code)
+        if s is not None:
+            SEANCES[code] = s
     if s is None:
         # deviner les codes au hasard : plafonné par adresse
         if not _compter("ip:" + _ip(request), "inconnue", LIMITES_IP["inconnue"]):
@@ -198,8 +334,10 @@ async def creer(request: Request, body: Optional[Creation] = None):
     libres = [c for c in (f"{secrets.randbelow(9000) + 1000}" for _ in range(60)) if c not in SEANCES]
     if not libres:
         raise HTTPException(503, "Trop de séances en cours : reprends dans un moment.")
-    s = Seance(code=libres[0], cle_prof=secrets.token_urlsafe(24), sujet=(body.sujet if body else "tc"))
+    s = Seance(code=libres[0], cle_prof=secrets.token_urlsafe(24), sujet=(body.sujet if body else "tc"),
+               uid=f"{datetime.now().strftime('%Y%m%d-%H%M')}_{libres[0]}_{uuid.uuid4().hex[:8]}", debut=_maintenant())
     SEANCES[s.code] = s
+    _sauver(s)
     return {"code": s.code, "cle_prof": s.cle_prof, "sujet": s.sujet, "expiration_s": EXPIRATION}
 
 
@@ -219,6 +357,7 @@ async def projeter(code: str, body: ChoixQuestion, request: Request, x_prof: str
     if body.question not in s.posees:
         s.posees.append(body.question)
     s.toucher()
+    _sauver(s)
     return {"ok": True, "version": s.version}
 
 
@@ -233,14 +372,16 @@ async def correction(code: str, body: Montrer, request: Request, x_prof: str | N
     _prof(s, x_prof, x_prof_tel)
     s.correction = body.montrer
     s.toucher()
+    _sauver(s)
     return {"ok": True, "version": s.version}
 
 
 @router.delete("/{code}")
 async def terminer(code: str, request: Request, x_prof: str | None = Header(default=None)):
-    """Fin de la séance : tout est effacé tout de suite."""
+    """Fin de la séance : elle quitte la mémoire ; elle reste gardée (admin, « Mode classe »)."""
     s = _seance(code, request)
     _prof(s, x_prof)
+    _sauver(s, fin=True)
     SEANCES.pop(s.code, None)
     return {"ok": True}
 
@@ -252,7 +393,9 @@ async def retirer(code: str, rid: str, request: Request, x_prof: str | None = He
     _prof(s, x_prof)
     for rs in s.reponses.values():
         if rs.pop(rid, None) is not None:
+            _oublier_photo(s, rid)
             s.toucher()
+            _sauver(s)
             return {"ok": True}
     raise HTTPException(404, "Réponse introuvable")
 
@@ -294,6 +437,7 @@ async def participer(code: str, body: Identite, request: Request, x_telephone: s
     else:
         p.nom, p.prenom, p.classe = _propre(body.nom), _propre(body.prenom), _propre(body.classe)[:20]
     s.toucher()
+    _sauver(s)
     return _vue_participant(p)
 
 
@@ -325,6 +469,7 @@ async def prof_telephone(code: str, body: Jeton, request: Request):
     cle = secrets.token_urlsafe(24)
     s.cles_tel.add(cle)
     s.toucher(changement=False)
+    _sauver(s)
     return {"cle": cle}
 
 
@@ -384,6 +529,7 @@ async def decider_prof(code: str, body: Decision, request: Request, x_prof: str 
     else:
         s.reponses_prof[body.telephone] = ""
     s.toucher()
+    _sauver(s)
     return {"ok": True}
 
 
@@ -396,6 +542,7 @@ async def nouvel_eleve(code: str, body: Identite, request: Request, x_prof: str 
     _autoriser("participant", s, request)
     p = _par_nom(s, body) or _ajouter(s, body, "")
     s.toucher()
+    _sauver(s)
     return _vue_participant(p)
 
 
@@ -414,13 +561,15 @@ async def retirer_participant(code: str, pid: str, request: Request, x_prof: str
     for rs in s.reponses.values():
         for rid in [r.id for r in rs.values() if r.eleve == pid]:
             rs.pop(rid, None)
+            _oublier_photo(s, rid)
     s.toucher()
+    _sauver(s)
     return {"ok": True}
 
 
 def _vue(r: Reponse, telephone: str) -> dict:
     return {"id": r.id, "numero": r.numero, "question": r.question, "texte": r.texte, "note": r.note, "sur": r.sur,
-            "verdict": r.verdict, "pertes": r.pertes, "bien": r.bien, "retour": r.retour, "image": r.image is not None,
+            "verdict": r.verdict, "pertes": r.pertes, "bien": r.bien, "retour": r.retour, "image": r.image is not None or r.photo,
             "mien": bool(telephone) and r.telephone == telephone, "heure": r.heure, "ordre": r.ordre}
 
 
@@ -464,9 +613,11 @@ async def image(code: str, rid: str, request: Request):
     s = _seance(code, request)
     for rs in s.reponses.values():
         r = rs.get(rid)
-        if r is not None and r.image:
-            return Response(r.image, media_type="image/jpeg",
-                            headers={"Cache-Control": "private, max-age=14400", "X-Content-Type-Options": "nosniff"})
+        if r is not None and (r.image or r.photo):
+            f = None if r.image else photo_gardee(s.uid, r.id)
+            if r.image or f:
+                return Response(r.image or f.read_bytes(), media_type="image/jpeg",
+                                headers={"Cache-Control": "private, max-age=14400", "X-Content-Type-Options": "nosniff"})
     raise HTTPException(404, "Image introuvable")
 
 
@@ -541,21 +692,25 @@ class Publication(BaseModel):
     retour: str = Field(default="", max_length=800)
     #: la miniature JPEG (base64, avec ou sans `data:image/jpeg;base64,`), 120 Ko au plus
     image_b64: Optional[str] = Field(default=None, max_length=200_000)
+    #: la photo de la feuille, nette (celle que lit l'IA, ≈ 1280 px, 400 Ko au plus) : gardée sur disque (admin, OCR)
+    photo_b64: Optional[str] = Field(default=None, max_length=560_000)
+    #: le texte que l'IA a lu sur la photo, avant que l'élève ou le prof le corrige
+    lu: str = Field(default="", max_length=4000)
     #: le prof photographie la feuille d'un autre élève : choisi dans la liste…
     eleve: Optional[str] = Field(default=None, pattern=r"^[a-f0-9]{8}$")
     #: … ou un nouveau nom (élève sans téléphone)
     nouvel_eleve: Optional[Identite] = None
 
 
-def _image(b64: Optional[str]) -> Optional[bytes]:
+def _image(b64: Optional[str], maximum: int = MAX_IMAGE) -> Optional[bytes]:
     if not b64:
         return None
     try:
         brut = base64.b64decode(b64.split(",", 1)[-1], validate=False)
     except (ValueError, TypeError):
         raise HTTPException(422, "Image illisible.") from None
-    if len(brut) > MAX_IMAGE:
-        raise HTTPException(413, "Image trop lourde (120 Ko au plus).")
+    if len(brut) > maximum:
+        raise HTTPException(413, f"Image trop lourde ({maximum // 1000} Ko au plus).")
     if not brut.startswith(b"\xff\xd8\xff"):
         raise HTTPException(422, "L'image doit être un JPEG.")
     return brut
@@ -586,6 +741,7 @@ async def publier(code: str, body: Publication, request: Request, x_telephone: s
     tel = _telephone(x_telephone)
     _autoriser("reponse", s, request)
     img = _image(body.image_b64)
+    nette = _image(body.photo_b64, MAX_PHOTO) or img
     if (body.eleve or body.nouvel_eleve) and not s.est_prof(x_prof, x_prof_tel):
         raise HTTPException(403, "Seul le prof rend la feuille d'un autre élève.")
     if body.eleve:
@@ -614,6 +770,7 @@ async def publier(code: str, body: Publication, request: Request, x_telephone: s
             raise
     if ancienne is not None:
         rs.pop(ancienne.id, None)
+        _oublier_photo(s, ancienne.id)
         numero = ancienne.numero
     else:
         s.numeros[body.question] = numero = s.numeros.get(body.question, 0) + 1
@@ -622,6 +779,9 @@ async def publier(code: str, body: Publication, request: Request, x_telephone: s
                 bien=[_ligne(x) for x in body.bien if str(x).strip()], retour=body.retour.strip(), image=img, quand=time.monotonic())
     s.arrivees += 1
     r.heure, r.ordre = time.time(), s.arrivees
+    r.photo = bool(nette) and _garder_photo(s, r.id, nette)
+    r.lu = body.lu.strip() if body.photo_b64 or body.image_b64 else ""
     rs[r.id] = r
     s.toucher()
+    _sauver(s)
     return {"id": r.id, "numero": r.numero, "eleve": eleve.id, "remplace": ancienne is not None, "version": s.version}

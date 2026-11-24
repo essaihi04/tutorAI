@@ -15,7 +15,7 @@ T2 = {"X-Telephone": "tel-bbbbbbbb"}
 
 
 @pytest.fixture()
-def client(monkeypatch):
+def client(monkeypatch, tmp_path):
     from app.services import llm_service as llm_mod, ocr_service
 
     async def chat(**kw):
@@ -31,6 +31,9 @@ def client(monkeypatch):
     monkeypatch.setattr(ocr_service, "extract_text_from_image", ocr)
     pc.SEANCES.clear()
     pc._appels.clear()
+    # les séances gardées : dans un dossier jetable
+    monkeypatch.setattr(pc, "DOSSIER", tmp_path / "classes")
+    pc._occupe.clear()
     app = FastAPI()
     app.include_router(pc.router)
     return TestClient(app)
@@ -139,10 +142,12 @@ def test_memoire_bornee_lache_les_vieilles_images(client, monkeypatch):
     client.post(f"/public/classe/{code}/reponse", json=rep, headers=T2).json()
     # question 1 projetée : une 3ᵉ image ne tient pas
     assert client.post(f"/public/classe/{code}/reponse", json=rep, headers={"X-Telephone": "tel-cccccccc"}).status_code == 507
-    # question suivante : les images de la question 1 sont lâchées, leur texte reste
+    # question suivante : les images de la question 1 quittent la mémoire, leur texte reste ; la photo gardée sur disque
+    # sert encore (24/11/2026)
     client.post(f"/public/classe/{code}/question", json={"question": "2"}, headers=P)
     assert client.post(f"/public/classe/{code}/reponse", json={**rep, "question": "2"}, headers=T1).status_code == 200
-    assert client.get(f"/public/classe/{code}/image/{a['id']}").status_code == 404
+    assert pc.SEANCES[code].reponses["1"][a["id"]].image is None
+    assert client.get(f"/public/classe/{code}/image/{a['id']}").status_code == 200
     client.post(f"/public/classe/{code}/question", json={"question": "1"}, headers=P)
     assert len(client.get(f"/public/classe/{code}").json()["reponses"]) == 2
 
@@ -152,6 +157,8 @@ def test_expiration(client, monkeypatch):
     pc.SEANCES[code].actif -= pc.EXPIRATION + 1
     assert client.get(f"/public/classe/{code}").status_code == 404
     assert code not in pc.SEANCES
+    # gardée, close : l'admin la voit encore
+    assert pc.seances_gardees()[0]["fin"]
 
 
 def test_plafond_creations_et_seances(client, monkeypatch):
@@ -324,3 +331,31 @@ def test_lecture_avec_les_mots_du_sujet():
     q = {"type": "open", "enonce": "Calcule P(B)", "matiere": "svt"}
     assert "LUE SUR LA PHOTO" not in reponse_eleve.prompt_reponse({}, q, "Qb = 1 ml/min", 2, None)
     assert "LUE SUR LA PHOTO" in reponse_eleve.prompt_reponse({}, q | {"photo": True}, "Qb = 1 ml/min", 2, None)
+
+
+def test_seance_gardee_reprise_et_admin(client):
+    """24/11/2026 : la séance est gardée sur disque (élèves, réponses, photo de la feuille), reprend après un redémarrage
+    du serveur, reste gardée après « Terminer » ; l'admin la relit sans les clés du prof."""
+    code, P = seance(client)
+    client.post(f"/public/classe/{code}/question", json={"question": "1"}, headers=P)
+    inscrire(client, code, T1, "Nora")
+    nette = "data:image/jpeg;base64," + base64.b64encode(JPEG[:4] + b"1" * 150_000).decode()
+    r = client.post(f"/public/classe/{code}/reponse", headers=T1, json={"question": "1", "texte": "lu", "note": 1, "sur": 2,
+                    "verdict": "partiel", "pertes": ["unité"], "image_b64": IMG, "photo_b64": nette, "lu": "Qb = 1"})
+    assert r.status_code == 200, r.text
+    rid = r.json()["id"]
+    [g] = pc.seances_gardees()
+    assert "cle_prof" not in g and g["participants"][0]["prenom"] == "Nora" and g["reponses"][0]["photo"] is True
+    assert g["reponses"][0]["lu"] == "Qb = 1" and g["reponses"][0]["texte"] == "lu"   # paire pour l'OCR
+    assert pc.photo_gardee(g["uid"], rid).read_bytes().startswith(JPEG[:4] + b"111")
+    # redémarrage du serveur : la mémoire est vide, la séance revient (clé du prof, élève, réponse, photo du mur)
+    pc.SEANCES.clear()
+    e = client.get(f"/public/classe/{code}", headers=P).json()
+    assert e["prof"] is True and e["participants"][0]["prenom"] == "Nora" and e["reponses"][0]["image"] is True
+    assert client.get(f"/public/classe/{code}/image/{rid}").content.startswith(JPEG[:4] + b"111")
+    # « Terminer » : la séance quitte la mémoire mais reste gardée, et ne revient plus
+    assert client.delete(f"/public/classe/{code}", headers=P).status_code == 200
+    assert client.get(f"/public/classe/{code}", headers=P).status_code == 404
+    [g] = pc.seances_gardees()
+    assert g["fin"] and len(g["reponses"]) == 1
+    assert pc.photo_gardee("../../etc", rid) is None

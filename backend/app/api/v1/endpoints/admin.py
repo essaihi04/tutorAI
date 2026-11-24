@@ -665,6 +665,23 @@ async def get_2bacpcf(admin: bool = Depends(_verify_admin_token)):
     return {"eleves": bilan()}
 
 
+@router.get("/classes")
+async def get_classes(admin: bool = Depends(_verify_admin_token)):
+    """Les séances du mode classe (24/11/2026), gardées pour toujours : élèves, réponses corrigées, photos des feuilles."""
+    from app.api.v1.endpoints.public_classe import seances_gardees
+    return {"seances": seances_gardees()}
+
+
+@router.get("/classes/{uid}/photo/{rid}")
+async def get_photo_classe(uid: str, rid: str, admin: bool = Depends(_verify_admin_token)):
+    from fastapi.responses import FileResponse
+    from app.api.v1.endpoints.public_classe import photo_gardee
+    f = photo_gardee(uid, rid)
+    if f is None:
+        raise HTTPException(status_code=404, detail="Photo introuvable")
+    return FileResponse(f, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
 # ──────────────────────────────────────────────
 # RÉTENTION (mémoire longue, 11 novembre 2026) : ce qui reste vraiment, par cours, par compétence, par élève
 # ──────────────────────────────────────────────

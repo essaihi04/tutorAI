@@ -9,8 +9,9 @@
  *                  code de son écran ; il saisit alors les feuilles des élèves sans téléphone, l'un après l'autre) ; la
  *                  question projetée (suit le prof), « 📷 Photographier » ou « ⌨ Écrire », la note, le mur anonyme.
  *
- * Rien d'enregistré (25/11/2026) : ni fiche, ni suivi, ni compte ; les noms et les réponses vivent en mémoire sur le
- * serveur le temps de la séance (`/api/v1/public/classe`) et disparaissent ; le prof peut télécharger un CSV. La correction reprend celle de l'évaluation (`Examen.tsx`) : QCM, vrai/faux et valeurs notés dans le
+ * Gardé (24/11/2026, remplace « rien d'enregistré ») : les noms, les réponses corrigées et la photo de chaque feuille sont
+ * gardés sur le serveur (`/api/v1/public/classe`) et relus dans l'admin (onglet « Mode classe ») ; le prof peut aussi
+ * télécharger un CSV. La correction reprend celle de l'évaluation (`Examen.tsx`) : QCM, vrai/faux et valeurs notés dans le
  * navigateur, rédactions par le tuteur sur le barème ; triangle et histogramme : la photo du tracé part au mur
  * « à regarder ensemble ».
  */
@@ -192,7 +193,7 @@ export function ProfClasse() {
           <li>Chaque réponse est lue et corrigée (note, éléments du barème perdus) ; tu vois qui a répondu, la réponse de chacun et les résultats de la classe.</li>
           <li>« Montrer la correction » : la correction s’affiche au tableau et sur les téléphones.</li>
         </ol>
-        <p className="mt-3 text-[15px] text-white/60">Rien n’est enregistré : les noms, les photos et les notes s’effacent quand tu termines la séance (ou après 4 h sans activité). Tu peux télécharger les résultats (CSV) avant.</p>
+        <p className="mt-3 text-[15px] text-white/60">Les noms, les réponses corrigées et les photos des feuilles sont gardés : tu les retrouves dans l’espace admin (« Mode classe »), séance par séance. Tu peux aussi télécharger les résultats (CSV).</p>
         <button onClick={() => void commencer()} className="mt-5 rounded-xl bg-amber-400 px-6 py-3 text-xl font-bold text-black hover:bg-amber-300">Commencer une séance</button>
         {erreur && <p className="mt-3 text-rose-300">{erreur}</p>}
       </div>
@@ -232,7 +233,7 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
   const aller = async (id: string) => { await appel(`/${prof.code}/question`, { method: 'POST', body: JSON.stringify({ question: id }) }, X).catch(() => {}); relire(); };
   const montrer = async (m: boolean) => { await appel(`/${prof.code}/correction`, { method: 'POST', body: JSON.stringify({ montrer: m }) }, X).catch(() => {}); relire(); };
   const terminer = async () => {
-    if (!window.confirm('Terminer la séance ? Tout sera effacé (noms, réponses, notes). Télécharge d’abord les résultats (CSV) si tu veux les garder.')) return;
+    if (!window.confirm('Terminer la séance ? Les téléphones ne pourront plus répondre. Les réponses et les photos restent gardées dans l’espace admin.')) return;
     await appel(`/${prof.code}`, { method: 'DELETE' }, X).catch(() => {});
     onFin();
   };
@@ -279,7 +280,7 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
             {vue === 'question' ? '📊 Résultats de la classe' : '← La question'}</button>
           <button onClick={() => etat && telechargerCsv(etat)} disabled={!participants.length} className={BTN} title="Fabriqué dans ce navigateur : rien n’est envoyé">⬇ CSV</button>
           <button onClick={() => void relierTelephone()} className={BTN} title="Saisir les réponses des élèves sans téléphone">📱 Mon téléphone</button>
-          <button onClick={() => void terminer()} title="Rien n’est enregistré : tout s’efface à la fin de la séance. Télécharge les résultats (⬇ CSV) avant de terminer." className="rounded-lg border border-rose-300/60 px-3 py-1.5 text-[clamp(13px,1vw,16px)] text-rose-200 hover:bg-rose-500/20">Terminer</button>
+          <button onClick={() => void terminer()} title="Les réponses et les photos restent gardées dans l’espace admin (« Mode classe »)." className="rounded-lg border border-rose-300/60 px-3 py-1.5 text-[clamp(13px,1vw,16px)] text-rose-200 hover:bg-rose-500/20">Terminer</button>
         </div>
       </header>
 
@@ -428,7 +429,7 @@ const cleProfTel = (code: string) => { try { return sessionStorage.getItem(`clas
 const garderCleProfTel = (code: string, cle: string) => { try { if (cle) sessionStorage.setItem(`classe-prof-tel-${code}`, cle); else sessionStorage.removeItem(`classe-prof-tel-${code}`); } catch { /* rien */ } };
 
 type Phase = 'vide' | 'lecture' | 'relire' | 'correction' | 'auto' | 'envoi' | 'envoye';
-type EtatTel = { phase: Phase; texte: string; choix?: (number | boolean | null)[]; mini?: string; resultat?: Etat & { verdictMur?: VerdictMur }; erreur?: string };
+type EtatTel = { phase: Phase; texte: string; choix?: (number | boolean | null)[]; mini?: string; nette?: string; lu?: string; resultat?: Etat & { verdictMur?: VerdictMur }; erreur?: string };
 
 function detailsEnListes(e: Etat) {
   const d = e.details || [];
@@ -562,7 +563,7 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
           </div>)}
         {role && <button onClick={() => { setRole(''); setErreur(''); }} className="mt-3 text-sm text-white/60 underline">← Revenir</button>}
         {erreur && <p className="mt-3 rounded-lg bg-rose-900/60 p-2">{erreur}</p>}
-        <p className="mt-4 text-xs text-white/50">Ton nom reste seulement sur ce téléphone (pour la prochaine fois) et pendant la séance : tout s’efface à la fin de la séance.</p>
+        <p className="mt-4 text-xs text-white/50">Ton nom, tes réponses et les photos de ta feuille sont gardés pour ton professeur ; ton nom reste aussi sur ce téléphone pour la prochaine fois.</p>
       </div>
     </div>
   );
@@ -690,10 +691,13 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
       let mini = await reduireImage(f, 480, 0.6);
       if (octets(mini) > 110_000) mini = await reduireImage(f, 360, 0.5);
       const grande = await reduireImage(f, 1280, 0.8);
+      // la photo gardée (admin, et plus tard l'entraînement de nos modèles d'OCR) : celle que lit l'IA, sinon un peu réduite
+      let nette = octets(grande) <= 390_000 ? grande : await reduireImage(f, 1000, 0.7);
+      if (octets(nette) > 390_000) nette = await reduireImage(f, 800, 0.6);
       const { texte } = await appel<{ texte: string }>(`/${code}/lire`, { method: 'POST', body: JSON.stringify({
         image_b64: grande, image_mime: 'image/jpeg', question: q.id, enonce: enonceOcr.slice(0, 1500), titre: p.titre.slice(0, 300),
         matiere: configExamen().matiere, niveau: configExamen().sujet.niveau, vocabulaire }) });
-      poser({ phase: 'relire', mini, texte, choix: q.genre === 'qcm' || q.genre === 'vf' ? choixDuTexte(q.genre, q.items.length, texte) : undefined });
+      poser({ phase: 'relire', mini, nette, lu: texte, texte, choix: q.genre === 'qcm' || q.genre === 'vf' ? choixDuTexte(q.genre, q.items.length, texte) : undefined });
     } catch (err) {
       poser({ phase: 'vide', erreur: (err as Error).message.replace(/^\d+$/, 'La photo n’a pas pu être lue : réessaie, ou écris la réponse.') });
     }
@@ -706,6 +710,7 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
       await appel(`/${code}/reponse`, { method: 'POST', body: JSON.stringify({
         question: q.id, texte: texte.slice(0, 4000), note: r.verdictMur === 'regarder' ? null : r.note ?? 0, sur: q.points,
         verdict: r.verdictMur || r.verdict || 'nonjuge', pertes, bien, retour: (r.retour || '').slice(0, 800), image_b64: mini || null,
+        photo_b64: (mini && e.nette && octets(e.nette) <= 390_000) ? e.nette : null, lu: mini ? (e.lu || '').slice(0, 4000) : '',
         ...(eleve ? { eleve } : {}) }) }, entetes);
       poser({ phase: 'envoye', resultat: r });
       onEnvoye?.(r);
@@ -754,7 +759,7 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
     const n = q.points * f;
     void publier({ fait: true, texte: e.texte, note: n, verdict: f === 1 ? 'juste' : f > 0 ? 'partiel' : 'faux', retour: 'Noté en comparant avec la correction.' }, e.texte.trim(), e.mini);
   };
-  const reprendre = () => poser({ phase: 'vide', texte: '', choix: undefined, mini: undefined, resultat: undefined, erreur: undefined });
+  const reprendre = () => poser({ phase: 'vide', texte: '', choix: undefined, mini: undefined, nette: undefined, lu: undefined, resultat: undefined, erreur: undefined });
   const pret = q.genre === 'qcm' || q.genre === 'vf' ? (e.choix || []).every(c => c !== null && c !== undefined) && (e.choix || []).length === q.items.length
     : trace ? !!e.mini : !!e.texte.trim();
   const de = eleve ? 'sa' : 'ma';
