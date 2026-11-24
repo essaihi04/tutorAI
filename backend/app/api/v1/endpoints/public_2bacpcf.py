@@ -137,6 +137,14 @@ async def mon_examen(request: Request, cours: str = Query(default="examen_physiq
     return {"debut": debut, "fini": fini, "questions": questions, "ouvert": True}
 
 
+@router.get("/a-retravailler")
+async def a_retravailler(request: Request, x_eleve: str | None = Header(default=None)):
+    """Les questions d'examen ratées et les réponses fausses dans les cours : la page mène chacune à sa diapositive."""
+    e = _eleve(x_eleve)
+    tc._autoriser("suivi", e["id"], request)
+    return tc.a_retravailler_de(tc._lire(SUIVI), e["id"], EXAMENS, COURS)
+
+
 @router.get("/reprise")
 async def reprise(request: Request, x_eleve: str | None = Header(default=None)):
     """La dernière diapositive de chaque séance et les diapositives déjà vues : la page reprend le cours là."""

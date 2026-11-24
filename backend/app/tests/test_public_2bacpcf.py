@@ -65,3 +65,16 @@ def test_reprise_du_cours(client):
     r = client.get(f"{U}/reprise", headers=H).json()["cours"]["phys_ch4_radioactivite"]
     assert r["derniere"] == "b" and r["vues"] == ["a", "b", "c"] and r["total"] == 87
     assert client.get(f"{U}/reprise").status_code == 401
+
+
+def test_a_retravailler(client):
+    H = {"X-Eleve": client.post(f"{U}/inscription", json=FICHE).json()["eleve_id"]}
+    q = {"type": "examen_question", "cours": "examen_chimie", "question_id": "1-2", "note": 1, "sur": 2.75, "pertes": ["Unité"]}
+    client.post(f"{U}/suivi", headers=H, json=q)
+    client.post(f"{U}/suivi", headers=H, json={**q, "question_id": "1-1", "note": 2, "sur": 2})
+    rc = {"type": "reponse_cours", "cours": "rev_chim_deux_sens_equilibre", "slide_id": "ee_r1_taux", "enonce": "τ ?", "correct": False}
+    client.post(f"{U}/suivi", headers=H, json=rc)
+    client.post(f"{U}/suivi", headers=H, json={**rc, "slide_id": "ee_z5_ph", "correct": True})
+    d = client.get(f"{U}/a-retravailler", headers=H).json()
+    assert [(x["examen"], x["id"], x["pertes"]) for x in d["questions"]] == [("examen_chimie", "1-2", ["Unité"])]
+    assert [x["slide_id"] for x in d["cours"]] == ["ee_r1_taux"]

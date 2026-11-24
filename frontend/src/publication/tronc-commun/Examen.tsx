@@ -16,6 +16,7 @@ import { pts } from '../../components/exercice/types';
 import { EXAMEN, type PartieExamen, type QuestionExamen } from './sujet';
 import FiguresCahier from '../../components/course/FigureCahier';
 import { monExamen, suivre, useTempsPasse, type Progression } from './suivi';
+import { lienDiapo, REVOIR_TC, type Lien } from './revoir';
 import { Histogramme, histoVide, noterHisto, noterTriangle, Triangle, type Histo, type Ligne } from './Traces';
 import { VOIX_EXAMEN } from './voixExamen';
 import { inscrireVoix, taireTout } from '../../components/course/voixUnique';
@@ -34,11 +35,13 @@ export interface ConfigExamen {
   retour: string;
   /** la clé de cette évaluation dans le suivi (« examen » au Tronc Commun ; « examen_physique »… sur /2bacpcf) */
   cle?: string;
+  /** les diapositives du cours qui expliquent une question (bilan : « à revoir », 24/11/2026) */
+  revoir?: (question: string) => Lien[];
 }
 let CFG: ConfigExamen & { questions: { p: PartieExamen; q: QuestionExamen }[]; total: number } = config({
   sujet: { ...EXAMEN, programme: 'la sortie écologique ; les facteurs édaphiques (texture et structure, propriétés chimiques, propriétés hydriques du sol)' },
   piste: (cle: string) => (VOIX_EXAMEN.includes(cle) ? `/media/audio/courses/tc_svt_examen/${cle}.mp3` : undefined),
-  suivi: true, matiere: 'svt', retour: 'Tronc Commun',
+  suivi: true, matiere: 'svt', retour: 'Tronc Commun', revoir: q => REVOIR_TC[q] || [],
 });
 function config(c: ConfigExamen) {
   const questions = c.sujet.parties.flatMap(pa => pa.questions.map(q => ({ p: pa, q })));
@@ -475,7 +478,12 @@ function Bilan({ note, parPartie, etats }: { note: number; parPartie: { pa: Part
             <td className="w-24 border border-slate-400 px-2 py-1 text-center font-semibold">{pts(n)} / {pts(sur)}</td></tr>))}</tbody>
       </table>
       {aRevoir.length ? (
-        <p className="mt-2 text-[15px] text-slate-800">À revoir avant la vraie évaluation : {aRevoir.map(x => `question ${x.q.id}`).join(', ')}. Relis leur correction, puis reprends la partie du cours qui leur correspond.</p>
+        <div className="mt-2 text-[15px] text-slate-800">
+          <p>À revoir avant la vraie évaluation : relis la correction de chaque question, puis reprends la diapositive du cours qui l’explique.</p>
+          <ul className="mt-1 space-y-1">{aRevoir.map(x => (
+            <li key={x.q.id}><b>Question {x.q.id}</b> ({pts(etats[x.q.id]?.note || 0)} / {pts(x.q.points)}){' '}
+              {(CFG.revoir?.(x.q.id) || []).map(l => <a key={l.diapo} href={lienDiapo(l)} className="ml-1 inline-block rounded border border-slate-500 px-1.5 text-[14px] text-blue-800 underline">↻ {l.titre}</a>)}</li>))}</ul>
+        </div>
       ) : <p className="mt-2 text-[15px] text-emerald-800">Tout est juste : tu es prêt pour l’évaluation.</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         <a href="./" className={BTN}>Revoir les cours</a>

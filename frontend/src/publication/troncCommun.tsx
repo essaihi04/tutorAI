@@ -22,6 +22,8 @@ import CoursePlayer from '../components/course/CoursePlayer';
 import type { CourseDeck } from '../components/course/types';
 import Examen from './tronc-commun/Examen';
 import Fiche from './tronc-commun/Fiche';
+import Retravailler from './tronc-commun/Retravailler';
+import { REVOIR_TC } from './tronc-commun/revoir';
 import { API_TC, eleveEnregistre, garderEleve, maReprise, suivre, useTempsPasse, type Eleve, type Reprise } from './tronc-commun/suivi';
 
 const SOURCES = import.meta.glob(['./tronc-commun/cours/tc_*.json', '!./tronc-commun/cours/*_voix.json'], { import: 'default' }) as Record<string, () => Promise<CourseDeck>>;
@@ -111,6 +113,7 @@ function Accueil() {
             <p className="mt-2 text-sm text-amber-300 group-hover:underline">Commencer →</p>
           </a>
         </div>
+        <Retravailler revoir={(_, q) => REVOIR_TC[q] || []} nomExamen={() => 'Évaluation'} nomCours={c => COURS.find(x => x.id === c)?.titre || c} />
       </div>
     </div>
   );

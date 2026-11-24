@@ -231,6 +231,36 @@ def reprise_de(suivi: list[dict], eleve: str, cours_connus) -> dict:
     return out
 
 
+def a_retravailler_de(suivi: list[dict], eleve: str, examens, cours_connus) -> dict:
+    """Ce que l'élève doit retravailler (24/11/2026) : chaque question d'examen où il n'a pas eu tous les points (sa
+    première réponse, avec les éléments du barème perdus) et chaque première réponse fausse dans un cours. La page mène
+    de chaque ligne à la diapositive du cours qui l'explique."""
+    questions: dict[tuple, dict] = {}
+    fausses: dict[tuple, dict] = {}
+    for ev in suivi:
+        if ev.get("eleve") != eleve:
+            continue
+        c = ev.get("cours", "")
+        if ev.get("type") == "examen_question" and c in examens:
+            questions.setdefault((c, ev.get("question_id", "")), {
+                "examen": c, "id": ev.get("question_id", ""), "note": ev.get("note") or 0, "sur": ev.get("sur") or 0,
+                "pertes": ev.get("pertes") or [], "enonce": ev.get("enonce", "")})
+        elif ev.get("type") == "reponse_cours" and c in cours_connus:
+            cle = (c, ev.get("slide_id"), ev.get("enonce", ""))
+            if cle not in fausses:
+                fausses[cle] = {"cours": c, "slide_id": ev.get("slide_id", ""), "titre": ev.get("titre", ""),
+                                "enonce": ev.get("enonce", ""), "correct": ev.get("correct")}
+    return {"questions": [q for q in questions.values() if q["sur"] and q["note"] < q["sur"]],
+            "cours": [{k: v for k, v in r.items() if k != "correct"} for r in fausses.values() if r["correct"] is False]}
+
+
+@router.get("/a-retravailler")
+async def a_retravailler(request: Request, x_eleve: str | None = Header(default=None)):
+    e = _eleve(x_eleve)
+    _autoriser("suivi", e["id"], request)
+    return a_retravailler_de(_lire(SUIVI), e["id"], {"examen"}, COURS)
+
+
 @router.get("/reprise")
 async def reprise(request: Request, x_eleve: str | None = Header(default=None)):
     """La dernière diapositive de chaque cours et les diapositives déjà vues : la page reprend le cours là."""

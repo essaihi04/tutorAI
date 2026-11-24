@@ -21,6 +21,8 @@ import CoursePlayer from '../components/course/CoursePlayer';
 import type { CourseDeck } from '../components/course/types';
 import Examen, { utiliserSujet } from './tronc-commun/Examen';
 import Fiche from './tronc-commun/Fiche';
+import Retravailler from './tronc-commun/Retravailler';
+import { REVOIR_2BAC } from './tronc-commun/revoir';
 import { configurerSuivi, eleveEnregistre, garderEleve, maReprise, suivre, useTempsPasse, type Eleve, type Reprise } from './tronc-commun/suivi';
 import { SUJET_CHIMIE, SUJET_PHYSIQUE, VOIX_CHIMIE, VOIX_PHYSIQUE } from './bac2pcf/sujets';
 
@@ -144,6 +146,8 @@ function Accueil() {
               </>}
             </div>))}
         </div>
+        <Retravailler revoir={(ex, q) => REVOIR_2BAC[ex]?.[q] || []} nomExamen={ex => `Examen de ${ex === 'examen_chimie' ? 'chimie' : 'physique'}`}
+          nomCours={c => SEANCES.find(x => x.id === c)?.nom || c} />
       </div>
     </div>
   );
@@ -190,7 +194,7 @@ function Page() {
   const params = new URLSearchParams(window.location.search);
   const ex = MATIERES.find(m => m.cle === params.get('examen'));
   if (ex) {
-    utiliserSujet({ sujet: ex.sujet as never, piste: cle => ex.voix[cle], suivi: true, matiere: 'physique', retour: '2ᵉ Bac PC', cle: `examen_${ex.cle}` });
+    utiliserSujet({ sujet: ex.sujet as never, piste: cle => ex.voix[cle], suivi: true, matiere: 'physique', retour: '2ᵉ Bac PC', cle: `examen_${ex.cle}`, revoir: q => REVOIR_2BAC[`examen_${ex.cle}`]?.[q] || [] });
     return <Examen />;
   }
   const id = params.get('cours');
