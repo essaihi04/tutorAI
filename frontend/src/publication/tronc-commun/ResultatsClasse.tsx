@@ -19,7 +19,7 @@ export type VerdictMur = 'juste' | 'partiel' | 'faux' | 'nonjuge' | 'regarder';
 export type ReponseMur = { id: string; numero: number; question: string; texte: string; note: number | null; sur: number; verdict: VerdictMur;
   pertes: string[]; bien: string[]; retour: string; image: boolean; mien: boolean; eleve?: string };
 export type EtatSeance = { code: string; version: number; question: string; correction: boolean; reponses: ReponseMur[]; par_question: Record<string, number>;
-  posees: string[]; participants: Participant[]; moi: Participant | null; toutes?: ReponseMur[]; prof?: boolean };
+  posees: string[]; participants: Participant[]; moi: Participant | null; toutes?: ReponseMur[]; prof?: boolean; demandes_prof?: string[] };
 
 const BLEU = '#2a78d6';
 const CRITIQUE = '#d03b3b';

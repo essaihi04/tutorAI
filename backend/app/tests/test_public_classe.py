@@ -245,3 +245,28 @@ def test_jeton_du_telephone_prof(client):
     s = pc.SEANCES[code]
     s.jeton = (j2, s.jeton[1] - pc.DUREE_JETON - 1)
     assert client.post(f"/public/classe/{code}/prof-telephone", json={"jeton": j2}).status_code == 403
+
+
+def test_telephone_prof_sans_code(client):
+    """« Je suis le professeur » sans code : l'écran du prof accepte d'un clic (24/11/2026)."""
+    code, P = seance(client)
+    T = {"X-Telephone": "tel-prof-direct1"}
+    assert client.post(f"/public/classe/{code}/demande-prof", headers=T).json()["statut"] == "attente"
+    assert client.get(f"/public/classe/{code}/demande-prof", headers=T).json()["statut"] == "attente"
+    # seul l'écran du prof voit et décide
+    assert "demandes_prof" not in client.get(f"/public/classe/{code}", headers=T).json()
+    assert client.get(f"/public/classe/{code}", headers=P).json()["demandes_prof"] == ["tel-prof-direct1"]
+    d = {"telephone": "tel-prof-direct1", "accepter": True}
+    assert client.post(f"/public/classe/{code}/demande-prof/decision", json=d, headers=T).status_code == 403
+    assert client.post(f"/public/classe/{code}/demande-prof/decision", json=d, headers=P).status_code == 200
+    r = client.get(f"/public/classe/{code}/demande-prof", headers=T).json()
+    assert r["statut"] == "accepte"
+    assert client.get(f"/public/classe/{code}", headers=T | {"X-Prof-Tel": r["cle"]}).json()["prof"] is True
+    # la clé ne se donne qu'une fois
+    assert client.get(f"/public/classe/{code}/demande-prof", headers=T).json()["statut"] == "aucune"
+    # refus
+    E = {"X-Telephone": "tel-eleve-farceur"}
+    client.post(f"/public/classe/{code}/demande-prof", headers=E)
+    client.post(f"/public/classe/{code}/demande-prof/decision", json={"telephone": "tel-eleve-farceur", "accepter": False}, headers=P)
+    assert client.get(f"/public/classe/{code}/demande-prof", headers=E).json()["statut"] == "refuse"
+    assert client.get(f"/public/classe/{code}", headers=E).json()["prof"] is False

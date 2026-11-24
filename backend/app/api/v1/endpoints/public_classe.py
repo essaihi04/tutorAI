@@ -110,6 +110,10 @@ class Seance:
     jeton: Optional[tuple[str, float]] = None
     #: les clés des téléphones du prof
     cles_tel: set = field(default_factory=set)
+    #: « Je suis le professeur » sans code : téléphone → heure de la demande (l'écran du prof accepte ou refuse)
+    demandes_prof: dict[str, float] = field(default_factory=dict)
+    #: téléphone → sa clé de prof, acceptée par l'écran du prof et pas encore reprise par le téléphone ; ou "" : refusé
+    reponses_prof: dict[str, str] = field(default_factory=dict)
 
     def est_prof(self, x_prof: Optional[str], x_prof_tel: Optional[str] = None) -> bool:
         if x_prof and secrets.compare_digest(x_prof.encode(), self.cle_prof.encode()):
@@ -314,6 +318,65 @@ async def prof_telephone(code: str, body: Jeton, request: Request):
     return {"cle": cle}
 
 
+def _demandes(s: Seance) -> list[str]:
+    """Les demandes « Je suis le professeur » de moins de 5 minutes."""
+    t = time.monotonic()
+    for tel in [x for x, h in s.demandes_prof.items() if t - h > 300]:
+        del s.demandes_prof[tel]
+    return list(s.demandes_prof)
+
+
+@router.post("/{code}/demande-prof")
+async def demander_prof(code: str, request: Request, x_telephone: str | None = Header(default=None)):
+    """Le téléphone : « Je suis le professeur », sans code. L'écran du prof affiche « Accepter » (un clic)."""
+    s = _seance(code, request)
+    _autoriser("jeton", s, request)
+    tel = _telephone(x_telephone)
+    if tel not in s.demandes_prof:
+        if len(_demandes(s)) >= 10:
+            raise HTTPException(429, "Trop de demandes : réessaie dans un moment.")
+        s.demandes_prof[tel] = time.monotonic()
+        s.reponses_prof.pop(tel, None)
+        s.toucher()
+    return {"statut": "attente"}
+
+
+@router.get("/{code}/demande-prof")
+async def statut_demande_prof(code: str, request: Request, x_telephone: str | None = Header(default=None)):
+    """Le téléphone attend : sa clé de prof quand l'écran a accepté (une seule fois), « refuse », ou « attente »."""
+    s = _seance(code, request)
+    tel = _telephone(x_telephone)
+    if tel in s.reponses_prof:
+        cle = s.reponses_prof.pop(tel)
+        return {"statut": "accepte", "cle": cle} if cle else {"statut": "refuse"}
+    return {"statut": "attente" if tel in _demandes(s) else "aucune"}
+
+
+class Decision(BaseModel):
+    telephone: str = Field(..., pattern=r"^[a-zA-Z0-9-]{1,40}$")
+    accepter: bool
+
+
+@router.post("/{code}/demande-prof/decision")
+async def decider_prof(code: str, body: Decision, request: Request, x_prof: str | None = Header(default=None)):
+    """L'écran du prof (lui seul) accepte ou refuse un téléphone."""
+    s = _seance(code, request)
+    if not x_prof or not secrets.compare_digest(x_prof.encode(), s.cle_prof.encode()):
+        raise HTTPException(403, "Réservé à l'écran du prof.")
+    if s.demandes_prof.pop(body.telephone, None) is None:
+        raise HTTPException(404, "Demande introuvable ou trop ancienne.")
+    if body.accepter:
+        if len(s.cles_tel) >= 5:
+            raise HTTPException(507, "Trop de téléphones de prof pour cette séance.")
+        cle = secrets.token_urlsafe(24)
+        s.cles_tel.add(cle)
+        s.reponses_prof[body.telephone] = cle
+    else:
+        s.reponses_prof[body.telephone] = ""
+    s.toucher()
+    return {"ok": True}
+
+
 @router.post("/{code}/eleve")
 async def nouvel_eleve(code: str, body: Identite, request: Request, x_prof: str | None = Header(default=None),
                        x_prof_tel: str | None = Header(default=None)):
@@ -370,6 +433,8 @@ async def etat(code: str, request: Request, v: int = Query(default=0), x_telepho
          "moi": _vue_participant(moi) if moi else None, "prof": prof,
          "reponses": [_vue(r, tel) | ({"eleve": r.eleve} if prof else {}) for r in sorted(courantes.values(), key=lambda r: r.numero)],
          "par_question": {q: len(rs) for q, rs in s.reponses.items() if rs}}
+    if x_prof and secrets.compare_digest(x_prof.encode(), s.cle_prof.encode()):
+        d["demandes_prof"] = _demandes(s)
     if prof:
         d["toutes"] = [_vue(r, "") | {"eleve": r.eleve} for rs in s.reponses.values() for r in rs.values()]
     return d

@@ -222,6 +222,10 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
     await appel(`/${prof.code}`, { method: 'DELETE' }, X).catch(() => {});
     onFin();
   };
+  const decider = async (telephone: string, accepter: boolean) => {
+    await appel(`/${prof.code}/demande-prof/decision`, { method: 'POST', body: JSON.stringify({ telephone, accepter }) }, X).catch(() => {});
+    relire();
+  };
   const relierTelephone = async () => {
     try { const d = await appel<{ jeton: string; expiration_s: number }>(`/${prof.code}/jeton-prof`, { method: 'POST' }, X); setJeton({ jeton: d.jeton, fin: Date.now() + d.expiration_s * 1000 }); }
     catch { /* séance perdue : le sondage le dira */ }
@@ -307,11 +311,20 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
       {fiche && etat && <FicheEleve etat={etat} q={q} id={fiche} code={prof.code} onAutre={setFiche} onFermer={() => setFiche(null)} onImage={setLoupe} onRapport={id => { setFiche(null); setRapport(id); }} />}
       {rapport && etat && <RapportEleve etat={etat} id={rapport} onAutre={setRapport} onFermer={() => setRapport(null)} />}
       {loupe && <Loupe src={loupe} onFermer={() => setLoupe('')} />}
+      {!!etat?.demandes_prof?.length && (
+        <div className="fixed left-1/2 top-3 z-[1100] w-[min(560px,94vw)] -translate-x-1/2 rounded-2xl bg-amber-300 p-4 text-black shadow-2xl" role="alertdialog" aria-label="Téléphone du professeur">
+          <p className="text-[clamp(17px,1.5vw,24px)] font-bold">📱 Un téléphone veut entrer comme professeur</p>
+          <p className="text-[15px]">Accepte seulement si c’est ton téléphone (il pourra saisir les réponses des élèves).</p>
+          <div className="mt-3 flex gap-2">
+            <button onClick={() => void decider(etat.demandes_prof![0], true)} className="flex-1 rounded-xl bg-emerald-700 px-4 py-2 text-lg font-bold text-white">✓ Accepter</button>
+            <button onClick={() => void decider(etat.demandes_prof![0], false)} className="rounded-xl border-2 border-black/40 px-4 py-2 text-lg font-semibold">Refuser</button>
+          </div>
+        </div>)}
       {jeton && (
         <div className="fixed inset-0 z-[1000] flex flex-col items-center justify-center gap-3 bg-white p-4 text-black" role="dialog" aria-label="Relier le téléphone du prof">
           <p className="text-[clamp(18px,2vw,30px)] font-bold">📱 Téléphone du professeur</p>
           <QrCode lien={`${lien}&prof=${jeton.jeton}`} className="w-[min(46vh,70vw)]" />
-          <p className="text-[clamp(15px,1.4vw,22px)]">Vise ce QR avec TON téléphone, ou choisis « Je suis le professeur » et tape :</p>
+          <p className="text-[clamp(15px,1.4vw,22px)]">Vise ce QR avec TON téléphone (ou, sur ton téléphone, touche simplement « Je suis le professeur ») ; code :</p>
           <p className="font-mono text-[clamp(36px,5vw,72px)] font-bold tracking-[0.3em]">{jeton.jeton}</p>
           <p className="text-sm text-slate-600">Valable 2 minutes, une seule fois. Tu pourras y saisir les réponses des élèves sans téléphone.</p>
           <button onClick={() => setJeton(null)} className="rounded-lg border border-slate-400 px-4 py-2">Fermer</button>
@@ -424,7 +437,6 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
   const [loupe, setLoupe] = useState('');
   const [voirDonnees, setVoirDonnees] = useState(false);
   const [role, setRole] = useState<'' | 'eleve' | 'prof'>('');
-  const [jetonSaisi, setJetonSaisi] = useState('');
   const [erreur, setErreur] = useState('');
   const [attente, setAttente] = useState(false);
   /** le prof : l'élève dont il saisit la feuille ('' : la liste) */
@@ -445,6 +457,22 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
     const j = new URLSearchParams(location.search).get('prof');
     if (code && j && /^\d{4}$/.test(j)) { history.replaceState(null, '', `?c=${code}`); void relierProf(j); }
   }, []);
+  // « Je suis le professeur » : la demande part tout de suite ; l'écran du prof l'accepte d'un clic (aucun code)
+  useEffect(() => {
+    if (role !== 'prof' || !code || cleProf) return;
+    let fini = false;
+    setErreur('');
+    appel(`/${code}/demande-prof`, { method: 'POST' }, { 'X-Telephone': tel }).catch(e => setErreur((e as Error).message));
+    const t = window.setInterval(async () => {
+      try {
+        const d = await appel<{ statut: string; cle?: string }>(`/${code}/demande-prof`, {}, { 'X-Telephone': tel });
+        if (fini) return;
+        if (d.statut === 'accepte' && d.cle) { garderCleProfTel(code, d.cle); setCleProf(d.cle); setRole(''); }
+        else if (d.statut === 'refuse') { setErreur('L’écran du prof a refusé.'); setRole(''); }
+      } catch { /* réessaie */ }
+    }, 2000);
+    return () => { fini = true; window.clearInterval(t); };
+  }, [role, code, cleProf]);
   // une clé de prof refusée (séance d'avant) : oubliée
   useEffect(() => { if (cleProf && etat && etat.prof === false) { garderCleProfTel(code, ''); setCleProf(''); } }, [etat?.prof]);
 
@@ -489,14 +517,10 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
           }} /></div>
         </>)}
         {role === 'prof' && (
-          <form className="mt-3" onSubmit={e => { e.preventDefault(); if (/^\d{4}$/.test(jetonSaisi)) void relierProf(jetonSaisi); }}>
-            <label className="block text-lg font-semibold">Le code du prof (sur ton écran : « 📱 Mon téléphone »)</label>
-            <div className="mt-2 flex gap-2">
-              <input value={jetonSaisi} onChange={e => setJetonSaisi(e.target.value.replace(/\D/g, '').slice(0, 4))} inputMode="numeric" placeholder="0000"
-                className="min-w-0 flex-1 rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-center font-mono text-3xl tracking-[0.3em] outline-none" />
-              <button disabled={jetonSaisi.length !== 4 || attente} className="rounded-xl bg-amber-400 px-4 text-lg font-semibold text-black disabled:opacity-40">Valider</button>
-            </div>
-          </form>)}
+          <div className="mt-3 rounded-2xl bg-white/10 p-4 text-center">
+            <p className="text-lg font-semibold">⏳ Sur l’écran du prof, clique sur « ✓ Accepter ».</p>
+            <p className="mt-2 text-[15px] text-white/70">Ton téléphone sera relié tout de suite : tu pourras saisir les réponses des élèves.</p>
+          </div>)}
         {role && <button onClick={() => { setRole(''); setErreur(''); }} className="mt-3 text-sm text-white/60 underline">← Revenir</button>}
         {erreur && <p className="mt-3 rounded-lg bg-rose-900/60 p-2">{erreur}</p>}
         <p className="mt-4 text-xs text-white/50">Ton nom sert seulement pendant ce cours : rien n’est enregistré, tout s’efface à la fin de la séance.</p>
