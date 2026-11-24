@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import ClavierScientifique, { BoutonSymboles } from './ClavierScientifique';
 import { clavier, useChampClavier, useClavier, type CleSuggestions } from './ClavierFlottant';
+import { BoutonTelephone, useChampTelephone } from './photoTelephone';
 
 /**
  * Une réponse libre se donne écrite, parlée ou photographiée (user rule, 10 novembre 2026).
@@ -46,30 +47,37 @@ async function lireLaPhoto(f: File, contexte: ContexteOcr): Promise<string> {
 }
 
 /** « 📷 Photo » : prise de vue (téléphone) ou fichier ; le texte lu est ajouté au champ. */
-export function BoutonPhoto({ contexte, onTexte, onErreur, disabled, petit = false }: {
+export function BoutonPhoto({ contexte, onTexte, onErreur, disabled, petit = false, relais = true }: {
   contexte: ContexteOcr; onTexte: (t: string) => void; onErreur?: (m: string | undefined) => void; disabled?: boolean; petit?: boolean;
+  /** liens libres : le texte rendu depuis le téléphone arrive ici (faux quand le champ qui l'entoure s'en charge) */
+  relais?: boolean;
 }) {
   const [lecture, setLecture] = useState(false);
-  return (
+  const lire = async (charger: () => Promise<string>) => {
+    setLecture(true); onErreur?.(undefined);
+    try {
+      const t = await charger();
+      if (t) onTexte(t); else onErreur?.('Rien de lisible sur la photo : reprends-la de plus près, ou écris ta réponse.');
+    } catch (err) {
+      const m = (err as Error).message;
+      onErreur?.(/^\d+$/.test(m) ? 'La photo n’a pas pu être lue : écris ta réponse, ou réessaie.' : m);
+    } finally { setLecture(false); }
+  };
+  // liens libres (24/11/2026) : la réponse écrite ou photographiée sur le téléphone de l'élève est ajoutée au champ
+  useChampTelephone({ enonce: contexte.enonce || contexte.title || '', texte: '', ajouter: onTexte }, relais && !disabled);
+  return (<>
     <label className={`shrink-0 cursor-pointer rounded-full ${petit ? 'px-3 py-1 text-xs' : 'px-4 py-2 text-sm'} ${lecture ? 'bg-sky-500/40 animate-pulse' : 'bg-white/10 hover:bg-white/20'} ${disabled ? 'pointer-events-none opacity-40' : ''}`}
       style={{ fontFamily: 'system-ui, sans-serif' }} title="Photographie ta feuille : le texte lu s'écrit dans le champ, tu le corriges avant d'envoyer">
       {lecture ? '📷 Lecture…' : '📷 Photo'}
       {/* sans `capture` : le téléphone propose l'appareil photo OU un fichier */}
       <input type="file" accept="image/*" className="hidden" disabled={disabled || lecture}
-        onChange={async e => {
+        onChange={e => {
           const f = e.target.files?.[0]; e.target.value = '';
-          if (!f) return;
-          setLecture(true); onErreur?.(undefined);
-          try {
-            const t = await lireLaPhoto(f, contexte);
-            if (t) onTexte(t); else onErreur?.('Rien de lisible sur la photo : reprends-la de plus près, ou écris ta réponse.');
-          } catch (err) {
-            const m = (err as Error).message;
-            onErreur?.(/^\d+$/.test(m) ? 'La photo n’a pas pu être lue : écris ta réponse, ou réessaie.' : m);
-          } finally { setLecture(false); }
+          if (f) void lire(() => lireLaPhoto(f, contexte));
         }} />
     </label>
-  );
+    <BoutonTelephone petit={petit} disabled={disabled || lecture} />
+  </>);
 }
 
 /** Le micro tenu comme un talkie-walkie : appuyer = il écoute, relâcher = il transcrit dans le champ. */
@@ -159,6 +167,10 @@ export default function ChampReponse({ onEnvoyer, disabled, contexte, placeholde
     requestAnimationFrame(() => champ.current?.focus());
   }, []);
   const envoyer = () => { const t = texte.trim(); if (t && !disabled) { setClavier(false); if (avecFlottant) clavier.fermer(); onEnvoyer(t); } };
+  // liens libres (24/11/2026) : le téléphone relié écrit dans ce champ en direct, et peut rendre la réponse
+  useChampTelephone({ enonce: contexte.enonce || contexte.title || '', texte,
+    remplacer: t => { setTexte(t); setAVerifier(!!t.trim()); },
+    rendre: t => { const x = t.trim(); if (x && !disabled) { setTexte(x); onEnvoyer(x); } } }, actif && !disabled);
   return (
     <div className="mt-2" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <div className="flex gap-2">
@@ -174,7 +186,7 @@ export default function ChampReponse({ onEnvoyer, disabled, contexte, placeholde
       {!disabled && (
         <div className={`mt-2 flex flex-wrap items-center gap-2 ${papier ? '[&_button]:!bg-slate-800 [&_button]:!text-white [&_label]:!bg-slate-800 [&_label]:!text-white' : ''}`}>
           <BoutonMicro petit onTexte={ajouter} onErreur={setErreur} />
-          <BoutonPhoto petit contexte={contexte} onTexte={ajouter} onErreur={setErreur} />
+          <BoutonPhoto petit relais={false} contexte={contexte} onTexte={ajouter} onErreur={setErreur} />
           {avecFlottant
             ? <BoutonSymboles petit ouvert={flottant.ouvert} onClick={() => { toucher(); clavier.basculer(); }} />
             : <BoutonSymboles petit ouvert={clavierDessous} onClick={() => setClavier(c => !c)} />}

@@ -7,7 +7,11 @@
  *   - `./`                                  l'accueil : les deux cours et l'évaluation ;
  *   - `?cours=tc_svt_sortie_ecologique`     « La sortie écologique » (cours entier) ;
  *   - `?cours=tc_svt_facteurs_edaphiques`   « Les facteurs édaphiques » (cours entier, activités 1 à 7) ;
- *   - `?examen`                             l'évaluation formative (50 min au plus, sans chronomètre).
+ *   - `?examen`                             l'évaluation formative (50 min au plus, sans chronomètre) ;
+ *   - `?classe`                             le mode classe, écran du professeur (évaluation projetée, réponses au mur) ;
+ *   - `?c=<code>`                           le mode classe, téléphone de l'élève (suit la question projetée) ;
+ *   - `?t=<code>`                           le téléphone relié au PC de l'élève (« 📱 Avec mon téléphone »).
+ * Les trois dernières ne demandent pas la fiche : ni nom, ni suivi, rien d'enregistré (24/11/2026).
  *
  * Le tuteur répond par les routes publiques déjà en ligne (`/api/v1/public/cours-ondes/…`, plafonnées). Ces cours ne sont
  * pas sur le serveur : l'identifiant du cours est retiré des demandes (le serveur refuserait un cours qu'il ne connaît pas),
@@ -22,6 +26,8 @@ import CoursePlayer from '../components/course/CoursePlayer';
 import type { CourseDeck } from '../components/course/types';
 import Examen from './tronc-commun/Examen';
 import Fiche from './tronc-commun/Fiche';
+import { ProfClasse, TelephoneClasse } from './tronc-commun/Classe';
+import { activerPhotoTelephone, PageTelephone } from '../components/course/photoTelephone';
 import Retravailler from './tronc-commun/Retravailler';
 import { REVOIR_TC } from './tronc-commun/revoir';
 import { API_TC, eleveEnregistre, garderEleve, maReprise, suivre, useTempsPasse, type Eleve, type Reprise } from './tronc-commun/suivi';
@@ -86,6 +92,9 @@ window.fetch = (entree: RequestInfo | URL, init?: RequestInit) => {
   }
   return fetchOriginal(`${PUBLIC}/${reste}`, { ...init, body: corps, headers: entetes });
 };
+// « 📱 Avec mon téléphone » à côté de chaque « 📷 Photo » : seulement sur ce lien libre
+activerPhotoTelephone(`${location.origin}${location.pathname}`);
+
 /** le cours ouvert, pour le suivi des réponses */
 let coursActuel = '';
 
@@ -113,6 +122,7 @@ function Accueil() {
             <p className="mt-2 text-sm text-amber-300 group-hover:underline">Commencer →</p>
           </a>
         </div>
+        <p className="mt-4 text-right text-sm [@media(max-height:520px)]:mt-2"><a href="?classe" className="text-white/45 underline hover:text-white/80">Mode classe (professeur)</a></p>
         <Retravailler revoir={(_, q) => REVOIR_TC[q] || []} nomExamen={() => 'Évaluation'} nomCours={c => COURS.find(x => x.id === c)?.titre || c} />
       </div>
     </div>
@@ -165,6 +175,15 @@ function Cours({ id }: { id: string }) {
 }
 
 function TroncCommun() {
+  const params = new URLSearchParams(window.location.search);
+  // mode classe et téléphone relié : sans fiche ni suivi
+  if (params.has('classe')) return <ProfClasse />;
+  if (params.has('c')) return <TelephoneClasse code={params.get('c') || ''} />;
+  if (params.has('t')) return <PageTelephone code={params.get('t') || ''} titre="Moalim · Tronc Commun" />;
+  return <AvecFiche />;
+}
+
+function AvecFiche() {
   const [eleve, setEleve] = useState<Eleve | null>(() => eleveEnregistre());
   if (!eleve) return <Fiche onEntree={setEleve} entete="Moalim · Tronc Commun Sciences BIOF · SVT" prefixe="TCSF" fond="#0f1a14" />;
   return <Pages />;

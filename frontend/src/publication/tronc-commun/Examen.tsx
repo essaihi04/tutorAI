@@ -20,6 +20,7 @@ import { lienDiapo, REVOIR_TC, type Lien } from './revoir';
 import { Histogramme, histoVide, noterHisto, noterTriangle, Triangle, type Histo, type Ligne } from './Traces';
 import { VOIX_EXAMEN } from './voixExamen';
 import { inscrireVoix, taireTout } from '../../components/course/voixUnique';
+import { BoutonTelephone, useVueTelephone, type VueTelephone } from '../../components/course/photoTelephone';
 
 /** `partie/P1`, `question/1-1`, `correction/1-1` → la piste, si elle existe */
 /** Ce qui change d'une page à l'autre (23/11/2026) : le Tronc Commun par défaut ; `/2bacpcf` appelle `utiliserSujet`. */
@@ -50,6 +51,8 @@ function config(c: ConfigExamen) {
 /** à appeler avant le premier rendu (une évaluation par page) */
 export function utiliserSujet(c: ConfigExamen) { CFG = config(c); }
 const piste = (cle: string) => CFG.piste(cle);
+/** la configuration en cours (sujet, questions, matière) : le mode classe s'en sert (24/11/2026) */
+export const configExamen = () => CFG;
 let voixCourante: HTMLAudioElement | null = null;
 function jouer(url?: string) {
   voixCourante?.pause();
@@ -66,8 +69,8 @@ const CRAIE = "'Patrick Hand', 'Caveat', cursive";
 const SUJET = "'Times New Roman', Georgia, serif";
 const BTN = 'rounded-md border border-slate-400 bg-white px-3 py-1.5 text-sm text-slate-900 hover:bg-slate-100';
 
-type Detail = { element: string; sur: number; obtenu: number; perte?: string };
-type Etat = {
+export type Detail = { element: string; sur: number; obtenu: number; perte?: string };
+export type Etat = {
   fait: boolean;
   /** QCM / vrai-faux : le choix de chaque item (index, ou vrai / faux) */
   choix?: (number | boolean | null)[];
@@ -83,26 +86,48 @@ type Etat = {
 };
 
 
-function texteDuSujet(p: PartieExamen) {
+export function texteDuSujet(p: PartieExamen) {
   const tab = p.tableau ? [p.tableau.entetes.join(' | '), ...p.tableau.lignes.map(l => l.join(' | '))].join(' ; ') : '';
   return [`Évaluation formative de ${CFG.sujet.matiere}, ${CFG.sujet.niveau} (Maroc) : ${p.titre}.`, p.intro || '', tab, ...(p.donnees || [])].filter(Boolean).join(' ');
+}
+
+/** la demande de correction d'une rédaction (barème, éléments) : la même pour l'évaluation et le mode classe */
+export function corpsCorrection(p: PartieExamen, q: Extract<QuestionExamen, { genre: 'redaction' }>, reponse: string) {
+  return {
+    diapo: { title: `${CFG.sujet.niveau} — ${p.titre}`, speech: texteDuSujet(p) },
+    question: { type: 'open', enonce: q.texte, attendu: q.attendu, matiere: CFG.matiere, bareme: q.points, elements: q.elements },
+    // un seul essai, comme en examen : le tuteur corrige et donne la bonne réponse (pas d'indice pour réessayer)
+    reponse: reponse.slice(0, 800), tentative: 2, verdict: null,
+  };
+}
+export type CorrectionTuteur = { correct: boolean | null; partiel?: boolean; parole: string; ecrit: string; note?: number; details?: Detail[] };
+/** la réponse du tuteur → note, verdict, retour (même règle partout) */
+export function etatDeCorrection(q: QuestionExamen, texte: string, r: CorrectionTuteur): Etat {
+  const verdict = r.correct === true ? 'juste' : r.partiel ? 'partiel' : r.correct === false ? 'faux' : 'nonjuge';
+  const note = typeof r.note === 'number' ? r.note : r.correct === true ? q.points : r.partiel ? q.points / 2 : 0;
+  return { fait: true, texte, verdict, note, retour: r.ecrit || r.parole, details: r.details };
 }
 
 async function corrigerParLeTuteur(p: PartieExamen, q: Extract<QuestionExamen, { genre: 'redaction' }>, reponse: string) {
   const r = await fetch('/api/v1/course-player/answer-reaction', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      diapo: { title: `${CFG.sujet.niveau} — ${p.titre}`, speech: texteDuSujet(p) },
-      question: { type: 'open', enonce: q.texte, attendu: q.attendu, matiere: CFG.matiere, bareme: q.points, elements: q.elements },
-      // un seul essai, comme en examen : le tuteur corrige et donne la bonne réponse (pas d'indice pour réessayer)
-      reponse: reponse.slice(0, 800), tentative: 2, verdict: null,
-    }),
+    body: JSON.stringify(corpsCorrection(p, q, reponse)),
   });
   if (!r.ok) throw new Error(String(r.status));
-  return r.json() as Promise<{ correct: boolean | null; partiel?: boolean; parole: string; ecrit: string; note?: number; details?: Detail[] }>;
+  return r.json() as Promise<CorrectionTuteur>;
 }
 
-function jugerValeur(q: Extract<QuestionExamen, { genre: 'valeur' }>, texte: string): Etat {
+/** QCM / vrai-faux : la note de chaque item (clé connue, dans le navigateur) */
+export function noterChoix(q: Extract<QuestionExamen, { genre: 'qcm' | 'vf' }>, choix: (number | boolean | null | undefined)[]): Etat {
+  const parItem = q.points / q.items.length;
+  const justes = q.items.map((it, k) => (q.genre === 'qcm' ? choix[k] === (it as { bonne: number }).bonne : choix[k] === (it as { vrai: boolean }).vrai));
+  const n = justes.filter(Boolean).length;
+  return { fait: true, note: n * parItem, verdict: n === q.items.length ? 'juste' : n > 0 ? 'partiel' : 'faux',
+    details: q.items.map((it, k) => ({ element: it.texte, sur: parItem, obtenu: justes[k] ? parItem : 0, perte: justes[k] ? '' : 'réponse fausse' })),
+    retour: n === q.items.length ? 'Tout est juste.' : `${n} sur ${q.items.length} juste${n > 1 ? 's' : ''} : lis l’explication sous chaque proposition.` };
+}
+
+export function jugerValeur(q: Extract<QuestionExamen, { genre: 'valeur' }>, texte: string): Etat {
   const lu = lireNombre(texte);
   const tol = q.tolerance ?? 0.02;
   const juste = lu != null && Math.abs(lu - q.valeur) <= tol * Math.max(Math.abs(q.valeur), 1e-12);
@@ -186,13 +211,7 @@ export default function Examen() {
 
   const validerChoix = () => {
     if (q.genre !== 'qcm' && q.genre !== 'vf') return;
-    const choix = etat.choix || [];
-    const parItem = q.points / q.items.length;
-    const justes = q.items.map((it, k) => (q.genre === 'qcm' ? choix[k] === (it as { bonne: number }).bonne : choix[k] === (it as { vrai: boolean }).vrai));
-    const n = justes.filter(Boolean).length;
-    poser(q.id, { fait: true, note: n * parItem, verdict: n === q.items.length ? 'juste' : n > 0 ? 'partiel' : 'faux',
-      details: q.items.map((it, k) => ({ element: it.texte, sur: parItem, obtenu: justes[k] ? parItem : 0, perte: justes[k] ? '' : 'réponse fausse' })),
-      retour: n === q.items.length ? 'Tout est juste.' : `${n} sur ${q.items.length} juste${n > 1 ? 's' : ''} : lis l’explication sous chaque proposition.` });
+    poser(q.id, noterChoix(q, etat.choix || []));
   };
 
   const repondre = async (texte: string) => {
@@ -201,9 +220,7 @@ export default function Examen() {
     poser(q.id, { texte, verdict: 'lecture', retour: 'Le tuteur lit ta réponse…' });
     try {
       const r = await corrigerParLeTuteur(p, q, texte);
-      const verdict = r.correct === true ? 'juste' : r.partiel ? 'partiel' : r.correct === false ? 'faux' : 'nonjuge';
-      const noteQ = typeof r.note === 'number' ? r.note : r.correct === true ? q.points : r.partiel ? q.points / 2 : 0;
-      poser(q.id, { fait: true, texte, verdict, note: noteQ, retour: r.ecrit || r.parole, details: r.details });
+      poser(q.id, etatDeCorrection(q, texte, r));
     } catch {
       poser(q.id, { fait: false, texte, autoEval: true, verdict: undefined, retour: '' });
     }
@@ -237,6 +254,27 @@ export default function Examen() {
     note: pa.questions.reduce((n, x) => n + (etats[x.id]?.fait ? etats[x.id].note || 0 : 0), 0),
   })), [etats]);
 
+  // liens libres (24/11/2026) : le téléphone relié montre la même question, la suit, y répond (clavier ou photo) ; la page suit
+  // aussi le téléphone quand il change de question. Rien ici sans `activerPhotoTelephone` (site principal).
+  const vueTel: VueTelephone | null = commence ? {
+    titre: CFG.sujet.titre,
+    questions: CFG.questions.map(x => ({ id: x.q.id, fait: !!etats[x.q.id]?.fait })),
+    courante: { id: q.id, partie: p.titre, texte: q.texte, points: q.points, matiere: CFG.matiere,
+      genre: q.genre === 'qcm' || q.genre === 'vf' || q.genre === 'valeur' ? q.genre : q.genre === 'redaction' ? 'texte' : 'trace',
+      items: q.genre === 'qcm' ? q.items.map(it => ({ texte: it.texte, choix: it.choix })) : q.genre === 'vf' ? q.items.map(it => ({ texte: it.texte })) : undefined,
+      aide: q.genre === 'valeur' ? `${q.grandeur} = … = résultat avec son unité` : undefined },
+    brouillon: etat.choix ? { choix: etat.choix } : undefined,
+    resultat: etat.fait ? { verdict: etat.verdict, note: etat.note, sur: q.points, retour: etat.retour?.slice(0, 1500), details: etat.details } : null,
+    occupe: etat.verdict === 'lecture' ? 'Le tuteur lit ta réponse…' : etat.autoEval && !etat.fait ? 'Le tuteur n’est pas joignable : compare avec la correction sur ton PC.' : '',
+  } : null;
+  useVueTelephone(vueTel, m => {
+    if (m.type === 'aller') { const k = CFG.questions.findIndex(x => x.q.id === m.question); if (k >= 0) setI(k); return; }
+    if (m.type !== 'choix' || (q.genre !== 'qcm' && q.genre !== 'vf') || (m.question && m.question !== q.id) || etats[q.id]?.fait) return;
+    const c = q.items.map((_, k) => m.choix[k] ?? null);
+    if (m.rendre && c.every(x => x !== null)) poser(q.id, { ...noterChoix(q, c), choix: c });
+    else poser(q.id, { choix: c });
+  });
+
   if (!commence) return <Accueil etat={repris} acces={acces} onCommencer={() => setCommence(true)} />;
 
   // « Terminer l'évaluation » : les questions sans réponse comptent 0, verrouillées, puis le bilan
@@ -262,6 +300,7 @@ export default function Examen() {
         <h1 className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{CFG.sujet.titre}</h1>
         <span className="hidden rounded border border-slate-500 px-2 py-0.5 text-sm text-slate-700 sm:inline" title="Durée conseillée, sans chronomètre">⏳ {CFG.sujet.minutes} min conseillées</span>
         <span className="rounded border border-black px-2 py-0.5 text-sm font-semibold">Note : {pts(note)} / {pts(pointsFaits)}{fini ? '' : ` · ${faites}/${CFG.questions.length}`}</span>
+        <BoutonTelephone clair />
         {!fini && <button onClick={terminer} className="rounded-md border border-rose-700 bg-rose-50 px-2.5 py-1 text-sm font-semibold text-rose-800 hover:bg-rose-100 [@media(max-height:520px)]:py-0.5">Terminer l’évaluation</button>}
       </header>
 
@@ -281,20 +320,7 @@ export default function Examen() {
             <h2 className="text-[17px] font-bold underline underline-offset-4">{p.titre}</h2>
             {piste(`partie/${p.id}`) && <button onClick={() => jouer(piste(`partie/${p.id}`))} className={`mt-1 ${BTN}`} style={{ fontFamily: 'system-ui, sans-serif' }}>🔊 Écouter</button>}
             <p className="mt-0.5 text-[13px] text-slate-600" style={{ fontFamily: 'system-ui, sans-serif' }}>{pts(p.questions.reduce((n, x) => n + x.points, 0))} points · environ {p.minutes} min</p>
-            {p.intro && <p className="mt-2 text-[16px] leading-snug"><Formule t={p.intro} /></p>}
-            {!!p.figures?.length && <div className="my-2" style={{ filter: 'invert(1) hue-rotate(180deg)' }}><FiguresCahier figures={p.figures as never} /></div>}
-            {p.tableau && (
-              <div className="mt-2 overflow-x-auto">
-                <table className="w-full border-collapse text-[15px]">
-                  <thead><tr>{p.tableau.entetes.map((h, k) => <th key={k} className="border border-black bg-slate-100 px-1.5 py-0.5 text-center">{h}</th>)}</tr></thead>
-                  <tbody>{p.tableau.lignes.map((l, k) => <tr key={k}>{l.map((c, m) => <td key={m} className={`border border-black px-1.5 py-0.5 ${m === 0 ? 'font-semibold' : 'text-center'}`}>{c}</td>)}</tr>)}</tbody>
-                </table>
-              </div>)}
-            {!!p.donnees?.length && (
-              <div className="mt-2 border border-black p-2 text-[15px]">
-                <p className="font-bold">Données :</p>
-                <ul className="list-disc pl-5">{p.donnees.map((d, k) => <li key={k}><Formule t={d} /></li>)}</ul>
-              </div>)}
+            <DonneesPartie p={p} />
             <table className="mt-3 w-full border-collapse text-[15px]">
               <tbody>{p.questions.map((x, k) => {
                 const e = etats[x.id];
@@ -411,7 +437,28 @@ export default function Examen() {
   );
 }
 
-function Choix({ q, etat, onChoisir }: { q: Extract<QuestionExamen, { genre: 'qcm' | 'vf' }>; etat: Etat; onChoisir: (k: number, v: number | boolean) => void }) {
+/** l'introduction, les figures, le tableau et les données d'une partie (feuille du sujet) ; `grand` : projeté en classe */
+export function DonneesPartie({ p, grand = false }: { p: PartieExamen; grand?: boolean }) {
+  const t = grand ? 'text-[clamp(16px,1.5vw,24px)]' : 'text-[15px]';
+  return (<>
+    {p.intro && <p className={`mt-2 leading-snug ${grand ? t : 'text-[16px]'}`}><Formule t={p.intro} /></p>}
+    {!!p.figures?.length && <div className="my-2" style={{ filter: 'invert(1) hue-rotate(180deg)' }}><FiguresCahier figures={p.figures as never} /></div>}
+    {p.tableau && (
+      <div className="mt-2 overflow-x-auto">
+        <table className={`w-full border-collapse ${t}`}>
+          <thead><tr>{p.tableau.entetes.map((h, k) => <th key={k} className="border border-black bg-slate-100 px-1.5 py-0.5 text-center">{h}</th>)}</tr></thead>
+          <tbody>{p.tableau.lignes.map((l, k) => <tr key={k}>{l.map((c, m) => <td key={m} className={`border border-black px-1.5 py-0.5 ${m === 0 ? 'font-semibold' : 'text-center'}`}>{c}</td>)}</tr>)}</tbody>
+        </table>
+      </div>)}
+    {!!p.donnees?.length && (
+      <div className={`mt-2 border border-black p-2 ${t}`}>
+        <p className="font-bold">Données :</p>
+        <ul className="list-disc pl-5">{p.donnees.map((d, k) => <li key={k}><Formule t={d} /></li>)}</ul>
+      </div>)}
+  </>);
+}
+
+export function Choix({ q, etat, onChoisir }: { q: Extract<QuestionExamen, { genre: 'qcm' | 'vf' }>; etat: Etat; onChoisir: (k: number, v: number | boolean) => void }) {
   return (
     <ol className="mt-2 space-y-3">
       {q.items.map((it, k) => {
@@ -440,7 +487,7 @@ function Choix({ q, etat, onChoisir }: { q: Extract<QuestionExamen, { genre: 'qc
   );
 }
 
-function Verdict({ etat }: { etat: Etat }) {
+export function Verdict({ etat }: { etat: Etat }) {
   const V = { juste: ['✔ Juste', 'border-emerald-700 text-emerald-800'], partiel: ['◐ Juste en partie', 'border-amber-600 text-amber-800'],
     faux: ['✘ Faux', 'border-rose-700 text-rose-800'], nonjuge: ['? Le tuteur n’a pas pu juger ta réponse', 'border-slate-500 text-slate-800'],
     lecture: ['…', 'border-slate-400 text-slate-600'] } as const;
