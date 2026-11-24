@@ -300,8 +300,9 @@ def progression(eleve: str) -> dict:
 
 
 def examen_ouvert(prog: dict, deja_commence: bool) -> bool:
-    """Ouvert après la révision ou un des deux cours (80 % des diapositives vues) ; un élève déjà commencé garde l'accès."""
-    return deja_commence or any(p["vues"] >= SEUIL_OUVERTURE * p["total"] for p in prog.values())
+    """Toujours ouvert (24/11/2026, demande de l'utilisateur : « annuler la possibilité d'avoir l'évaluation seulement
+    à la fin du cours »). Avant : ouvert après la révision ou un des deux cours (80 % des diapositives vues)."""
+    return True
 
 
 def bilan() -> list[dict]:

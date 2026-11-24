@@ -106,7 +106,8 @@ def test_classe_ouverture_tests_doublons(client):
     client.post("/public/tronc-commun/inscription", json={**FICHE, "telephone": "0611111111"})          # même nom, autre téléphone
     client.post("/public/tronc-commun/inscription", json={**FICHE, "nom": "test", "classe": "prof", "telephone": "0622222222"})
     H = {"X-Eleve": a}
-    assert client.get("/public/tronc-commun/examen", headers=H).json()["ouvert"] is False
+    # l'évaluation est ouverte tout de suite, sans finir le cours (24/11/2026)
+    assert client.get("/public/tronc-commun/examen", headers=H).json()["ouvert"] is True
     for k in range(12):
         client.post("/public/tronc-commun/suivi", headers=H, json={"type": "diapo", "cours": "tc_svt_revision", "slide_id": f"s{k}", "total": 15})
     assert client.get("/public/tronc-commun/examen", headers=H).json()["ouvert"] is True      # 12/15 = 80 %
