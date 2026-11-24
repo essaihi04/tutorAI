@@ -237,40 +237,38 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
   for (const r of rs) if (r.eleve) parEleve[r.eleve] = r;
   const ontRepondu = participants.filter(x => parEleve[x.id]).length;
   const lien = lienComplet(prof.code, PAGE(), 'c');
-  const BTN = 'rounded-lg border border-white/30 px-3 py-1.5 text-[clamp(14px,1.1vw,18px)] hover:bg-white/10 disabled:opacity-30';
+  const BTN = 'rounded-lg border border-white/30 px-2.5 py-1 text-[clamp(13px,1vw,17px)] hover:bg-white/10 disabled:opacity-30';
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[#0f1a14] text-white lg:h-[100dvh]" style={{ fontFamily: 'system-ui, sans-serif' }}>
-      <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-white/15 px-3 py-2">
-        <button onClick={() => setQrGrand(true)} title="QR code en grand"><QrCode lien={lien} className="w-[clamp(64px,7vw,120px)] rounded" /></button>
-        <div className="min-w-0">
-          <p className="text-[clamp(14px,1.1vw,20px)] text-white/70">Sur ton téléphone : <b className="font-mono text-white">{lienCourt(prof.code, PAGE(), 'c')}</b></p>
-          <p className="font-mono text-[clamp(30px,3.6vw,64px)] font-bold leading-none tracking-[0.2em] text-amber-300">{prof.code}</p>
-        </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/15 px-2 py-1">
+        <button onClick={() => setQrGrand(true)} title="QR code en grand"><QrCode lien={lien} className="w-[clamp(36px,3vw,52px)] rounded" /></button>
+        <button onClick={() => setQrGrand(true)} className="min-w-0 text-left" title={`Sur le téléphone : ${lienCourt(prof.code, PAGE(), 'c')} (clic : le QR en grand)`}>
+          <span className="font-mono text-[clamp(22px,2vw,34px)] font-bold leading-none tracking-[0.15em] text-amber-300">{prof.code}</span>
+        </button>
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
           {vue === 'question' && (<>
             <button className={BTN} disabled={k === 0} onClick={() => void aller(qs[k - 1].q.id)}>← Précédente</button>
             <select value={q.id} onChange={e => void aller(e.target.value)} className="rounded-lg border border-white/30 bg-[#12301f] px-2 py-1.5 text-[clamp(14px,1.1vw,18px)]">
               {qs.map(x => <option key={x.q.id} value={x.q.id}>Question {x.q.id}{etat?.par_question[x.q.id] ? ` · ${etat.par_question[x.q.id]} rép.` : ''}</option>)}
             </select>
             <button className={BTN} disabled={k === qs.length - 1} onClick={() => void aller(qs[k + 1].q.id)}>Suivante →</button>
-            <button onClick={() => void montrer(!etat?.correction)} className={`rounded-lg px-3 py-1.5 text-[clamp(14px,1.1vw,18px)] font-semibold ${etat?.correction ? 'bg-rose-200 text-rose-950' : 'bg-amber-400 text-black'}`}>
+            <button onClick={() => void montrer(!etat?.correction)} className={`rounded-lg px-2.5 py-1 text-[clamp(13px,1vw,17px)] font-semibold ${etat?.correction ? 'bg-rose-200 text-rose-950' : 'bg-amber-400 text-black'}`}>
               {etat?.correction ? 'Cacher la correction' : 'Montrer la correction'}</button>
           </>)}
-          <button onClick={() => setVue(v => (v === 'question' ? 'resultats' : 'question'))} className="rounded-lg bg-[#2a78d6] px-3 py-1.5 text-[clamp(14px,1.1vw,18px)] font-semibold">
+          <button onClick={() => setVue(v => (v === 'question' ? 'resultats' : 'question'))} className="rounded-lg bg-[#2a78d6] px-2.5 py-1 text-[clamp(13px,1vw,17px)] font-semibold">
             {vue === 'question' ? '📊 Résultats de la classe' : '← La question'}</button>
           <button onClick={() => etat && telechargerCsv(etat)} disabled={!participants.length} className={BTN} title="Fabriqué dans ce navigateur : rien n’est envoyé">⬇ CSV</button>
           <button onClick={() => void relierTelephone()} className={BTN} title="Saisir les réponses des élèves sans téléphone">📱 Mon téléphone</button>
-          <button onClick={() => void terminer()} className="rounded-lg border border-rose-300/60 px-3 py-1.5 text-[clamp(13px,1vw,16px)] text-rose-200 hover:bg-rose-500/20">Terminer</button>
+          <button onClick={() => void terminer()} title="Rien n’est enregistré : tout s’efface à la fin de la séance. Télécharge les résultats (⬇ CSV) avant de terminer." className="rounded-lg border border-rose-300/60 px-3 py-1.5 text-[clamp(13px,1vw,16px)] text-rose-200 hover:bg-rose-500/20">Terminer</button>
         </div>
       </header>
-      <p className="shrink-0 bg-amber-300/15 px-3 py-0.5 text-[13px] text-amber-100">Rien n’est enregistré : tout s’efface à la fin de la séance. Télécharge les résultats (⬇ CSV) avant de terminer.</p>
 
       {vue === 'resultats' && etat ? (
         <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100 p-3 text-slate-900"><ResultatsClasse etat={etat} onEleve={setRapport} /></div>
       ) : (<>
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-3 pt-2">
-          <p className="mr-2 text-[clamp(16px,1.5vw,26px)]"><b className="text-amber-300">{ontRepondu} / {participants.length}</b> élève{participants.length > 1 ? 's ont' : ' a'} répondu</p>
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-2 pt-1">
+          <p className="mr-2 text-[clamp(15px,1.2vw,22px)]"><b className="text-amber-300">{ontRepondu} / {participants.length}</b> élève{participants.length > 1 ? 's ont' : ' a'} répondu</p>
           {participants.map(x => {
             const r = parEleve[x.id];
             const v = r ? r.verdict : 'rien';
@@ -280,7 +278,7 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
           })}
           {!participants.length && <span className="text-white/60">Les noms des élèves apparaîtront ici quand ils auront visé le QR code.</span>}
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 p-3 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 gap-2 p-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
           <section className="min-h-0 overflow-y-auto rounded-xl bg-white p-4 text-black shadow-md">
             <div className="mb-1 flex items-center gap-2 text-sm text-slate-600" style={{ fontFamily: 'system-ui, sans-serif' }}>
               <span>Question {k + 1} / {qs.length}</span>
