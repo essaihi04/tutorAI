@@ -137,6 +137,14 @@ async def mon_examen(request: Request, cours: str = Query(default="examen_physiq
     return {"debut": debut, "fini": fini, "questions": questions, "ouvert": True}
 
 
+@router.get("/reprise")
+async def reprise(request: Request, x_eleve: str | None = Header(default=None)):
+    """La dernière diapositive de chaque séance et les diapositives déjà vues : la page reprend le cours là."""
+    e = _eleve(x_eleve)
+    tc._autoriser("suivi", e["id"], request)
+    return {"cours": tc.reprise_de(tc._lire(SUIVI), e["id"], COURS)}
+
+
 @router.post("/answer-reaction")
 async def answer_reaction(body: cp.AnswerReactionRequest, request: Request, x_eleve: str | None = Header(default=None)):
     """La correction d'une réponse rédigée (examens, questions des cours), plafonnée par élève inscrit."""

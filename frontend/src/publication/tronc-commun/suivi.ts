@@ -44,10 +44,37 @@ export type EvenementSuivi = {
   etat?: Record<string, unknown>;
 };
 
+/** Où l'élève en est dans un cours (24/11/2026 : « garder l'avancement de chaque élève, ne pas commencer à zéro ») :
+ * la dernière diapositive ouverte et celles déjà vues. Le serveur la donne d'après le suivi (même élève, tout appareil) ;
+ * le navigateur en garde une copie pour le cas où le serveur ne répond pas. */
+export interface Reprise { derniere: string; vues: string[]; position?: number; total?: number }
+const cleReprise = (cours: string) => `${CLE}:reprise:${eleveEnregistre()?.id || ''}:${cours}`;
+function noterReprise(cours: string, slide: string, position?: number, total?: number) {
+  try {
+    const r: Reprise = JSON.parse(localStorage.getItem(cleReprise(cours)) || 'null') || { derniere: '', vues: [] };
+    localStorage.setItem(cleReprise(cours), JSON.stringify({ derniere: slide, position, total, vues: r.vues.includes(slide) ? r.vues : [...r.vues, slide] }));
+  } catch { /* navigation privée */ }
+}
+export async function maReprise(cours: string): Promise<Reprise | null> {
+  const e = eleveEnregistre();
+  if (!e) return null;
+  let locale: Reprise | null = null;
+  try { locale = JSON.parse(localStorage.getItem(cleReprise(cours)) || 'null'); } catch { /* rien */ }
+  try {
+    const r = await fetchBrut(`${API}/reprise`, { headers: { 'X-Eleve': e.id } });
+    if (r.ok) {
+      const d = (await r.json())?.cours?.[cours] as Reprise | undefined;
+      if (d?.derniere) return { ...d, vues: [...new Set([...(d.vues || []), ...(locale?.vues || [])])] };
+    }
+  } catch { /* hors ligne */ }
+  return locale?.derniere ? locale : null;
+}
+
 /** Envoie un événement de suivi (jamais bloquant : hors ligne, il se perd). */
 export function suivre(ev: EvenementSuivi) {
   const e = eleveEnregistre();
   if (!e) return;
+  if (ev.type === 'diapo' && ev.cours && ev.slide_id) noterReprise(ev.cours, ev.slide_id, ev.position, ev.total);
   const corps = { ...ev, enonce: ev.enonce?.slice(0, 500), reponse: ev.reponse?.slice(0, 800), titre: ev.titre?.slice(0, 300),
     pertes: ev.pertes?.slice(0, 12).map(p => p.slice(0, 200)) };
   void fetchBrut(`${API}/suivi`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Eleve': e.id }, body: JSON.stringify(corps) })

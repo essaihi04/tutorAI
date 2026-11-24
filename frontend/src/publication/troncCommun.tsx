@@ -22,7 +22,7 @@ import CoursePlayer from '../components/course/CoursePlayer';
 import type { CourseDeck } from '../components/course/types';
 import Examen from './tronc-commun/Examen';
 import Fiche from './tronc-commun/Fiche';
-import { API_TC, eleveEnregistre, garderEleve, suivre, useTempsPasse, type Eleve } from './tronc-commun/suivi';
+import { API_TC, eleveEnregistre, garderEleve, maReprise, suivre, useTempsPasse, type Eleve, type Reprise } from './tronc-commun/suivi';
 
 const SOURCES = import.meta.glob(['./tronc-commun/cours/tc_*.json', '!./tronc-commun/cours/*_voix.json'], { import: 'default' }) as Record<string, () => Promise<CourseDeck>>;
 const COURS = [
@@ -128,12 +128,17 @@ function aPartirDe(deck: CourseDeck, diapo: string | null): CourseDeck {
 function Cours({ id }: { id: string }) {
   const [cours, setCours] = useState<CourseDeck | null>(null);
   const [introuvable, setIntrouvable] = useState(false);
+  /** où l'élève s'était arrêté dans ce cours (undefined : pas encore su) */
+  const [reprise, setReprise] = useState<Reprise | null | undefined>(undefined);
   useTempsPasse(id, !!cours);
   useEffect(() => { coursActuel = id; }, [id]);
   useEffect(() => {
     const charger = source(id);
     if (!charger) { setIntrouvable(true); return; }
-    void charger().then(d => setCours(aPartirDe(d, new URLSearchParams(window.location.search).get('diapo')))).catch(() => setIntrouvable(true));
+    const diapo = new URLSearchParams(window.location.search).get('diapo');
+    // l'avancement de l'élève : le cours reprend à la dernière diapositive ouverte (sauf lien `?diapo=`)
+    void Promise.all([charger(), diapo ? Promise.resolve(null) : maReprise(id)])
+      .then(([d, r]) => { setReprise(r); setCours(aPartirDe(d, diapo)); }).catch(() => setIntrouvable(true));
   }, [id]);
   if (introuvable) return <Accueil />;
   if (!cours) return <div className="grid h-[100dvh] place-items-center bg-[#0a0a18] text-white/70">Chargement du cours…</div>;
@@ -149,6 +154,7 @@ function Cours({ id }: { id: string }) {
       </div>
       <div className="min-h-0 w-full flex-1 overflow-hidden rounded-2xl border border-white/10">
         <CoursePlayer deck={cours} language="mixed" mode="concentration" tuteur3D
+          progress={reprise ? { current_slide_id: reprise.derniere, completed_slide_ids: reprise.vues, status: 'in_progress' } : null}
           onSlideChange={d => suivre({ type: 'diapo', cours: id, slide_id: d.id, titre: d.title, position: d.position, total: d.total })} />
       </div>
     </div>

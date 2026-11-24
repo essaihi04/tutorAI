@@ -215,6 +215,30 @@ async def mon_examen(request: Request, x_eleve: str | None = Header(default=None
             "ouvert": examen_ouvert(prog, bool(questions)), "seuil": SEUIL_OUVERTURE}
 
 
+def reprise_de(suivi: list[dict], eleve: str, cours_connus) -> dict:
+    """Où l'élève en est dans chaque cours (24/11/2026, « garder l'avancement de chaque élève, ne pas recommencer à
+    zéro ») : la dernière diapositive ouverte et celles déjà vues, d'après le suivi ; le même élève les retrouve sur
+    n'importe quel appareil."""
+    out: dict[str, dict] = {}
+    for ev in suivi:
+        c = ev.get("cours", "")
+        if ev.get("eleve") != eleve or ev.get("type") != "diapo" or c not in cours_connus or not ev.get("slide_id"):
+            continue
+        r = out.setdefault(c, {"derniere": "", "position": 0, "total": 0, "vues": []})
+        r["derniere"], r["position"], r["total"] = ev["slide_id"], ev.get("position", 0), ev.get("total", 0)
+        if ev["slide_id"] not in r["vues"]:
+            r["vues"].append(ev["slide_id"])
+    return out
+
+
+@router.get("/reprise")
+async def reprise(request: Request, x_eleve: str | None = Header(default=None)):
+    """La dernière diapositive de chaque cours et les diapositives déjà vues : la page reprend le cours là."""
+    e = _eleve(x_eleve)
+    _autoriser("suivi", e["id"], request)
+    return {"cours": reprise_de(_lire(SUIVI), e["id"], COURS)}
+
+
 @router.post("/answer-reaction")
 async def answer_reaction(body: cp.AnswerReactionRequest, request: Request, x_eleve: str | None = Header(default=None)):
     """La correction d'une réponse rédigée (évaluation, questions du cours), plafonnée par élève inscrit."""

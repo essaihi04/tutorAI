@@ -55,3 +55,13 @@ def test_deux_examens_separes_une_reponse(client):
 
 def test_suivi_sans_fiche_refuse(client):
     assert client.post(f"{U}/suivi", json={"type": "temps", "cours": "phys_ch3_ondes_lumineuses", "secondes": 30}).status_code == 401
+
+
+def test_reprise_du_cours(client):
+    H = {"X-Eleve": client.post(f"{U}/inscription", json=FICHE).json()["eleve_id"]}
+    assert client.get(f"{U}/reprise", headers=H).json() == {"cours": {}}
+    for k, sid in enumerate(["a", "b", "c", "b"], 1):
+        client.post(f"{U}/suivi", headers=H, json={"type": "diapo", "cours": "phys_ch4_radioactivite", "slide_id": sid, "position": k, "total": 87})
+    r = client.get(f"{U}/reprise", headers=H).json()["cours"]["phys_ch4_radioactivite"]
+    assert r["derniere"] == "b" and r["vues"] == ["a", "b", "c"] and r["total"] == 87
+    assert client.get(f"{U}/reprise").status_code == 401
