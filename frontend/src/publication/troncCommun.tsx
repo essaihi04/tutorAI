@@ -6,7 +6,7 @@
  * construite à part (`vite.tronc-commun.config.ts`) et publiée dans son propre dossier par `scripts/publier_tronc_commun.py`.
  *   - `./`                                  l'accueil : les deux cours et l'évaluation ;
  *   - `?cours=tc_svt_sortie_ecologique`     « La sortie écologique » (cours entier) ;
- *   - `?cours=tc_svt_facteurs_edaphiques`   « Les facteurs édaphiques », jusqu'à l'activité 3 ;
+ *   - `?cours=tc_svt_facteurs_edaphiques`   « Les facteurs édaphiques » (cours entier, activités 1 à 7) ;
  *   - `?examen`                             l'évaluation formative (50 min au plus, sans chronomètre).
  *
  * Le tuteur répond par les routes publiques déjà en ligne (`/api/v1/public/cours-ondes/…`, plafonnées). Ces cours ne sont
@@ -27,7 +27,7 @@ import { API_TC, eleveEnregistre, garderEleve, suivre, useTempsPasse, type Eleve
 const SOURCES = import.meta.glob(['./tronc-commun/cours/tc_*.json', '!./tronc-commun/cours/*_voix.json'], { import: 'default' }) as Record<string, () => Promise<CourseDeck>>;
 const COURS = [
   { id: 'tc_svt_sortie_ecologique', titre: 'La sortie écologique', sous: 'Outils et techniques, recensement, exploitation des relevés, notion d’écosystème', couleur: '#2e7d4f' },
-  { id: 'tc_svt_facteurs_edaphiques', titre: 'Les facteurs édaphiques', sous: 'Texture et structure, propriétés chimiques et hydriques du sol (activités 1 à 3)', couleur: '#8a5a2b' },
+  { id: 'tc_svt_facteurs_edaphiques', titre: 'Les facteurs édaphiques', sous: 'Propriétés du sol, répartition des êtres vivants, faune et microflore, formation et protection du sol (activités 1 à 7)', couleur: '#8a5a2b' },
   { id: 'tc_svt_revision', titre: 'Révision avec le tuteur', sous: 'Les deux chapitres en bref ; triangle des textures, perméabilité, histogramme et courbe de fréquence pas à pas', couleur: '#2f5d8a' },
 ];
 const source = (id: string) => SOURCES[Object.keys(SOURCES).find(f => f.endsWith(`/${id}.json`)) || ''];

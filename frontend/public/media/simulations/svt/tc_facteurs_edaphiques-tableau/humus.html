@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Humification et minéralisation — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Coupe de sol : la litière est fragmentée par les détritivores en matière organique morte ; les bactéries et les champignons la transforment en humus (humification), puis en matière minérale (minéralisation) que les racines absorbent"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="vivants.js"></script>
+<script>
+/*
+ * Activité 6, doc 2 : humification et minéralisation (fe_e4_humus), recréé : coupe de sol peinte, êtres vivants peints,
+ * cadres et flèches à la craie ; des particules suivent chaque flèche au moment où la voix la dit.
+ * Moments : litiere 2 ; detritivores 5 ; mo 8 ; humification 11 ; humus 13 ; mineralisation 16 ; racines 19 ; fin 19,5.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const P = { conclusions: true };
+const M = { litiere: 2, detritivores: 5, mo: 8, humification: 11, humus: 13, mineralisation: 16, racines: 19 }, FIN = 19.5;
+const MOTIFS = { litiere: 'la litière : feuilles mortes, débris', detritivores: 'les détritivores fragmentent la litière', mo: 'la matière organique morte', humification: 'bactéries et champignons : l’humification',
+  humus: 'l’humus', mineralisation: 'la minéralisation : la matière minérale', racines: 'les racines absorbent la matière minérale' };
+function boite(c, k, x, y, w, h, lignes, coul, t0) {
+  const t = B.chrono.t; if (t < t0) return;
+  ecrit.ecrire(c, 'b_' + k, () => { c.rect(x, y, w, h, { couleur: coul, largeur: 2.4, fond: coul, fondAlpha: .14 }); lignes.forEach((l, i) => c.texte(l, x + w / 2, y + h / 2 + 7 + (i - (lignes.length - 1) / 2) * 24, { couleur: i ? 'blanc' : coul, taille: i ? 17 : 19, align: 'center', max: w - 12, gras: !i })); });
+  if (t < t0 + 1.4) ST.lueur(c, x - 4, y - 4, w + 8, h + 8, true);
+  c.repere(k, x, y, w, h, MOTIFS[k]);
+}
+function flux(c, x1, y1, x2, y2, t0, couleur) {
+  const t = B.chrono.t; if (t < t0) return;
+  ecrit.ecrire(c, `f_${x1}_${y1}`, () => c.fleche(x1, y1, x2, y2, { couleur: 'blanc', largeur: 2.6 }));
+  c.direct(() => { const g = c.ctx; for (let k = 0; k < 4; k++) { const u = ((t - t0) * .45 + k / 4) % 1; g.fillStyle = couleur; g.beginPath(); g.arc(mix(x1, x2, u), mix(y1, y2, u), 4, 0, 6.28); g.fill(); } });
+}
+function etiquette(c, k, s, x, y, coul, t0) { if (B.chrono.t < t0) return; ecrit.ecrire(c, 'e_' + k, () => { c.rect(x - c.largeurTexte(s, 18) / 2 - 12, y - 20, c.largeurTexte(s, 18) + 24, 28, { couleur: coul, largeur: 1.8, arrondi: 14, fond: coul, fondAlpha: .2 }); c.texte(s, x, y, { couleur: coul, taille: 18, align: 'center', gras: true }); }); }
+function dessiner(c) {
+  scene.cadre(141);
+  const t = B.chrono.t, L = scene.L, K = scene.compact, ys = 92;
+  c.direct(() => { const g = c.ctx;
+    const gr = g.createLinearGradient(0, ys, 0, 400); gr.addColorStop(0, '#6a4a2e'); gr.addColorStop(1, '#3e2a18'); g.fillStyle = gr; g.fillRect(0, ys, L, 400 - ys);
+    const rr = ST.graine(4); for (let i = 0; i < 700; i++) { g.fillStyle = rr() > .5 ? 'rgba(20,12,6,.35)' : 'rgba(210,170,120,.18)'; g.fillRect(rr() * L, ys + rr() * (400 - ys), 2, 2); }
+    for (let i = 0; i < 14; i++) { g.fillStyle = '#d9d6cf'; g.beginPath(); g.ellipse(20 + i * L / 13, 408, 34, 12, 0, 0, 6.28); g.fill(); }
+    for (let i = 0; i < 16; i++) ST.herbe(g, 30 + i * (L - 60) / 15, ys, 1.1);
+    const ul = doux((t - M.litiere + 1.6) / 1.2); for (let i = 0; i < 12; i++) ST.feuilleMorte(g, 40 + i * (L - 80) / 11, ys - 4, .55, { angle: i * .9, graine: i, alpha: ul, trous: doux((t - M.detritivores) / 3) * .7 });
+    // une plante et ses racines (à droite)
+    ST.plante(g, L - 120, ys, 70); g.strokeStyle = 'rgba(214,190,150,.9)'; g.lineWidth = 2; for (let i = -2; i <= 2; i++) { g.beginPath(); g.moveTo(L - 120, ys); g.quadraticCurveTo(L - 120 + i * 18, ys + 40, L - 120 + i * 28, ys + 70); g.stroke(); }
+  });
+  c.texte('Litière', 22, ys - 20, { couleur: 'orange', taille: 18 }); c.repere('litiere', 0, ys - 30, L, 40, MOTIFS.litiere);
+  c.texte('Sol', 22, 380, { couleur: 'faible', taille: 17 });
+  // les êtres vivants : détritivores, puis bactéries et champignons
+  const cercle = (k, x, y, r, t0, peindre, nom) => { if (t < t0) return; const u = doux((t - t0) / 1.2);
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = u; g.fillStyle = 'rgba(240,240,230,.92)'; g.beginPath(); g.arc(x, y, r, 0, 6.28); g.fill(); g.beginPath(); g.arc(x, y, r, 0, 6.28); g.clip(); peindre(g); g.restore(); });
+    ecrit.ecrire(c, 'n_' + k, () => c.texte(nom, x, y + r + 22, { couleur: 'blanc', taille: 17, align: 'center' })); };
+  const xc = 84;
+  cercle('det', xc, 160, 52, M.detritivores - 1.6, g => { ST.ver(g, Array.from({ length: 9 }, (_, j) => [xc - 40 + j * 9, 180 + Math.sin(j + t) * 3]), { e: 6 }); ST.cloporte(g, xc - 10, 146, .6); ST.acarien(g, xc + 26, 140, .8); }, 'détritivores');
+  cercle('micro', xc, 300, 52, M.humification - 1.6, g => { ST.mycelium(g, xc - 10, 296, 120, 1, { graine: 3, alpha: 1 }); g.strokeStyle = '#4ade80'; const rr = ST.graine(6); for (let i = 0; i < 9; i++) ST.bacterie(g, xc + (rr() - .5) * 70, 300 + (rr() - .5) * 70, .9, rr() * 3); }, 'bactéries, champignons');
+  // les cadres et les flux
+  const xm = 190, wm = 250, xr = Math.max(500, L - 280), wr = Math.min(260, L - xr - 10);
+  boite(c, 'mo', xm, 118, wm, 62, ['Matière organique morte', 'glucides, protéines…'], 'jaune', M.mo - 1.4);
+  if (!K) flux(c, xm + 40, ys + 6, xm + 60, 116, M.mo - .8, '#c08a3e');
+  boite(c, 'humus', xm, 300, wm, 62, ['Humus', 'réserve organique'], 'orange', M.humus - 1.4);
+  flux(c, xm + wm / 2, 184, xm + wm / 2, 296, M.humification - .4, '#c08a3e');
+  etiquette(c, 'hum', 'Humification', xm + wm / 2, 248, 'cyan', M.humification - .2);
+  boite(c, 'mineralisation', xr, 196, wr, 62, ['Matière minérale', 'H₂O, CO₂, NO₃⁻, PO₄³⁻…'], 'violet', M.mineralisation - 1.4);
+  flux(c, xm + wm + 4, 330, xr + 30, 262, M.mineralisation - .6, '#c084fc');
+  if (!K) flux(c, xm + wm + 4, 150, xr - 4, 222, M.mineralisation - .2, '#c084fc');
+  etiquette(c, 'min', 'Minéralisation', (xm + wm + xr) / 2 + 10, 318, 'jaune', M.mineralisation);
+  c.repere('humification', xm, 184, wm, 112, MOTIFS.humification);
+  if (t >= M.racines - 1.2) { flux(c, xr + wr / 2, 194, L - 120, ys + 66, M.racines - 1.2, '#c084fc'); if (!K) ecrit.ecrire(c, 'rac', () => c.texte('absorbée par les racines', xr + wr / 2, 284, { couleur: 'vert', taille: 17, align: 'center', max: wr + 30 })); c.repere('racines', L - 200, ys - 80, 160, 160, MOTIFS.racines); }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => { const t = B ? B.chrono.t : 0, xr = Math.max(500, L - 280);
+  if (t >= M.mineralisation - 1.4) return { x: 180, y: 60, w: L - 180, h: 320 };
+  if (t >= M.humification - 1.6) return { x: 20, y: 100, w: 440, h: 290 };
+  return { x: 10, y: 50, w: 450, h: 230 }; };
+function voir(t) { return Object.keys(M).filter(k => t >= M[k]).map(k => MOTIFS[k]).join(' ; ') || 'Une coupe de sol.'; }
+var B = ST.brancher({ id: 'edaph_humus', titre: 'Humification et minéralisation', M, FIN, motifs: MOTIFS, params: P,
+  texte: 'La litière est fragmentée par les détritivores (lombrics, cloportes, acariens) en matière organique morte ; les bactéries et les champignons la transforment en humus (humification) ; l’humus, puis la matière organique, deviennent lentement de la matière minérale (H₂O, CO₂, nitrates, phosphates…) : la minéralisation ; les racines l’absorbent.',
+  voir, depart: 'Une coupe de sol…', fini: () => 'Matière organique → humus → matière minérale.',
+  explication: { humus: Object.keys(M).map(k => ({ repere: k, texte: MOTIFS[k] })) } });
+window.Tableau.bulle($('feedback'), 'Que devient la litière ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

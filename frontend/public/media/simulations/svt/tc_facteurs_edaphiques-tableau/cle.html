@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Classer la faune du sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Clé de détermination simplifiée de la faune du sol : un animal peint est examiné (corps mou ou carapace, anneaux, paires de pattes comptées une à une, antennes) et le chemin de la clé s’allume jusqu’à son groupe"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="vivants.js"></script>
+<script>
+/*
+ * Activité 5, doc 2 : reconnaître et classer la faune du sol avec la clé de détermination simplifiée (recréée à la
+ * craie ; les animaux sont peints). Chaque animal passe à gauche ; le chemin de la clé s’allume nœud par nœud ; les
+ * paires de pattes sont comptées en s’allumant (règle 16) ; le groupe s’allume et le nom de l’animal s’y inscrit.
+ *  ?vue=cle1 (fe_v4_cle) : lombric → annélides ; escargot → mollusques ; carabe (3 paires, 1 paire d’antennes) → insectes.
+ *     Moments : cle 3 ; lombric 6 ; lombric_groupe 9 ; escargot 12 ; escargot_groupe 15 ; carabe 18 ; pattes_carabe 21 ;
+ *     carabe_groupe 23 ; fin 23,5.
+ *  ?vue=cle2 (fe_v5_cle) : cloporte (7 paires, corps plat) → crustacés ; iule (plus de 15 paires) → myriapodes ;
+ *     araignée (4 paires, pas d’antennes) → arachnides. Moments : cle 2 ; cloporte 5 ; pattes_cloporte 8,5 ;
+ *     cloporte_groupe 10,5 ; iule 13 ; iule_groupe 16 ; araignee 19 ; pattes_araignee 22 ; araignee_groupe 24 ; fin 24,5.
+ * set_parameters {conclusions:false} : le groupe de l’araignée ne s’allume pas (question ouverte).
+ */
+const ST = window.SolTableau, { doux } = ST;
+const $ = id => document.getElementById(id);
+const VUE = new URLSearchParams(location.search).get('vue') === 'cle2' ? 'cle2' : 'cle1';
+const P = { conclusions: true };
+const ANIMAUX = VUE === 'cle1' ? [
+  { id: 'lombric', nom: 'lombric', groupe: 'annelides', chemin: ['mou', 'anneaux'], t: 6 },
+  { id: 'escargot', nom: 'escargot', groupe: 'mollusques', chemin: ['mou', 'tentacules'], t: 12 },
+  { id: 'carabe', nom: 'carabe', groupe: 'insectes', chemin: ['arthro', 'p3'], t: 18, pattes: 21, n: 3 },
+] : [
+  { id: 'cloporte', nom: 'cloporte', groupe: 'crustaces', chemin: ['arthro', 'p4_15'], t: 5, pattes: 8.5, n: 7 },
+  { id: 'iule', nom: 'iule', groupe: 'myriapodes', chemin: ['arthro', 'p15'], t: 13, pattes: 15, n: 16 },
+  { id: 'araignee', nom: 'araignée', groupe: 'arachnides', chemin: ['arthro', 'p4'], t: 19, pattes: 22, n: 4 },
+];
+const M = { cle: VUE === 'cle1' ? 3 : 2 };
+ANIMAUX.forEach((A, i) => { M[A.id] = A.t; if (A.pattes && A.id !== 'iule') M['pattes_' + A.id] = A.pattes; M[A.id + '_groupe'] = A.t + (A.pattes ? (A.id === 'iule' ? 3 : 5) : 3); });
+const FIN = Math.max(...Object.values(M)) + .5;
+const GROUPES = { mollusques: 'Mollusques', annelides: 'Annélides', myriapodes: 'Myriapodes', crustaces: 'Crustacés', arachnides: 'Arachnides', insectes: 'Insectes' };
+const MOTIFS = { cle: 'la clé de détermination' };
+ANIMAUX.forEach(A => { MOTIFS[A.id] = 'on examine : ' + A.nom; if (M['pattes_' + A.id]) MOTIFS['pattes_' + A.id] = `${A.nom} : ${A.n} paires de pattes`; MOTIFS[A.id + '_groupe'] = `${A.nom} → ${GROUPES[A.groupe].toLowerCase()}`; });
+/* La clé : nœuds (x, y relatifs à la zone de la clé), textes courts. */
+function noeuds(L) {
+  const x1 = 286, x2 = 452, x3 = Math.max(x2 + 210, Math.min(L - 130, x2 + 260)), w1 = 152, w2 = x3 - x2 - 22, w3 = Math.min(124, L - x3 - 8);
+  return {
+    mou: { x: x1, y: 70, w: w1, l: ['Corps mou,', 'sans pattes'] }, arthro: { x: x1, y: 264, w: w1, l: ['Carapace, pattes', 'articulées :', 'arthropodes'] },
+    tentacules: { x: x2, y: 40, w: w2, l: ['sans anneaux,', 'deux tentacules'], g: 'mollusques' }, anneaux: { x: x2, y: 112, w: w2, l: ['avec anneaux,', 'sans antennes'], g: 'annelides' },
+    p15: { x: x2, y: 186, w: w2, l: ['plus de 15 paires de pattes,', 'une paire d’antennes'], g: 'myriapodes' }, p4_15: { x: x2, y: 250, w: w2, l: ['de 4 à 15 paires, corps', 'plat, des antennes'], g: 'crustaces' },
+    p4: { x: x2, y: 314, w: w2, l: ['4 paires de pattes,', 'pas d’antennes'], g: 'arachnides' }, p3: { x: x2, y: 378, w: w2, l: ['3 paires de pattes,', 'une paire d’antennes'], g: 'insectes' },
+    x3, w3,
+  };
+}
+const H1 = 21;   // interligne de la clé
+function dessinerAnimal(g, A, k, t) {
+  const x = 135, y = 200;
+  if (A.id === 'lombric') { ST.ver(g, Array.from({ length: 18 }, (_, j) => [x - 90 + j * 10.5, y + Math.sin(j * .55 + t * 1.5) * 10]), { e: 13 }); return []; }
+  if (A.id === 'escargot') { ST.escargot(g, x, y + 10, 1.7); return []; }
+  if (A.id === 'carabe') return ST.carabe(g, x - 10, y, 1.55, { teinte: [40, 125, 105] }).map(p => [p[0], p[1], 46]);
+  if (A.id === 'cloporte') return ST.cloporte(g, x - 6, y, 2).map(p => [p[0], p[1], 40]);
+  if (A.id === 'iule') return ST.iule(g, x + 4, y, 1.12).map(p => [p[0], p[1] + 8, 12]);
+  return ST.araignee(g, x, y, 1.65).map(p => [p[0], p[1], 56]);
+}
+function dessiner(c) {
+  scene.cadre(VUE === 'cle1' ? 111 : 113);
+  const t = B.chrono.t, L = scene.L, K = scene.compact, N = noeuds(L);
+  const centre = k => [N[k].x + N[k].w / 2, N[k].y + (N[k].l.length - 1) * H1 / 2];
+  // la clé, tracée à la craie
+  if (t >= M.cle - 2.4) {
+    ecrit.ecrire(c, 'cle', () => {
+      ['mou', 'arthro'].forEach(k => N[k].l.forEach((s, j) => c.texte(s, N[k].x, N[k].y + j * H1, { couleur: k === 'arthro' && j === 2 ? 'orange' : 'blanc', taille: 17, max: N[k].w, duree: VUE === 'cle1' ? .25 : .12 })));
+      [['mou', ['tentacules', 'anneaux']], ['arthro', ['p15', 'p4_15', 'p4', 'p3']]].forEach(([a, fils]) => fils.forEach(f => {
+        const [xa, ya] = centre(a), yb = centre(f)[1]; c.fleche(N[a].x + N[a].w + 2, ya - 5, N[f].x - 6, yb - 5, { couleur: 'faible', largeur: 1.4, tete: 7 }); }));
+      ['tentacules', 'anneaux', 'p15', 'p4_15', 'p4', 'p3'].forEach(k => {
+        N[k].l.forEach((s, j) => c.texte(s, N[k].x, N[k].y + j * H1, { couleur: 'blanc', taille: 16, max: N[k].w, duree: VUE === 'cle1' ? .25 : .12 }));
+        const yc = centre(k)[1]; c.fleche(N[k].x + N[k].w + 4, yc - 5, N.x3 - 4, yc - 5, { couleur: 'faible', largeur: 1.4, tete: 7 });
+        c.texte(GROUPES[N[k].g], N.x3, yc, { couleur: 'violet', taille: 18, gras: true, max: N.w3, duree: VUE === 'cle1' ? .2 : .12 });
+      });
+    });
+    c.repere('cle', 280, 20, L - 286, 384, 'la clé de détermination');
+  }
+  // l’animal examiné, le chemin qui s’allume, les pattes comptées, le groupe
+  const A = [...ANIMAUX].reverse().find(a => t >= a.t - 1.6);
+  ANIMAUX.forEach(a => {
+    const tg = M[a.id + '_groupe']; if (t < tg - .2) return;
+    if (a.id === 'araignee' && !P.conclusions) return;
+    const k = Object.keys(N).find(q => N[q].g === a.groupe), [, yc] = centre(k);
+    ST.lueur(c, N.x3 - 6, yc - 24, N.w3 + 8, a === A ? 50 : 30, t < tg + 1.2);
+    c.direct(() => c.texte(a.nom, N.x3 + 4, yc + 20, { couleur: 'jaune', taille: 16, max: N.w3 }));
+    c.repere(a.id + '_groupe', N.x3 - 6, yc - 24, N.w3 + 8, 50, MOTIFS[a.id + '_groupe']);
+  });
+  if (A) {
+    const u = doux((t - A.t + 1.6) / 1.2);
+    let pattes = [];
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = u; pattes = dessinerAnimal(g, A, 1, t); g.restore(); });
+    c.direct(() => c.texte(A.nom, 135, 318, { couleur: 'jaune', taille: 22, align: 'center', gras: true }));
+    c.repere(A.id, 20, 90, 230, 240, 'l’animal examiné : ' + A.nom);
+    // le chemin : un nœud puis l’autre
+    A.chemin.forEach((k, i) => { const ti = A.t + .6 + i * 1.2; if (t >= ti && !K) ST.lueur(c, N[k].x - 6, N[k].y - 20, N[k].w + 10, N[k].l.length * H1 + 10, t < ti + 1.2); });
+    if (A.pattes && t >= A.pattes - 2.4) {
+      const pas = A.n > 8 ? .13 : A.n > 4 ? .3 : .5, vus = pattes.slice(0, A.n);
+      const n = ST.compter(c, t, A.pattes - 2.2, pas, vus.map(([x, y, h]) => ({ x: x - 5, y: y - h, w: 10, h: 2 * h })), { dx: -8, dy: -4, taille: 15 });
+      if (n === vus.length) c.direct(() => c.texte(A.id === 'iule' ? 'plus de 15 paires de pattes' : `${A.n} paires de pattes`, 135, 350, { couleur: 'jaune', taille: 19, align: 'center' }));
+      if (M['pattes_' + A.id]) c.repere('pattes_' + A.id, 20, 120, 230, 240, MOTIFS['pattes_' + A.id]);
+    }
+  }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => ({ x: 10, y: 96, w: 250, h: 272 });   // compact : l’animal et ses pattes comptées ; la ligne du bas dit le groupe
+function voir(t) {
+  const m = ['Clé de détermination : corps mou sans pattes (sans anneaux et deux tentacules → mollusques ; avec anneaux sans antennes → annélides) ; carapace et pattes articulées = arthropodes (plus de 15 paires → myriapodes ; 4 à 15 paires, corps plat → crustacés ; 4 paires sans antennes → arachnides ; 3 paires, une paire d’antennes → insectes).'];
+  ANIMAUX.forEach(A => { if (t >= A.t) m.push('Animal examiné : ' + A.nom + '.'); if (A.pattes && t >= A.pattes) m.push(MOTIFS['pattes_' + A.id] || 'iule : plus de 15 paires de pattes'); if (t >= M[A.id + '_groupe'] && (A.id !== 'araignee' || P.conclusions)) m.push(MOTIFS[A.id + '_groupe'] + '.'); });
+  return m.join(' ');
+}
+var B = ST.brancher({ id: 'edaph_cle_' + VUE, titre: 'Classer la faune du sol', M, FIN, motifs: MOTIFS, params: P, vue: VUE,
+  texte: 'Clé de détermination simplifiée de la faune du sol. ' + ANIMAUX.map(A => `${A.nom} → ${GROUPES[A.groupe].toLowerCase()}`).join(' ; ') + '.',
+  voir, depart: 'Un animal, la clé…', fini: () => 'Chaque animal a trouvé son groupe.',
+  setParams: { schema: { conclusions: 'true | false (false : le groupe de l’araignée ne s’allume pas)' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  explication: { [VUE]: ANIMAUX.map(A => ({ repere: A.id + '_groupe', texte: MOTIFS[A.id + '_groupe'] })) } });
+window.Tableau.bulle($('feedback'), 'À quel groupe appartient cet animal ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

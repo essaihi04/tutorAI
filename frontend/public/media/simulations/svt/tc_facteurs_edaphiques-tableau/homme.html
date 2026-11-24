@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’Homme et le sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une colline : déforestation, incendie, surpâturage, puis la pluie emporte le sol nu et le désert avance ; reboisement, terrasses et fixation des dunes ; labour, goutte-à-goutte, engrais et alternance des cultures"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="vivants.js"></script>
+<script>
+/*
+ * Activité 7 : impact de l’Homme sur le sol (recréé ; paysage, arbres, chèvres, outils peints).
+ *  ?vue=degradation (fe_p1_degradation) : une colline boisée ; déforestation, incendie, surpâturage ; la pluie emporte le
+ *     sol nu (érosion, lessivage) ; le désert avance. Moments : foret 2 ; deforestation 5 ; incendie 7,5 ; surpaturage 10 ;
+ *     pluie 12,5 ; erosion 15 ; desertification 18 ; fin 18,5.
+ *  ?vue=protection (fe_p2_protection) : reboisement selon les courbes de niveau, cultures en terrasses ; sous la pluie
+ *     l’eau s’infiltre, le sol reste ; dune fixée par des barrières et des plantes. Moments : colline 2 ; reboisement 5 ;
+ *     terrasses 8 ; pluie 11 ; dune 14 ; fin 15.
+ *  ?vue=fertilite (fe_p3_fertilite) : labour, irrigation goutte-à-goutte, engrais, alternance des cultures.
+ *     Moments : labour 3 ; goutte 7 ; engrais 11 ; alternance 15 ; fin 15,5.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const VUE = ['protection', 'fertilite'].includes(new URLSearchParams(location.search).get('vue')) ? new URLSearchParams(location.search).get('vue') : 'degradation';
+const P = { conclusions: true };
+const CFG = {
+  degradation: { M: { foret: 2, deforestation: 5, incendie: 7.5, surpaturage: 10, pluie: 12.5, erosion: 15, desertification: 18 }, FIN: 18.5,
+    MOTIFS: { foret: 'la forêt couvre et protège le sol', deforestation: 'déforestation : les arbres coupés', incendie: 'incendie de forêt', surpaturage: 'surpâturage : l’herbe mangée', pluie: 'la pluie tombe sur le sol nu', erosion: 'érosion : l’eau emporte le sol', desertification: 'désertification : le sable avance' } },
+  protection: { M: { colline: 2, reboisement: 5, terrasses: 8, pluie: 11, dune: 14 }, FIN: 15,
+    MOTIFS: { colline: 'une colline au sol fragile', reboisement: 'reboisement selon les courbes de niveau', terrasses: 'cultures en terrasses', pluie: 'la pluie s’infiltre, le sol reste', dune: 'une dune fixée : barrières et plantes' } },
+  fertilite: { M: { labour: 3, goutte: 7, engrais: 11, alternance: 15 }, FIN: 15.5,
+    MOTIFS: { labour: 'le labour aère et mélange le sol', goutte: 'le goutte-à-goutte : peu d’eau, pas d’érosion', engrais: 'les engrais apportent des sels minéraux', alternance: 'l’alternance des cultures' } },
+}[VUE];
+const { M, FIN, MOTIFS } = CFG;
+const ap = (k, d = 1.4) => doux((B.chrono.t - M[k] + d) / (d * .9));
+
+/* La colline : surface y(f) pour f de 0 (sommet, à gauche) à 1 (vallée, à droite). */
+const yHaut = f => (f < .62 ? 110 + 190 * doux(f / .62) : 300);
+function colline(g, L, ep, o = {}) {
+  const X = f => f * L, N = 80;
+  // ciel discret, roche puis sol (épaisseur ep, plus mince sur la pente quand il s’érode)
+  g.fillStyle = '#8b8f94'; g.beginPath(); g.moveTo(0, 400); for (let k = 0; k <= N; k++) g.lineTo(X(k / N), yHaut(k / N) + ep(k / N)); g.lineTo(L, 400); g.closePath(); g.fill();
+  const gr = g.createLinearGradient(0, 100, 0, 360); gr.addColorStop(0, '#7a5434'); gr.addColorStop(1, '#5a3b22');
+  g.fillStyle = gr; g.beginPath(); for (let k = 0; k <= N; k++) g.lineTo(X(k / N), yHaut(k / N)); for (let k = N; k >= 0; k--) g.lineTo(X(k / N), yHaut(k / N) + ep(k / N)); g.closePath(); g.fill();
+}
+function degradation(c) {
+  const t = B.chrono.t, L = scene.L, K = scene.compact, X = f => f * L;
+  const er = ap('erosion', 2.4), ds = ap('desertification', 2);
+  c.direct(() => { const g = c.ctx;
+    colline(g, L, f => (f < .62 ? 40 * (1 - er * .75 * Math.sin(Math.PI * Math.min(1, f / .62))) : 40));
+    // les arbres : coupés (à gauche), brûlés (au milieu), puis l’herbe broutée (à droite)
+    const arbres = [.06, .12, .18, .24, .3, .36, .42, .48];
+    arbres.forEach((f, i) => { const x = X(f), y = yHaut(f) + 2;
+      if (i < 3 && t >= M.deforestation - 1) ST.arbre(g, x, y, 70, { coupe: true });
+      else if (i >= 3 && i < 6 && t >= M.incendie - 1.4) { const b = ap('incendie'); ST.arbre(g, x, y, 70, { brule: b }); if (b < 1 || t < M.incendie + 1.5) ST.flamme(g, x, y - 20, 40, t + i, Math.max(0, 1 - doux((t - M.incendie - 1.5) / 1.2))); }
+      else ST.arbre(g, x, y, 70); });
+    if (t >= M.deforestation - 1 && t < M.deforestation + 1) { g.fillStyle = '#d6b27a'; for (let k = 0; k < 3; k++) g.fillRect(X(.04 + k * .06), yHaut(.06 + k * .06) - 8, 40, 7); }
+    const br = ap('surpaturage');
+    for (let k = 0; k < 10; k++) { const f = .52 + k * .045; if (br > 0 && k % 3 !== 0 && f < .9) continue; ST.herbe(g, X(f), yHaut(f), 1.2, { sec: br > .5 }); }
+    if (t >= M.surpaturage - 1.4) for (let k = 0; k < 3; k++) { const f = .56 + k * .09; ST.chevre(g, X(f) + Math.sin(t + k) * 4, yHaut(f), 1, { broute: Math.sin(t * 2 + k) > 0, alpha: br }); }
+    // la pluie et l’eau boueuse qui descend la pente
+    if (t >= M.pluie - 1.4 && t < M.desertification) { const a = ap('pluie'); ST.nuage(g, X(.3), 46, 1.4, a); ST.nuage(g, X(.55), 40, 1.2, a);
+      g.strokeStyle = `rgba(150,200,240,${.7 * a})`; g.lineWidth = 1.4; for (let k = 0; k < 40; k++) { const x = X(.15 + (k % 20) * .025), y = 70 + ((t * 160 + k * 37) % 120); g.beginPath(); g.moveTo(x, y); g.lineTo(x - 3, y + 9); g.stroke(); } }
+    if (er > 0) { g.strokeStyle = `rgba(150,100,55,${.85 * er})`; g.lineWidth = 4; for (let k = 0; k < 4; k++) { g.beginPath(); for (let j = 0; j <= 20; j++) { const f = .1 + k * .04 + j * .026; g.lineTo(X(f), yHaut(f) + 4 + Math.sin(j + t * 3 + k) * 1.5); } g.stroke(); }
+      g.fillStyle = `rgba(122,84,52,${er})`; g.beginPath(); g.ellipse(X(.8), 302, 90 * er, 14 * er, 0, Math.PI, 6.28); g.fill(); }
+    // le désert qui avance
+    if (ds > 0) { const gr = g.createLinearGradient(0, 260, 0, 320); gr.addColorStop(0, '#f2d28a'); gr.addColorStop(1, '#d4a956'); g.fillStyle = gr; g.beginPath(); g.moveTo(L, 300);
+      for (let k = 0; k <= 30; k++) { const f = 1 - k / 30 * .5 * ds; g.lineTo(X(f), 300 - 26 * Math.abs(Math.sin(k * .55)) * ds); } g.lineTo(X(1 - .5 * ds), 302); g.closePath(); g.fill(); }
+  });
+  const lab = (k, s, f, y, coul) => { if (t >= M[k] - .6) { ecrit.ecrire(c, 'l_' + k, () => c.texte(s, X(f), y, { couleur: coul, taille: 19, align: 'center' })); c.repere(k, X(f) - 70, y - 22, 140, 120, MOTIFS[k]); } };
+  if (!K) { lab('deforestation', 'déforestation', .12, 64, 'orange'); lab('incendie', 'incendie', .36, 84, 'rouge'); lab('surpaturage', 'surpâturage', .66, 220, 'jaune');
+    lab('erosion', 'érosion : le sol part', .28, 380, 'orange'); lab('desertification', 'désertification', .82, 380, 'jaune'); }
+  else ['deforestation', 'incendie', 'surpaturage', 'erosion', 'desertification'].forEach(k => { if (t >= M[k] - .6) c.repere(k, 0, 0, L, 400, MOTIFS[k]); });
+  c.repere('foret', 0, 60, X(.6), 200, MOTIFS.foret);
+  if (t >= M.pluie - .6) c.repere('pluie', X(.1), 20, X(.6), 160, MOTIFS.pluie);
+}
+function protection(c) {
+  const t = B.chrono.t, L = scene.L, K = scene.compact, X = f => f * L;
+  const ter = ap('terrasses', 1.8), dn = ap('dune', 1.6);
+  c.direct(() => { const g = c.ctx;
+    colline(g, L, () => 40);
+    // les terrasses : des marches sur le bas de la pente, avec des cultures
+    if (ter > 0) for (let k = 0; k < 5; k++) { const f0 = .36 + k * .05, f1 = f0 + .05, y = yHaut(f0) + 2;
+      g.save(); g.globalAlpha = ter; g.fillStyle = '#6a4a2e'; g.beginPath(); g.moveTo(X(f0), y); g.lineTo(X(f1), y); g.lineTo(X(f1), yHaut(f1)); g.lineTo(X(f0), yHaut(f1)); g.closePath(); g.fill();
+      g.strokeStyle = '#c8b38a'; g.lineWidth = 2; g.beginPath(); g.moveTo(X(f1), y); g.lineTo(X(f1), yHaut(f1)); g.stroke();
+      for (let j = 0; j < 3; j++) ST.herbe(g, X(f0) + 8 + j * (X(f1) - X(f0) - 12) / 2, y, 1.1); g.restore(); }
+    // le reboisement en lignes (courbes de niveau) sur le haut de la pente
+    const rb = ap('reboisement', 1.8);
+    if (rb > 0) [.04, .09, .14, .19, .24, .29].forEach((f, i) => { g.save(); g.globalAlpha = rb; ST.arbre(g, X(f), yHaut(f) + 2, 44 * Math.min(1, rb + .2)); g.restore(); });
+    if (rb > 0) { g.strokeStyle = `rgba(250,204,21,${.6 * rb})`; g.setLineDash([6, 6]); g.lineWidth = 1.5; [.08, .18, .28].forEach(f => { g.beginPath(); g.moveTo(X(f) - 40, yHaut(f)); g.lineTo(X(f) + 40, yHaut(f)); g.stroke(); }); g.setLineDash([]); }
+    // la pluie : l’eau s’infiltre (gouttes qui entrent dans le sol)
+    if (t >= M.pluie - 1.4) { const a = ap('pluie'); ST.nuage(g, X(.22), 46, 1.3, a); ST.nuage(g, X(.42), 40, 1.1, a);
+      for (let k = 0; k < 14; k++) { const f = .08 + k * .03, y0 = yHaut(f), u = (t * .8 + k * .13) % 1; ST.goutte(g, X(f), mix(80, y0 + 30, u), 3, a * (u < .8 ? 1 : (1 - u) * 5)); } }
+    // la dune fixée (dans la vallée) : barrières et plantes
+    if (dn > 0) { const x0 = X(.7), x1 = L - 10; const gr = g.createLinearGradient(0, 230, 0, 300); gr.addColorStop(0, '#f2d28a'); gr.addColorStop(1, '#d4a956'); g.save(); g.globalAlpha = dn; g.fillStyle = gr;
+      g.beginPath(); g.moveTo(x0, 300); g.quadraticCurveTo((x0 + x1) / 2, 210, x1, 300); g.closePath(); g.fill();
+      g.strokeStyle = '#8a6a3e'; g.lineWidth = 3; for (let k = 0; k < 7; k++) { const x = x0 + 30 + k * (x1 - x0 - 60) / 6, y = 300 - 82 * Math.sin(Math.PI * (x - x0) / (x1 - x0)) * .5 - 8; g.beginPath(); g.moveTo(x, y + 6); g.lineTo(x, y - 16); g.stroke(); }
+      for (let k = 0; k < 6; k++) { const x = x0 + 46 + k * (x1 - x0 - 90) / 5, y = 300 - 82 * Math.sin(Math.PI * (x - x0) / (x1 - x0)) * .5 - 2; ST.herbe(g, x, y, 1.3); } g.restore(); }
+  });
+  const lab = (k, s, x, y, coul) => { if (t >= M[k] - .6) { if (!K) ecrit.ecrire(c, 'l_' + k, () => c.texte(s, x, y, { couleur: coul, taille: 19, align: 'center' })); c.repere(k, x - 90, y - 24, 180, 140, MOTIFS[k]); } };
+  lab('reboisement', 'reboisement', X(.17), 92, 'vert'); lab('terrasses', 'terrasses', X(.46), 380, 'jaune'); lab('pluie', 'l’eau s’infiltre', X(.17), 380, 'cyan'); lab('dune', 'dune fixée', X(.85), 200, 'orange');
+  c.repere('colline', 0, 100, X(.62), 240, MOTIFS.colline);
+}
+function tracteur(g, x, y, k) { g.save(); g.translate(x, y); g.scale(k, k);
+  g.fillStyle = '#c0392b'; g.fillRect(-30, -34, 46, 22); g.fillStyle = '#a93226'; g.fillRect(-6, -54, 22, 22); g.fillStyle = 'rgba(200,230,255,.7)'; g.fillRect(-2, -50, 14, 12);
+  for (const [px, r] of [[-20, 18], [26, 11]]) { g.fillStyle = '#1f1f1f'; g.beginPath(); g.arc(px, -12 + (18 - r) * .0, r, 0, 6.28); g.fill(); g.fillStyle = '#888'; g.beginPath(); g.arc(px, -12, r * .4, 0, 6.28); g.fill(); }
+  g.strokeStyle = '#666'; g.lineWidth = 3; g.beginPath(); g.moveTo(-34, -20); g.lineTo(-58, -6); g.lineTo(-62, 6); g.stroke(); g.restore(); }
+function fertilite(c) {
+  const t = B.chrono.t, L = scene.L, K = scene.compact, w = Math.min(176, (L - 50) / 4), y0 = 70, h = 230;
+  const PAN = [['labour', 'Labour', ['aère, mélange', 'les constituants']], ['goutte', 'Goutte-à-goutte', ['peu d’eau,', 'pas d’érosion']], ['engrais', 'Engrais', ['des sels minéraux', 'pour les plantes']], ['alternance', 'Alternance', ['changer de culture', 'chaque année']]];
+  PAN.forEach(([k, titre, lignes], i) => {
+    const x = 10 + i * (w + 10); if (t < M[k] - 3) return;
+    const u = doux((t - M[k] + 3) / 2.8), ys = y0 + 120;
+    c.direct(() => { const g = c.ctx; g.save(); g.beginPath(); g.rect(x, y0, w, h); g.clip();
+      const gr = g.createLinearGradient(0, ys, 0, y0 + h); gr.addColorStop(0, '#7a5434'); gr.addColorStop(1, '#4a301c'); g.fillStyle = gr; g.fillRect(x, ys, w, y0 + h - ys);
+      if (k === 'labour') { const xt = mix(x - 30, x + w - 30, u); tracteur(g, xt, ys, .9); g.strokeStyle = '#3a2414'; g.lineWidth = 3; for (let j = 0; j < 5; j++) { g.beginPath(); for (let q = 0; q <= 10; q++) { const px = x + q * w / 10; if (px < xt - 50) g.lineTo(px, ys + 8 + j * 14 + Math.sin(q + j) * 3); } g.stroke(); }
+        for (let j = 0; j < 8; j++) if (x + 10 + j * 20 < xt - 50) ST.bulle(g, x + 12 + j * 20, ys + 20 + (j % 3) * 18, 4); }
+      else if (k === 'goutte') { g.strokeStyle = '#111'; g.lineWidth = 5; g.beginPath(); g.moveTo(x, ys - 6); g.lineTo(x + w, ys - 6); g.stroke();
+        for (let j = 0; j < 4; j++) { const px = x + 24 + j * (w - 40) / 3; ST.plante(g, px, ys, 46); const f = (t * .9 + j * .25) % 1; ST.goutte(g, px + 8, ys - 4 + f * 20, 3, u * (1 - f)); g.fillStyle = `rgba(60,150,210,${.35 * u})`; g.beginPath(); g.ellipse(px + 8, ys + 14, 14, 8, 0, 0, 6.28); g.fill(); } }
+      else if (k === 'engrais') { for (let j = 0; j < 3; j++) ST.plante(g, x + 30 + j * (w - 50) / 2, ys, 56);
+        const rr = ST.graine(4); for (let j = 0; j < 22; j++) { const f = (t * .6 + rr()) % 1, px = x + 10 + rr() * (w - 20); g.fillStyle = '#e0f2fe'; g.globalAlpha = u; g.beginPath(); g.arc(px, mix(y0 + 10, ys + 30, f), 3, 0, 6.28); g.fill(); }
+        g.globalAlpha = 1; for (let j = 0; j < 4; j++) ST.ion(g, x + 24 + j * (w - 40) / 3, ys + 50, ['K+', 'Ca2+', 'Mg2+', 'K+'][j], { r: 9, alpha: u }); }
+      else { ['blé', 'fève', 'blé'].forEach((cu, j) => { const px = x + 6 + j * (w - 12) / 3, pw = (w - 12) / 3 - 4, a = doux((t - M[k] + 3 - j * .8) / .8); g.globalAlpha = a;
+          for (let q = 0; q < 3; q++) { const sx = px + 8 + q * (pw - 16) / 2; if (cu === 'blé') { g.strokeStyle = '#e8c35a'; g.lineWidth = 2; g.beginPath(); g.moveTo(sx, ys); g.lineTo(sx, ys - 44); g.stroke(); g.fillStyle = '#e8b830'; g.beginPath(); g.ellipse(sx, ys - 50, 3.5, 9, 0, 0, 6.28); g.fill(); } else ST.plante(g, sx, ys, 34); }
+          g.globalAlpha = 1; }); }
+      g.restore(); g.strokeStyle = 'rgba(226,232,240,.5)'; g.lineWidth = 1.5; g.strokeRect(x, y0, w, h); });
+    ecrit.ecrire(c, 't' + i, () => c.texte(titre, x + w / 2, 52, { couleur: 'jaune', taille: 19, align: 'center', max: w }));
+    if (k === 'alternance') ['année 1', 'année 2', 'année 3'].forEach((s, j) => { if (t >= M[k] - 3 + j * .8) ecrit.ecrire(c, 'a' + j, () => c.texte(String(j + 1), x + 6 + j * (w - 12) / 3 + (w - 12) / 6 - 2, y0 + 24, { couleur: 'blanc', taille: 17, align: 'center' })); });
+    if (!K) ecrit.ecrire(c, 'l' + i, () => lignes.forEach((l, q) => c.texte(l, x + w / 2, y0 + h + 30 + q * 24, { couleur: 'vert', taille: 17, align: 'center', max: w + 8 })));
+    if (t >= M[k] - .3) ST.lueur(c, x, y0, w, h, t < M[k] + .9);
+    c.repere(k, x, 30, w, h + 90, MOTIFS[k]);
+  });
+}
+function dessiner(c) { scene.cadre({ degradation: 161, protection: 163, fertilite: 165 }[VUE]); ({ degradation, protection, fertilite })[VUE](c); return c.fin(); }
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => {
+  if (VUE !== 'fertilite') return { x: 0, y: 20, w: L, h: 380 };
+  const t = B ? B.chrono.t : 0, w = Math.min(176, (L - 50) / 4), ks = ['labour', 'goutte', 'engrais', 'alternance'], i = Math.max(0, ks.filter(k => t >= M[k] - 3).length - 1);
+  return { x: 4 + i * (w + 10), y: 28, w: w + 12, h: 276 };
+};
+function voir(t) { return Object.keys(M).filter(k => t >= M[k]).map(k => MOTIFS[k]).join(' ; ') || 'Un paysage.'; }
+var B = ST.brancher({ id: 'edaph_homme_' + VUE, titre: { degradation: 'La dégradation du sol', protection: 'Protéger le sol', fertilite: 'Améliorer la fertilité du sol' }[VUE], M, FIN, motifs: MOTIFS, params: P, vue: VUE,
+  texte: { degradation: 'Le couvert végétal protège le sol ; la déforestation, les incendies et le surpâturage le détruisent ; sous la pluie, le sol nu est emporté (érosion, lessivage) ; la biodiversité s’appauvrit et le désert avance (désertification).',
+    protection: 'Le reboisement (selon les courbes de niveau) et les cultures en terrasses limitent l’érosion : la pluie s’infiltre ; dans les régions désertiques, des barrières et des plantes fixent les dunes.',
+    fertilite: 'Améliorer la fertilité : le labour aère et mélange le sol (meilleure rétention de l’eau) ; le goutte-à-goutte limite l’érosion ; les engrais apportent les sels minéraux ; l’alternance des cultures augmente la fertilité.' }[VUE],
+  voir, depart: 'Observe…', fini: () => ({ degradation: 'Un sol nu se dégrade vite.', protection: 'Le sol est protégé.', fertilite: 'Un sol plus fertile.' }[VUE]),
+  explication: { [VUE]: Object.keys(M).map(k => ({ repere: k, texte: MOTIFS[k] })) } });
+window.Tableau.bulle($('feedback'), { degradation: 'Qu’est-ce qui abîme le sol ?', protection: 'Comment protéger le sol ?', fertilite: 'Comment rendre le sol plus fertile ?' }[VUE]);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

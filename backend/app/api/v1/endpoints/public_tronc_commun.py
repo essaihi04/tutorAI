@@ -226,7 +226,7 @@ async def answer_reaction(body: cp.AnswerReactionRequest, request: Request, x_el
 #: 23/11/2026 : les classes de Tronc Commun sciences BIOF ; l'élève ne tape que le numéro (« 12 » → « TCSF 12 »)
 PREFIXE_CLASSE = "TCSF"
 #: nombre de diapositives de chaque cours (quand la page ne l'a pas encore envoyé)
-TOTAUX = {"tc_svt_sortie_ecologique": 35, "tc_svt_facteurs_edaphiques": 34, "tc_svt_revision": 15}
+TOTAUX = {"tc_svt_sortie_ecologique": 35, "tc_svt_facteurs_edaphiques": 55, "tc_svt_revision": 15}
 #: l'évaluation s'ouvre quand la révision OU un des deux cours est parcouru à ce point (diapositives vues / total)
 SEUIL_OUVERTURE = 0.8
 

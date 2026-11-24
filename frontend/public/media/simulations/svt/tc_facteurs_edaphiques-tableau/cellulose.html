@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La microflore du sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux boîtes de Pétri avec une rondelle de papier cellulose, sur un sol stérilisé et sur un sol non stérilisé, trois semaines dans l’étuve ; puis les champignons et les bactéries qui décomposent les feuilles mortes"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="vivants.js"></script>
+<script>
+/*
+ * Activité 5, doc 3 : la microflore du sol (recréé ; boîtes, papier, feuilles, champignons et bactéries peints).
+ *  ?vue=petri (fe_v6_cellulose) : boîte 1 = sol humide stérilisé (chauffé à 100 °C) ; boîte 2 = sol humide non stérilisé ;
+ *     une rondelle de papier cellulose sur chacun ; étuve à 30 °C, 3 semaines (comptées en s’allumant) ; la boîte 2 se
+ *     troue peu à peu, la boîte 1 reste intacte. Moments : sol 2 ; sterilise 4 ; papier 6 ; etuve 8 ; semaine1 10 ;
+ *     semaine2 11,5 ; semaine3 13 ; resultat 14,5 ; conclusion 16,5 ; fin 17.
+ *  ?vue=microflore (fe_v7_decomposeurs) : feuille morte envahie par le mycélium (champignons), zoom : les filaments
+ *     entrent par un stomate ; feuille rongée par les bactéries jusqu’aux nervures, zoom : les bactéries ; conclusion :
+ *     des décomposeurs. Moments : feuille 2 ; mycelium 5 ; zoom_champ 8 ; bacteries 11 ; zoom_bact 13,5 ; nervures 15,5 ;
+ *     decomposeurs 18 ; fin 18,5.
+ * set_parameters {conclusions:false} : la conclusion ne s’écrit pas (question ouverte).
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const VUE = new URLSearchParams(location.search).get('vue') === 'microflore' ? 'microflore' : 'petri';
+const P = { conclusions: true };
+const CFG = VUE === 'petri' ? { M: { sol: 2, sterilise: 4, papier: 6, etuve: 8, semaine1: 10, semaine2: 11.5, semaine3: 13, resultat: 14.5, conclusion: 16.5 }, FIN: 17,
+  MOTIFS: { sol: 'deux boîtes de Pétri, du sol humide', sterilise: 'boîte 1 : sol stérilisé à 100 °C', papier: 'une rondelle de papier cellulose', etuve: 'dans l’étuve, à 30 °C', semaine1: 'semaine 1', semaine2: 'semaine 2', semaine3: 'semaine 3',
+    resultat: 'boîte 1 intacte ; boîte 2 trouée', conclusion: 'des êtres vivants du sol ont décomposé la cellulose' } }
+  : { M: { feuille: 2, mycelium: 5, zoom_champ: 8, bacteries: 11, zoom_bact: 13.5, nervures: 15.5, decomposeurs: 18 }, FIN: 18.5,
+  MOTIFS: { feuille: 'des feuilles mortes de la litière', mycelium: 'les champignons : le mycélium', zoom_champ: 'au microscope : les filaments entrent par un stomate', bacteries: 'les bactéries', zoom_bact: 'au microscope : des bactéries très nombreuses',
+    nervures: 'il ne reste que les nervures', decomposeurs: 'champignons et bactéries : des décomposeurs' } };
+const { M, FIN, MOTIFS } = CFG;
+function solHumide(g, x, y, r) { const gr = g.createRadialGradient(x - r * .3, y - r * .3, 4, x, y, r); gr.addColorStop(0, '#7a5434'); gr.addColorStop(1, '#4a301c'); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r);
+  const rr = ST.graine(Math.round(x)); for (let i = 0; i < 260; i++) { g.fillStyle = rr() > .5 ? 'rgba(30,18,8,.4)' : 'rgba(200,160,110,.25)'; g.fillRect(x - r + rr() * 2 * r, y - r + rr() * 2 * r, 2, 2); } }
+function papier(g, x, y, r, deg) {
+  g.save(); g.beginPath(); g.arc(x, y, r, 0, 6.28); g.clip();
+  g.fillStyle = '#f1ede2'; g.fillRect(x - r, y - r, 2 * r, 2 * r);
+  const rr = ST.graine(3); g.strokeStyle = 'rgba(180,170,150,.5)'; g.lineWidth = .8; for (let i = 0; i < 60; i++) { const a = rr() * 6.28, cx = x + (rr() - .5) * 2 * r, cy = y + (rr() - .5) * 2 * r; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * 9, cy + Math.sin(a) * 9); g.stroke(); }
+  if (deg > 0) { const r2 = ST.graine(11); for (let i = 0; i < Math.round(deg * 26); i++) { const cx = x + (r2() - .5) * 1.7 * r, cy = y + (r2() - .5) * 1.7 * r, rad = 4 + r2() * 9 * deg;
+      g.fillStyle = 'rgba(70,55,25,.75)'; g.beginPath(); g.arc(cx, cy, rad + 3, 0, 6.28); g.fill(); g.save(); g.beginPath(); g.arc(cx, cy, rad, 0, 6.28); g.clip(); g.fillStyle = '#4a301c'; g.fillRect(cx - rad, cy - rad, 2 * rad, 2 * rad); g.restore(); } }
+  g.restore();
+}
+/* ───────── petri ───────── */
+function petriVue(c) {
+  const t = B.chrono.t, L = scene.L, K = scene.compact, R = 92, yc = 206, X1 = Math.min(200, L * .26), X2 = X1 + 290;
+  const deg = doux((t - M.semaine1 + 1) / (M.semaine3 - M.semaine1 + 1.2));
+  [[X1, 'Boîte 1 : sol stérilisé', '(chauffé à 100 °C)', 1], [X2, 'Boîte 2 : sol non stérilisé', '(vivant)', 2]].forEach(([x, l1, l2, n]) => {
+    c.direct(() => ST.petri(c.ctx, x, yc, R, g => { if (t >= M.sol - 1.6) { g.globalAlpha = doux((t - M.sol + 1.6) / 1.2); solHumide(g, x, yc, R); g.globalAlpha = 1; }
+      if (t >= M.papier - 1.4) { g.globalAlpha = doux((t - M.papier + 1.4) / 1); papier(g, x, yc, R * .72, n === 2 ? deg : 0); g.globalAlpha = 1; } }));
+    c.texte(l1, x, 30, { couleur: n === 1 ? 'orange' : 'vert', taille: 19, align: 'center' });
+    if (!K) c.texte(l2, x, 54, { couleur: 'faible', taille: 17, align: 'center' });
+    c.repere('boite' + n, x - R, yc - R, 2 * R, 2 * R, l1);
+  });
+  // la stérilisation de la boîte 1 : chauffée à 100 °C
+  if (t >= M.sterilise - 1.4 && t < M.etuve) { const a = 1 - doux((t - M.sterilise - 1.2) / 1); c.direct(() => { for (let k = -2; k <= 2; k++) ST.flamme(c.ctx, X1 + k * 26, yc + R + 26, 30, t + k, a); }); }
+  if (t >= M.sterilise - .4) ecrit.ecrire(c, 'cent', () => c.texte('100 °C', X1 - R - 6, yc + R + 4, { couleur: 'orange', taille: 18, align: 'right' }));
+  // l’étuve à 30 °C
+  if (t >= M.etuve - 1.4) { ecrit.ecrire(c, 'etuve', () => { c.rect(X1 - R - 30, 68, X2 - X1 + 2 * R + 60, 262, { couleur: 'blanc', largeur: 2.2, fond: 'orange', fondAlpha: .06 }); c.texte('Étuve : 30 °C', X1 - R - 20, 92, { couleur: 'orange', taille: 18 }); });
+    c.repere('etuve', X1 - R - 30, 68, X2 - X1 + 2 * R + 60, 262, 'l’étuve à 30 °C'); }
+  // trois semaines, comptées en s’allumant
+  const xs = X2 + R + 50;
+  if (t >= M.semaine1 - .6) {
+    const bx = [0, 1, 2].map(i => ({ x: xs, y: 110 + i * 56, w: Math.min(150, L - xs - 20), h: 40 }));
+    bx.forEach((b, i) => { if (t >= M['semaine' + (i + 1)] - .6) { ecrit.ecrire(c, 's' + i, () => c.texte('semaine ' + (i + 1), b.x + 10, b.y + 27, { couleur: 'jaune', taille: 19 })); ST.lueur(c, b.x, b.y, b.w, b.h, t < M['semaine' + (i + 1)] + .9); c.repere('semaine' + (i + 1), b.x, b.y, b.w, b.h, 'semaine ' + (i + 1)); } });
+  }
+  if (t >= M.resultat - .8) {
+    ecrit.ecrire(c, 'res', () => { c.texte('papier intact', X1, 360, { couleur: 'blanc', taille: 19, align: 'center' }); c.texte('papier troué, décomposé', X2, 360, { couleur: 'orange', taille: 19, align: 'center' }); });
+    ST.lueur(c, X2 - R, yc - R, 2 * R, 2 * R, t < M.resultat + 1.2);
+    c.repere('resultat', X1 - R, 340, X2 - X1 + 2 * R, 28, MOTIFS.resultat);
+  }
+  if (t >= M.conclusion - 1 && P.conclusions && !K) { ecrit.ecrire(c, 'concl', () => c.texte('Des êtres vivants du sol (tués à 100 °C) ont décomposé la cellulose.', (X1 + X2) / 2, 400, { couleur: 'vert', taille: 19, align: 'center', max: L - 30 })); c.repere('conclusion', 20, 382, L - 40, 26, MOTIFS.conclusion); }
+}
+/* ───────── microflore ───────── */
+function zoom(g, x, y, r, peindre) { g.save(); g.beginPath(); g.arc(x, y, r, 0, 6.28); g.clip(); peindre(g); g.restore(); g.strokeStyle = 'rgba(56,189,248,.9)'; g.lineWidth = 3; g.beginPath(); g.arc(x, y, r, 0, 6.28); g.stroke(); }
+function microflore(c) {
+  const t = B.chrono.t, L = scene.L, K = scene.compact, xa = Math.min(200, L * .26), xb = xa + 330, yf = 132, yz = 314, rz = 64;
+  const uf = doux((t - M.feuille + 1.6) / 1.2), um = doux((t - M.mycelium + 2) / 2.4), ub = doux((t - M.bacteries + 1.6) / 1.2), un = doux((t - M.zoom_bact) / (M.nervures - M.zoom_bact));
+  c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = uf;
+    ST.feuilleMorte(g, xa, yf, 3.2, { angle: -.15, graine: 2, couleur: '#c48a3a' }); if (um > 0) ST.mycelium(g, xa - 10, yf, 150, um, { graine: 4 });
+    g.restore();
+    if (ub > 0) { g.save(); g.globalAlpha = ub; if (un < 1) ST.feuilleMorte(g, xb, yf, 3.2, { angle: .12, graine: 6, couleur: '#b98038', trous: .3 + un * .7 }); ST.feuilleMorte(g, xb, yf, 3.2, { angle: .12, nervures: true, alpha: un }); g.restore(); }
+  });
+  c.texte('Feuille envahie par des champignons', xa, 38, { couleur: 'blanc', taille: 18, align: 'center', max: 300 });
+  c.repere('feuille', xa - 100, 60, 200, 140, 'une feuille morte de la litière');
+  if (t >= M.mycelium - .4) { if (!K) ecrit.ecrire(c, 'myc', () => c.texte('mycélium (filaments blancs)', xa, 228, { couleur: 'blanc', taille: 17, align: 'center' })); c.repere('mycelium', xa - 100, 60, 200, 150, MOTIFS.mycelium); }
+  if (t >= M.zoom_champ - 1.4) {
+    const u = doux((t - M.zoom_champ + 1.4) / 1.2);
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = u; zoom(g, xa, yz, rz, g => {
+      g.fillStyle = '#3f9b86'; g.fillRect(xa - rz, yz - rz, 2 * rz, 2 * rz);
+      for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) { g.fillStyle = 'rgba(160,230,200,.45)'; g.beginPath(); g.ellipse(xa + i * 24 + (j % 2) * 12, yz + j * 18, 11, 8, 0, 0, 6.28); g.fill(); }
+      g.fillStyle = '#1e5a4c'; g.beginPath(); g.ellipse(xa + 6, yz + 10, 10, 5, 0, 0, 6.28); g.fill();
+      g.strokeStyle = '#f0ead6'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(xa - rz, yz - 30); g.quadraticCurveTo(xa - 10, yz - 20, xa + 6, yz + 8); g.moveTo(xa - 20, yz - rz); g.quadraticCurveTo(xa + 10, yz - 20, xa + rz, yz - 10); g.stroke();
+    }); g.restore(); });
+    if (!K) ecrit.ecrire(c, 'zc', () => { c.texte('les filaments entrent', xa + rz + 14, yz - 4, { couleur: 'cyan', taille: 16 }); c.texte('par un stomate', xa + rz + 14, yz + 18, { couleur: 'cyan', taille: 16 }); });
+    c.repere('zoom_champ', xa - rz, yz - rz, 2 * rz, 2 * rz, MOTIFS.zoom_champ);
+  }
+  if (t >= M.bacteries - 1.6) { c.texte('Feuille rongée par des bactéries', xb, 38, { couleur: 'blanc', taille: 18, align: 'center', max: 300 }); c.repere('bacteries', xb - 100, 60, 200, 140, MOTIFS.bacteries); }
+  if (t >= M.zoom_bact - 1.4) {
+    const u = doux((t - M.zoom_bact + 1.4) / 1.2), nb = Math.round(8 + 52 * doux((t - M.zoom_bact + 1) / 3));
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = u; zoom(g, xb, yz, rz, g => { g.fillStyle = '#6b6058'; g.fillRect(xb - rz, yz - rz, 2 * rz, 2 * rz); const rr = ST.graine(21);
+      for (let i = 0; i < nb; i++) ST.bacterie(g, xb + (rr() - .5) * 2 * rz, yz + (rr() - .5) * 2 * rz, 1, rr() * 3); }); g.restore(); });
+    if (!K) ecrit.ecrire(c, 'zb', () => { c.texte('bactéries :', xb + rz + 14, yz - 4, { couleur: 'cyan', taille: 16 }); c.texte('très nombreuses', xb + rz + 14, yz + 18, { couleur: 'cyan', taille: 16 }); });
+    c.repere('zoom_bact', xb - rz, yz - rz, 2 * rz, 2 * rz, MOTIFS.zoom_bact);
+  }
+  if (t >= M.nervures - .6) { if (!K) ecrit.ecrire(c, 'nerv', () => c.texte('il ne reste que les nervures', xb, 228, { couleur: 'blanc', taille: 17, align: 'center' })); c.repere('nervures', xb - 100, 60, 200, 150, MOTIFS.nervures); }
+  if (t >= M.decomposeurs - 1 && P.conclusions && !K) {
+    ecrit.ecrire(c, 'dec', () => c.texte('Microflore = champignons + bactéries : des décomposeurs.', (xa + xb) / 2, 404, { couleur: 'vert', taille: 19, align: 'center', max: L - 30 }));
+    c.repere('decomposeurs', 20, 386, L - 40, 26, MOTIFS.decomposeurs);
+  }
+}
+function dessiner(c) { scene.cadre(VUE === 'petri' ? 121 : 123); VUE === 'petri' ? petriVue(c) : microflore(c); return c.fin(); }
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => {
+  const t = B ? B.chrono.t : 0;
+  if (VUE === 'petri') { const X1 = Math.min(200, L * .26); return t >= M.semaine1 - .6 && t < M.resultat - .8 ? { x: X1 + 290 - 100, y: 10, w: Math.min(L, X1 + 290 + 92 + 220) - (X1 + 190), h: 310 } : { x: X1 - 130, y: 10, w: 580, h: 360 }; }
+  const xa = Math.min(200, L * .26); return t >= M.bacteries - 1.6 ? { x: xa + 330 - 160, y: 14, w: 320, h: 370 } : { x: xa - 160, y: 14, w: 320, h: 370 };
+};
+function voir(t) { return Object.keys(M).filter(k => t >= M[k] && (!['conclusion', 'decomposeurs'].includes(k) || P.conclusions)).map(k => MOTIFS[k]).join(' ; ') || 'Rien encore.'; }
+var B = ST.brancher({ id: 'edaph_cellulose_' + VUE, titre: VUE === 'petri' ? 'Le papier cellulose sur deux sols' : 'Champignons et bactéries', M, FIN, motifs: MOTIFS, params: P, vue: VUE,
+  texte: VUE === 'petri' ? 'Boîte 1 : sol humide stérilisé à 100 °C ; boîte 2 : sol humide non stérilisé ; papier cellulose ; étuve à 30 °C pendant 3 semaines. Boîte 1 : papier intact ; boîte 2 : papier troué, décomposé par des êtres vivants du sol.'
+    : 'Les champignons (mycélium, filaments blancs) pénètrent les feuilles par les stomates et les digèrent en partie ; les bactéries, très nombreuses, détruisent presque toute la feuille, sauf les nervures. Champignons et bactéries forment la microflore : des décomposeurs.',
+  voir, depart: 'Observe…', fini: () => (VUE === 'petri' ? 'Seul le papier du sol vivant est décomposé.' : 'Des décomposeurs.'),
+  setParams: { schema: { conclusions: 'true | false' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  explication: { [VUE]: Object.keys(M).map(k => ({ repere: k, texte: MOTIFS[k] })) } });
+window.Tableau.bulle($('feedback'), VUE === 'petri' ? 'Que devient le papier ?' : 'Qui décompose les feuilles ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

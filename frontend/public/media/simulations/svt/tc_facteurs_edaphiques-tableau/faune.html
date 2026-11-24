@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La faune du sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La faune du sol : quatre groupes selon la taille ; l’appareil de Berlese qui chasse les petits animaux de la litière vers l’alcool ; la récolte observée à la loupe"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="vivants.js"></script>
+<script>
+/*
+ * Activité 5, doc 1 : la faune du sol (recréé : pas de photocopie ; animaux et appareil peints).
+ *  ?vue=tailles (fe_v1_tailles) : quatre groupes selon la taille : microfaune (moins de 200 µm, nématode), mésofaune
+ *     (200 µm à 4 mm, acarien), macrofaune (4 mm à 10 cm, cloporte, ver de terre), mégafaune (plus de 10 cm, lièvre).
+ *     (Le document écrit 0,2 mm : dit 200 µm, sans virgule.) Moments : axe 2 ; micro 5 ; meso 8 ; macro 11 ; mega 14 ; fin 14,5.
+ *  ?vue=berlese (fe_v2_berlese) : le montage de Berlese, puis la lampe chauffe et éclaire ; les animaux fuient vers le bas
+ *     et tombent dans l’alcool à 70°. Moments : support 1,5 ; entonnoir 3,5 ; litiere 5,5 ; alcool 7,5 ; lampe 10 ;
+ *     fuite 13 ; chute 16 ; fin 16,5.
+ *  ?vue=recolte (fe_v3_recolte) : la récolte dans une boîte de Pétri, à la loupe ; acariens 700 à 40 000 par m²,
+ *     nématodes 1 000 000 par m². Moments : boite 2 ; animaux 4,5 ; acariens 8 ; nematodes 11 ; biodiversite 14 ; fin 14,5.
+ * set_parameters {conclusions:false} : la phrase de conclusion ne s’écrit pas.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const VUE = ['berlese', 'recolte'].includes(new URLSearchParams(location.search).get('vue')) ? new URLSearchParams(location.search).get('vue') : 'tailles';
+const P = { conclusions: true };
+const CFG = {
+  tailles: { M: { axe: 2, micro: 5, meso: 8, macro: 11, mega: 14 }, FIN: 14.5,
+    MOTIFS: { axe: 'la taille des animaux du sol', micro: 'microfaune : moins de 200 µm', meso: 'mésofaune : de 200 µm à 4 mm', macro: 'macrofaune : de 4 mm à 10 cm', mega: 'mégafaune : plus de 10 cm' } },
+  berlese: { M: { support: 1.5, entonnoir: 3.5, litiere: 5.5, alcool: 7.5, lampe: 10, fuite: 13, chute: 16 }, FIN: 16.5,
+    MOTIFS: { support: 'le support', entonnoir: 'l’entonnoir, entouré d’un cache noir', litiere: 'le sol et la litière sur un filet', alcool: 'un flacon d’alcool à 70°', lampe: 'la lampe éclaire et chauffe', fuite: 'les animaux fuient vers le bas', chute: 'ils tombent dans l’alcool' } },
+  recolte: { M: { boite: 2, animaux: 4.5, acariens: 8, nematodes: 11, biodiversite: 14 }, FIN: 14.5,
+    MOTIFS: { boite: 'la récolte dans une boîte de Pétri', animaux: 'à la loupe : de très petits animaux', acariens: 'acariens : de 700 à 40 000 par m²', nematodes: 'nématodes : 1 000 000 par m²', biodiversite: 'une grande biodiversité, surtout de petits animaux' } },
+}[VUE];
+const { M, FIN, MOTIFS } = CFG;
+const milliers = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+/* ───────── tailles ───────── */
+const GROUPES = [
+  { id: 'micro', nom: 'Microfaune', taille: 'moins de 200 µm', ex: 'nématode', voir: 'au microscope', coul: 'cyan' },
+  { id: 'meso', nom: 'Mésofaune', taille: '200 µm à 4 mm', ex: 'acarien', voir: 'à la loupe', coul: 'vert' },
+  { id: 'macro', nom: 'Macrofaune', taille: '4 mm à 10 cm', ex: 'cloporte, ver de terre', voir: 'à l’œil nu', coul: 'jaune' },
+  { id: 'mega', nom: 'Mégafaune', taille: 'plus de 10 cm', ex: 'lièvre, campagnol', voir: 'à l’œil nu', coul: 'orange' },
+];
+const LARG = 184, XG = i => 12 + i * (LARG + 4);
+function tailles(c) {
+  const t = B.chrono.t, K = scene.compact;
+  if (t >= M.axe - 1.5) ecrit.ecrire(c, 'axe', () => { c.fleche(12, 372, 12 + 4 * (LARG + 4), 372, { couleur: 'blanc', largeur: 2 }); c.texte('taille de l’animal', 12 + 4 * (LARG + 4) - 4, 400, { couleur: 'blanc', taille: 17, align: 'right' }); });
+  ['200 µm', '4 mm', '10 cm'].forEach((s, i) => { if (t >= M.axe) ecrit.ecrire(c, 'g' + i, () => { c.ligne(XG(i + 1) - 2, 364, XG(i + 1) - 2, 380, { couleur: 'blanc', largeur: 2 }); c.texte(s, XG(i + 1) - 2, 400, { couleur: 'blanc', taille: 17, align: 'center' }); }); });
+  GROUPES.forEach((G, i) => {
+    const tg = M[G.id]; if (t < tg - 1.6) return;
+    const x = XG(i), u = doux((t - tg + 1.6) / 1.2), xc = x + LARG / 2;
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = .18 * u; g.fillStyle = c.couleur(G.coul); g.fillRect(x, 40, LARG, 312); g.restore(); });
+    if (t < tg + .6) ST.lueur(c, x, 40, LARG, 312, true);
+    ecrit.ecrire(c, 'n' + i, () => { c.texte(G.nom, xc, 72, { couleur: G.coul, taille: 22, align: 'center', gras: true }); c.texte(G.taille, xc, 102, { couleur: 'blanc', taille: 18, align: 'center' }); });
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = u;
+      if (G.id === 'micro') ST.nematode(g, xc, 196, 1.7, { phase: t * 2 });
+      else if (G.id === 'meso') ST.acarien(g, xc, 196, 2.6);
+      else if (G.id === 'macro') { ST.cloporte(g, xc, 168, 1.25); ST.ver(g, Array.from({ length: 12 }, (_, j) => [xc - 60 + j * 11, 236 + Math.sin(j * .8 + t) * 6]), { e: 9 }); }
+      else { ST.lievre(g, xc - 4, 250, 1.45); }
+      g.restore(); });
+    ecrit.ecrire(c, 'e' + i, () => { c.texte(G.ex, xc, 296, { couleur: 'blanc', taille: 18, align: 'center', max: LARG - 8 }); if (!K) c.texte(G.voir, xc, 326, { couleur: 'faible', taille: 17, align: 'center' }); });
+    c.repere(G.id, x, 40, LARG, 312, `${G.nom} : ${G.taille} (${G.ex})`);
+  });
+}
+
+/* ───────── berlese ───────── */
+const ANIM = Array.from({ length: 14 }, (_, i) => { const r = ST.graine(i * 17 + 5); return { u: r(), v: r(), type: i % 3, d: r() * .8 }; });
+function berlese(c) {
+  const t = B.chrono.t, K = scene.compact, cx = 250, yR = 156, yF = 200, yN = 262;
+  const ap = k => doux((t - M[k] + 1.6) / 1.2);
+  c.direct(() => {
+    const g = c.ctx;
+    // support
+    if (t >= M.support - 1.6) { g.save(); g.globalAlpha = ap('support'); g.fillStyle = '#8a6a45'; g.fillRect(110, 382, 300, 12); g.fillStyle = '#9aa3ad'; g.fillRect(124, 54, 7, 330);
+      g.fillRect(124, 60, 126, 6); g.fillRect(124, 172, 52, 6); g.fillStyle = '#5b636c'; g.fillRect(118, 56, 20, 14); g.fillRect(118, 168, 20, 14); g.restore(); }
+    // flacon d’alcool à 70°
+    if (t >= M.alcool - 1.6) { g.save(); g.globalAlpha = ap('alcool');
+      const fl = g.createLinearGradient(196, 0, 304, 0); fl.addColorStop(0, 'rgba(200,225,240,.35)'); fl.addColorStop(.5, 'rgba(240,250,255,.15)'); fl.addColorStop(1, 'rgba(200,225,240,.35)');
+      g.fillStyle = fl; g.beginPath(); g.moveTo(236, 290); g.lineTo(236, 312); g.lineTo(200, 336); g.lineTo(200, 380); g.lineTo(300, 380); g.lineTo(300, 336); g.lineTo(264, 312); g.lineTo(264, 290); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(230,245,255,.8)'; g.lineWidth = 2; g.stroke();
+      g.fillStyle = 'rgba(240,225,150,.75)'; g.fillRect(202, 352, 96, 26); g.restore(); }
+    // entonnoir, cache noir, filet, sol + litière
+    if (t >= M.entonnoir - 1.6) { g.save(); g.globalAlpha = ap('entonnoir');
+      g.fillStyle = 'rgba(25,25,30,.92)'; g.beginPath(); g.moveTo(cx - 100, yR - 4); g.lineTo(cx - 90, yR - 4); g.lineTo(cx - 6, yN); g.lineTo(cx - 14, yN); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(cx + 100, yR - 4); g.lineTo(cx + 90, yR - 4); g.lineTo(cx + 6, yN); g.lineTo(cx + 14, yN); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(230,240,250,.85)'; g.lineWidth = 2.4; g.beginPath(); g.moveTo(cx - 90, yR); g.lineTo(cx - 6, yN); g.lineTo(cx - 6, 300); g.moveTo(cx + 90, yR); g.lineTo(cx + 6, yN); g.lineTo(cx + 6, 300); g.stroke();
+      g.strokeStyle = 'rgba(200,230,255,.8)'; g.lineWidth = 1.2; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(cx - 62, yF); g.lineTo(cx + 62, yF); g.stroke(); g.setLineDash([]); g.restore(); }
+    if (t >= M.litiere - 1.6) { g.save(); g.globalAlpha = ap('litiere'); g.beginPath(); g.moveTo(cx - 88, yR + 2); g.lineTo(cx + 88, yR + 2); g.lineTo(cx + 62, yF); g.lineTo(cx - 62, yF); g.closePath(); g.clip();
+      g.fillStyle = '#4a3220'; g.fillRect(cx - 90, yR, 180, yF - yR); for (let i = 0; i < 16; i++) ST.feuilleMorte(g, cx - 80 + (i % 8) * 22, yR + 10 + Math.floor(i / 8) * 18, .45, { angle: i, graine: i, couleur: i % 2 ? '#b07a34' : '#8a5a26' }); g.restore(); }
+    // lampe
+    const la = t >= M.lampe - 1.6 ? ap('lampe') : 0, al = t >= M.lampe - .4 ? doux((t - M.lampe + .4) / .6) : 0;
+    if (la > 0) { g.save(); g.globalAlpha = la; g.strokeStyle = '#94a3b8'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, 63); g.lineTo(cx, 78); g.stroke(); ST.lampe(g, cx, 92, 1.3, { allumee: al }); g.restore();
+      if (al > 0) { g.save(); g.strokeStyle = `rgba(251,146,60,${.6 * al})`; g.lineWidth = 2; for (let k = -1; k <= 1; k++) { g.beginPath(); for (let j = 0; j <= 20; j++) { const yy = 118 + j * 1.6, xx = cx + k * 40 + Math.sin(j * .7 - t * 6) * 4; j ? g.lineTo(xx, yy) : g.moveTo(xx, yy); } g.stroke(); } g.restore(); } }
+    // les petits animaux : dans la litière, puis vers le bas, puis dans l’alcool
+    if (t >= M.litiere) ANIM.forEach((A, i) => {
+      const f = doux((t - M.lampe - .5 - A.d) / (M.fuite - M.lampe)), ch = doux((t - M.fuite + .4 - A.d) / (M.chute - M.fuite - 1.4));
+      let x = mix(cx - 60 + A.u * 120, cx - 30 + A.u * 60, f), y = mix(yR + 10 + A.v * 18, yF - 6, f);
+      if (ch > 0) { x = mix(x, cx - 2 + (A.u - .5) * 8, Math.min(1, ch * 2)); y = ch < .5 ? mix(yF - 6, yN + 30, ch * 2) : mix(yN + 30, 362 + A.v * 10, (ch - .5) * 2); if (ch >= 1) x = 214 + A.u * 72; }
+      if (A.type === 0) ST.acarien(g, x, y, .32); else if (A.type === 1) ST.nematode(g, x, y, .22, { phase: t * 3 + i }); else { g.fillStyle = '#f1f5f9'; g.beginPath(); g.ellipse(x, y, 4, 2, .5, 0, 6.28); g.fill(); }
+    });
+  });
+  // les légendes, à droite, avec un trait vers l’objet (cachées en compact : la ligne du bas les dit)
+  const XL = 440, leg = [['lampe', 'Lampe (40 W) : lumière et chaleur', 92, cx + 64], ['litiere', 'Sol + litière', 172, cx + 90], ['litiere', 'Filet', 202, cx + 62], ['entonnoir', 'Entonnoir et cache noir', 236, cx + 40], ['alcool', 'Alcool à 70°', 364, 300]];
+  if (!K) leg.forEach(([k, s, y, xo], i) => { if (t >= M[k] - .4) ecrit.ecrire(c, 'leg' + i, () => { c.ligne(xo + 4, y - 6, XL - 8, y - 6, { couleur: 'faible', largeur: 1.2 }); c.texte(s, XL, y, { couleur: 'blanc', taille: 18, max: scene.L - XL - 10 }); }); });
+  if (t >= M.fuite - .6 && !K) ecrit.ecrire(c, 'fuite', () => { c.fleche(cx + 126, 130, cx + 126, 196, { couleur: 'orange', largeur: 2.4 }); c.texte('les animaux fuient', XL, 294, { couleur: 'orange', taille: 18 }); c.texte('la lumière et la chaleur', XL, 318, { couleur: 'orange', taille: 18 }); });
+  if (t >= M.fuite - .6) c.repere('fuite', cx - 90, yR, 180, yF - yR + 40, 'les animaux fuient vers le bas');
+  if (t >= M.chute - .6) c.repere('chute', 196, 300, 108, 84, 'les animaux récoltés dans l’alcool');
+  c.repere('appareil', 110, 50, 300, 346, 'l’appareil de Berlese');
+}
+
+/* ───────── récolte ───────── */
+const FOULE = Array.from({ length: 44 }, (_, i) => { const r = ST.graine(i * 29 + 3); const a = r() * 6.28, d = Math.sqrt(r()) * 120; return { x: Math.cos(a) * d, y: Math.sin(a) * d, type: i % 4, ang: r() * 6.28, d: r() }; });
+function recolte(c) {
+  const t = B.chrono.t, K = scene.compact, L = scene.L, px = 170, py = 220, R = 146;
+  const ua = doux((t - M.animaux + 2) / 1.6);
+  c.direct(() => ST.petri(c.ctx, px, py, R, g => {
+    g.fillStyle = 'rgba(40,45,50,.85)'; g.fillRect(px - R, py - R, 2 * R, 2 * R);
+    FOULE.forEach((A, i) => { if (A.d > ua) return; const x = px + A.x, y = py + A.y;
+      if (A.type === 0) ST.acarien(g, x, y, .75); else if (A.type === 1) ST.nematode(g, x, y, .55, { phase: i + t });
+      else if (A.type === 2) { g.save(); g.translate(x, y); g.rotate(A.ang); g.fillStyle = '#e8e2d0'; g.beginPath(); g.ellipse(0, 0, 9, 3.5, 0, 0, 6.28); g.fill(); g.restore(); }
+      else ST.cloporte(g, x, y, .32); });
+  }, {}));
+  c.texte(K ? 'récolte' : 'la récolte, à la loupe', px, 54, { couleur: 'blanc', taille: 18, align: 'center' });
+  c.repere('boite', px - R, py - R, 2 * R, 2 * R, 'la boîte de Pétri : la récolte');
+  const xr = 360, wr = Math.min(L - xr - 16, 420);
+  [['acariens', 'Acariens (mésofaune)', 'de 700 à', 40000, 'vert', 110, g => ST.acarien(g, xr + 34, 112, 1.6)],
+   ['nematodes', 'Nématodes (microfaune)', '', 1000000, 'cyan', 224, g => ST.nematode(g, xr + 34, 226, .9, { phase: t * 2 })]].forEach(([k, nom, avant, n, coul, y, peindre]) => {
+    if (t < M[k] - 1.6) return;
+    const u = doux((t - M[k] + 1.6) / 1.4);
+    c.direct(() => { c.ctx.save(); c.ctx.globalAlpha = u; peindre(c.ctx); c.ctx.restore(); });
+    ecrit.ecrire(c, k, () => c.texte(nom, xr + 74, y - 14, { couleur: coul, taille: 19, max: wr - 74 }));
+    c.direct(() => c.texte(`${avant ? avant + ' ' : ''}${milliers(n * u)} par m²`, xr + 74, y + 18, { couleur: 'jaune', taille: 21, gras: true, max: wr - 74 }));
+    if (t < M[k] + .4) ST.lueur(c, xr, y - 40, wr, 76, true);
+    c.repere(k, xr, y - 40, wr, 76, MOTIFS[k]);
+  });
+  if (t >= M.biodiversite - 1 && P.conclusions && !K) {
+    ecrit.ecrire(c, 'bio', () => ['Le sol abrite une grande biodiversité,', 'surtout de très petits animaux :', 'la microfaune du sol.'].forEach((l, k) => c.texte(l, xr, 318 + k * 26, { couleur: 'vert', taille: 19, max: wr })));
+    c.repere('biodiversite', xr, 296, wr, 84, MOTIFS.biodiversite);
+  }
+}
+
+function dessiner(c) {
+  scene.cadre({ tailles: 101, berlese: 103, recolte: 105 }[VUE]);
+  ({ tailles, berlese, recolte })[VUE](c);
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => {
+  const t = B ? B.chrono.t : 0;
+  if (VUE === 'tailles') { const g = [...GROUPES].reverse().find(G => t >= M[G.id] - 1.6); if (!g) return { x: 4, y: 330, w: 760, h: 84 }; const i = GROUPES.indexOf(g); return { x: XG(i) - 8, y: 40, w: LARG + 16, h: 300 }; }
+  if (VUE === 'berlese') return { x: 104, y: 44, w: 312, h: 356 };
+  return t >= M.acariens - 1.6 ? { x: 352, y: 40, w: Math.min(L - 360 - 16, 420) + 16, h: 226 } : { x: 14, y: 30, w: 312, h: 340 };
+};
+function voir(t) {
+  const m = [];
+  if (VUE === 'tailles') { m.push('Une flèche de taille croissante, graduée 200 µm, 4 mm, 10 cm.'); GROUPES.forEach(G => { if (t >= M[G.id]) m.push(`${G.nom} : ${G.taille}, exemple ${G.ex} (${G.voir}).`); }); }
+  else if (VUE === 'berlese') { Object.keys(M).forEach(k => { if (t >= M[k]) m.push(MOTIFS[k] + '.'); }); }
+  else { Object.keys(M).forEach(k => { if (t >= M[k] && (k !== 'biodiversite' || P.conclusions)) m.push(MOTIFS[k] + '.'); }); }
+  return m.join(' ');
+}
+var B = ST.brancher({ id: 'edaph_faune_' + VUE, titre: { tailles: 'Quatre groupes selon la taille', berlese: 'L’appareil de Berlese', recolte: 'La récolte de Berlese' }[VUE], M, FIN, motifs: MOTIFS, params: P, vue: VUE,
+  texte: { tailles: 'La faune du sol en quatre groupes selon la taille : microfaune (moins de 200 µm : nématodes), mésofaune (200 µm à 4 mm : acariens, collemboles), macrofaune (4 mm à 10 cm : vers de terre, cloportes, insectes), mégafaune (plus de 10 cm : lièvres, campagnols).',
+    berlese: 'Appareil de Berlese : support, entonnoir entouré d’un cache noir, filet, sol et litière, flacon d’alcool à 70° ; la lampe (40 W) éclaire et chauffe, les petits animaux fuient vers le bas et tombent dans l’alcool.',
+    recolte: 'Récolte de Berlese observée à la loupe : de très nombreux petits animaux. Acariens : de 700 à 40 000 par m² ; nématodes : 1 000 000 par m². Le sol abrite une grande biodiversité, surtout la microfaune.' }[VUE],
+  voir, depart: 'Observe…', fini: () => ({ tailles: 'Quatre groupes, du microscope à l’œil nu.', berlese: 'Les animaux sont récoltés dans l’alcool.', recolte: 'Une grande biodiversité.' }[VUE]),
+  setParams: { schema: { conclusions: 'true | false' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  explication: { [VUE]: Object.keys(M).map(k => ({ repere: k, texte: MOTIFS[k] })) } });
+window.Tableau.bulle($('feedback'), { tailles: 'Comment classer les animaux du sol ?', berlese: 'Comment récupérer les petits animaux ?', recolte: 'Combien sont-ils ?' }[VUE]);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

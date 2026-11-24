@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le sol et la répartition des animaux — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Trois sols plus ou moins riches en sodium et les campagnols qui y vivent, rangés dans un tableau ; ou la densité de deux espèces de carabe selon la texture du sol"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="vivants.js"></script>
+<script>
+/*
+ * Activité 4, doc 1 : influence des facteurs édaphiques sur la répartition des animaux (recréé, pas de photocopie).
+ *  ?vue=campagnol (diapositive fe_r1_campagnol) : trois sols, sodium faible / moyen / élevé ; un campagnol peint = 500
+ *     individus par hectare ; on compte en allumant (1 ; 2 ; 5 campagnols), puis le tableau est tracé vide et les nombres
+ *     y volent : 500, 1000, 2500 individus/ha (document : 575, 1000, plus de 2500 — arrondis en nombres simples).
+ *     Moments : sols 2 ; faible 5 ; moyenne 7,5 ; elevee 11 ; tableau 13 ; chiffres 16,5 ; conclusion 18,5 ; fin 19.
+ *  ?vue=carabe (fe_r2_carabe) : densité relative (%) de deux espèces de carabe selon la texture (document simplifié en
+ *     4 textures, nombres entiers) : A 0 / 20 / 20 / 30 ; B 20 / 10 / 15 / 25.
+ *     Moments : carabes 2 ; axes 4,5 ; courbe_a 9 ; courbe_b 13 ; absent 15 ; conclusion 17 ; fin 17,5.
+ * set_parameters {conclusions:false} : la conclusion ne s’écrit pas (question ouverte).
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const VUE = new URLSearchParams(location.search).get('vue') === 'carabe' ? 'carabe' : 'campagnol';
+const P = { conclusions: true };
+let M, FIN, MOTIFS;
+if (VUE === 'campagnol') {
+  M = { sols: 2, faible: 5, moyenne: 7.5, elevee: 11, tableau: 13, chiffres: 16.5, conclusion: 18.5 }; FIN = 19;
+  MOTIFS = { sols: 'trois sols : peu, moyennement ou beaucoup de sodium', faible: 'sodium faible : 1 campagnol → 500 /ha', moyenne: 'sodium moyen : 2 campagnols → 1000 /ha',
+    elevee: 'sodium élevé : 5 campagnols → 2500 /ha', tableau: 'le tableau, tracé vide', chiffres: 'les nombres rangés dans le tableau', conclusion: 'le campagnol préfère les sols riches en sodium' };
+} else {
+  M = { carabes: 2, axes: 4.5, courbe_a: 9, courbe_b: 13, absent: 15, conclusion: 17 }; FIN = 17.5;
+  MOTIFS = { carabes: 'deux espèces de carabe, A et B', axes: 'densité (%) selon la texture', courbe_a: 'la courbe de l’espèce A', courbe_b: 'la courbe de l’espèce B',
+    absent: 'A : 0 % sur le sable grossier', conclusion: 'A évite le sable grossier ; B vit partout' };
+}
+
+/* ───────── vue campagnol ───────── */
+const SOLS = [
+  { id: 'faible', nom: 'sodium faible', na: 1, n: 1, val: '500', t: 5 },
+  { id: 'moyenne', nom: 'sodium moyen', na: 3, n: 2, val: '1000', t: 7.5 },
+  { id: 'elevee', nom: 'sodium élevé', na: 6, n: 5, val: '2500', t: 11 },
+];
+const TX = 10, TC = [180, 190, 190, 190], XC = [TX]; TC.forEach(w => XC.push(XC[XC.length - 1] + w));
+function campagnols(c) {
+  const t = B.chrono.t, K = scene.compact, y0 = 92, y1 = 196;
+  SOLS.forEach((S, i) => {
+    const x = XC[i + 1] + 7, w = TC[i + 1] - 14, a = doux(t / 1.4);
+    c.direct(() => {
+      const g = c.ctx; g.save(); g.globalAlpha = a;
+      const fg = g.createLinearGradient(0, y0, 0, y1); fg.addColorStop(0, '#8d6438'); fg.addColorStop(1, '#5e3f22'); g.fillStyle = fg; g.fillRect(x, y0, w, y1 - y0);
+      const rr = ST.graine(i * 7 + 3); for (let k = 0; k < 160; k++) { g.fillStyle = rr() > .5 ? 'rgba(40,25,10,.35)' : 'rgba(210,170,120,.25)'; g.fillRect(x + rr() * w, y0 + rr() * (y1 - y0), 2, 2); }
+      for (let k = 0; k < 9; k++) ST.herbe(g, x + 10 + k * (w - 20) / 8, y0, 1);
+      // les ions Na⁺ du sol : plus ou moins nombreux
+      for (let k = 0; k < S.na; k++) ST.ion(g, x + 22 + (k % 3) * (w - 44) / 2, y0 + 34 + Math.floor(k / 3) * 34, 'Na+', { r: 12, alpha: doux((t - .8 - k * .15) / .6) });
+      g.restore();
+    });
+    c.texte(S.nom, x + w / 2, y0 - 72, { couleur: 'cyan', taille: 19, align: 'center' });
+    c.repere('sol_' + S.id, x, y0 - 60, w, y1 - y0 + 60, S.nom);
+    // les campagnols du sol, comptés en les allumant (un campagnol peint = 500 individus/ha)
+    if (t >= S.t - 1.6) {
+      // jusqu’à 3 par rangée ; une 2ᵉ rangée au-dessus pour le sol riche (5 campagnols)
+      const boites = [], parRang = 3;
+      for (let k = 0; k < S.n; k++) {
+        const rang = Math.floor(k / parRang), m = Math.min(parRang, S.n - rang * parRang), j = k % parRang, pas = 54;
+        const xk = x + w / 2 + (j - (m - 1) / 2) * pas - (rang ? 4 : 0), yk = y0 - 14 - rang * 30;
+        boites.push({ x: xk - 24, y: yk - 16, w: 48, h: 28 });
+        c.direct(() => ST.campagnol(c.ctx, xk, yk, .66, { alpha: doux((t - S.t + 1.6 - k * .3) / .5) }));
+      }
+      const n = ST.compter(c, t, S.t - 1.3, Math.min(.5, 1.2 / S.n), boites, { dx: -4, dy: 2, taille: 15 });
+      if (n === S.n) {
+        c.direct(() => c.texte(S.val + ' /ha', x + w / 2, y1 + 30, { couleur: 'jaune', taille: 21, align: 'center', gras: true }));
+        c.repere(S.id, x, y0 - 30, w, y1 - y0 + 66, `${S.nom} : ${S.val} individus par hectare`);
+      }
+    }
+  });
+  if (!K) {
+    c.direct(() => ST.campagnol(c.ctx, 70, 126, .8));
+    c.texte('1 campagnol', 70, 168, { couleur: 'blanc', taille: 17, align: 'center' });
+    c.texte('= 500 individus', 92, 192, { couleur: 'blanc', taille: 17, align: 'center' });
+    c.texte('par hectare', 92, 214, { couleur: 'blanc', taille: 17, align: 'center' });
+  }
+  // le tableau, tracé vide puis rempli : les nombres volent des sols vers leurs cases
+  const tab = ST.tableauAnime(c, ecrit, t, { cle: 'tab', x: TX, y: 262, cols: TC, lignes: [46, 58], taille: 18, tTrace: M.tableau - 1.2,
+    entetes: [{ l: 0, c: 0, texte: 'Sodium du sol', couleur: 'blanc' }, ...SOLS.map((S, i) => ({ l: 0, c: i + 1, texte: S.nom.replace('sodium ', '') })),
+      { l: 1, c: 0, lignes: K ? ['Campagnols /ha'] : ['Campagnols', '(individus/ha)'], couleur: 'blanc' }],
+    cellules: SOLS.map((S, i) => ({ l: 1, c: i + 1, texte: S.val, t: M.chiffres - 2.4 + i * .8, de: [XC[i + 1] + TC[i + 1] / 2, 226] })) });
+  if (t >= M.tableau - 1.2) { const r0 = tab(0, 0), r1 = tab(1, 3); c.repere('tableau', r0.x, r0.y, r1.x + r1.w - r0.x, r1.y + r1.h - r0.y, 'le tableau des résultats'); }
+  if (t >= M.conclusion - 1 && P.conclusions && !K) {
+    ecrit.ecrire(c, 'conclusion', () => c.texte('Plus le sol est riche en sodium, plus les campagnols sont nombreux.', 380, 404, { couleur: 'vert', taille: 19, align: 'center', max: 740 }));
+    c.repere('conclusion', 20, 384, 720, 28, 'la conclusion');
+  }
+}
+
+/* ───────── vue carabe ───────── */
+const TEX = [{ nom: ['sable', 'grossier'], c: '#e0607e' }, { nom: ['sable', 'moyen'], c: '#3fbf5a' }, { nom: ['sable', 'fin'], c: '#d8d84a' }, { nom: ['argile'], c: '#a87a52' }];
+const ESP = [
+  { id: 'a', nom: 'espèce A', coul: 'cyan', teinte: [20, 120, 130], v: [0, 20, 20, 30], t0: 5.6, t1: 9 },
+  { id: 'b', nom: 'espèce B', coul: 'vert', teinte: [90, 150, 50], v: [20, 10, 15, 25], t0: 9.6, t1: 13 },
+];
+function carabes(c) {
+  const t = B.chrono.t, K = scene.compact, L = scene.L;
+  if (!K) ESP.forEach((E, i) => {
+    const y = 110 + i * 150;
+    c.direct(() => ST.carabe(c.ctx, 100, y, 1.25, { teinte: E.teinte, alpha: doux((t - i * .5) / 1) }));
+    c.texte('Carabe ' + E.nom.replace('espèce ', ''), 100, y + 58, { couleur: E.coul, taille: 19, align: 'center' });
+    c.repere('carabe_' + E.id, 20, y - 44, 170, 110, 'le carabe, ' + E.nom);
+  });
+  if (!K) c.texte('insecte de 1 à 3 cm', 100, 398, { couleur: 'faible', taille: 16, align: 'center' });
+  const gx = 270, gy = 48, gw = Math.min(L - gx - 40, 560), gh = 240, X = i => gx + (i + .5) * gw / 4, Y = v => gy + gh - v / 40 * gh;
+  if (t >= M.axes - 2.2) ecrit.ecrire(c, 'axes', () => {
+    c.axe(gx, gy + gh, gx + gw + 14, gy + gh, [], { couleur: 'blanc' });
+    c.axe(gx, gy + gh, gx, gy - 12, [10, 20, 30].map(v => [v / 40 * gh / (gh + 12), String(v)]), { couleur: 'blanc', vertical: true, taille: 16 });
+    c.texte('Densité relative (%)', gx + 8, gy - 16, { couleur: 'blanc', taille: 17 });
+    c.texte('texture', gx + gw + 4, gy + gh - 10, { couleur: 'blanc', taille: 16, align: 'right' });
+    TEX.forEach((T, i) => T.nom.forEach((s, j) => c.texte(s, X(i), gy + gh + 38 + j * 20, { couleur: 'blanc', taille: 17, align: 'center' })));
+  });
+  if (t >= M.axes - 1) c.direct(() => { const g = c.ctx; TEX.forEach((T, i) => { g.fillStyle = T.c; g.globalAlpha = doux((t - M.axes + 1) / 1); g.fillRect(gx + i * gw / 4 + 2, gy + gh + 6, gw / 4 - 4, 9); }); g.globalAlpha = 1; });
+  c.repere('axes', gx - 30, gy - 30, gw + 50, gh + 90, 'densité relative selon la texture');
+  ESP.forEach((E, e) => {
+    if (t < E.t0) return;
+    const u = Math.min(1, (t - E.t0) / (E.t1 - E.t0 - .4)), n = 1 + u * 3;
+    c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = c.couleur(E.coul); g.lineWidth = 3.2; g.shadowColor = g.strokeStyle; g.shadowBlur = 6; g.beginPath();
+      for (let i = 0; i <= Math.floor(n) && i < 4; i++) { const xx = X(i), yy = Y(E.v[i]); i ? g.lineTo(xx, yy) : g.moveTo(xx, yy); }
+      if (n < 4) { const i = Math.floor(n), f = n - i; g.lineTo(mix(X(i), X(i + 1), f), mix(Y(E.v[i]), Y(E.v[i + 1]), f)); }
+      g.stroke(); g.restore(); });
+    for (let i = 0; i < 4 && i <= n; i++) {
+      c.point(X(i), Y(E.v[i]), 5, E.coul);
+      if (!K) c.direct(() => c.texte(E.v[i] + ' %', X(i) + (i === 3 ? -12 : 10), Y(E.v[i]) + (e ? 24 : -12), { couleur: E.coul, taille: 16, align: i === 3 ? 'right' : 'left' }));
+    }
+    if (u >= 1) { c.direct(() => c.texte(E.id.toUpperCase(), X(3) + 22, Y(E.v[3]) + (e ? 18 : -6), { couleur: E.coul, taille: 22, gras: true })); c.repere('courbe_' + E.id, gx, gy, gw, gh, 'la courbe de l’' + E.nom); }
+  });
+  if (t >= M.absent - .8) { ST.lueur(c, X(0) - 26, Y(0) - 22, 52, 32, t < M.absent + 1); c.repere('absent', X(0) - 26, Y(0) - 22, 52, 32, 'espèce A : 0 % sur le sable grossier'); }
+  if (t >= M.conclusion - 1 && P.conclusions) {
+    const lignes = K ? [] : ['A : absente du sable grossier, préfère l’argile.', 'B : présente sur tous les types de sol.'];
+    if (!K) ecrit.ecrire(c, 'conclusion', () => lignes.forEach((l, k) => c.texte(l, gx + gw / 2, 384 + k * 24, { couleur: 'jaune', taille: 18, align: 'center', max: gw + 40 })));
+    c.repere('conclusion', gx - 20, 366, gw + 40, 52, 'la conclusion');
+  }
+}
+
+function dessiner(c) {
+  scene.cadre(VUE === 'carabe' ? 81 : 71);
+  VUE === 'carabe' ? carabes(c) : campagnols(c);
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+// compact (téléphone en paysage) : seulement l’étape en cours — les sols, puis le tableau ; le graphique seul
+scene.foyer = (L) => VUE === 'carabe' ? { x: 200, y: 10, w: Math.min(L - 270 - 40, 560) + 110, h: 370 }
+  : (B && B.chrono.t >= M.tableau - 1.2 ? { x: 6, y: 256, w: 754, h: 112 } : { x: 186, y: 4, w: 574, h: 236 });
+function voir(t) {
+  const m = [];
+  if (VUE === 'campagnol') {
+    m.push('Trois sols : sodium faible, moyen, élevé (ions Na⁺ dessinés : 1, 3, 6). Un campagnol peint = 500 individus par hectare.');
+    SOLS.forEach(S => { if (t >= S.t) m.push(`${S.nom} : ${S.n} campagnol(s) compté(s), soit ${S.val} individus/ha.`); });
+    if (t >= M.tableau) m.push('Le tableau est tracé : sodium faible / moyen / élevé ; campagnols (individus/ha).');
+    if (t >= M.chiffres) m.push('Rempli : 500 ; 1000 ; 2500.');
+    if (t >= M.conclusion && P.conclusions) m.push('Conclusion : plus le sol est riche en sodium, plus les campagnols sont nombreux.');
+  } else {
+    m.push('Deux espèces de carabe (A et B) ; graphique : densité relative (%) selon la texture (sable grossier, sable moyen, sable fin, argile).');
+    ESP.forEach(E => { if (t >= E.t1) m.push(`${E.nom} : ${E.v.join(' ; ')} %.`); });
+    if (t >= M.absent) m.push('Espèce A : 0 % sur le sable grossier (absente).');
+    if (t >= M.conclusion && P.conclusions) m.push('Conclusion : A est absente du sable grossier et préfère l’argile ; B est présente sur tous les types de sol.');
+  }
+  return m.join(' ');
+}
+var B = ST.brancher({ id: 'edaph_repartition_' + VUE, titre: VUE === 'carabe' ? 'Le carabe et la texture du sol' : 'Le campagnol et le sodium du sol', M, FIN, motifs: MOTIFS, params: P, vue: VUE,
+  texte: VUE === 'carabe' ? 'Doc 1 b : densité relative de deux espèces de carabe selon la texture du sol. A : 0 % sur le sable grossier, 20 %, 20 %, 30 % sur l’argile ; B : 20 %, 10 %, 15 %, 25 %. A évite le sable grossier et préfère l’argile ; B vit sur tous les sols.'
+    : 'Doc 1 a : abondance des campagnols selon la concentration du sodium du sol : faible 500, moyenne 1000, élevée 2500 individus par hectare. Le campagnol préfère les sols riches en sodium.',
+  voir, depart: VUE === 'carabe' ? 'Deux carabes, un graphique…' : 'Trois sols…', fini: () => (VUE === 'carabe' ? 'A évite le sable grossier ; B vit partout.' : 'Le campagnol préfère les sols riches en sodium.'),
+  setParams: { schema: { conclusions: 'true | false (false : la conclusion ne s’écrit pas)' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  explication: VUE === 'carabe' ? { carabe: ESP.map(E => ({ repere: 'courbe_' + E.id, texte: `${E.nom} : ${E.v.join(', ')} %` })) } : { campagnol: SOLS.map(S => ({ repere: S.id, texte: `${S.nom} : ${S.val} individus/ha` })) } });
+window.Tableau.bulle($('feedback'), VUE === 'carabe' ? 'Où vit chaque espèce ?' : 'Le sodium change-t-il le nombre de campagnols ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

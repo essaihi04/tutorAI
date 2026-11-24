@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le chêne-liège et l’horizon sableux — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Coupe de la forêt de la Maâmora près de la Daya de Sidi Aâmira : zones C, B, A, B, C ; un horizon sableux plus ou moins épais sur l’argile ; les plants de chêne-liège ne poussent que dans la zone B ; puis les racines dans chaque zone"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="vivants.js"></script>
+<script>
+/*
+ * Activité 4, doc 2 : influence de la capacité de rétention en eau sur la répartition des végétaux (recréé à la craie).
+ *  ?vue=coupe (diapositive fe_r3_maamora) : coupe W → E près de la Daya de Sidi Aâmira (forêt de la Maâmora) ; zones
+ *     C | B | A | B | C ; sable siliceux sur l’argile, mince au centre, épais au bord (2 m à la limite B/C). Plants de
+ *     chêne-liège dans toutes les zones ; 2 ans après, seuls ceux de la zone B ont poussé (2 m). Puis le tableau, tracé
+ *     vide et rempli : A 0 à 50 cm, échec ; B 50 à 200 cm, 2 m en 2 ans ; C plus de 200 cm, échec.
+ *     Moments : coupe 3 ; zones 5 ; plantation 7,5 ; deux_ans 11 ; tableau 13 ; zone_a 15 ; zone_b 16,5 ; zone_c 18 ; fin 18,5.
+ *  ?vue=racines (fe_r4_racines) : trois colonnes de sol (A, B, C) avec un chêne-liège et sa racine pivotante, de même
+ *     longueur ; A : la racine plonge dans l’argile gorgée d’eau → asphyxie ; C : sable trop épais, l’eau s’écoule, la racine
+ *     n’atteint pas l’argile → manque d’eau ; B : la racine atteint l’eau de l’argile sans y plonger → l’arbre pousse.
+ *     Moments : colonnes 2 ; zone_a 6 ; zone_c 10 ; zone_b 13 ; explication 16 ; fin 16,5.
+ * set_parameters {conclusions:false} : l’explication de la zone B ne s’écrit pas (question ouverte).
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const VUE = new URLSearchParams(location.search).get('vue') === 'racines' ? 'racines' : 'coupe';
+const P = { conclusions: true };
+let M, FIN, MOTIFS;
+if (VUE === 'coupe') {
+  M = { coupe: 3, zones: 5, plantation: 7.5, deux_ans: 11, tableau: 13, zone_a: 15, zone_b: 16.5, zone_c: 18 }; FIN = 18.5;
+  MOTIFS = { coupe: 'la coupe : sable siliceux sur argile', zones: 'les zones C, B, A, B, C', plantation: 'des plants de chêne-liège dans chaque zone', deux_ans: 'deux ans plus tard : ils ne poussent qu’en zone B',
+    tableau: 'le tableau, tracé vide', zone_a: 'A : 0 à 50 cm de sable → échec', zone_b: 'B : 50 à 200 cm → 2 m en 2 ans', zone_c: 'C : plus de 200 cm → échec' };
+} else {
+  M = { colonnes: 2, zone_a: 6, zone_c: 10, zone_b: 13, explication: 16 }; FIN = 16.5;
+  MOTIFS = { colonnes: 'trois sols : zone A, zone B, zone C', zone_a: 'A : racine dans l’argile gorgée d’eau → asphyxie', zone_c: 'C : sable trop épais → manque d’eau',
+    zone_b: 'B : le chêne-liège pousse', explication: 'B : la racine atteint l’eau sans asphyxie' };
+}
+function sable(g, x, y, w, h, a = 1) { if (h <= 0) return; g.save(); g.globalAlpha *= a; const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, '#eedc9a'); gr.addColorStop(1, '#cdb46c'); g.fillStyle = gr; g.fillRect(x, y, w, h);
+  g.fillStyle = 'rgba(110,90,40,.55)'; const r = ST.graine(Math.round(x + y)); for (let i = 0; i < w * h / 60; i++) g.fillRect(x + r() * w, y + r() * h, 1.8, 1.8); g.restore(); }
+function argile(g, x, y, w, h, a = 1, eau = 0) { g.save(); g.globalAlpha *= a; const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, '#d9a08c'); gr.addColorStop(1, '#b0745f'); g.fillStyle = gr; g.fillRect(x, y, w, h);
+  if (eau) { g.fillStyle = `rgba(60,150,220,${.32 * eau})`; g.fillRect(x, y, w, h); } g.restore(); }
+
+/* ───────── vue coupe ───────── */
+const ZONES = [{ n: 'C', de: 0, a: .15 }, { n: 'B', de: .15, a: .33 }, { n: 'A', de: .33, a: .67 }, { n: 'B', de: .67, a: .85 }, { n: 'C', de: .85, a: 1 }];
+const PLANTS = [.05, .1, .19, .245, .3, .365, .635, .7, .755, .81, .9, .95];
+const zoneDe = f => (f < .15 || f > .85 ? 'C' : f < .33 || f > .67 ? 'B' : 'A');
+function coupe(c) {
+  const t = B.chrono.t, L = scene.L, K = scene.compact, x0 = 14, x1 = L - 14, X = f => x0 + (x1 - x0) * f;
+  const e = f => Math.pow(Math.abs(f - .5) * 2, 1.5), yS = f => 172 - 82 * e(f), yA = f => 176 + 30 * e(f) * e(f), yB = 246;
+  const a = doux(t / 2);
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.globalAlpha = a;
+    const N = 80, col = (fn, f0, f1, coul) => { g.beginPath(); for (let k = 0; k <= N; k++) { const f = f0 + (f1 - f0) * k / N; k ? g.lineTo(X(f), fn(f)) : g.moveTo(X(f), fn(f)); } };
+    // sable siliceux (entre la surface et l’argile), argile, sous-sol
+    g.save(); col(yS, 0, 1); g.lineTo(X(1), yB); g.lineTo(X(0), yB); g.closePath(); g.clip(); sable(g, X(0), 80, X(1) - X(0), yB - 80); g.restore();
+    g.save(); col(yA, 0, 1); g.lineTo(X(1), yA(1) + 30); g.lineTo(X(0), yA(0) + 30); g.closePath(); g.clip(); argile(g, X(0), 170, X(1) - X(0), 100); g.restore();
+    g.save(); col(f => yA(f) + 30, 0, 1); g.lineTo(X(1), yB + 4); g.lineTo(X(0), yB + 4); g.closePath(); g.fillStyle = '#8b8f94'; g.fill(); g.restore();
+    // la daya (mare) au centre
+    const gr = g.createLinearGradient(0, 166, 0, 178); gr.addColorStop(0, 'rgba(150,210,245,.95)'); gr.addColorStop(1, 'rgba(60,140,210,.9)'); g.fillStyle = gr;
+    g.beginPath(); g.moveTo(X(.41), yS(.41)); g.quadraticCurveTo(X(.5), 182, X(.59), yS(.59)); g.closePath(); g.fill();
+    // le sens du drainage des eaux souterraines (vers les bords)
+    g.strokeStyle = 'rgba(30,30,30,.7)'; g.lineWidth = 2; for (const [f, s] of [[.08, -1], [.92, 1]]) { const y = yA(f) - 12; g.beginPath(); g.moveTo(X(f) - s * 16, y - 4); g.lineTo(X(f) + s * 16, y + 4); g.stroke(); }
+    g.restore();
+  });
+  c.texte('W', x0 + 4, 64, { couleur: 'faible', taille: 16 }); c.texte('E', x1 - 4, 64, { couleur: 'faible', taille: 16, align: 'right' });
+  if (!K) { c.texte('Daya Sidi Aâmira', X(.5), 160, { couleur: 'cyan', taille: 16, align: 'center' });
+    c.texte('sable siliceux', X(.12), 205, { couleur: '#3a2a10', taille: 16, align: 'center' }); c.texte('argile', X(.5), 205, { couleur: '#4a1e12', taille: 16, align: 'center' }); }
+  c.repere('coupe', x0, 80, x1 - x0, yB - 80, 'la coupe : sable siliceux sur argile');
+  // les zones
+  if (t >= M.zones - 1.6) ZONES.forEach((Z, i) => ecrit.ecrire(c, 'z' + i, () => {
+    if (i) c.ligne(X(Z.de), 34, X(Z.de), yB, { couleur: 'faible', largeur: 1.2, pointille: [5, 5] });
+    c.texte('Zone ' + Z.n, X((Z.de + Z.a) / 2), 32, { couleur: Z.n === 'B' ? 'vert' : 'jaune', taille: 19, align: 'center' });
+  }));
+  if (t >= M.zones) { const f = .15, h = yA(f) - yS(f); ecrit.ecrire(c, 'cote', () => c.cote(X(f) + 12, yS(f) + 2, X(f) + 12, yA(f) - 2, '', { couleur: 'blanc', largeur: 1.4 }));
+    if (!K) ecrit.ecrire(c, 'cote_t', () => c.texte('2 m', X(f) + 20, yS(f) + h / 2 + 6, { couleur: 'blanc', taille: 16 })); }
+  // les plants, puis deux ans plus tard
+  if (t >= M.plantation - 1.4) {
+    const u = doux((t - M.plantation + 1.4) / 1.2), v = doux((t - M.deux_ans + 2.6) / 2.4);
+    c.direct(() => PLANTS.forEach(f => {
+      const z = zoneDe(f), x = X(f), y = yS(f);
+      if (z === 'B' && v > 0) ST.chene(c.ctx, x, y, mix(16, 54, v), { alpha: u, graine: Math.round(f * 100) });
+      else ST.plantule(c.ctx, x, y, 28, { fletrie: z === 'B' ? 0 : v, alpha: u });
+    }));
+    c.repere('plants', X(.15), 60, X(.85) - X(.15), 120, 'les plants de chêne-liège');
+  }
+  if (t >= M.deux_ans && !K) ecrit.ecrire(c, 'ans', () => c.texte('2 ans après', X(.5), 92, { couleur: 'orange', taille: 18, align: 'center' }));
+  // le tableau
+  const lignes = [['A', 'de 0 à 50 cm', 'échec de croissance', 'zone_a', .5], ['B', 'de 50 à 200 cm', '2 m en 2 ans', 'zone_b', .24], ['C', 'plus de 200 cm', 'échec de croissance', 'zone_c', .075]];
+  const cols = [110, 270, Math.min(330, L - 20 - 380)];
+  const tab = ST.tableauAnime(c, ecrit, t, { cle: 'tab', x: 20, y: 268, cols, lignes: [34, 34, 34, 34], taille: 17, tTrace: M.tableau - 1.4,
+    entetes: [{ l: 0, c: 0, texte: 'Zone', couleur: 'blanc' }, { l: 0, c: 1, texte: 'Épaisseur du sable', couleur: 'blanc' }, { l: 0, c: 2, texte: 'Résultat du reboisement', couleur: 'blanc' },
+      ...lignes.map((l, i) => ({ l: i + 1, c: 0, texte: 'Zone ' + l[0], couleur: l[0] === 'B' ? 'vert' : 'jaune' }))],
+    cellules: lignes.flatMap((l, i) => [{ l: i + 1, c: 1, texte: l[1], t: M[l[3]] - 1.4, de: [X(l[4]), 150] }, { l: i + 1, c: 2, texte: l[2], t: M[l[3]] - .8, de: [X(l[4]), 120], couleur: l[0] === 'B' ? 'vert' : 'rouge' }]) });
+  if (t >= M.tableau - 1.4) { const r0 = tab(0, 0), r1 = tab(3, 2); c.repere('tableau', r0.x, r0.y, r1.x + r1.w - r0.x, r1.y + r1.h - r0.y, 'le tableau des résultats');
+    lignes.forEach((l, i) => { if (t >= M[l[3]]) { const r = tab(i + 1, 0), q = tab(i + 1, 2); c.repere(l[3], r.x, r.y, q.x + q.w - r.x, r.h, `zone ${l[0]} : ${l[1]}, ${l[2]}`); } }); }
+}
+
+/* ───────── vue racines ───────── */
+const COLS = [
+  { id: 'zone_a', n: 'A', sable: 22, etat: 'asphyxie', lignes: ['sable mince : la racine', 'plonge dans l’argile', 'gorgée d’eau → asphyxie'] },
+  { id: 'zone_b', n: 'B', sable: 78, etat: 'sain', lignes: ['la racine atteint l’eau', 'de l’argile, sans', 'y plonger : pas d’asphyxie'] },
+  { id: 'zone_c', n: 'C', sable: 160, etat: 'fletri', lignes: ['sable trop épais : l’eau', 's’écoule, la racine', 'n’atteint pas l’argile'] },
+];
+function racines(c) {
+  const t = B.chrono.t, L = scene.L, K = scene.compact, w = 210, pas = Math.min(250, (L - 40 - w) / 2), ys = 172, yb = 342, racine = 96;
+  COLS.forEach((C, i) => {
+    const x = 20 + i * pas, tz = M[C.id], vu = t >= tz - 1.4, u = doux((t - tz + 1.4) / 1.4);
+    c.direct(() => {
+      const g = c.ctx, a = doux(t / 1.4); g.save(); g.globalAlpha = a;
+      sable(g, x, ys, w, C.sable); argile(g, x, ys + C.sable, w, yb - ys - C.sable, 1, 1);
+      // l’eau : retenue dans l’argile (bleu), qui s’écoule à travers le sable de C
+      if (C.n === 'C' && vu) { for (let k = 0; k < 7; k++) { const yy = ys + 10 + ((t * 40 + k * 23) % (C.sable - 14)); ST.goutte(g, x + 30 + k * 24, yy, 3.4, .9); } }
+      g.restore();
+      // l’arbre et sa racine pivotante (même longueur partout)
+      const etat = vu ? C.etat : 'sain', h = C.n === 'B' ? mix(80, 112, u) : mix(80, 72, u);
+      ST.chene(g, x + w / 2, ys, h, { racine, tracante: .25, etat, alpha: a, graine: i + 4 });
+      if (C.n === 'A' && vu) { g.save(); g.globalAlpha = u; g.fillStyle = 'rgba(60,40,25,.35)'; g.beginPath(); g.ellipse(x + w / 2, ys + C.sable + (racine - C.sable) / 2 + 6, 22, (racine - C.sable) / 2 + 4, 0, 0, 6.28); g.fill(); g.restore(); }
+    });
+    c.texte('Zone ' + C.n, x + w / 2, 28, { couleur: C.n === 'B' ? 'vert' : 'jaune', taille: 20, align: 'center' });
+    if (!K) c.texte(C.n === 'C' ? 'sable > 2 m' : C.n === 'B' ? 'sable 50 cm à 2 m' : 'sable < 50 cm', x + w / 2, 54, { couleur: 'faible', taille: 16, align: 'center' });
+    c.repere('col_' + C.n.toLowerCase(), x, 10, w, yb - 10, 'la zone ' + C.n);
+    const montrer = C.n === 'B' ? t >= M.explication - 1 && P.conclusions : vu;
+    if (C.n === 'B' && t >= M.explication - 1 && P.conclusions) {
+      // l’eau de l’argile monte dans la racine
+      c.direct(() => { const g = c.ctx; for (let k = 0; k < 3; k++) { const yy = ys + C.sable + 14 - ((t * 30 + k * 10) % 28); ST.goutte(g, x + w / 2 + 10 + k * 7, yy, 3, .9); } });
+      ST.lueur(c, x + w / 2 - 30, ys + C.sable - 18, 60, 36, t < M.explication + 1);
+    }
+    if (montrer && !K) ecrit.ecrire(c, 'l_' + C.n, () => C.lignes.forEach((l, k) => c.texte(l, x + w / 2, yb + 22 + k * 21, { couleur: C.n === 'B' ? 'vert' : 'rouge', taille: 17, align: 'center', max: w + 30 })));
+    if (vu) c.repere(C.id, x, ys - 100, w, yb - ys + 100, MOTIFS[C.id]);
+  });
+  if (t >= M.explication - 1 && P.conclusions) c.repere('explication', 20 + pas, ys, w, 120, MOTIFS.explication);
+}
+
+function dessiner(c) {
+  scene.cadre(VUE === 'coupe' ? 91 : 93);
+  VUE === 'coupe' ? coupe(c) : racines(c);
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => VUE === 'coupe' ? (B && B.chrono.t >= M.tableau - 1.4 ? { x: 14, y: 262, w: Math.min(730, 400 + Math.min(330, L - 400)), h: 144 } : { x: 0, y: 6, w: L, h: 250 })
+  : { x: 10, y: -18, w: 2 * Math.min(250, (L - 40 - 210) / 2) + 230, h: 356 };
+function voir(t) {
+  const m = [];
+  if (VUE === 'coupe') {
+    m.push('Coupe W → E près de la Daya de Sidi Aâmira : sable siliceux sur argile ; le sable est mince au centre (zone A) et épais au bord (2 m à la limite B/C).');
+    if (t >= M.zones) m.push('Zones : C, B, A, B, C.');
+    if (t >= M.plantation) m.push('Des plants de chêne-liège dans toutes les zones.');
+    if (t >= M.deux_ans) m.push('Deux ans après : les chênes-lièges de la zone B ont poussé (2 m) ; ceux des zones A et C ont séché.');
+    if (t >= M.tableau) m.push('Tableau tracé : zone, épaisseur du sable, résultat.');
+    ['zone_a', 'zone_b', 'zone_c'].forEach(k => { if (t >= M[k]) m.push(MOTIFS[k] + '.'); });
+  } else {
+    m.push('Trois colonnes de sol (zones A, B, C) : sable plus ou moins épais sur l’argile gorgée d’eau ; un chêne-liège avec sa racine pivotante, de même longueur.');
+    COLS.forEach(C => { if (t >= M[C.id] && (C.n !== 'B' || t >= M.explication)) m.push(`Zone ${C.n} : ${C.lignes.join(' ')}.`); else if (t >= M[C.id]) m.push(MOTIFS[C.id] + '.'); });
+  }
+  return m.join(' ');
+}
+var B = ST.brancher({ id: 'edaph_maamora_' + VUE, titre: VUE === 'coupe' ? 'Le chêne-liège près de la Daya de Sidi Aâmira' : 'Les racines du chêne-liège dans les zones A, B, C', M, FIN, motifs: MOTIFS, params: P, vue: VUE,
+  texte: VUE === 'coupe' ? 'Doc 2 : forêt de la Maâmora, près de la Daya de Sidi Aâmira. Horizon sableux sur argile : zone A 0 à 50 cm (échec du reboisement), zone B 50 à 200 cm (les plants atteignent 2 m en 2 ans), zone C plus de 200 cm (échec).'
+    : 'Zone A : sable mince, la racine plonge dans l’argile gorgée d’eau, asphyxie. Zone C : sable épais, faible rétention, l’eau s’écoule, la racine n’atteint pas l’argile, manque d’eau. Zone B : la racine atteint l’eau de l’argile sans asphyxie : le chêne-liège pousse.',
+  voir, depart: VUE === 'coupe' ? 'Une coupe de la forêt…' : 'Trois sols, trois arbres…', fini: () => 'Le chêne-liège pousse seulement dans la zone B.',
+  setParams: { schema: { conclusions: 'true | false (false : l’explication de la zone B ne s’écrit pas)' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  explication: { [VUE]: VUE === 'coupe' ? [{ repere: 'coupe', texte: 'sable siliceux sur argile' }, { repere: 'tableau', texte: 'les résultats du reboisement' }] : COLS.map(C => ({ repere: 'col_' + C.n.toLowerCase(), texte: C.lignes.join(' ') })) } });
+window.Tableau.bulle($('feedback'), VUE === 'coupe' ? 'Où le chêne-liège pousse-t-il ?' : 'Pourquoi seulement en zone B ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

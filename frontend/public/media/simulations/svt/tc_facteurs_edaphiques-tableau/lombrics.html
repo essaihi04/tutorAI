@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le rôle des lombrics — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le rôle des lombrics : un aquarium aux couches de sol bien séparées que dix lombrics mélangent en un mois ; leurs trois actions mécaniques ; leurs déjections plus riches en éléments minéraux que le sol"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="vivants.js"></script>
+<script>
+/*
+ * Activité 6, doc 1 : rôle de la faune du sol, les lombrics (recréé ; aquarium, couches, vers et turricules peints).
+ *  ?vue=aquarium (fe_e1_aquarium) : couches de sol de natures différentes (terreau, sable, argile…) et litière ; dix
+ *     lombrics comptés en s’allumant ; parois couvertes (obscurité) ; un mois passe : galeries, litière enfouie, couches
+ *     mélangées ; à côté, l’aquarium du début. Moments : couches 3 ; litiere 5 ; lombrics 8,5 ; obscurite 10 ; mois 12 ;
+ *     melange 16 ; resultat 18 ; fin 18,5.
+ *  ?vue=mecanique (fe_e2_mecanique) : fragmentation de la litière ; creusement de galeries (air et eau circulent) ;
+ *     brassage des couches. Moments : fragmentation 4 ; galeries 8 ; aeration 10,5 ; brassage 14 ; fin 14,5.
+ *  ?vue=chimique (fe_e3_chimique) : le lombric avale la terre et rejette des turricules ; tableau tracé vide puis rempli
+ *     (mg par kg de terre ; nombres simples gardant les rapports du document, magnésium ×2,5 arrondi à ×3) :
+ *     azote (nitrates) 2 → 10 (×5) ; calcium 4 → 8 (×2) ; magnésium 3 → 9 (×3) ; phosphore 1 → 7 (×7) ; potassium 2 → 22 (×11).
+ *     Moments : avale 3 ; turricule 6 ; tableau 8 ; sol_vals 11 ; dej_vals 14 ; rapports 17 ; potassium 19,5 ;
+ *     conclusion 21,5 ; fin 22.
+ * set_parameters {conclusions:false} : la conclusion ne s’écrit pas.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const VUE = ['mecanique', 'chimique'].includes(new URLSearchParams(location.search).get('vue')) ? new URLSearchParams(location.search).get('vue') : 'aquarium';
+const P = { conclusions: true };
+const CFG = {
+  aquarium: { M: { couches: 3, litiere: 5, lombrics: 8.5, obscurite: 10, mois: 12, melange: 16, resultat: 18 }, FIN: 18.5,
+    MOTIFS: { couches: 'des couches de sol bien séparées', litiere: 'la litière en surface', lombrics: 'dix lombrics', obscurite: 'parois couvertes : obscurité', mois: 'un mois passe…', melange: 'les couches se mélangent', resultat: 'avant / après un mois' } },
+  mecanique: { M: { fragmentation: 4, galeries: 8, aeration: 10.5, brassage: 14 }, FIN: 14.5,
+    MOTIFS: { fragmentation: 'la litière avalée, broyée, fragmentée', galeries: 'des galeries creusées', aeration: 'l’air et l’eau circulent', brassage: 'les couches brassées' } },
+  chimique: { M: { avale: 3, turricule: 6, tableau: 8, sol_vals: 11, dej_vals: 14, rapports: 17, potassium: 19.5, conclusion: 21.5 }, FIN: 22,
+    MOTIFS: { avale: 'le lombric avale la terre', turricule: 'il rejette des turricules', tableau: 'le tableau, tracé vide', sol_vals: 'les taux dans le sol', dej_vals: 'les taux dans les déjections', rapports: 'combien de fois plus riche ?', potassium: 'potassium : 22 sur 2 = 11 fois', conclusion: 'les déjections enrichissent le sol' } },
+}[VUE];
+const { M, FIN, MOTIFS } = CFG;
+const COUL = { terreau: ['#4a3322', '#2c1d12'], sable: ['#ecd7a2', '#c9ad6e'], argile: ['#9a8a7c', '#76675a'] };
+function couche(g, x, y, w, h, type) { const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, COUL[type][0]); gr.addColorStop(1, COUL[type][1]); g.fillStyle = gr; g.fillRect(x, y, w, h);
+  const rr = ST.graine(Math.round(x * 3 + y)); for (let i = 0; i < w * h / 70; i++) { g.fillStyle = rr() > .5 ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.14)'; g.fillRect(x + rr() * w, y + rr() * h, 2, 2); } }
+
+/* ───────── aquarium ───────── */
+const COUCHES = [['terreau', 'terreau'], ['sable', 'sable'], ['argile', 'argile'], ['terreau', 'terreau'], ['sable', 'sable']];
+const VERS = Array.from({ length: 10 }, (_, i) => { const r = ST.graine(i * 41 + 9); return { x: r(), y: r(), ph: r() * 6, v: .6 + r() * .6 }; });
+function aquarium(g, x, y, w, h, m, t, o = {}) {
+  const hc = (h - 24) / COUCHES.length, rr = ST.graine(77);
+  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+  g.fillStyle = 'rgba(180,210,230,.08)'; g.fillRect(x, y, w, h);
+  COUCHES.forEach(([type], i) => { const y0 = y + 24 + i * hc; couche(g, x, y0, w, hc + 1, type); });
+  if (m > 0) {
+    // le mélange : des mottes d’une couche passent dans les autres, les limites deviennent floues
+    for (let i = 0; i < Math.round(m * 200); i++) { const src = Math.floor(rr() * COUCHES.length), px = x + rr() * w, py = y + 24 + rr() * (h - 24), r0 = 3 + rr() * 6;
+      g.fillStyle = COUL[COUCHES[src][0]][rr() > .5 ? 0 : 1]; g.globalAlpha = Math.min(1, m * 1.4); g.beginPath(); g.ellipse(px, py, r0 * 1.3, r0, rr() * 3, 0, 6.28); g.fill(); }
+    g.globalAlpha = 1;
+    // les galeries et la litière enfouie
+    g.strokeStyle = 'rgba(30,18,10,.75)'; g.lineWidth = 3.5; for (let i = 0; i < Math.round(m * 7); i++) { const px = x + rr() * w, py = y + 30 + rr() * (h - 40); g.beginPath(); g.moveTo(px, py); g.quadraticCurveTo(px + 20, py + 30, px - 10, py + 60); g.stroke(); }
+    for (let i = 0; i < Math.round(m * 18); i++) ST.feuilleMorte(g, x + rr() * w, y + 40 + rr() * (h - 50), .22, { angle: rr() * 6, graine: i });
+  }
+  // la litière en surface (de moins en moins)
+  if (o.litiere) for (let i = 0; i < 9; i++) if ((i / 9) >= m * .8) ST.feuilleMorte(g, x + 18 + i * (w - 30) / 8, y + 16, .5, { angle: i * .7, graine: i + 3, alpha: o.litiere });
+  // les lombrics
+  if (o.vers) VERS.forEach((V, i) => { if (i >= o.vers) return; const px = x + 20 + V.x * (w - 60), py = o.surface ? y + 10 : y + 40 + V.y * (h - 70), a = t * V.v + V.ph;
+    ST.ver(g, Array.from({ length: 7 }, (_, j) => [px + j * 6, py + Math.sin(a + j * .8) * 4]), { e: 5 }); });
+  g.restore();
+  g.strokeStyle = 'rgba(220,240,255,.85)'; g.lineWidth = 3; g.strokeRect(x, y, w, h);
+  if (o.noir) { g.strokeStyle = `rgba(10,10,12,${.9 * o.noir})`; g.lineWidth = 12; g.strokeRect(x - 7, y - 7, w + 14, h + 14); }
+}
+function aquariumVue(c) {
+  const t = B.chrono.t, L = scene.L, K = scene.compact, x = 140, y = 56, w = 320, h = 300;
+  const m = doux((t - M.mois) / (M.melange - M.mois));
+  const nv = t >= M.lombrics - 2 ? Math.min(10, Math.floor((t - M.lombrics + 2) / .2) + 1) : 0;
+  c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = doux((t - M.couches + 2) / 1.4);
+    aquarium(g, x, y, w, h, m, t, { litiere: doux((t - M.litiere + 1.4) / 1), vers: nv, surface: t < M.mois, noir: doux((t - M.obscurite + 1) / 1) * (t < M.resultat - 1 ? 1 : .35) }); g.restore(); });
+  const hc = (h - 24) / COUCHES.length;
+  if (!K) COUCHES.forEach(([, nom], i) => { if (t >= M.couches - 1) ecrit.ecrire(c, 'c' + i, () => c.texte(nom, x - 14, y + 24 + i * hc + hc / 2 + 6, { couleur: 'blanc', taille: 17, align: 'right' })); });
+  if (t >= M.litiere - .5 && !K) ecrit.ecrire(c, 'lit', () => c.texte('litière', x - 14, y + 18, { couleur: 'orange', taille: 17, align: 'right' }));
+  c.repere('aquarium', x, y, w, h, 'l’aquarium');
+  if (nv > 0 && t < M.mois) { ST.compter(c, t, M.lombrics - 2, .2, VERS.slice(0, 10).map(V => ({ x: x + 20 + V.x * (w - 60) - 4, y: y + 2, w: 46, h: 16 })), { dx: -30, dy: -2, taille: 15 }); }
+  if (t >= M.lombrics - .2) ecrit.ecrire(c, 'dix', () => c.texte('10 lombrics', x + w / 2, y - 14, { couleur: 'jaune', taille: 20, align: 'center' }));
+  if (t >= M.obscurite - .4 && !K) ecrit.ecrire(c, 'noir', () => { c.texte('parois couvertes', x + w + 22, 96, { couleur: 'blanc', taille: 17 }); c.texte('de papier noir', x + w + 22, 118, { couleur: 'blanc', taille: 17 }); });
+  if (t >= M.mois - 1) { const j = Math.min(30, Math.max(1, Math.round((t - M.mois + 1) / (M.melange - M.mois + 1) * 30)));
+    c.direct(() => c.texte(`jour ${j}`, x + w + 22, 180, { couleur: 'jaune', taille: 22, gras: true })); c.repere('mois', x + w + 16, 156, 120, 32, 'un mois passe'); }
+  if (t >= M.resultat - 1.2) {
+    const xa = x + w + 150, wa = Math.min(150, L - xa - 12), ha = wa * h / w;
+    if (wa > 90) { c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = doux((t - M.resultat + 1.2) / 1); aquarium(g, xa, 230, wa, ha, 0, t, { litiere: 1 }); g.restore(); });
+      ecrit.ecrire(c, 'avant', () => c.texte('au début', xa + wa / 2, 220, { couleur: 'blanc', taille: 17, align: 'center' })); }
+    ecrit.ecrire(c, 'apres', () => c.texte('après un mois : couches mélangées', x + w / 2, 390, { couleur: 'vert', taille: 19, align: 'center', max: w + 120 }));
+    c.repere('resultat', x, y, w, h, MOTIFS.resultat);
+  }
+  if (t >= M.melange - .4) c.repere('melange', x, y + 24, w, h - 24, MOTIFS.melange);
+}
+
+/* ───────── mécanique ───────── */
+function mecanique(c) {
+  const t = B.chrono.t, L = scene.L, K = scene.compact, w = 226, pas = Math.min(250, (L - 20 - w) / 2), y0 = 70, h = 220;
+  const P3 = [['fragmentation', 'Fragmentation', ['les feuilles sont avalées,', 'broyées, mélangées à la terre']], ['galeries', 'Galeries', ['l’air et l’eau', 'circulent mieux']], ['brassage', 'Brassage', ['minéraux remontés,', 'débris enfouis']]];
+  P3.forEach(([id, titre, lignes], i) => {
+    const x = 10 + i * pas, tm = M[id]; if (t < tm - 3.2) return;
+    const u = doux((t - tm + 3.2) / 3);
+    c.direct(() => { const g = c.ctx; g.save(); g.beginPath(); g.rect(x, y0, w, h); g.clip();
+      if (id === 'fragmentation') { couche(g, x, y0 + 110, w, h - 110, 'terreau'); ST.herbe(g, x + 20, y0 + 110); ST.herbe(g, x + w - 20, y0 + 110);
+        ST.feuilleMorte(g, x + 80, y0 + 90, 1.4, { trous: u, graine: 3 }); ST.ver(g, Array.from({ length: 9 }, (_, j) => [x + 120 + j * 9, y0 + 118 + Math.sin(j * .7 + t * 2) * 5]), { e: 8 });
+        const rr = ST.graine(5); for (let k = 0; k < Math.round(u * 30); k++) { g.fillStyle = '#9a6a2e'; g.fillRect(x + 20 + rr() * (w - 40), y0 + 130 + rr() * 80, 4, 3); } }
+      else if (id === 'galeries') { couche(g, x, y0 + 30, w, h - 30, 'terreau'); const rr = ST.graine(8); g.strokeStyle = '#d8c7a8'; g.lineWidth = 7; g.lineCap = 'round';
+        for (let k = 0; k < 4; k++) { const gx = x + 30 + k * 52; g.beginPath(); g.moveTo(gx, y0 + 30); for (let j = 1; j <= 8 * u; j++) g.lineTo(gx + Math.sin(j + k) * 14, y0 + 30 + j * 22); g.stroke(); }
+        if (t >= M.aeration - 1.4) for (let k = 0; k < 4; k++) { const gx = x + 30 + k * 52, f = ((t * .35 + k * .27) % 1), j = f * 8, yy = y0 + 30 + j * 22, xx = gx + Math.sin(j + k) * 14;
+          if (k % 2) ST.bulle(g, xx, yy, 5); else ST.goutte(g, xx, yy, 5); } }
+      else { const hh = (h - 30) / 2; couche(g, x, y0 + 30, w, hh, 'terreau'); couche(g, x, y0 + 30 + hh, w, hh, 'sable');
+        const rr = ST.graine(12); for (let k = 0; k < 14; k++) { const px = x + 14 + rr() * (w - 28), f = rr();
+          const yu = mix(y0 + 30 + hh + 20 + f * 60, y0 + 50 + f * 40, u), yd = mix(y0 + 40 + f * 60, y0 + 30 + hh + 20 + f * 60, u);
+          ST.grain(g, px, yu, 'sable', { r: 6, graine: k }); g.fillStyle = '#2a1a0c'; g.beginPath(); g.ellipse(px + 8, yd, 6, 3.5, k, 0, 6.28); g.fill(); } }
+      g.restore(); g.strokeStyle = 'rgba(226,232,240,.5)'; g.lineWidth = 1.5; g.strokeRect(x, y0, w, h); });
+    if (id === 'brassage' && !K) ecrit.ecrire(c, 'fl', () => { c.fleche(x + w - 22, y0 + 190, x + w - 22, y0 + 90, { couleur: 'jaune', largeur: 2.6 }); c.fleche(x + 22, y0 + 90, x + 22, y0 + 190, { couleur: 'orange', largeur: 2.6 }); });
+    ecrit.ecrire(c, 't' + i, () => c.texte(`${i + 1}. ${titre}`, x + w / 2, 50, { couleur: 'jaune', taille: 20, align: 'center' }));
+    if (!K) ecrit.ecrire(c, 'l' + i, () => lignes.forEach((l, k) => c.texte(l, x + w / 2, y0 + h + 32 + k * 24, { couleur: 'vert', taille: 17, align: 'center', max: w + 16 })));
+    if (t >= tm - .3) ST.lueur(c, x, y0, w, h, t < tm + .8);
+    c.repere(id, x, 30, w, h + 90, MOTIFS[id]);
+  });
+  if (t >= M.aeration - .3) c.repere('aeration', 10 + pas, y0, w, h, MOTIFS.aeration);
+}
+
+/* ───────── chimique ───────── */
+const ELTS = [['Azote (nitrates)', 2, 10, '×5'], ['Calcium', 4, 8, '×2'], ['Magnésium', 3, 9, '×3'], ['Phosphore', 1, 7, '×7'], ['Potassium', 2, 22, '×11']];
+function chimique(c) {
+  const t = B.chrono.t, L = scene.L, K = scene.compact, xs = 20, ws = 220, ys = 130, hs = 250;
+  c.direct(() => { const g = c.ctx; couche(g, xs, ys, ws, hs, 'terreau'); ST.herbe(g, xs + 20, ys); ST.herbe(g, xs + ws - 20, ys);
+    // la galerie et le lombric qui avale la terre
+    g.strokeStyle = '#1a1009'; g.lineWidth = 12; g.lineCap = 'round'; g.beginPath(); g.moveTo(xs + 110, ys); g.quadraticCurveTo(xs + 90, ys + 120, xs + 150, ys + 200); g.stroke();
+    const a = t * 2; ST.ver(g, Array.from({ length: 14 }, (_, j) => { const u = .25 + j / 20; return [xs + 110 + (u * u * 40 - u * 40) * 1 + u * 40 * u, ys + u * 200 + Math.sin(a + j) * 2]; }), { e: 9 });
+    if (t >= M.avale - 2 && t < M.turricule + 2) { const rr = ST.graine(Math.floor(t * 4)); for (let k = 0; k < 6; k++) ST.grain(g, xs + 120 + rr() * 20, ys + 220 - rr() * 20, 'limon', { r: 3 }); }
+    // les turricules à la surface
+    const u = doux((t - M.turricule + 2.6) / 2.4);
+    if (u > 0) for (let k = 0; k < 9; k++) { const px = xs + 92 + (k % 3) * 14 - (k > 5 ? 0 : 4), py = ys - 6 - Math.floor(k / 3) * 10; g.globalAlpha = Math.min(1, u * 3 - k * .25); if (g.globalAlpha <= 0) continue;
+      const gr = g.createRadialGradient(px - 3, py - 3, 1, px, py, 10); gr.addColorStop(0, '#8a6444'); gr.addColorStop(1, '#3e2716'); g.fillStyle = gr; g.beginPath(); g.ellipse(px, py, 10, 7, k, 0, 6.28); g.fill(); g.globalAlpha = 1; }
+  });
+  c.texte('le sol', xs + 30, ys + hs - 14, { couleur: 'blanc', taille: 17 });
+  if (t >= M.turricule - .6) { ecrit.ecrire(c, 'tur', () => { c.texte('turricules', xs + 170, ys - 40, { couleur: 'jaune', taille: 18 }); c.ligne(xs + 168, ys - 34, xs + 130, ys - 14, { couleur: 'jaune', largeur: 1.4 }); }); c.repere('turricule', xs + 70, ys - 50, 90, 50, 'les turricules : les déjections'); }
+  if (!K) ecrit.ecrire(c, 'ver', () => c.texte('le lombric avale la terre', xs + ws / 2, ys + hs + 30, { couleur: 'blanc', taille: 17, align: 'center' }));
+  c.repere('avale', xs, ys, ws, hs, 'le lombric avale la terre');
+  const xt = 268, cols = [Math.min(190, L - xt - 330), 96, 128, 92];
+  const tab = ST.tableauAnime(c, ecrit, t, { cle: 'tab', x: xt, y: 50, cols, lignes: [56, 44, 44, 44, 44, 44], taille: 18, tTrace: M.tableau - 1.6,
+    entetes: [{ l: 0, c: 0, texte: 'Élément', couleur: 'blanc' }, { l: 0, c: 1, texte: 'Sol', couleur: 'blanc' }, { l: 0, c: 2, texte: 'Déjections', couleur: 'blanc' }, { l: 0, c: 3, lignes: ['Combien', 'de fois ?'], couleur: 'blanc' },
+      ...ELTS.map((E, i) => ({ l: i + 1, c: 0, texte: E[0], couleur: 'cyan' }))],
+    cellules: [...ELTS.map((E, i) => ({ l: i + 1, c: 1, texte: String(E[1]), t: M.sol_vals - 2.4 + i * .5, de: [xs + 60, ys + 120] })),
+      ...ELTS.map((E, i) => ({ l: i + 1, c: 2, texte: String(E[2]), t: M.dej_vals - 2.4 + i * .5, de: [xs + 110, ys - 20] })),
+      ...ELTS.slice(0, 4).map((E, i) => ({ l: i + 1, c: 3, texte: E[3], t: M.rapports - 2.2 + i * .5, couleur: 'vert' })),
+      { l: 5, c: 3, texte: '×11', t: M.potassium - .9, couleur: 'vert' }] });
+  if (t >= M.tableau - 1.6) {
+    const r0 = tab(0, 0), r1 = tab(5, 3); c.repere('tableau', r0.x, r0.y, r1.x + r1.w - r0.x, r1.y + r1.h - r0.y, 'le tableau : sol et déjections');
+    if (!K) ecrit.ecrire(c, 'unite', () => c.texte('taux en mg par kg de terre', r0.x, r1.y + r1.h + 24, { couleur: 'faible', taille: 16 }));
+    if (t >= M.potassium - .9) { const r = tab(5, 1), q = tab(5, 3); c.repere('potassium', r.x, r.y, q.x + q.w - r.x, r.h, MOTIFS.potassium); }
+    if (t >= M.rapports - 2.2) { const r = tab(1, 3), q = tab(4, 3); c.repere('rapports', r.x, r.y, r.w, q.y + q.h - r.y, MOTIFS.rapports); }
+  }
+  if (t >= M.conclusion - 1 && P.conclusions && !K) {
+    ecrit.ecrire(c, 'concl', () => ['Les déjections sont plus riches en éléments minéraux :', 'les lombrics améliorent la fertilité du sol.'].forEach((l, k) => c.texte(l, xt, 372 + k * 24, { couleur: 'vert', taille: 18, max: L - xt - 12 })));
+    c.repere('conclusion', xt, 352, L - xt - 12, 52, MOTIFS.conclusion);
+  }
+}
+function dessiner(c) { scene.cadre({ aquarium: 131, mecanique: 133, chimique: 135 }[VUE]); ({ aquarium: aquariumVue, mecanique, chimique })[VUE](c); return c.fin(); }
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => {
+  const t = B ? B.chrono.t : 0;
+  if (VUE === 'aquarium') return { x: 110, y: 16, w: 498, h: 356 };
+  if (VUE === 'mecanique') { const pas = Math.min(250, (L - 20 - 226) / 2), i = t >= M.brassage - 3.2 ? 2 : t >= M.galeries - 3.2 ? 1 : 0; return { x: 4 + i * pas, y: 26, w: 238, h: 270 }; }
+  return t >= M.tableau - 1.6 ? { x: 262, y: 44, w: Math.min(190, L - 268 - 330) + 324, h: 286 } : { x: 10, y: 74, w: 240, h: 312 };
+};
+function voir(t) { return Object.keys(M).filter(k => t >= M[k] && (k !== 'conclusion' || P.conclusions)).map(k => MOTIFS[k]).join(' ; ') + (VUE === 'chimique' && t >= M.dej_vals ? '. Tableau : ' + ELTS.map(E => `${E[0]} ${E[1]} → ${E[2]}`).join(' ; ') : ''); }
+var B = ST.brancher({ id: 'edaph_lombrics_' + VUE, titre: { aquarium: 'Les lombrics dans un aquarium', mecanique: 'L’action mécanique des lombrics', chimique: 'L’action chimique des lombrics' }[VUE], M, FIN, motifs: MOTIFS, params: P, vue: VUE,
+  texte: { aquarium: 'Aquarium : couches de sol séparées (terreau, sable, argile) et litière ; dix lombrics ; parois couvertes de noir ; après un mois, les couches sont mélangées, la litière enfouie, des galeries creusées.',
+    mecanique: 'Action mécanique des lombrics : fragmentation de la litière (feuilles avalées, broyées, mélangées à la terre), creusement de galeries (aération, circulation de l’eau), brassage des couches (minéraux remontés, débris enfouis).',
+    chimique: 'Action chimique : les déjections (turricules) sont plus riches que le sol : azote 2 → 10 (5 fois), calcium 4 → 8 (2 fois), magnésium 3 → 9 (3 fois), phosphore 1 → 7 (7 fois), potassium 2 → 22 (11 fois), en mg par kg de terre.' }[VUE],
+  voir, depart: 'Observe…', fini: () => ({ aquarium: 'Les lombrics ont mélangé les couches.', mecanique: 'Fragmenter, creuser, brasser.', chimique: 'Des déjections plus riches.' }[VUE]),
+  setParams: { schema: { conclusions: 'true | false' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  explication: { [VUE]: Object.keys(M).map(k => ({ repere: k, texte: MOTIFS[k] })) } });
+window.Tableau.bulle($('feedback'), { aquarium: 'Que font les lombrics au sol ?', mecanique: 'Trois actions mécaniques', chimique: 'Le sol ou les déjections : lequel est plus riche ?' }[VUE]);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

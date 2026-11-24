@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La formation du sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Formation du sol en trois étapes : la roche-mère se fissure et se dissout ; mousses et lichens la colonisent ; le sol s’enrichit en matière organique et se divise en horizons A, B, C au-dessus de la roche-mère"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="vivants.js"></script>
+<script>
+/*
+ * Activité 6, doc 3 : formation et évolution du sol (fe_e5_formation), trois colonnes peintes (recréé).
+ *  Étape 1 : la roche-mère se fissure (variations de température) et ses minéraux se dissolvent (pluie chargée de CO₂).
+ *  Étape 2 : végétation pionnière (mousses, lichens) et premières matières organiques.
+ *  Étape 3 : enrichissement en matière organique, horizons A (humus, litière), B (accumulation), C (roche altérée),
+ *            roche-mère ; le lavage entraîne sels et molécules vers le bas ; quelques-uns remontent.
+ * Moments : etape1 2 ; desagregation 5 ; etape2 8 ; pionniers 10,5 ; etape3 13 ; horizons 16 ; lavage 18,5 ; fin 19.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const P = { conclusions: true };
+const M = { etape1: 2, desagregation: 5, etape2: 8, pionniers: 10.5, etape3: 13, horizons: 16, lavage: 18.5 }, FIN = 19;
+const MOTIFS = { etape1: 'étape 1 : la roche-mère', desagregation: 'la roche se fissure et se dissout', etape2: 'étape 2 : des fragments et de la matière organique', pionniers: 'mousses et lichens : végétation pionnière',
+  etape3: 'étape 3 : le sol s’épaissit', horizons: 'horizons A, B, C sur la roche-mère', lavage: 'le lavage entraîne les sels vers le bas' };
+const W = 200, Y0 = 50, YS = 128, YB = 372;
+function roche(g, x, y, w, h, fis) {
+  const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, '#e8b98a'); gr.addColorStop(1, '#c48d5e'); g.fillStyle = gr; g.fillRect(x, y, w, h);
+  g.strokeStyle = 'rgba(80,50,30,.55)'; g.lineWidth = 1.2; for (let i = 0; i < w / 22; i++) for (let j = 0; j < h / 24; j++) { const px = x + 10 + i * 22 + (j % 2) * 11, py = y + 12 + j * 24; g.beginPath(); g.moveTo(px - 3, py); g.lineTo(px + 3, py); g.moveTo(px, py - 3); g.lineTo(px, py + 3); g.stroke(); }
+  if (fis > 0) { const rr = ST.graine(Math.round(x)); g.strokeStyle = 'rgba(40,22,12,.85)'; g.lineWidth = 1.8; for (let i = 0; i < 7; i++) { let px = x + rr() * w, py = y + 4 + rr() * h * .6; g.beginPath(); g.moveTo(px, py); for (let k = 0; k < 4 * fis; k++) { px += (rr() - .5) * 26; py += 10 + rr() * 12; g.lineTo(px, py); } g.stroke(); } }
+}
+function ciel(g, x, y, w, h) { const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, '#7cc3f0'); gr.addColorStop(1, '#d8efff'); g.fillStyle = gr; g.fillRect(x, y, w, h); }
+function fragments(g, x, y, w, h, n) { const rr = ST.graine(Math.round(x + 7)); g.fillStyle = '#c9c9c4'; g.fillRect(x, y, w, h);
+  for (let i = 0; i < n; i++) { const px = x + 8 + rr() * (w - 16), py = y + 6 + rr() * (h - 12), r = 7 + rr() * 9; const gr = g.createRadialGradient(px - 2, py - 2, 1, px, py, r); gr.addColorStop(0, '#eec49a'); gr.addColorStop(1, '#b07a4c'); g.fillStyle = gr; g.beginPath(); g.ellipse(px, py, r * 1.2, r * .8, rr() * 3, 0, 6.28); g.fill(); } }
+function dessiner(c) {
+  scene.cadre(151);
+  const t = B.chrono.t, L = scene.L, K = scene.compact, pas = Math.min(270, (L - 40 - W) / 2), X = i => 20 + i * pas;
+  const cols = [M.etape1, M.etape2, M.etape3];
+  cols.forEach((t0, i) => {
+    if (t < t0 - 1.6) return;
+    const x = X(i), u = doux((t - t0 + 1.6) / 1.2);
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = u; g.beginPath(); g.rect(x, Y0, W, YB - Y0); g.clip();
+      ciel(g, x, Y0, W, YS - Y0);
+      if (i === 0) { roche(g, x, YS, W, YB - YS, doux((t - M.desagregation + 1.6) / 1.6));
+        if (t >= M.desagregation - 1.6 && t < M.desagregation + 2.5) { for (let k = 0; k < 8; k++) ST.goutte(g, x + 14 + k * 24, Y0 + 20 + ((t * 70 + k * 17) % (YS - Y0 - 20)), 3.4, .9);
+          g.fillStyle = '#facc15'; g.beginPath(); g.arc(x + W - 24, Y0 + 20, 13, 0, 6.28); g.fill(); } }
+      else if (i === 1) { roche(g, x, YS + 70, W, YB - YS - 70, 1); fragments(g, x, YS, W, 74, 16); g.fillStyle = 'rgba(60,40,25,.55)'; g.fillRect(x, YS, W, 8);
+        const up = doux((t - M.pionniers + 1.6) / 1.4); if (up > 0) for (let k = 0; k < 5; k++) ST.mousse(g, x + 22 + k * 40, YS + 2, 1.2, { lichen: k % 2, alpha: up, graine: k + 3 }); }
+      else { const yA = YS, yBh = YS + 70, yC = YS + 130, yR = YS + 182;
+        g.fillStyle = '#3b3430'; g.fillRect(x, yA, W, yBh - yA); const rr = ST.graine(9); for (let k = 0; k < 120; k++) { g.fillStyle = rr() > .5 ? 'rgba(20,14,10,.6)' : 'rgba(150,130,110,.3)'; g.fillRect(x + rr() * W, yA + rr() * 70, 2, 2); }
+        g.fillStyle = '#b9b7b2'; g.fillRect(x, yBh, W, yC - yBh); for (let k = 0; k < 40; k++) { g.fillStyle = 'rgba(120,80,50,.5)'; g.fillRect(x + rr() * W, yBh + rr() * 60, 3, 3); }
+        fragments(g, x, yC, W, yR - yC, 10); roche(g, x, yR, W, YB - yR, .6);
+        for (let k = 0; k < 8; k++) ST.feuilleMorte(g, x + 14 + k * 24, YS - 2, .32, { angle: k, graine: k });
+        ST.arbre(g, x + 150, YS, 76); ST.plante(g, x + 50, YS, 40); ST.herbe(g, x + 100, YS); ST.herbe(g, x + 20, YS);
+        g.strokeStyle = 'rgba(214,190,150,.9)'; g.lineWidth = 1.6; for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(x + 150, YS); g.quadraticCurveTo(x + 150 + k * 10, YS + 40, x + 150 + k * 18, YS + 90); g.stroke(); }
+        ST.ver(g, Array.from({ length: 7 }, (_, j) => [x + 30 + j * 7, YS + 40 + Math.sin(j + t) * 3]), { e: 5 });
+        if (t >= M.lavage - 1.6) { const ul = (t * .5) % 1; for (let k = 0; k < 4; k++) { const yy = YS + 10 + ((ul + k / 4) % 1) * 120; ST.ion(g, x + 70 + k * 12, yy, k % 2 ? 'K+' : 'Ca2+', { r: 6, texte: false }); } } }
+      g.restore(); g.strokeStyle = 'rgba(226,232,240,.6)'; g.lineWidth = 1.6; g.strokeRect(x, Y0, W, YB - Y0); });
+    ecrit.ecrire(c, 'titre' + i, () => c.texte('Étape ' + (i + 1), x + W / 2, 36, { couleur: 'jaune', taille: 21, align: 'center', gras: true }));
+    c.repere('etape' + (i + 1), x, Y0, W, YB - Y0, MOTIFS['etape' + (i + 1)]);
+  });
+  const leg = (k, s, x, y, coul) => ecrit.ecrire(c, k, () => c.texte(s, x, y, { couleur: coul || 'blanc', taille: 17, align: 'center', max: W + 50 }));
+  if (t >= M.etape1 - .6) { leg('r1', 'roche-mère', X(0) + W / 2, YS + 110, '#3a1e0e'); }
+  if (t >= M.desagregation - .4 && !K) { leg('d1', 'fissures (température)', X(0) + W / 2, YB + 24, 'orange'); leg('d2', 'dissolution (pluie + CO₂)', X(0) + W / 2, YB + 46, 'cyan'); c.repere('desagregation', X(0), Y0, W, YB - Y0, MOTIFS.desagregation); }
+  if (t >= M.pionniers - .4) { if (!K) { leg('p1', 'mousses, lichens :', X(1) + W / 2, YB + 24, 'vert'); leg('p2', 'végétation pionnière', X(1) + W / 2, YB + 46, 'vert'); } c.repere('pionniers', X(1), YS - 30, W, 110, MOTIFS.pionniers); }
+  if (t >= M.etape2 - .6 && !K) leg('mo2', 'matière organique', X(1) + W / 2, YS - 12, '#1e3a8a');
+  if (t >= M.horizons - 1.4) {
+    const x = X(2), H = [['horizon A', YS + 40, '#f5f5f4'], ['horizon B', YS + 104, '#1f2937'], ['horizon C', YS + 160, '#1f2937'], ['roche-mère', YS + 220, '#3a1e0e']];
+    H.forEach(([s, y, coul], k) => { if (t >= M.horizons - 1.4 + k * .4) ecrit.ecrire(c, 'h' + k, () => c.texte(s, x + W - 8, y, { couleur: coul, taille: 17, align: 'right', gras: true })); });
+    if (!K) { leg('hz1', 'humus et litière en haut,', x + W / 2, YB + 24, 'jaune'); leg('hz2', 'horizons A, B, C', x + W / 2, YB + 46, 'jaune'); }
+    c.repere('horizons', x, YS, W, YB - YS, MOTIFS.horizons);
+  }
+  if (t >= M.lavage - 1) { ecrit.ecrire(c, 'lav', () => c.fleche(X(2) - 18, YS + 10, X(2) - 18, YS + 120, { couleur: 'cyan', largeur: 2.6 })); if (!K && pas > W + 60) ecrit.ecrire(c, 'lavt', () => { c.texte('lavage', X(2) - 26, YS + 60, { couleur: 'cyan', taille: 17, align: 'right' }); }); c.repere('lavage', X(2) - 30, YS, 40, 130, MOTIFS.lavage); }
+  // les flèches du temps entre les colonnes
+  [1, 2].forEach(i => { if (t >= cols[i] - 1.6 && pas > W + 40) ecrit.ecrire(c, 'fl' + i, () => c.fleche(X(i) - pas + W + 8, 90, X(i) - 8, 90, { couleur: 'blanc', largeur: 2.2 })); });
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => { const t = B ? B.chrono.t : 0, pas = Math.min(270, (L - 40 - W) / 2), i = t >= M.etape3 - 1.6 ? 2 : t >= M.etape2 - 1.6 ? 1 : 0; return { x: 20 + i * pas - 40, y: 14, w: W + 50, h: YB - 14 + 4 }; };
+function voir(t) { return Object.keys(M).filter(k => t >= M[k]).map(k => MOTIFS[k]).join(' ; ') || 'Rien encore.'; }
+var B = ST.brancher({ id: 'edaph_formation', titre: 'La formation du sol', M, FIN, motifs: MOTIFS, params: P,
+  texte: 'Étape 1 : désagrégation de la roche-mère (fissures dues aux variations de température, dissolution par l’eau de pluie chargée de CO₂). Étape 2 : colonisation par la végétation pionnière (mousses, lichens), premières matières organiques. Étape 3 : enrichissement en matière organique, formation du complexe argilo-humique, apparition des horizons A, B, C ; le lavage entraîne les sels minéraux vers les horizons profonds.',
+  voir, depart: 'Une roche nue…', fini: () => 'Roche-mère → végétation pionnière → horizons.',
+  explication: { formation: Object.keys(M).map(k => ({ repere: k, texte: MOTIFS[k] })) } });
+window.Tableau.bulle($('feedback'), 'Comment le sol se forme-t-il ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

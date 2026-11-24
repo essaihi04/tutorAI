@@ -1,6 +1,6 @@
 """Publie le lien libre du Tronc Commun SVT : https://moalim.online/tronc-commun/ (22 novembre 2026).
 
-Deux cours (« La sortie écologique », « Les facteurs édaphiques » jusqu'à l'activité 3) et une évaluation formative,
+Deux cours (« La sortie écologique », « Les facteurs édaphiques » activités 1 à 7) et une évaluation formative,
 hors du site : ni dans la base des élèves, ni dans l'application. Comme `publier_cours_ondes.py` : une page construite à
 part, publiée dans son propre dossier du serveur, sans commit ni déploiement du site et sans toucher à nginx
 (`location /` fait `try_files $uri $uri/ /index.html` : le dossier `tronc-commun/` est servi tel quel).
