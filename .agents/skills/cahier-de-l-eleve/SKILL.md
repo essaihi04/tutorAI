@@ -45,6 +45,23 @@ coûte aucune voix (il peut donc être corrigé dans le cours en ligne comme dan
 est seulement une image pour comprendre (l'analogie du taxi peut rester en un mot entre parenthèses si elle aide à
 retenir), une chose hors du cadre, une notion pas encore enseignée.
 
+## 2 bis. Le cours en général, jamais les données d'un exercice (24 novembre 2026)
+
+Demande de l'utilisateur : « donner seulement les cas en général, pas les données des exercices : quand il révise,
+l'élève n'a pas les énoncés ». Le cahier se relit SANS le cours ni les documents :
+- **jamais** les nombres, les noms ou les résultats d'un document ou d'un exercice : pas de « S1 : P = 80/8 = 10 ml/min »,
+  pas de « Maâmora : I : 2 espèces », pas de « Nereis : F ≈ 83 % », pas de « zone A (0 à 50 cm) : échec », pas de
+  « azote ×5 », pas de « R1 (20 ; 40 ; 40) : limon ». Une ligne qui n'a de sens qu'avec l'énoncé sous les yeux est fausse ;
+- **à la place, la règle générale** que le document a montrée, écrite pour tous les cas : « un sol sableux est très
+  perméable et retient peu d'eau ; un sol argileux, l'inverse », « les déjections des lombrics sont plus riches en
+  éléments minéraux que le sol », « trop peu de sable : asphyxie des racines ; trop de sable : manque d'eau » ;
+- **les valeurs de référence du cours restent** (elles servent à tous les exercices) : les seuils des indices de
+  fréquence, l'échelle de Braun-Blanquet, les classes de taille de la faune, les zones de pH… de préférence en tableau ;
+- un **exemple** n'est permis que s'il est inventé, court et complet en une ligne, sans renvoyer à un document
+  (« Exemple : 6 relevés sur 10 → F = 60 % → indice IV ») ;
+- le nom d'un lieu ou d'une espèce étudiés en classe reste seulement s'il est une connaissance du programme (le
+  chêne-liège calcifuge), pas une donnée d'exercice.
+
 ## 3. Combien (la taille)
 
 - **Un bloc : 3 à 6 lignes de texte et 0 à 2 figures**, qui tiennent dans UN écran, téléphone en paysage compris
@@ -87,3 +104,45 @@ retenir), une chose hors du cadre, une notion pas encore enseignée.
    (`json.dumps(d, ensure_ascii=False, indent=2)`, mêmes fins de ligne, même fin de fichier) ; appliquer au cours en
    ligne ET à sa copie en attente (`backend/data/courses/en_attente/<deck>.json`) quand elle existe, en suivant les
    `slide_ids` et les blocs de chacun (la copie en attente peut avoir un autre découpage).
+
+## 6. Mise en page et charte de couleurs (24 novembre 2026)
+
+Demande de l'utilisateur : « le cahier doit être plus organisé : les définitions de côté, les explications bien
+écrites, pas de texte non rassemblé, pas de texte écrit partout ; des tableaux, des graphes ; le titre au milieu, le
+début de paragraphe à gauche… ; penser à la charte de couleurs ». Le lecteur (`memoire/LignesCahier.tsx`, bloc ET bulle de
+diapositive) met en forme chaque ligne d'après son début ; écrire donc chaque ligne avec le bon début :
+
+| Début de ligne | Rendu | Couleur (craie sur tableau vert) |
+|---|---|---|
+| `I. Titre` (romain) | titre de partie, **au milieu**, souligné | jaune craie `#fde68a` |
+| `1. Sous-titre` (seul sur sa ligne, sans « : ») | à gauche, souligné | cyan `#67e8f9` |
+| `a) Sous-partie` (seule sur sa ligne) | à gauche, en retrait | vert clair `#86efac` |
+| `Définition : …` | **encadré à part**, étiquette « Définition » | vert `#34d399` |
+| `Formule : …` | encadré, formule au milieu, avec unités | ambre `#fbbf24` |
+| `Méthode : 1) … 2) … 3) …` | encadré, une étape par ligne | bleu `#60a5fa` |
+| `Attention : …` | l'erreur à éviter | rose `#fda4af` |
+| `Remarque : …` / `Exemple : …` | en retrait, plus petit (exemple en italique) | gris clair `#d4d4d8` |
+| `Donc …` / `Conclusion : …` / `Bilan : …` | ⇒ en gras | orange `#fdba74` |
+| `\| a \| b \|` (lignes qui se suivent) | **un tableau** ; la 1ʳᵉ ligne est l'en-tête | en-tête jaune |
+| le reste | un paragraphe qui commence à gauche | blanc craie `#f5f1dc` |
+
+Règles d'organisation :
+- **un titre seul sur sa ligne** (« 2. La texture du sol »), puis le contenu ; jamais « 1. Outils : carte, boussole… »
+  (titre et contenu collés) ;
+- **une définition par encadré**, mot pour mot, le terme défini en tête (« Définition : la texture est… ») ;
+- **dès qu'il y a une liste de cas qui se comparent** (formes de l'eau, structures, indices, classes de taille, pH, clé
+  de détermination), un **tableau** plutôt qu'une phrase pleine de « ; » ; 2 à 4 colonnes, 6 lignes au plus ;
+- **dès que la notion se dessine** (courbe, histogramme, triangle, schéma), une figure (`cahier_figures`, § 4) ;
+- les formules dans « Formule : » avec le sens de chaque lettre et l'unité ;
+- jamais deux idées collées par « ; » quand elles se lisent mieux en deux lignes ; jamais de ligne de plus de ~90
+  caractères hors tableau.
+
+## 7. Le niveau de la classe (24 novembre 2026)
+
+Le cahier est celui d'UNE classe : son vocabulaire, son programme, son examen. Le Tronc Commun n'est pas le 2ᵉ Bac :
+- **Tronc Commun** (contrôles continus, examen local) : phrases simples, vocabulaire du programme de TC, pas de notion
+  de 1ʳᵉ ou de 2ᵉ Bac, calculs simples (%, rapports, moyennes) ; les méthodes visent les questions du contrôle
+  (décrire → déduire → expliquer, calculer, construire un histogramme, lire le triangle des textures) ;
+- **1ʳᵉ Bac** : examen régional ; **2ᵉ Bac** : national, ses formules, ses phrases types et son barème (§ 2) ;
+- lire le niveau dans le cours (`niveau`) et ne jamais utiliser une notion qu'une classe n'a pas encore vue.
+

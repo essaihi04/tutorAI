@@ -51,12 +51,20 @@ export function partiesDuCahier(lignes: { texte: string }[], figures: (FigureCah
       else groupes[groupes.length - 1].push(i);
     });
   } else if (lignes.length > 3) {
-    const k = Math.ceil(lignes.length / 3);
-    let i = 0;
+    // les lignes d'un tableau (« | a | b | » qui se suivent) comptent pour une : un tableau n'est jamais coupé (24/11/2026)
+    const unites: number[][] = [];
+    lignes.forEach((l, i) => {
+      const tableau = (l.texte || '').trim().startsWith('|');
+      const der = unites[unites.length - 1];
+      if (tableau && der && (lignes[der[der.length - 1]].texte || '').trim().startsWith('|')) der.push(i);
+      else unites.push([i]);
+    });
+    const k = Math.ceil(unites.length / 3);
+    let u = 0;
     for (let g = 0; g < k; g++) {
-      const taille = Math.ceil((lignes.length - i) / (k - g));
-      groupes.push(Array.from({ length: taille }, (_, j) => i + j));
-      i += taille;
+      const taille = Math.ceil((unites.length - u) / (k - g));
+      groupes.push(unites.slice(u, u + taille).flat());
+      u += taille;
     }
   } else {
     groupes.push(lignes.map((_, i) => i));

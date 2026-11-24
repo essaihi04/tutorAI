@@ -9,6 +9,7 @@ import ClavierScientifique, { BoutonSymboles } from './ClavierScientifique';
 import { clavier, hauteurClavierTelephone, largeurClavier, useChampClavier, useClavier } from './ClavierFlottant';
 import TableauCode from './TableauCode';
 import { Formule } from './Formule';
+import LignesCahier from './memoire/LignesCahier';
 import DemonstrationPleine, { type FigureDemo, type LectureDemo } from './DemonstrationPleine';
 import PageExamenVue from './PageExamen';
 import type { EnteteCahier } from './cahier';
@@ -2424,7 +2425,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
               {entete?.partie && <h3 className="mt-3 text-2xl" style={{ fontFamily: CRAIE, color: '#fca5a5' }}>{entete.partie}</h3>}
               <h4 className={`mt-2 text-xl underline decoration-amber-200/40 underline-offset-4 ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={entete?.diapo || slide.title} /></h4>
               {contenu.lead && <p className={`mt-1 text-base italic ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#e7e5c9' }}><Formule t={contenu.lead} /></p>}
-              {cahier && cahier !== contenu.lead && <p className={`mt-2 text-lg leading-relaxed ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={cahier} /></p>}
+              {cahier && cahier !== contenu.lead && <div style={{ fontFamily: CRAIE }}><LignesCahier textes={cahier.split('
+')} className={`mt-2 !text-lg ${entete ? 'pl-4' : ''}`} /></div>}
               {/* les dessins du cahier (courbe, schéma, croquis légendés), sous le texte */}
               <FiguresCahier figures={conc.cahier_figures} compact className={`mt-3 ${entete ? 'pl-4' : ''}`} />
               {centre.length > 0 && (

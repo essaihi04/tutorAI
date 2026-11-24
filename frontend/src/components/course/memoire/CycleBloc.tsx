@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import QuestionMemoire, { CRAIE, Formule, type ResultatQuestion } from './QuestionMemoire';
+import LignesCahier from './LignesCahier';
 import { noter, type BlocCours, type QuestionMemoire as Q, type ReponsesPreparees } from './api';
 import type { ReactionPreparee } from '../types';
 import type { EnteteCahier } from '../cahier';
@@ -147,7 +148,7 @@ export function TableauCahier({ bloc, onEcrit, entetes, relecture }: { bloc: Blo
               <div key={i}>
                 {plan[i]?.partie && <p className="mb-1 text-2xl text-rose-300">{plan[i]!.partie}</p>}
                 <p className="pl-3 text-lg text-amber-100 underline decoration-amber-200/30 underline-offset-4">{plan[i]!.diapo}</p>
-                <p className="pl-6 text-xl leading-snug text-[#f5f1dc] md:text-2xl" dir="auto"><Formule t={lignes[i].texte} /></p>
+                <LignesCahier textes={[lignes[i].texte]} className="pl-6" />
               </div>
             ))}
           </div>
@@ -156,11 +157,8 @@ export function TableauCahier({ bloc, onEcrit, entetes, relecture }: { bloc: Blo
             {/* les titres de parties du cours, sauf si le cahier écrit déjà les siens (« I. », « II. ») : ils se
                 doublaient, dans le désordre (« II. » au-dessus de « I. »), 20 novembre 2026 */}
             {vue === 0 && !cahierTitre(lignes) && plan.filter(e => e?.partie).map((e, i) => <p key={i} className="mb-1 text-2xl text-rose-300 court:text-xl">{e!.partie}</p>)}
-            <ol className="space-y-3">
-              {partie.lignes.map(i => (
-                <li key={i} className="text-xl leading-snug text-[#f5f1dc] md:text-2xl" dir="auto"><Formule t={lignes[i].texte} /></li>
-              ))}
-            </ol>
+            {/* la mise en page du cahier : titre au milieu, définitions encadrées, tableaux, charte de couleurs (24/11/2026) */}
+            <LignesCahier textes={partie.lignes.map(i => lignes[i].texte)} />
           </>
         ) : <p className="text-lg text-white/60">Écris avec tes mots ce que tu viens de comprendre.</p>}
         </SansDefilement>
