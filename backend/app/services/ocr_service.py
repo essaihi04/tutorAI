@@ -389,6 +389,70 @@ async def _correct_math_text_with_deepseek(raw_text: str, subject: str = "", con
         return raw_text
 
 
+CONSIGNE_LECTURE_CLAUDE = (
+    "Tu lis la photo d'une feuille d'élève marocain (lycée, sciences, rédigée en français, parfois avec un peu d'arabe). "
+    "Transcris EXACTEMENT ce que l'élève a écrit, à la main ou à l'imprimé, sans rien corriger ni compléter : garde ses "
+    "erreurs, ses calculs, ses unités, les numéros des questions (1-1, 2-a…) et les lettres cochées ou entourées "
+    "(écris par exemple « a) B »). Écris les formules en texte simple lisible (P = V / t = 80 / 8 = 10 ml/min ; "
+    "x², 10^-3, √, λ, θ…), sans LaTeX ni symbole $. Ignore ce qui est barré. Un mot illisible : [illisible]. "
+    "Réponds UNIQUEMENT par la transcription, sans phrase autour. S'il n'y a rien de lisible, réponds par un texte vide."
+)
+
+
+def _image_pour_claude(image_base64: str, mime_type: str) -> tuple[str, str]:
+    """Claude accepte une image d'au plus 5 Mo et la lit au mieux vers 1568 px : une grande photo est réduite."""
+    if len(image_base64) * 3 // 4 <= 3_500_000 and mime_type in ("image/jpeg", "image/png", "image/webp", "image/gif"):
+        try:
+            from PIL import Image
+            import io
+            with Image.open(io.BytesIO(base64.b64decode(image_base64))) as im:
+                if max(im.size) <= 2000:
+                    return image_base64, mime_type
+        except Exception:  # noqa: BLE001
+            return image_base64, mime_type
+    from PIL import Image, ImageOps
+    import io
+    with Image.open(io.BytesIO(base64.b64decode(image_base64))) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im.thumbnail((1600, 1600))
+        sortie = io.BytesIO()
+        im.save(sortie, format="JPEG", quality=85)
+    return base64.b64encode(sortie.getvalue()).decode("ascii"), "image/jpeg"
+
+
+async def _lire_avec_claude(image_base64: str, mime_type: str, subject: str = "", contexte: str = "") -> str:
+    """La photo lue par Claude (vision) : le texte de l'élève tel qu'il l'a écrit ; vide si Claude n'est pas joignable."""
+    from app.services.llm_service import llm_service
+    client = getattr(llm_service, "_claude", None)
+    if client is None:
+        return ""
+    donnees, mime = _image_pour_claude(image_base64, mime_type)
+    texte = CONSIGNE_LECTURE_CLAUDE
+    if subject or contexte:
+        texte += f"\n\nContexte (pour lire les mots du sujet, pas pour corriger) : matière {subject or '?'} ; {contexte[:600]}"
+    debut = token_tracker.start_timer()
+    r = await client.beta.messages.create(
+        model=settings.anthropic_ocr_model,
+        max_tokens=4000,
+        output_config={"effort": settings.anthropic_ocr_effort},
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
+        messages=[{"role": "user", "content": [
+            {"type": "image", "source": {"type": "base64", "media_type": mime, "data": donnees}},
+            {"type": "text", "text": texte},
+        ]}],
+        timeout=60.0,
+    )
+    try:
+        await llm_service._suivre_claude(r, None, None, "ocr", "ocr", debut)
+    except Exception:  # noqa: BLE001
+        pass
+    if getattr(r, "stop_reason", None) == "refusal":
+        return ""
+    lu = "\n".join(b.text for b in r.content if getattr(b, "type", "") == "text").strip()
+    return re.sub(r"\$+", "", lu)
+
+
 async def extract_text_from_image(
     image_base64: str,
     mime_type: str = "image/png",
@@ -409,6 +473,14 @@ async def extract_text_from_image(
         header, image_base64 = image_base64.split(",", 1)
         if ";" in header:
             mime_type = header.split(":")[1].split(";")[0]
+
+    # 24/11/2026 : Claude lit la photo d'abord ; Mistral OCR + DeepSeek seulement s'il échoue
+    try:
+        lu = await _lire_avec_claude(image_base64, mime_type, subject=subject, contexte=contexte)
+        if lu:
+            return {"text": lu, "markdown": lu, "success": True, "error": None, "lecteur": "claude"}
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Lecture Claude impossible, repli sur Mistral OCR : {e}")
 
     headers = {
         "Authorization": f"Bearer {settings.mistral_api_key}",
