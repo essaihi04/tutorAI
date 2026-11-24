@@ -36,6 +36,17 @@ def client(monkeypatch):
     return TestClient(app)
 
 
+def inscrire(client, code, H, prenom, nom="Alaoui", classe=""):
+    r = client.post(f"/public/classe/{code}/participant", json={"nom": nom, "prenom": prenom, "classe": classe}, headers=H)
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+def telephone_prof(client, code, P):
+    j = client.post(f"/public/classe/{code}/jeton-prof", headers=P).json()["jeton"]
+    return {"X-Telephone": "tel-prof0000", "X-Prof-Tel": client.post(f"/public/classe/{code}/prof-telephone", json={"jeton": j}).json()["cle"]}
+
+
 def seance(client):
     d = client.post("/public/classe").json()
     assert len(d["code"]) == 4 and d["code"].isdigit() and len(d["cle_prof"]) > 20
@@ -73,6 +84,10 @@ def test_reponse_au_mur_et_remplacement(client):
     client.post(f"/public/classe/{code}/question", json={"question": "1-5"}, headers=P)
     rep = {"question": "1-5", "texte": "A plus perméable", "note": 0.5, "sur": 1, "verdict": "partiel",
            "pertes": ["Justification : absente"], "bien": ["Comparaison"], "retour": "Il manque…", "image_b64": IMG}
+    # sans nom : refusé
+    assert client.post(f"/public/classe/{code}/reponse", json=rep, headers=T1).status_code == 409
+    inscrire(client, code, T1, "Salma")
+    inscrire(client, code, T2, "Yassine")
     a = client.post(f"/public/classe/{code}/reponse", json=rep, headers=T1).json()
     b = client.post(f"/public/classe/{code}/reponse", json={**rep, "texte": "autre", "image_b64": None}, headers=T2).json()
     assert (a["numero"], b["numero"]) == (1, 2)
@@ -86,8 +101,9 @@ def test_reponse_au_mur_et_remplacement(client):
     img = client.get(f"/public/classe/{code}/image/{c['id']}")
     assert img.status_code == 200 and img.content == JPEG and img.headers["content-type"] == "image/jpeg"
     assert client.get(f"/public/classe/{code}/image/{a['id']}").status_code == 404   # l'ancienne est partie
-    # « autre feuille » (le prof photographie plusieurs copies) : une nouvelle réponse
-    d = client.post(f"/public/classe/{code}/reponse", json={**rep, "nouvelle": True}, headers=T1).json()
+    # « feuille d'un autre élève » (le prof photographie une copie) : un nouveau nom, une nouvelle réponse
+    assert client.post(f"/public/classe/{code}/reponse", json={**rep, "nouvel_eleve": {"nom": "Bennani", "prenom": "Omar"}}, headers=T1).status_code == 403
+    d = client.post(f"/public/classe/{code}/reponse", json={**rep, "nouvel_eleve": {"nom": "Bennani", "prenom": "Omar"}}, headers=telephone_prof(client, code, P)).json()
     assert d["numero"] == 3 and d["remplace"] is False
     # la réponse d'une autre question n'est pas au mur de la question projetée
     client.post(f"/public/classe/{code}/reponse", json={**rep, "question": "2-1"}, headers=T1)
@@ -102,6 +118,7 @@ def test_reponse_bornee(client):
     code, _ = seance(client)
     rep = {"question": "1", "verdict": "juste", "note": 2, "sur": 2}
     assert client.post(f"/public/classe/{code}/reponse", json=rep).status_code == 400            # sans téléphone
+    inscrire(client, code, T1, "Salma")
     gros = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff" + b"0" * 160_000).decode()
     assert client.post(f"/public/classe/{code}/reponse", json={**rep, "image_b64": gros}, headers=T1).status_code == 422  # > 200 000 caractères
     moyen = base64.b64encode(b"\xff\xd8\xff" + b"0" * 125_000).decode()[:199_000]
@@ -116,6 +133,8 @@ def test_memoire_bornee_lache_les_vieilles_images(client, monkeypatch):
     code, P = seance(client)
     rep = {"question": "1", "verdict": "juste", "note": 2, "sur": 2, "image_b64": IMG}
     client.post(f"/public/classe/{code}/question", json={"question": "1"}, headers=P)
+    for t, n in ((T1, "A"), (T2, "B"), ({"X-Telephone": "tel-cccccccc"}, "C")):
+        inscrire(client, code, t, n)
     a = client.post(f"/public/classe/{code}/reponse", json=rep, headers=T1).json()
     client.post(f"/public/classe/{code}/reponse", json=rep, headers=T2).json()
     # question 1 projetée : une 3ᵉ image ne tient pas
@@ -167,3 +186,62 @@ def test_code_inconnu_plafonne(client, monkeypatch):
     for _ in range(3):
         assert client.get("/public/classe/0000").status_code == 404
     assert client.get("/public/classe/0001").status_code == 429
+
+
+def test_participants_et_reponses_nominatives(client, monkeypatch):
+    code, P = seance(client)
+    client.post(f"/public/classe/{code}/question", json={"question": "1"}, headers=P)
+    sa = inscrire(client, code, T1, "Salma", "El Idrissi", "TCSF 2")
+    # un téléphone = un élève : redonner son nom le corrige, sans doublon
+    assert inscrire(client, code, T1, "Salma", "El Idrissy") == sa
+    ya = inscrire(client, code, T2, "Yassine", "Amrani")
+    assert client.post(f"/public/classe/{code}/participant", json={"nom": "x" * 61, "prenom": "y"}, headers={"X-Telephone": "tel-dddddddd"}).status_code == 422
+    rep = {"question": "1", "verdict": "partiel", "note": 1, "sur": 2, "pertes": ["d) : −0,5"]}
+    client.post(f"/public/classe/{code}/reponse", json=rep, headers=T1)
+    client.post(f"/public/classe/{code}/reponse", json={**rep, "verdict": "juste", "note": 2}, headers=T2)
+    # un élève ne rend pas la feuille d'un autre
+    assert client.post(f"/public/classe/{code}/reponse", json={**rep, "eleve": sa}, headers=T2).status_code == 403
+    # le téléphone du prof rend la feuille de Salma : elle remplace celle de Salma
+    TP = telephone_prof(client, code, P)
+    r = client.post(f"/public/classe/{code}/reponse", json={**rep, "note": 1.5, "eleve": sa}, headers=TP).json()
+    assert r["eleve"] == sa and r["remplace"] is True
+    assert client.post(f"/public/classe/{code}/reponse", json={**rep, "eleve": "deadbeef"}, headers=TP).status_code == 404
+    # un élève sans téléphone, ajouté par le prof (le même nom tapé deux fois = un seul élève)
+    assert client.post(f"/public/classe/{code}/eleve", json={"nom": "Bennani", "prenom": "Omar"}, headers=T2).status_code == 403
+    o1 = client.post(f"/public/classe/{code}/eleve", json={"nom": "Bennani", "prenom": "Omar", "classe": "TCSF 2"}, headers=TP).json()["id"]
+    o2 = client.post(f"/public/classe/{code}/reponse", json={**rep, "nouvel_eleve": {"nom": "bennani", "prenom": "OMAR"}}, headers=TP).json()["eleve"]
+    assert o1 == o2
+    assert client.get(f"/public/classe/{code}", headers=TP).json()["prof"] is True
+    # le téléphone : les noms, son élève, le mur sans noms
+    t = client.get(f"/public/classe/{code}", headers=T1).json()
+    assert t["moi"]["id"] == sa and {p["prenom"] for p in t["participants"]} == {"Salma", "Yassine", "Omar"}
+    assert all("eleve" not in x for x in t["reponses"]) and "toutes" not in t
+    # l'écran du prof : l'élève de chaque réponse, toutes les réponses, les questions posées
+    client.post(f"/public/classe/{code}/question", json={"question": "2"}, headers=P)
+    client.post(f"/public/classe/{code}/reponse", json={**rep, "question": "2"}, headers=T1)
+    e = client.get(f"/public/classe/{code}", headers=P).json()
+    assert e["posees"] == ["1", "2"]
+    assert {(x["question"], x["eleve"], x["note"]) for x in e["toutes"]} == {("1", sa, 1.5), ("1", ya, 2), ("1", o1, 1), ("2", sa, 1)}
+    # le prof retire un élève : ses réponses partent avec lui
+    assert client.delete(f"/public/classe/{code}/participant/{o1}").status_code == 403
+    assert client.delete(f"/public/classe/{code}/participant/{o1}", headers=P).status_code == 200
+    assert len(client.get(f"/public/classe/{code}", headers=P).json()["toutes"]) == 3
+    # nombre d'élèves borné
+    monkeypatch.setattr(pc, "MAX_PARTICIPANTS", 2)
+    assert client.post(f"/public/classe/{code}/participant", json={"nom": "N", "prenom": "P"}, headers={"X-Telephone": "tel-eeeeeeee"}).status_code == 507
+
+
+def test_jeton_du_telephone_prof(client):
+    code, P = seance(client)
+    assert client.post(f"/public/classe/{code}/jeton-prof").status_code == 403
+    j = client.post(f"/public/classe/{code}/jeton-prof", headers=P).json()["jeton"]
+    faux = f"{(int(j) + 1) % 10000:04d}"
+    assert client.post(f"/public/classe/{code}/prof-telephone", json={"jeton": faux}).status_code == 403
+    assert client.post(f"/public/classe/{code}/prof-telephone", json={"jeton": j}).status_code == 200
+    # une seule fois
+    assert client.post(f"/public/classe/{code}/prof-telephone", json={"jeton": j}).status_code == 403
+    # expiré
+    j2 = client.post(f"/public/classe/{code}/jeton-prof", headers=P).json()["jeton"]
+    s = pc.SEANCES[code]
+    s.jeton = (j2, s.jeton[1] - pc.DUREE_JETON - 1)
+    assert client.post(f"/public/classe/{code}/prof-telephone", json={"jeton": j2}).status_code == 403

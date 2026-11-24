@@ -5,10 +5,18 @@ chacun (ou le prof, avec son téléphone, pour la feuille d'un élève) photogra
 lue (OCR), la réponse corrigée (barème, éléments perdus, correction), puis publiée au mur de la séance, que toute la classe
 voit au tableau et sur son téléphone.
 
-Demande de l'utilisateur : **ni nom, ni enregistrement**. Rien sur disque, rien en base : une séance vit dans la mémoire du
-serveur (UN seul worker uvicorn en prod, un dictionnaire suffit) et disparaît après 4 h sans activité, ou quand le prof la
-termine. Les réponses sont anonymes (« Réponse 1, 2… ») ; un identifiant de téléphone tiré au hasard (`X-Telephone`, gardé
-en sessionStorage) permet seulement de remplacer sa propre réponse à la même question au lieu d'en empiler.
+Demande de l'utilisateur : **rien d'enregistré**. Rien sur disque, rien en base, rien dans les comptes d'élèves : une séance
+vit dans la mémoire du serveur (UN seul worker uvicorn en prod, un dictionnaire suffit) et disparaît après 4 h sans
+activité, ou quand le prof la termine (il peut télécharger les résultats en CSV, fabriqué dans son navigateur).
+
+Les élèves (25/11/2026) : en scannant le QR, chacun donne une fois son nom, son prénom et sa classe (facultative) ; un
+téléphone = un élève (l'identifiant tiré au hasard, `X-Telephone`, gardé en sessionStorage, lie le nom). Chaque réponse
+est rattachée à son élève : il remplace sa propre réponse à la même question au lieu d'en empiler.
+Le téléphone du prof : l'écran du prof demande un jeton (4 chiffres, 2 minutes, une seule fois, montré en QR et en
+chiffres) ; le téléphone qui le donne reçoit sa propre clé (`X-Prof-Tel`). Il saisit alors les réponses de plusieurs
+élèves (ceux sans téléphone) : choisis dans la liste, ou nouveaux (`POST /{code}/eleve`), traités comme les autres.
+L'écran du prof (`X-Prof`) et son téléphone voient les noms et toutes les réponses ; les téléphones des élèves voient la
+liste des noms et le mur anonyme (« Réponse 1, 2… »).
 
 Le serveur ne connaît pas le sujet (il est dans la page) : il garde l'identifiant de la question projetée et ce que les
 téléphones publient. Ouvert à tous, donc borné : nombre de séances, créations par adresse, appels à l'OCR et au LLM par
@@ -44,8 +52,11 @@ MAX_IMAGE = 120_000
 MAX_OCTETS_SEANCE = 12_000_000
 MAX_OCTETS_TOTAL = 600_000_000
 MAX_REPONSES_QUESTION = 120
+MAX_PARTICIPANTS = 60
 #: (nombre, fenêtre en secondes) — par séance, par adresse IP, pour tout le serveur
-LIMITES_SEANCE = {"lire": (300, 3600), "corriger": (300, 3600), "reponse": (600, 3600)}
+LIMITES_SEANCE = {"lire": (300, 3600), "corriger": (300, 3600), "reponse": (600, 3600), "participant": (300, 3600), "jeton": (20, 3600)}
+#: le jeton qui relie le téléphone du prof : valable 2 minutes, une seule fois
+DUREE_JETON = 120
 LIMITES_IP = {"creer": (20, 3600), "lire": (900, 3600), "corriger": (900, 3600), "reponse": (2000, 3600), "inconnue": (120, 3600)}
 LIMITES_TOTALES = {"lire": (5000, 86400), "corriger": (5000, 86400)}
 
@@ -57,6 +68,8 @@ class Reponse:
     numero: int
     question: str
     telephone: str
+    #: l'élève (identifiant de participant)
+    eleve: str
     texte: str
     note: Optional[float]
     sur: float
@@ -66,6 +79,16 @@ class Reponse:
     retour: str
     image: Optional[bytes]
     quand: float
+
+
+@dataclass
+class Participant:
+    id: str
+    nom: str
+    prenom: str
+    classe: str
+    #: le téléphone de l'élève ('' : ajouté par le prof, sans téléphone)
+    telephone: str
 
 
 @dataclass
@@ -80,6 +103,21 @@ class Seance:
     #: question → identifiant de réponse → réponse (ordre d'arrivée)
     reponses: dict[str, dict[str, Reponse]] = field(default_factory=dict)
     numeros: dict[str, int] = field(default_factory=dict)
+    participants: dict[str, Participant] = field(default_factory=dict)
+    #: les questions déjà projetées, dans l'ordre (les résultats sont ramenés sur leurs points)
+    posees: list[str] = field(default_factory=list)
+    #: le jeton en cours pour relier le téléphone du prof : (jeton, fin)
+    jeton: Optional[tuple[str, float]] = None
+    #: les clés des téléphones du prof
+    cles_tel: set = field(default_factory=set)
+
+    def est_prof(self, x_prof: Optional[str], x_prof_tel: Optional[str] = None) -> bool:
+        if x_prof and secrets.compare_digest(x_prof.encode(), self.cle_prof.encode()):
+            return True
+        return bool(x_prof_tel) and any(secrets.compare_digest(x_prof_tel.encode(), c.encode()) for c in self.cles_tel)
+
+    def eleve_du_telephone(self, tel: str) -> Optional[Participant]:
+        return next((p for p in self.participants.values() if p.telephone and p.telephone == tel), None)
 
     def toucher(self, changement: bool = True) -> None:
         self.actif = time.monotonic()
@@ -119,8 +157,8 @@ def _seance(code: str, request: Request) -> Seance:
     return s
 
 
-def _prof(s: Seance, x_prof: Optional[str]) -> None:
-    if not x_prof or not secrets.compare_digest(x_prof.encode(), s.cle_prof.encode()):
+def _prof(s: Seance, x_prof: Optional[str], x_prof_tel: Optional[str] = None) -> None:
+    if not s.est_prof(x_prof, x_prof_tel):
         raise HTTPException(403, "Réservé au professeur de la séance.")
 
 
@@ -165,6 +203,8 @@ async def projeter(code: str, body: ChoixQuestion, request: Request, x_prof: str
     _prof(s, x_prof)
     if s.question != body.question:
         s.question, s.correction = body.question, False
+    if body.question not in s.posees:
+        s.posees.append(body.question)
     s.toucher()
     return {"ok": True, "version": s.version}
 
@@ -203,6 +243,108 @@ async def retirer(code: str, rid: str, request: Request, x_prof: str | None = He
     raise HTTPException(404, "Réponse introuvable")
 
 
+class Identite(BaseModel):
+    nom: str = Field(..., min_length=1, max_length=60)
+    prenom: str = Field(..., min_length=1, max_length=60)
+    classe: str = Field(default="", max_length=20)
+
+
+def _propre(x: str) -> str:
+    return " ".join(str(x).split())[:60]
+
+
+def _ajouter(s: Seance, ident: Identite, tel: str) -> Participant:
+    nom, prenom = _propre(ident.nom), _propre(ident.prenom)
+    if not nom or not prenom:
+        raise HTTPException(422, "Écris ton nom et ton prénom.")
+    if len(s.participants) >= MAX_PARTICIPANTS:
+        raise HTTPException(507, f"La séance est complète ({MAX_PARTICIPANTS} élèves).")
+    p = Participant(id=uuid.uuid4().hex[:8], nom=nom, prenom=prenom, classe=_propre(ident.classe)[:20], telephone=tel)
+    s.participants[p.id] = p
+    return p
+
+
+def _vue_participant(p: Participant) -> dict:
+    return {"id": p.id, "nom": p.nom, "prenom": p.prenom, "classe": p.classe}
+
+
+@router.post("/{code}/participant")
+async def participer(code: str, body: Identite, request: Request, x_telephone: str | None = Header(default=None)):
+    """L'élève donne une fois son nom, son prénom et sa classe ; un téléphone = un élève (redonner son nom le corrige)."""
+    s = _seance(code, request)
+    tel = _telephone(x_telephone)
+    _autoriser("participant", s, request)
+    p = s.eleve_du_telephone(tel)
+    if p is None:
+        p = _ajouter(s, body, tel)
+    else:
+        p.nom, p.prenom, p.classe = _propre(body.nom), _propre(body.prenom), _propre(body.classe)[:20]
+    s.toucher()
+    return _vue_participant(p)
+
+
+@router.post("/{code}/jeton-prof")
+async def jeton_prof(code: str, request: Request, x_prof: str | None = Header(default=None)):
+    """L'écran du prof : un jeton pour relier SON téléphone (4 chiffres, 2 minutes, une seule fois)."""
+    s = _seance(code, request)
+    _prof(s, x_prof)
+    s.jeton = (f"{secrets.randbelow(10000):04d}", time.monotonic() + DUREE_JETON)
+    s.toucher(changement=False)
+    return {"jeton": s.jeton[0], "expiration_s": DUREE_JETON}
+
+
+class Jeton(BaseModel):
+    jeton: str = Field(..., pattern=r"^\d{4}$")
+
+
+@router.post("/{code}/prof-telephone")
+async def prof_telephone(code: str, body: Jeton, request: Request):
+    """Le téléphone du prof donne le jeton : il reçoit sa clé de prof (le jeton ne sert plus)."""
+    s = _seance(code, request)
+    _autoriser("jeton", s, request)
+    j = s.jeton
+    if not j or time.monotonic() > j[1] or not secrets.compare_digest(body.jeton.encode(), j[0].encode()):
+        raise HTTPException(403, "Code du prof faux ou expiré : affiche-le de nouveau sur l'écran du prof.")
+    s.jeton = None
+    if len(s.cles_tel) >= 5:
+        raise HTTPException(507, "Trop de téléphones de prof pour cette séance.")
+    cle = secrets.token_urlsafe(24)
+    s.cles_tel.add(cle)
+    s.toucher(changement=False)
+    return {"cle": cle}
+
+
+@router.post("/{code}/eleve")
+async def nouvel_eleve(code: str, body: Identite, request: Request, x_prof: str | None = Header(default=None),
+                       x_prof_tel: str | None = Header(default=None)):
+    """Le prof ajoute un élève sans téléphone (même nom et prénom : le même élève)."""
+    s = _seance(code, request)
+    _prof(s, x_prof, x_prof_tel)
+    _autoriser("participant", s, request)
+    p = _par_nom(s, body) or _ajouter(s, body, "")
+    s.toucher()
+    return _vue_participant(p)
+
+
+def _par_nom(s: Seance, ident: Identite) -> Optional[Participant]:
+    cle = (_propre(ident.nom).lower(), _propre(ident.prenom).lower())
+    return next((p for p in s.participants.values() if (p.nom.lower(), p.prenom.lower()) == cle), None)
+
+
+@router.delete("/{code}/participant/{pid}")
+async def retirer_participant(code: str, pid: str, request: Request, x_prof: str | None = Header(default=None)):
+    """Le prof retire un élève (nom mal écrit, doublon) et ses réponses."""
+    s = _seance(code, request)
+    _prof(s, x_prof)
+    if s.participants.pop(pid, None) is None:
+        raise HTTPException(404, "Élève introuvable")
+    for rs in s.reponses.values():
+        for rid in [r.id for r in rs.values() if r.eleve == pid]:
+            rs.pop(rid, None)
+    s.toucher()
+    return {"ok": True}
+
+
 def _vue(r: Reponse, telephone: str) -> dict:
     return {"id": r.id, "numero": r.numero, "question": r.question, "texte": r.texte, "note": r.note, "sur": r.sur,
             "verdict": r.verdict, "pertes": r.pertes, "bien": r.bien, "retour": r.retour, "image": r.image is not None,
@@ -210,17 +352,27 @@ def _vue(r: Reponse, telephone: str) -> dict:
 
 
 @router.get("/{code}")
-async def etat(code: str, request: Request, v: int = Query(default=0), x_telephone: str | None = Header(default=None)):
-    """L'état de la séance (interrogé toutes les 2 à 3 s) ; `?v=<version>` : rien de neuf → `{inchange: true}`."""
+async def etat(code: str, request: Request, v: int = Query(default=0), x_telephone: str | None = Header(default=None),
+               x_prof: str | None = Header(default=None), x_prof_tel: str | None = Header(default=None)):
+    """L'état de la séance (interrogé toutes les 2 à 3 s) ; `?v=<version>` : rien de neuf → `{inchange: true}`.
+    Le téléphone : son élève, la liste des noms, le mur anonyme. L'écran du prof (`X-Prof`) : en plus, l'élève de chaque
+    réponse et toutes les réponses de la séance (pour les résultats de la classe)."""
     s = _seance(code, request)
     s.toucher(changement=False)
     if v and v == s.version:
         return {"version": s.version, "inchange": True}
+    prof = s.est_prof(x_prof, x_prof_tel)
     tel = re.sub(r"[^a-zA-Z0-9-]", "", x_telephone or "")[:40]
     courantes = s.reponses.get(s.question, {})
-    return {"code": s.code, "sujet": s.sujet, "version": s.version, "question": s.question, "correction": s.correction,
-            "reponses": [_vue(r, tel) for r in sorted(courantes.values(), key=lambda r: r.numero)],
-            "par_question": {q: len(rs) for q, rs in s.reponses.items() if rs}}
+    moi = s.eleve_du_telephone(tel) if tel else None
+    d = {"code": s.code, "sujet": s.sujet, "version": s.version, "question": s.question, "correction": s.correction,
+         "posees": s.posees, "participants": [_vue_participant(p) for p in s.participants.values()],
+         "moi": _vue_participant(moi) if moi else None, "prof": prof,
+         "reponses": [_vue(r, tel) | ({"eleve": r.eleve} if prof else {}) for r in sorted(courantes.values(), key=lambda r: r.numero)],
+         "par_question": {q: len(rs) for q, rs in s.reponses.items() if rs}}
+    if prof:
+        d["toutes"] = [_vue(r, "") | {"eleve": r.eleve} for rs in s.reponses.values() for r in rs.values()]
+    return d
 
 
 @router.get("/{code}/image/{rid}")
@@ -300,8 +452,10 @@ class Publication(BaseModel):
     retour: str = Field(default="", max_length=800)
     #: la miniature JPEG (base64, avec ou sans `data:image/jpeg;base64,`), 120 Ko au plus
     image_b64: Optional[str] = Field(default=None, max_length=200_000)
-    #: le prof photographie plusieurs feuilles : une nouvelle réponse au lieu de remplacer la précédente
-    nouvelle: bool = False
+    #: le prof photographie la feuille d'un autre élève : choisi dans la liste…
+    eleve: Optional[str] = Field(default=None, pattern=r"^[a-f0-9]{8}$")
+    #: … ou un nouveau nom (élève sans téléphone)
+    nouvel_eleve: Optional[Identite] = None
 
 
 def _image(b64: Optional[str]) -> Optional[bytes]:
@@ -336,14 +490,27 @@ def _ligne(x: str) -> str:
 
 
 @router.post("/{code}/reponse")
-async def publier(code: str, body: Publication, request: Request, x_telephone: str | None = Header(default=None)):
+async def publier(code: str, body: Publication, request: Request, x_telephone: str | None = Header(default=None),
+                  x_prof: str | None = Header(default=None), x_prof_tel: str | None = Header(default=None)):
     """La réponse corrigée, au mur de la séance (anonyme). Le même téléphone remplace sa réponse à la même question."""
     s = _seance(code, request)
     tel = _telephone(x_telephone)
     _autoriser("reponse", s, request)
     img = _image(body.image_b64)
+    if (body.eleve or body.nouvel_eleve) and not s.est_prof(x_prof, x_prof_tel):
+        raise HTTPException(403, "Seul le prof rend la feuille d'un autre élève.")
+    if body.eleve:
+        eleve = s.participants.get(body.eleve)
+        if eleve is None:
+            raise HTTPException(404, "Élève introuvable dans la séance.")
+    elif body.nouvel_eleve:
+        eleve = _par_nom(s, body.nouvel_eleve) or _ajouter(s, body.nouvel_eleve, "")
+    else:
+        eleve = s.eleve_du_telephone(tel)
+        if eleve is None:
+            raise HTTPException(409, "Écris d'abord ton nom et ton prénom.")
     rs = s.reponses.setdefault(body.question, {})
-    ancienne = None if body.nouvelle else next((r for r in rs.values() if r.telephone == tel), None)
+    ancienne = next((r for r in rs.values() if r.eleve == eleve.id), None)
     if ancienne is None and len(rs) >= MAX_REPONSES_QUESTION:
         raise HTTPException(507, "Trop de réponses pour cette question.")
     garde = ancienne.image if ancienne is not None else None
@@ -361,9 +528,9 @@ async def publier(code: str, body: Publication, request: Request, x_telephone: s
         numero = ancienne.numero
     else:
         s.numeros[body.question] = numero = s.numeros.get(body.question, 0) + 1
-    r = Reponse(id=uuid.uuid4().hex[:16], numero=numero, question=body.question, telephone=tel, texte=body.texte.strip(),
+    r = Reponse(id=uuid.uuid4().hex[:16], numero=numero, question=body.question, telephone=tel, eleve=eleve.id, texte=body.texte.strip(),
                 note=body.note, sur=body.sur, verdict=body.verdict, pertes=[_ligne(x) for x in body.pertes if str(x).strip()],
                 bien=[_ligne(x) for x in body.bien if str(x).strip()], retour=body.retour.strip(), image=img, quand=time.monotonic())
     rs[r.id] = r
     s.toucher()
-    return {"id": r.id, "numero": r.numero, "remplace": ancienne is not None, "version": s.version}
+    return {"id": r.id, "numero": r.numero, "eleve": eleve.id, "remplace": ancienne is not None, "version": s.version}
