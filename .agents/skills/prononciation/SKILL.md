@@ -32,6 +32,8 @@ déformé, et la transcription MoulSot le confirme : « siemens », vu **une foi
 4. **Régénérer toutes les pistes concernées** (voir § 3), puis committer règle, test, cours et mp3 ensemble.
    Le kernel en direct reprend `texte_parle.py` au prochain lancement, donc les réponses du tuteur suivent aussi.
 
+5. **Choisir par une page d'écoute en lot** (24/11/2026) : quand le kernel d'essai n'est pas allumé, mettre les écritures dans un petit lot Kaggle (une clé par écriture, v1 = l'écriture actuelle, dans une phrase courte du cours) et publier la page groupée par mot (skill voix-du-cours, § 3 quater). Exemples choisis : « أفقي » → « أوفوقي » (ofoqi), « برر » → « بَرِّر » (barrir). Écrire la règle avec `lambda mt: mt.group(1) + "…"` : un `r""` passé par un heredoc devient l'octet 0x01. Déployer avant de régénérer les pistes : le lot lit `texte_parle.py` dans `/opt/moalim`.
+
 ## 2. Chercher les autres mots du même genre
 
 `python -X utf8 scripts/voix/mots_a_risque.py [transcriptions.json …]` :
