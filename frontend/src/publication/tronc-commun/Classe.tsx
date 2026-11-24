@@ -19,7 +19,7 @@ import { COULEUR_VERDICT, MOT_VERDICT, nomComplet, nomCourt, RapportEleve, Resul
 import { Formule } from '../../components/course/Formule';
 import { pts } from '../../components/exercice/types';
 import { choixDuTexte, lienComplet, lienCourt, octets, QrCode, reduireImage } from '../../components/course/photoTelephone';
-import { Choix, configExamen, corpsCorrection, DonneesPartie, etatDeCorrection, jugerValeur, noterChoix, Verdict, type CorrectionTuteur, type Etat } from './Examen';
+import { Choix, configExamen, corpsCorrection, DonneesPartie, etatDeCorrection, jugerValeur, noterChoix, texteDuSujet, Verdict, type CorrectionTuteur, type Etat } from './Examen';
 import { Histogramme, histoVide, Triangle } from './Traces';
 import type { PartieExamen, QuestionExamen } from './sujet';
 
@@ -83,15 +83,19 @@ const COULEURS: Record<VerdictMur, [string, string]> = {
 };
 
 /** Une réponse du mur : miniature (cliquable), texte lu, note, ce qui est juste, ce qui est perdu. */
-function CarteReponse({ r, code, grand = false, onImage, onRetirer }: { r: ReponseMur; code: string; grand?: boolean; onImage: (src: string) => void; onRetirer?: () => void }) {
+function CarteReponse({ r, code, grand = false, onImage, onRetirer, nom, nouvelle = false }: { r: ReponseMur; code: string; grand?: boolean; onImage: (src: string) => void;
+  onRetirer?: () => void; nom?: string; nouvelle?: boolean }) {
   const [titre, couleur] = COULEURS[r.verdict];
+  const heure = r.heure ? new Date(r.heure * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
   const src = `${API}/${code}/image/${r.id}`;
   const t = grand ? 'text-[clamp(15px,1.25vw,22px)]' : 'text-[15px]';
   return (
-    <div className={`flex flex-col rounded-xl border-2 p-2 ${couleur}`} style={{ fontFamily: 'system-ui, sans-serif' }}>
-      <div className="flex items-center gap-2">
-        <span className={`font-bold ${grand ? 'text-[clamp(16px,1.4vw,24px)]' : 'text-[15px]'}`}>Réponse {r.numero}{r.mien ? ' (toi)' : ''}</span>
-        <span className="flex-1 text-sm">{titre}</span>
+    <div className={`flex flex-col rounded-xl border-2 p-2 ${couleur} ${nouvelle ? 'ring-4 ring-amber-300' : ''}`} style={{ fontFamily: 'system-ui, sans-serif' }}>
+      <div className="flex flex-wrap items-center gap-x-2">
+        {nouvelle && <span className="rounded bg-amber-300 px-1.5 text-xs font-bold text-black">NOUVELLE</span>}
+        <span className={`font-bold ${grand ? 'text-[clamp(16px,1.4vw,24px)]' : 'text-[15px]'}`}>{nom ?? `Réponse ${r.numero}`}{r.mien ? ' (toi)' : ''}</span>
+        {nom && <span className="rounded bg-black px-1.5 text-xs font-semibold text-white">{r.question}</span>}
+        <span className="flex-1 text-sm">{titre}{nom && heure ? <span className="ml-1 text-xs opacity-60">· {heure}</span> : null}</span>
         {r.note != null && <span className={`rounded-md bg-white px-2 font-bold ${grand ? 'text-[clamp(18px,1.6vw,28px)]' : 'text-lg'}`}>{pts(r.note)} / {pts(r.sur)}</span>}
         {onRetirer && <button onClick={onRetirer} className="rounded px-1 text-xs text-slate-500 hover:bg-white" title="Retirer du mur">✕</button>}
       </div>
@@ -210,6 +214,8 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
   /** le petit rapport d'un élève */
   const [rapport, setRapport] = useState<string | null>(null);
   const [jeton, setJeton] = useState<{ jeton: string; fin: number } | null>(null);
+  /** le fil des réponses : toutes les questions (la plus récente en haut) ou seulement la question projetée */
+  const [fil, setFil] = useState<'toutes' | 'question'>('toutes');
   const qs = configExamen().questions;
   const k = Math.max(0, qs.findIndex(x => x.q.id === etat?.question));
   const { p, q } = qs[k];
@@ -236,6 +242,9 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
   const parEleve: Record<string, ReponseMur> = {};
   for (const r of rs) if (r.eleve) parEleve[r.eleve] = r;
   const ontRepondu = participants.filter(x => parEleve[x.id]).length;
+  const nomDe = (id?: string) => { const x = participants.find(y => y.id === id); return x ? nomComplet(x) : 'Élève'; };
+  const recentes = [...(fil === 'toutes' ? etat?.toutes || [] : rs)].sort((a, b) => (b.ordre || 0) - (a.ordre || 0));
+  const derniere = recentes[0]?.ordre;
   const lien = lienComplet(prof.code, PAGE(), 'c');
   const BTN = 'rounded-lg border border-white/30 px-2.5 py-1 text-[clamp(13px,1vw,17px)] hover:bg-white/10 disabled:opacity-30';
 
@@ -274,7 +283,8 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
             const v = r ? r.verdict : 'rien';
             return <button key={x.id} onClick={() => setFiche(x.id)} title={`${nomComplet(x)} : ${MOT_VERDICT[v]}${r?.note != null ? ` (${pts(r.note)} / ${pts(r.sur)})` : ''}`}
               className="rounded-full px-3 py-1 text-[clamp(13px,1.1vw,18px)] font-semibold" style={{ background: COULEUR_VERDICT[v], color: v === 'rien' ? '#333' : v === 'nonjuge' || v === 'regarder' ? '#0b2a4a' : '#fff' }}>
-              {nomCourt(x, participants)}</button>;
+              {nomCourt(x, participants)}
+              {x.regarde && x.regarde !== q.id && <span className="ml-1 rounded bg-black/70 px-1 text-[0.75em] text-white" title={`Regarde la question ${x.regarde} sur son téléphone`}>📱 {x.regarde}</span>}</button>;
           })}
           {!participants.length && <span className="text-white/60">Les noms des élèves apparaîtront ici quand ils auront visé le QR code.</span>}
         </div>
@@ -287,20 +297,25 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
             <Enonce p={p} q={q} grand correction={!!etat?.correction} donnees={donnees} />
           </section>
           <section className="flex min-h-0 flex-col">
-            <div className="flex flex-wrap gap-2 text-[clamp(14px,1.2vw,22px)]">
-              <span className="rounded-lg bg-white/10 px-3 py-1">Toutes les réponses : <b>{n.recues}</b></span>
+            <div className="flex flex-wrap items-center gap-2 text-[clamp(14px,1.2vw,22px)]">
+              <span className="rounded-lg bg-white/10 px-3 py-1">Question {q.id} : <b>{n.recues}</b></span>
               <span className="rounded-lg bg-emerald-700/70 px-3 py-1">✔ <b>{n.justes}</b></span>
               <span className="rounded-lg bg-amber-600/70 px-3 py-1">◐ <b>{n.partielles}</b></span>
               <span className="rounded-lg bg-rose-700/70 px-3 py-1">✘ <b>{n.fausses}</b></span>
               {!!n.regarder && <span className="rounded-lg bg-sky-700/70 px-3 py-1">👀 <b>{n.regarder}</b></span>}
+              <span className="ml-auto flex overflow-hidden rounded-lg border border-white/30 text-[clamp(12px,0.95vw,15px)]">
+                <button onClick={() => setFil('toutes')} className={`px-2 py-1 ${fil === 'toutes' ? 'bg-white text-black' : ''}`}>Toutes les questions</button>
+                <button onClick={() => setFil('question')} className={`px-2 py-1 ${fil === 'question' ? 'bg-white text-black' : ''}`}>Question {q.id}</button>
+              </span>
             </div>
-            <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
-              {rs.length ? (
+            <p className="mt-1 text-[clamp(12px,0.95vw,15px)] text-white/60">Les réponses corrigées par l’IA, la plus récente en haut : note, ce qui est juste, ce qui est perdu.</p>
+            <div className="mt-1 min-h-0 flex-1 overflow-y-auto">
+              {recentes.length ? (
                 <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))]">
-                  {rs.map(r => <CarteReponse key={r.id} r={r} code={prof.code} grand onImage={setLoupe}
-                    onRetirer={() => { if (window.confirm(`Retirer la réponse ${r.numero} du mur ?`)) void appel(`/${prof.code}/reponse/${r.id}`, { method: 'DELETE' }, X).then(relire).catch(() => {}); }} />)}
+                  {recentes.map(r => <CarteReponse key={r.id} r={r} code={prof.code} grand onImage={setLoupe} nom={nomDe(r.eleve)} nouvelle={r.ordre === derniere}
+                    onRetirer={() => { if (window.confirm(`Retirer la réponse de ${nomDe(r.eleve)} (question ${r.question}) ?`)) void appel(`/${prof.code}/reponse/${r.id}`, { method: 'DELETE' }, X).then(relire).catch(() => {}); }} />)}
                 </div>
-              ) : <p className="mt-6 text-center text-[clamp(16px,1.4vw,24px)] text-white/60">Les réponses apparaîtront ici (le mur ne montre pas les noms).</p>}
+              ) : <p className="mt-6 text-center text-[clamp(16px,1.4vw,24px)] text-white/60">Les réponses apparaîtront ici, la plus récente en haut, avec le nom de l’élève.</p>}
             </div>
           </section>
         </div>
@@ -551,7 +566,13 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
   const toutes = configExamen().questions;
   const iq = toutes.findIndex(y => y.q.id === q.id);
   const auTableau = q.id === etat.question;
-  const aller = (id: string) => { setVue(id === etat.question ? '' : id); setCible(''); setEnvoye(''); window.scrollTo(0, 0); };
+  const aller = (id: string) => {
+    setCible(''); setEnvoye(''); window.scrollTo(0, 0);
+    // le téléphone du prof est une télécommande : la question change aussi au tableau
+    if (estProf) { setVue(''); void appel(`/${code}/question`, { method: 'POST', body: JSON.stringify({ question: id }) }, entetes).then(relire).catch(() => {}); }
+    else setVue(id === etat.question ? '' : id);
+  };
+  const montrerCorrection = () => { void appel(`/${code}/correction`, { method: 'POST', body: JSON.stringify({ montrer: !etat.correction }) }, entetes).then(relire).catch(() => {}); };
   const correction = etat.correction && auTableau;
 
   return (
@@ -570,7 +591,10 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
         </select>
         <button disabled={iq >= toutes.length - 1} onClick={() => aller(toutes[iq + 1].q.id)} className="rounded border border-white/30 px-2 py-1 disabled:opacity-30">→</button>
         {!auTableau && <button onClick={() => aller(etat.question)} className="rounded bg-amber-400 px-2 py-1 font-semibold text-black">📺 Tableau</button>}
+        {estProf && <button onClick={montrerCorrection} className={`rounded px-2 py-1 font-semibold ${etat.correction ? 'bg-rose-200 text-rose-950' : 'bg-amber-400 text-black'}`}>
+          {etat.correction ? 'Cacher corr.' : 'Correction'}</button>}
       </nav>
+      {estProf && <p className="bg-[#1b2a22] px-2 pb-1 text-xs text-white/60">📺 Changer de question ici la change aussi au tableau.</p>}
       </div>
       <div className="mx-auto grid max-w-5xl gap-2 p-2 [@media(orientation:landscape)_and_(max-height:520px)]:grid-cols-2">
         <section className="rounded-lg bg-white p-3 shadow">
@@ -620,10 +644,31 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
   );
 }
 
+/** Les mots, symboles et grandeurs du sujet et de la question (sans doublon) : la lecture de la photo s'en sert pour
+ *  une écriture difficile (« PB » mal écrit n'est plus lu « Qb »). Des mots, pas des phrases : on n'y dicte pas la réponse. */
+function motsDuSujet(p: PartieExamen, q: QuestionExamen) {
+  const sources = [texteDuSujet(p), q.texte, ...('correction' in q ? q.correction : []), ...('elements' in q ? q.elements : [])];
+  if (q.genre === 'valeur') sources.push(q.grandeur, ...q.unites);
+  if (q.genre === 'qcm') sources.push(...q.items.flatMap(it => it.choix));
+  if (q.genre === 'histogramme') sources.push(...q.especes.flat());
+  if (q.genre === 'triangle') sources.push(...q.choix);
+  const vus = new Set<string>();
+  const mots: string[] = [];
+  for (const m of sources.join(' ').split(/[\s,;:.!?«»"“”()[\]]+/)) {
+    const t = m.replace(/^['’]+|['’]+$/g, '');
+    if (t.length < 2 || /^\d+([.,]\d+)?$/.test(t) || vus.has(t.toLowerCase())) continue;
+    vus.add(t.toLowerCase()); mots.push(t);
+  }
+  // les grandeurs telles qu'on les écrit : P(A), P(B), Vr(A)…
+  const grandeurs = sources.join(' ').match(/\b[A-Za-z]{1,3}\([A-Za-z0-9]{1,3}\)/g) || [];
+  return [...new Set(grandeurs), ...mots].join(' ').slice(0, 1900);
+}
+
 /** Répondre à la question : photo de la feuille (lue, modifiable) ou réponse écrite ; corrigée ; publiée au mur. */
 function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoye }: { code: string; p: PartieExamen; q: QuestionExamen; entetes: Record<string, string>;
   eleve?: string; e: EtatTel; poser: (m: Partial<EtatTel>) => void; onLoupe: (src: string) => void; onEnvoye?: (r: Etat & { verdictMur?: VerdictMur }) => void }) {
   const trace = q.genre === 'triangle' || q.genre === 'histogramme';
+  const vocabulaire = motsDuSujet(p, q);
   const enonceOcr = q.genre === 'qcm' || q.genre === 'vf'
     ? `${q.texte} ${q.items.map((it, k) => `${String.fromCharCode(97 + k)}) ${it.texte}${q.genre === 'qcm' ? ' ' + (it as { choix: string[] }).choix.map((c, m) => `${lettre(m)}. ${c}`).join(' ') : ''}`).join(' ')}`
     : q.genre === 'histogramme' ? `${q.texte} Espèces et indices : ${q.especes.map(([n, i]) => `${n} ${i}`).join(' ; ')}`
@@ -637,7 +682,7 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
       const grande = await reduireImage(f, 1280, 0.8);
       const { texte } = await appel<{ texte: string }>(`/${code}/lire`, { method: 'POST', body: JSON.stringify({
         image_b64: grande, image_mime: 'image/jpeg', question: q.id, enonce: enonceOcr.slice(0, 1500), titre: p.titre.slice(0, 300),
-        matiere: configExamen().matiere, niveau: configExamen().sujet.niveau }) });
+        matiere: configExamen().matiere, niveau: configExamen().sujet.niveau, vocabulaire }) });
       poser({ phase: 'relire', mini, texte, choix: q.genre === 'qcm' || q.genre === 'vf' ? choixDuTexte(q.genre, q.items.length, texte) : undefined });
     } catch (err) {
       poser({ phase: 'vide', erreur: (err as Error).message.replace(/^\d+$/, 'La photo n’a pas pu être lue : réessaie, ou écris la réponse.') });
@@ -674,7 +719,7 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
       try {
         const corps = {
           diapo: { title: `${configExamen().sujet.niveau} — ${p.titre}`, speech: '' },
-          question: { type: 'open', enonce: enonceOcr.slice(0, 1500), attendu: q.correction.join(' '), matiere: configExamen().matiere, bareme: q.points, elements: q.correction },
+          question: { type: 'open', enonce: enonceOcr.slice(0, 1500), attendu: q.correction.join(' '), matiere: configExamen().matiere, bareme: q.points, elements: q.correction, photo: !!e.mini },
           reponse: texte.slice(0, 4000), tentative: 2, verdict: null,
         };
         const r = await appel<CorrectionTuteur>(`/${code}/corriger`, { method: 'POST', body: JSON.stringify(corps) });
@@ -686,7 +731,9 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
     if (q.genre === 'redaction') {
       poser({ phase: 'correction', erreur: undefined });
       try {
-        const r = await appel<CorrectionTuteur>(`/${code}/corriger`, { method: 'POST', body: JSON.stringify(corpsCorrection(p, q, texte)) });
+        const c = corpsCorrection(p, q, texte);
+        // lue sur la photo : une lettre mal lue (« Qb » pour « PB ») ne coûte pas de points
+        const r = await appel<CorrectionTuteur>(`/${code}/corriger`, { method: 'POST', body: JSON.stringify({ ...c, question: { ...c.question, photo: !!e.mini } }) });
         return publier(etatDeCorrection(q, texte, r), texte, e.mini);
       } catch {
         poser({ phase: 'auto' });   // le tuteur ne répond pas : on compare avec la correction

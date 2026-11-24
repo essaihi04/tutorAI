@@ -394,7 +394,9 @@ CONSIGNE_LECTURE_CLAUDE = (
     "avec un peu d'arabe). Tu la rends en texte pour qu'un professeur la note sans voir la photo.\n"
     "1) LE TEXTE : transcris EXACTEMENT ce que l'élève a écrit, sans rien corriger ni compléter : garde ses erreurs, ses "
     "calculs, ses unités, les numéros des questions (1-1, 2-a…) et les lettres cochées ou entourées (« a) B »). Ignore ce "
-    "qui est barré. Un mot illisible : [illisible].\n"
+    "qui est barré. Un mot illisible : [illisible]. Une écriture difficile : quand des lettres se ressemblent (P/Q/D, "
+    "B/8/b, l/1/I, O/0, u/v, n/r, S/5, Z/2, g/9), choisis la lecture qui a un sens dans la matière et la question (les mots, "
+    "grandeurs et symboles du contexte) ; un mot nettement écrit reste tel quel, même faux.\n"
     "2) LES FORMULES : écris-les en notation correcte et lisible, telles que l'élève les a écrites (même fausses) : "
     "fractions avec / et parenthèses, puissances et indices en Unicode (x², 10⁻³, H₃O⁺, Fe²⁺, ²³⁸₉₂U, m·s⁻¹), "
     "λ, θ, Δ, √, ∞, →, ⇌, ≈ ; une équation chimique avec sa flèche et ses coefficients ; jamais de LaTeX ni de symbole $.\n"
@@ -451,7 +453,7 @@ async def _lire_avec_claude(image_base64: str, mime_type: str, subject: str = ""
     donnees, mime = _image_pour_claude(image_base64, mime_type)
     texte = CONSIGNE_LECTURE_CLAUDE
     if subject or contexte:
-        texte += f"\n\nContexte (pour lire les mots du sujet, pas pour corriger) : matière {subject or '?'} ; {contexte[:1500]}"
+        texte += f"\n\nContexte (pour lire les mots du sujet, pas pour corriger) : matière {subject or '?'} ; {contexte[:3500]}"
     debut = token_tracker.start_timer()
     r = await client.beta.messages.create(
         model=settings.anthropic_ocr_model,

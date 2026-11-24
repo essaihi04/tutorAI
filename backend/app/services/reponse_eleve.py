@@ -79,6 +79,17 @@ def consigne_dessin(reponse: Any, question: dict) -> str:
             "description dit absent est absent. Pour « cite », recopie l'extrait de la description qui traite l'élément.\n")
 
 
+def consigne_photo(question: dict) -> str:
+    """La réponse lue sur la photo d'une feuille manuscrite (24/11/2026) : une lettre mal lue ne coûte pas de points."""
+    if not question.get("photo"):
+        return ""
+    return ("Cette réponse a été LUE SUR LA PHOTO d'une feuille écrite à la main : la lecture peut confondre des lettres "
+            "qui se ressemblent (P/Q/D, B/8/b, l/1/I, O/0, u/v, n/r, S/5, Z/2, g/9). Quand un mot, un symbole ou une "
+            "grandeur lue diffère d'un terme attendu par une ou deux lettres de ce genre (« Qb » pour « PB » ou « P(B) ») et "
+            "que le reste de la réponse montre que l'élève parle bien de lui, compte-le comme le terme attendu : aucune "
+            "perte, et ne le signale pas comme une faute. Ne retire des points que pour une vraie erreur de fond.\n")
+
+
 def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, verdict: Optional[bool]) -> str:
     choix = question.get("choix") or []
     lignes_choix = "\n".join(f"  {chr(65 + i)}. {c}" for i, c in enumerate(choix))
@@ -132,7 +143,7 @@ Question posée ({question.get('type', 'qcm')}) : {question.get('enonce', '')}
 {lignes_choix}
 {cle}
 Réponse de l'élève (essai n° {tentative}) : {str(reponse)[:4000]}
-{consigne_dessin(reponse, question)}{impose}
+{consigne_dessin(reponse, question)}{consigne_photo(question)}{impose}
 
 {consigne_juge}
 S'il a juste : dis précisément ce qui est juste et pourquoi, en une ou deux phrases, sans en faire trop.

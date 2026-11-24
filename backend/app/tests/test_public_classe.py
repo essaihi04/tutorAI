@@ -283,3 +283,43 @@ def test_telephone_regarde_une_autre_question(client):
     assert client.get(f"/public/classe/{code}", headers=T).json()["reponses"] == []
     vue = client.get(f"/public/classe/{code}?q=2", headers=T).json()
     assert vue["question"] == "1" and len(vue["reponses"]) == 1 and vue["reponses"][0]["mien"] is True
+
+
+def test_fil_du_prof_et_telecommande(client):
+    """24/11/2026 : le fil du prof (rang et heure d'arrivée), la question regardée par chaque élève, et le téléphone du
+    prof qui change la question du tableau."""
+    code, P = seance(client)
+    client.post(f"/public/classe/{code}/question", json={"question": "1"}, headers=P)
+    T = {"X-Telephone": "tel-fil-00000001"}
+    inscrire(client, code, T, "Nora")
+    for q in ("1", "2"):
+        assert client.post(f"/public/classe/{code}/reponse", headers=T, json={"question": q, "texte": "x", "note": 1, "sur": 1, "verdict": "juste"}).status_code == 200
+    toutes = client.get(f"/public/classe/{code}", headers=P).json()["toutes"]
+    assert sorted(r["ordre"] for r in toutes) == [1, 2] and all(r["heure"] > 0 for r in toutes)
+    # l'élève regarde la question 2 : l'écran du prof le voit ; revenu au tableau : plus rien
+    client.get(f"/public/classe/{code}?q=2", headers=T)
+    assert client.get(f"/public/classe/{code}", headers=P).json()["participants"][0]["regarde"] == "2"
+    client.get(f"/public/classe/{code}", headers=T)
+    assert client.get(f"/public/classe/{code}", headers=P).json()["participants"][0]["regarde"] == ""
+    # le téléphone du prof : télécommande ; un élève ne peut pas
+    assert client.post(f"/public/classe/{code}/question", json={"question": "3"}, headers=T).status_code == 403
+    D = {"X-Telephone": "tel-prof-telec01"}
+    client.post(f"/public/classe/{code}/demande-prof", headers=D)
+    client.post(f"/public/classe/{code}/demande-prof/decision", json={"telephone": "tel-prof-telec01", "accepter": True}, headers=P)
+    cle = client.get(f"/public/classe/{code}/demande-prof", headers=D).json()["cle"]
+    D = D | {"X-Prof-Tel": cle}
+    assert client.post(f"/public/classe/{code}/question", json={"question": "3"}, headers=D).status_code == 200
+    assert client.post(f"/public/classe/{code}/correction", json={"montrer": True}, headers=D).status_code == 200
+    e = client.get(f"/public/classe/{code}", headers=P).json()
+    assert e["question"] == "3" and e["correction"] is True
+
+
+def test_lecture_avec_les_mots_du_sujet():
+    """La lecture reçoit les mots du sujet (« PB » mal écrit n'est plus lu « Qb ») ; la notation d'une réponse lue sur
+    photo ne retire pas de points pour une lettre mal lue."""
+    from app.services import reponse_eleve
+    c = pc.contexte_lecture(pc.Lecture(image_b64="x" * 20, enonce="Calcule P(B)", vocabulaire="P(A) P(B) perméabilité ml/min"))
+    assert "P(A) P(B) perméabilité" in c and "Qb" in c
+    q = {"type": "open", "enonce": "Calcule P(B)", "matiere": "svt"}
+    assert "LUE SUR LA PHOTO" not in reponse_eleve.prompt_reponse({}, q, "Qb = 1 ml/min", 2, None)
+    assert "LUE SUR LA PHOTO" in reponse_eleve.prompt_reponse({}, q | {"photo": True}, "Qb = 1 ml/min", 2, None)

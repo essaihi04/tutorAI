@@ -79,6 +79,9 @@ class Reponse:
     retour: str
     image: Optional[bytes]
     quand: float
+    #: l'heure (horloge du serveur, secondes) et le rang d'arrivée dans la séance : le fil du prof, le plus récent en haut
+    heure: float = 0.0
+    ordre: int = 0
 
 
 @dataclass
@@ -89,6 +92,8 @@ class Participant:
     classe: str
     #: le téléphone de l'élève ('' : ajouté par le prof, sans téléphone)
     telephone: str
+    #: la question que l'élève regarde sur son téléphone quand il quitte celle du tableau ('') : suivie sur l'écran du prof
+    regarde: str = ""
 
 
 @dataclass
@@ -114,6 +119,8 @@ class Seance:
     demandes_prof: dict[str, float] = field(default_factory=dict)
     #: téléphone → sa clé de prof, acceptée par l'écran du prof et pas encore reprise par le téléphone ; ou "" : refusé
     reponses_prof: dict[str, str] = field(default_factory=dict)
+    #: le nombre de réponses publiées (rang d'arrivée)
+    arrivees: int = 0
 
     def est_prof(self, x_prof: Optional[str], x_prof_tel: Optional[str] = None) -> bool:
         if x_prof and secrets.compare_digest(x_prof.encode(), self.cle_prof.encode()):
@@ -201,10 +208,12 @@ class ChoixQuestion(BaseModel):
 
 
 @router.post("/{code}/question")
-async def projeter(code: str, body: ChoixQuestion, request: Request, x_prof: str | None = Header(default=None)):
-    """La question projetée : les téléphones la suivent ; la correction est cachée à chaque changement."""
+async def projeter(code: str, body: ChoixQuestion, request: Request, x_prof: str | None = Header(default=None),
+                   x_prof_tel: str | None = Header(default=None)):
+    """La question projetée : les téléphones la suivent ; la correction est cachée à chaque changement.
+    L'écran du prof ou son téléphone (qui sert alors de télécommande)."""
     s = _seance(code, request)
-    _prof(s, x_prof)
+    _prof(s, x_prof, x_prof_tel)
     if s.question != body.question:
         s.question, s.correction = body.question, False
     if body.question not in s.posees:
@@ -218,9 +227,10 @@ class Montrer(BaseModel):
 
 
 @router.post("/{code}/correction")
-async def correction(code: str, body: Montrer, request: Request, x_prof: str | None = Header(default=None)):
+async def correction(code: str, body: Montrer, request: Request, x_prof: str | None = Header(default=None),
+                     x_prof_tel: str | None = Header(default=None)):
     s = _seance(code, request)
-    _prof(s, x_prof)
+    _prof(s, x_prof, x_prof_tel)
     s.correction = body.montrer
     s.toucher()
     return {"ok": True, "version": s.version}
@@ -269,7 +279,7 @@ def _ajouter(s: Seance, ident: Identite, tel: str) -> Participant:
 
 
 def _vue_participant(p: Participant) -> dict:
-    return {"id": p.id, "nom": p.nom, "prenom": p.prenom, "classe": p.classe}
+    return {"id": p.id, "nom": p.nom, "prenom": p.prenom, "classe": p.classe, "regarde": p.regarde}
 
 
 @router.post("/{code}/participant")
@@ -411,7 +421,7 @@ async def retirer_participant(code: str, pid: str, request: Request, x_prof: str
 def _vue(r: Reponse, telephone: str) -> dict:
     return {"id": r.id, "numero": r.numero, "question": r.question, "texte": r.texte, "note": r.note, "sur": r.sur,
             "verdict": r.verdict, "pertes": r.pertes, "bien": r.bien, "retour": r.retour, "image": r.image is not None,
-            "mien": bool(telephone) and r.telephone == telephone}
+            "mien": bool(telephone) and r.telephone == telephone, "heure": r.heure, "ordre": r.ordre}
 
 
 @router.get("/{code}")
@@ -423,13 +433,17 @@ async def etat(code: str, request: Request, v: int = Query(default=0), q: str = 
     réponse et toutes les réponses de la séance (pour les résultats de la classe)."""
     s = _seance(code, request)
     s.toucher(changement=False)
+    tel = re.sub(r"[^a-zA-Z0-9-]", "", x_telephone or "")[:40]
+    moi = s.eleve_du_telephone(tel) if tel else None
+    # la question que l'élève regarde quand il quitte celle du tableau ('' : celle du tableau) : l'écran du prof la suit
+    if moi is not None and moi.regarde != q:
+        moi.regarde = q
+        s.toucher()
     if v and v == s.version:
         return {"version": s.version, "inchange": True}
     prof = s.est_prof(x_prof, x_prof_tel)
-    tel = re.sub(r"[^a-zA-Z0-9-]", "", x_telephone or "")[:40]
     # `q` : le téléphone regarde une autre question que celle du tableau (il navigue) ; ses réponses à elle
     courantes = s.reponses.get(q or s.question, {})
-    moi = s.eleve_du_telephone(tel) if tel else None
     d = {"code": s.code, "sujet": s.sujet, "version": s.version, "question": s.question, "correction": s.correction,
          "posees": s.posees, "participants": [_vue_participant(p) for p in s.participants.values()],
          "moi": _vue_participant(moi) if moi else None, "prof": prof,
@@ -463,6 +477,8 @@ class Lecture(BaseModel):
     titre: str = Field(default="", max_length=300)
     matiere: str = Field(default="svt", max_length=40)
     niveau: str = Field(default="Tronc Commun Sciences BIOF", max_length=80)
+    #: les mots, symboles et grandeurs du sujet et de la question (pour lire une écriture difficile)
+    vocabulaire: str = Field(default="", max_length=2000)
 
 
 def contexte_lecture(body: Lecture) -> str:
@@ -473,6 +489,10 @@ def contexte_lecture(body: Lecture) -> str:
         "Pour un QCM ou un vrai/faux, garde le repère de chaque proposition (a, b, c…) et la lettre ou le mot choisi (A, B, vrai, faux).",
         "Normalise les symboles et les unités (exposants en Unicode : m², 10⁻³ ; flèches →). Jamais de LaTeX ni de signe $.",
         "Garde les mots de l'élève et son raisonnement : ne corrige NI ses erreurs NI ses résultats, ne complète rien, n'ajoute aucune explication.",
+        (f"Mots, symboles et grandeurs de ce sujet : {body.vocabulaire}" if body.vocabulaire else ""),
+        "Écriture difficile : l'élève écrit avec ces mots-là. Quand des lettres se ressemblent (P/Q/D, B/8/b/6, l/1/I, O/0, "
+        "u/v, n/r/h, a/o, S/5, Z/2, g/9, t/+, x/×), choisis la lecture qui a un sens dans ce sujet (« PB » ou « P(B) », pas "
+        "« Qb »). Mais un mot nettement écrit reste tel quel, même faux : tu lis, tu ne corriges pas.",
         "Rends le texte lu et, pour chaque dessin (courbe, histogramme, schéma, tableau…), son bloc [Dessin de l'élève : …].",
     ]
     return "\n".join(x for x in lignes if x)
@@ -598,6 +618,8 @@ async def publier(code: str, body: Publication, request: Request, x_telephone: s
     r = Reponse(id=uuid.uuid4().hex[:16], numero=numero, question=body.question, telephone=tel, eleve=eleve.id, texte=body.texte.strip(),
                 note=body.note, sur=body.sur, verdict=body.verdict, pertes=[_ligne(x) for x in body.pertes if str(x).strip()],
                 bien=[_ligne(x) for x in body.bien if str(x).strip()], retour=body.retour.strip(), image=img, quand=time.monotonic())
+    s.arrivees += 1
+    r.heure, r.ordre = time.time(), s.arrivees
     rs[r.id] = r
     s.toucher()
     return {"id": r.id, "numero": r.numero, "eleve": eleve.id, "remplace": ancienne is not None, "version": s.version}
