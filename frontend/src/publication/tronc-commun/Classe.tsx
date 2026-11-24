@@ -220,6 +220,14 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
   const k = Math.max(0, qs.findIndex(x => x.q.id === etat?.question));
   const { p, q } = qs[k];
   useEffect(() => { if (perdue) onFin(); }, [perdue]);
+  // un téléphone du prof vient d'être relié (accepté, ou par le QR « Mon téléphone ») : la question s'affiche tout de suite
+  const telsProf = useRef(-1);
+  useEffect(() => {
+    const n = etat?.telephones_prof;
+    if (n == null) return;
+    if (telsProf.current >= 0 && n > telsProf.current) { setQrGrand(false); setJeton(null); }
+    telsProf.current = n;
+  }, [etat?.telephones_prof]);
   useEffect(() => { if (!jeton) return; const t = window.setTimeout(() => setJeton(null), Math.max(0, jeton.fin - Date.now())); return () => window.clearTimeout(t); }, [jeton]);
   const aller = async (id: string) => { await appel(`/${prof.code}/question`, { method: 'POST', body: JSON.stringify({ question: id }) }, X).catch(() => {}); relire(); };
   const montrer = async (m: boolean) => { await appel(`/${prof.code}/correction`, { method: 'POST', body: JSON.stringify({ montrer: m }) }, X).catch(() => {}); relire(); };
@@ -229,6 +237,8 @@ function SeanceProf({ prof, onFin }: { prof: Prof; onFin: () => void }) {
     onFin();
   };
   const decider = async (telephone: string, accepter: boolean) => {
+    // le téléphone du prof accepté : le grand QR (et le code) se ferment, la question s'affiche tout de suite
+    if (accepter) { setQrGrand(false); setJeton(null); }
     await appel(`/${prof.code}/demande-prof/decision`, { method: 'POST', body: JSON.stringify({ telephone, accepter }) }, X).catch(() => {});
     relire();
   };
@@ -498,7 +508,7 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
         if (d.statut === 'accepte' && d.cle) { garderCleProfTel(code, d.cle); setCleProf(d.cle); setRole(''); }
         else if (d.statut === 'refuse') { setErreur('L’écran du prof a refusé.'); setRole(''); }
       } catch { /* réessaie */ }
-    }, 2000);
+    }, 1000);
     return () => { fini = true; window.clearInterval(t); };
   }, [role, code, cleProf]);
   // une clé de prof refusée (séance d'avant) : oubliée

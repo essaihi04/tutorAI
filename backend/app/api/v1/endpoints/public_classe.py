@@ -451,6 +451,8 @@ async def etat(code: str, request: Request, v: int = Query(default=0), q: str = 
          "par_question": {q: len(rs) for q, rs in s.reponses.items() if rs}}
     if x_prof and secrets.compare_digest(x_prof.encode(), s.cle_prof.encode()):
         d["demandes_prof"] = _demandes(s)
+        # les téléphones du prof reliés : l'écran ferme son grand QR dès qu'un nouveau arrive
+        d["telephones_prof"] = len(s.cles_tel)
     if prof:
         d["toutes"] = [_vue(r, "") | {"eleve": r.eleve} for rs in s.reponses.values() for r in rs.values()]
     return d

@@ -262,6 +262,7 @@ def test_telephone_prof_sans_code(client):
     r = client.get(f"/public/classe/{code}/demande-prof", headers=T).json()
     assert r["statut"] == "accepte"
     assert client.get(f"/public/classe/{code}", headers=T | {"X-Prof-Tel": r["cle"]}).json()["prof"] is True
+    assert client.get(f"/public/classe/{code}", headers=P).json()["telephones_prof"] == 1
     # la clé ne se donne qu'une fois
     assert client.get(f"/public/classe/{code}/demande-prof", headers=T).json()["statut"] == "aucune"
     # refus
