@@ -97,7 +97,7 @@ export function corpsCorrection(p: PartieExamen, q: Extract<QuestionExamen, { ge
     diapo: { title: `${CFG.sujet.niveau} — ${p.titre}`, speech: texteDuSujet(p) },
     question: { type: 'open', enonce: q.texte, attendu: q.attendu, matiere: CFG.matiere, bareme: q.points, elements: q.elements },
     // un seul essai, comme en examen : le tuteur corrige et donne la bonne réponse (pas d'indice pour réessayer)
-    reponse: reponse.slice(0, 800), tentative: 2, verdict: null,
+    reponse: reponse.slice(0, 4000), tentative: 2, verdict: null,
   };
 }
 export type CorrectionTuteur = { correct: boolean | null; partiel?: boolean; parole: string; ecrit: string; note?: number; details?: Detail[] };
@@ -240,7 +240,7 @@ export default function Examen() {
         verdict: e.verdict, enonce: x.texte, reponse: e.texte || (e.choix || []).map(c => String(c)).join(' ; '),
         pertes: (e.details || []).filter(d => d.obtenu < d.sur).map(d => `${d.element} : ${d.perte || 'manque'}`),
         // ce qu'il faut pour remontrer la question telle quelle si l'élève revient
-        etat: { fait: true, choix: e.choix, texte: e.texte?.slice(0, 800), note: e.note, verdict: e.verdict, retour: e.retour?.slice(0, 700),
+        etat: { fait: true, choix: e.choix, texte: e.texte?.slice(0, 4000), note: e.note, verdict: e.verdict, retour: e.retour?.slice(0, 700),
           details: e.details, lignes: e.lignes, zone: e.zone, histo: e.histo } });
     }
     if (CFG.questions.every(x => etats[x.q.id]?.fait) && !envoyes.current.__fin) {

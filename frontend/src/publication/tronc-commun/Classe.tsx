@@ -619,7 +619,7 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
     const { pertes, bien } = detailsEnListes(r);
     try {
       await appel(`/${code}/reponse`, { method: 'POST', body: JSON.stringify({
-        question: q.id, texte: texte.slice(0, 3000), note: r.verdictMur === 'regarder' ? null : r.note ?? 0, sur: q.points,
+        question: q.id, texte: texte.slice(0, 4000), note: r.verdictMur === 'regarder' ? null : r.note ?? 0, sur: q.points,
         verdict: r.verdictMur || r.verdict || 'nonjuge', pertes, bien, retour: (r.retour || '').slice(0, 800), image_b64: mini || null,
         ...(eleve ? { eleve } : {}) }) }, entetes);
       poser({ phase: 'envoye', resultat: r });

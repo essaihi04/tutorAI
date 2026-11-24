@@ -390,12 +390,34 @@ async def _correct_math_text_with_deepseek(raw_text: str, subject: str = "", con
 
 
 CONSIGNE_LECTURE_CLAUDE = (
-    "Tu lis la photo d'une feuille d'élève marocain (lycée, sciences, rédigée en français, parfois avec un peu d'arabe). "
-    "Transcris EXACTEMENT ce que l'élève a écrit, à la main ou à l'imprimé, sans rien corriger ni compléter : garde ses "
-    "erreurs, ses calculs, ses unités, les numéros des questions (1-1, 2-a…) et les lettres cochées ou entourées "
-    "(écris par exemple « a) B »). Écris les formules en texte simple lisible (P = V / t = 80 / 8 = 10 ml/min ; "
-    "x², 10^-3, √, λ, θ…), sans LaTeX ni symbole $. Ignore ce qui est barré. Un mot illisible : [illisible]. "
-    "Réponds UNIQUEMENT par la transcription, sans phrase autour. S'il n'y a rien de lisible, réponds par un texte vide."
+    "Tu lis la photo d'une feuille d'élève marocain (lycée : SVT, physique, chimie ou mathématiques ; en français, parfois "
+    "avec un peu d'arabe). Tu la rends en texte pour qu'un professeur la note sans voir la photo.\n"
+    "1) LE TEXTE : transcris EXACTEMENT ce que l'élève a écrit, sans rien corriger ni compléter : garde ses erreurs, ses "
+    "calculs, ses unités, les numéros des questions (1-1, 2-a…) et les lettres cochées ou entourées (« a) B »). Ignore ce "
+    "qui est barré. Un mot illisible : [illisible].\n"
+    "2) LES FORMULES : écris-les en notation correcte et lisible, telles que l'élève les a écrites (même fausses) : "
+    "fractions avec / et parenthèses, puissances et indices en Unicode (x², 10⁻³, H₃O⁺, Fe²⁺, ²³⁸₉₂U, m·s⁻¹), "
+    "λ, θ, Δ, √, ∞, →, ⇌, ≈ ; une équation chimique avec sa flèche et ses coefficients ; jamais de LaTeX ni de symbole $.\n"
+    "3) LES DESSINS : pour chaque courbe, graphique, histogramme, diagramme, schéma, croquis, tableau, montage, figure "
+    "géométrique ou construction, écris à sa place un bloc « [Dessin de l'élève : <nature>] » qui décrit objectivement, "
+    "sans le juger ni le corriger, tout ce qu'un professeur vérifierait sur la copie :\n"
+    "- graphique, courbe, histogramme, diagramme : le titre ; chaque axe (sa grandeur, son unité, sa flèche, ses "
+    "graduations et si l'échelle est régulière) ; les points ou valeurs placés (lis leurs coordonnées) ; la forme du tracé "
+    "(droite passant ou non par l'origine, croissante, décroissante, exponentielle, palier, asymptote, maximum, tangente…) ; "
+    "tracé à la règle ou à main levée ; pour un histogramme : chaque classe et la hauteur de sa barre, barres collées ou "
+    "séparées, classe vide laissée ou non ; pour un diagramme en secteurs : les secteurs et leurs angles ou pourcentages ;\n"
+    "- schéma ou croquis (SVT, montage, dispositif) : ce qui est dessiné, chaque légende et l'élément que pointe sa flèche, "
+    "les légendes manquantes, le titre, l'échelle ou le grossissement ;\n"
+    "- physique : vecteurs (point d'application, direction, sens, longueur et échelle), rayons lumineux, symboles et "
+    "branchement d'un circuit, sens du courant, appareils de mesure, tensions fléchées ;\n"
+    "- chimie : formules développées ou semi-développées, schéma de Lewis, montage de titrage ou de chauffage, tableau "
+    "d'avancement (chaque case) ;\n"
+    "- mathématiques : figure, constructions, codages, tableau de variations ou de signes (chaque case et chaque flèche), "
+    "arbre de probabilités ;\n"
+    "- tableau : chaque ligne et chaque colonne avec ses valeurs.\n"
+    "Dis aussi ce qui manque à l'endroit où on l'attendrait (« pas de titre », « axe des ordonnées sans unité »).\n"
+    "Réponds UNIQUEMENT par la transcription et ces blocs, dans l'ordre de la feuille, sans phrase autour. S'il n'y a rien "
+    "de lisible, réponds par un texte vide."
 )
 
 
@@ -429,11 +451,11 @@ async def _lire_avec_claude(image_base64: str, mime_type: str, subject: str = ""
     donnees, mime = _image_pour_claude(image_base64, mime_type)
     texte = CONSIGNE_LECTURE_CLAUDE
     if subject or contexte:
-        texte += f"\n\nContexte (pour lire les mots du sujet, pas pour corriger) : matière {subject or '?'} ; {contexte[:600]}"
+        texte += f"\n\nContexte (pour lire les mots du sujet, pas pour corriger) : matière {subject or '?'} ; {contexte[:1500]}"
     debut = token_tracker.start_timer()
     r = await client.beta.messages.create(
         model=settings.anthropic_ocr_model,
-        max_tokens=4000,
+        max_tokens=6000,
         output_config={"effort": settings.anthropic_ocr_effort},
         betas=["server-side-fallback-2026-07-01"],
         fallbacks="default",

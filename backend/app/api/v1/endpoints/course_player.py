@@ -148,7 +148,7 @@ class AnswerReactionRequest(BaseModel):
     """Une réponse de l'élève à une question ou un exercice de la diapositive (mode concentration)."""
     diapo: dict = Field(default_factory=dict)          # {title, speech}
     question: dict = Field(default_factory=dict)       # {type, enonce, choix?, bonne?, attendu?}
-    reponse: str = Field(default="", max_length=800)
+    reponse: str = Field(default="", max_length=4000)
     tentative: int = Field(default=1, ge=1, le=5)
     verdict: Optional[bool] = None                     # connu quand la clé est dans l'exercice
 
@@ -344,7 +344,7 @@ def contexte_ocr(body: OcrReponseRequest, deck: Optional[dict]) -> tuple[str, st
         " exposants et indices en Unicode (m·s⁻¹, 10⁻³, x², y_M devient yM), flèches de réaction (→, ⇌), unités du SI (Hz, m, s, Ω, °C).",
         "Jamais de LaTeX ni de signe $. Garde les mots de l'élève, sa langue (français ou darija) et son raisonnement :"
         " ne corrige NI ses erreurs de physique NI ses résultats, ne complète rien, n'ajoute aucune explication.",
-        "Rends uniquement le texte lu, prêt à être relu par l'élève.",
+        "Rends le texte lu, prêt à être relu par l'élève, et pour chaque dessin (courbe, histogramme, schéma, tableau…) son bloc [Dessin de l'élève : …].",
     ]
     return matiere, "\n".join(x for x in lignes if x)
 
@@ -364,7 +364,7 @@ async def ocr_reponse(body: OcrReponseRequest, student: dict = Depends(get_curre
     except Exception:  # noqa: BLE001
         r = {}
     texte = str(r.get("text") or r.get("markdown") or "").strip()
-    texte = re.sub(r"\$+", "", texte)[:3000]
+    texte = re.sub(r"\$+", "", texte)[:4000]
     if not texte:
         # 422 et pas 5xx : main.py remplace le texte de toute réponse 5xx par « Erreur interne du service ».
         raise HTTPException(status_code=422, detail="Je n’ai pas pu lire la photo : prends-la de plus près, bien éclairée, ou écris ta réponse.")

@@ -51,6 +51,34 @@ def elements_bareme(question: dict) -> list[dict]:
     return [{"element": " ; ".join(g), "sur": q * 0.25} for g, q in zip(groupes, parts)]
 
 
+#: comment un prof note un dessin dans chaque matière (24/11/2026) ; la photo arrive décrite dans des blocs [Dessin…]
+CRITERES_DESSIN = {
+    "SVT": "un schéma ou croquis : titre, légendes justes reliées par des flèches à la bonne structure, proportions et "
+           "grossissement ; un graphique : titre, axes nommés avec unités, échelle régulière, points bien placés, tracé ; "
+           "un histogramme : classes en abscisse, effectif ou fréquence en ordonnée, barres COLLÉES, classe vide laissée à "
+           "sa place ; un tableau : en-têtes et valeurs justes",
+    "physique-chimie": "un graphique : titre, axes nommés avec unités, échelle régulière, points bien placés, tracé à la "
+                       "règle pour une droite, forme attendue (droite par l'origine, exponentielle, asymptote, tangente) ; "
+                       "un vecteur : point d'application, direction, sens, longueur à l'échelle ; un circuit : symboles "
+                       "normalisés, branchement, appareils de mesure et tensions fléchées ; une formule ou une équation "
+                       "chimique : atomes et charges équilibrés, flèche ou ⇌ ; un tableau d'avancement : chaque case",
+    "mathématiques": "une figure ou construction : exactitude et codages ; un tableau de variations ou de signes : chaque "
+                     "case, chaque flèche, les valeurs aux bornes ; une courbe : repère, points remarquables, asymptotes, "
+                     "tangentes, allure",
+}
+
+
+def consigne_dessin(reponse: Any, question: dict) -> str:
+    """Si la réponse contient un dessin décrit (photo de la feuille), le prof le note comme sur la copie."""
+    if "[Dessin" not in str(reponse or ""):
+        return ""
+    m = MATIERES.get(str(question.get("matiere") or "").lower(), "physique-chimie")
+    return ("La réponse contient des blocs « [Dessin de l'élève : …] » : c'est la description fidèle de ce que l'élève a "
+            "dessiné sur sa feuille (lue sur la photo). Note ce dessin comme un professeur de " + m + " le fait sur la "
+            "copie, élément par élément : " + CRITERES_DESSIN.get(m, CRITERES_DESSIN["physique-chimie"]) + ". Ce que la "
+            "description dit absent est absent. Pour « cite », recopie l'extrait de la description qui traite l'élément.\n")
+
+
 def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, verdict: Optional[bool]) -> str:
     choix = question.get("choix") or []
     lignes_choix = "\n".join(f"  {chr(65 + i)}. {c}" for i, c in enumerate(choix))
@@ -103,8 +131,8 @@ Ce que tu viens d'expliquer à voix haute : {str(diapo.get('speech') or '')[:120
 Question posée ({question.get('type', 'qcm')}) : {question.get('enonce', '')}
 {lignes_choix}
 {cle}
-Réponse de l'élève (essai n° {tentative}) : {str(reponse)[:500]}
-{impose}
+Réponse de l'élève (essai n° {tentative}) : {str(reponse)[:4000]}
+{consigne_dessin(reponse, question)}{impose}
 
 {consigne_juge}
 S'il a juste : dis précisément ce qui est juste et pourquoi, en une ou deux phrases, sans en faire trop.

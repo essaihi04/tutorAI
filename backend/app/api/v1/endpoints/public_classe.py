@@ -471,7 +471,7 @@ def contexte_lecture(body: Lecture) -> str:
         "Pour un QCM ou un vrai/faux, garde le repère de chaque proposition (a, b, c…) et la lettre ou le mot choisi (A, B, vrai, faux).",
         "Normalise les symboles et les unités (exposants en Unicode : m², 10⁻³ ; flèches →). Jamais de LaTeX ni de signe $.",
         "Garde les mots de l'élève et son raisonnement : ne corrige NI ses erreurs NI ses résultats, ne complète rien, n'ajoute aucune explication.",
-        "Rends uniquement le texte lu.",
+        "Rends le texte lu et, pour chaque dessin (courbe, histogramme, schéma, tableau…), son bloc [Dessin de l'élève : …].",
     ]
     return "\n".join(x for x in lignes if x)
 
@@ -490,7 +490,7 @@ async def lire(code: str, body: Lecture, request: Request):
                                                       subject=body.matiere, contexte=contexte_lecture(body))
     except Exception:  # noqa: BLE001
         r = {}
-    texte = re.sub(r"\$+", "", str((r or {}).get("text") or (r or {}).get("markdown") or "")).strip()[:3000]
+    texte = re.sub(r"\$+", "", str((r or {}).get("text") or (r or {}).get("markdown") or "")).strip()[:4000]
     if not texte:
         raise HTTPException(422, "Je n’ai pas pu lire la photo : reprends-la de plus près, bien éclairée, ou écris la réponse.")
     return {"texte": texte}
@@ -508,7 +508,7 @@ async def corriger(code: str, body: cp.AnswerReactionRequest, request: Request):
 
 class Publication(BaseModel):
     question: str = Field(..., pattern=ID_QUESTION)
-    texte: str = Field(default="", max_length=3000)
+    texte: str = Field(default="", max_length=4000)
     note: Optional[float] = Field(default=None, ge=0, le=100)
     sur: float = Field(default=0, ge=0, le=100)
     verdict: Literal["juste", "partiel", "faux", "nonjuge", "regarder"]
