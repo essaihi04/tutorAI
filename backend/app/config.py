@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     anthropic_effort: str = "low"
     # Lecture des photos des feuilles d'élèves (24/11/2026, demande de l'utilisateur : « utiliser Claude pour la lecture
     # des photos ») : Claude d'abord, puis Mistral OCR + DeepSeek en secours (le compte Mistral était bloqué).
-    anthropic_ocr_model: str = "claude-opus-5-5"
+    anthropic_ocr_model: str = "claude-sonnet-5-5"   # 24/11/2026 : Sonnet pour le moment (demande de l'utilisateur)
     anthropic_ocr_effort: str = "low"
 
     # Google Cloud (not used - using Gemini API key instead)
