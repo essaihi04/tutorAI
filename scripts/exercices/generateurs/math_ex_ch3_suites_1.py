@@ -31,7 +31,7 @@ QUESTIONS = [
          ("1 : (uₙ) arithmétique de raison r = 5 : uₙ = u₀ + n r", "u indice n égale u zéro plus n fois r"),
          ("uₙ = 2 + 5n", "u indice n égale deux plus cinq n"),
          ("u₈ = 2 + 5 × 8 = 42", "u huit égale deux plus cinq fois huit")],
-         "السؤال un. la suite arithmétique، la raison ديالها cinq. إذن u indice n égale u zéro plus n fois r. يعني u indice n égale deux plus cinq n. ونعوضو n ب huit: u huit égale deux plus cinq fois huit، égale quarante-deux."),
+         "السؤال un. la suite arithmétique، la raison ديالها cinq. إذن u indice n égale u zéro plus n fois r. يعني u indice n égale deux plus cinq n. ونعوضو n par huit: u huit égale deux plus cinq fois huit، égale quarante-deux."),
      "explication": "ex_1", "facile": "fa_1"},
     {"id": "2", "texte": "Calculer la somme S = u₀ + u₁ + … + u₈.",
      "texte_dit": "السؤال deux: حسب la somme S، égale u zéro plus u un، حتى ل u huit.",
