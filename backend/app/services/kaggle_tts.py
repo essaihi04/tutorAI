@@ -606,7 +606,8 @@ def construire_kernel(dossier: Path, cle: str, lancement: str, jeton: str,
     if settings.kaggle_tts_socle:
         sources.append(f"{p}/{settings.kaggle_tts_socle}")
     if settings.kaggle_stt_modele and settings.kaggle_stt_source:
-        sources.append(f"{p}/{settings.kaggle_stt_source}")   # poids MoulSot affinés
+        src = settings.kaggle_stt_source   # poids MoulSot affinés ; « compte/kernel » s'ils sont sur un autre compte
+        sources.append(src if "/" in src else f"{p}/{src}")
     kernel = kernel or settings.kaggle_tts_kernel
     meta = {"id": f"{u}/{kernel}", "title": kernel,
             "code_file": "serveur.py", "language": "python", "kernel_type": "script",

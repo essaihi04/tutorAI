@@ -145,7 +145,8 @@ def test_kernel_construit(tmp_path, actif, dossier_kernel):
     construire_kernel(tmp_path, "CLE'\"", "l1", "jeton")
     meta = json.loads((tmp_path / "kernel-metadata.json").read_text(encoding="utf-8"))
     assert meta["id"] == "prof/academy-tts-direct" and meta["is_private"] and meta["enable_gpu"]
-    assert meta["kernel_sources"] == ["prof/academy-v5-bodi", "prof/academy-moulsot-v4"]   # voix + MoulSot v4
+    # voix v6 (compte propriétaire) + MoulSot v5 (sur un autre compte : source « compte/kernel » gardée telle quelle)
+    assert meta["kernel_sources"] == ["prof/academy-v6-bodi", "zouhairessaihi/academy-moulsot-v5"]
     source = (tmp_path / "serveur.py").read_text(encoding="utf-8")
     assert "__CONF__" not in source and "__REF_B64__" not in source
     compile(source, "serveur.py", "exec")

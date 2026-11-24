@@ -124,7 +124,8 @@ class Settings(BaseSettings):
     kaggle_api_token: str = ""            # KAGGLE_API_TOKEN (jamais dans le dépôt)
     kaggle_sources_proprietaire: str = ""   # compte qui possède academy-v5-bodi et le socle (vide = kaggle_username)
     kaggle_tts_kernel: str = "academy-tts-direct"
-    kaggle_tts_modele: str = "academy-v5-bodi"   # v4 affiné 1 h sur la voix Bodi (2026-11-10 ; ne jamais relancer ce kernel : sa sortie porte les poids)
+    kaggle_tts_modele: str = "academy-v6-bodi"   # v5 + 78 clips Bodi externes contrôlés sur les nombres (2026-11-24, choisi à l'écoute ;
+                                                 # v5 = "academy-v5-bodi"). Ne jamais relancer ces kernels : leur sortie porte les poids
     kaggle_tts_reference: str = "reference_bodi.flac"   # voix Bodi choisie le 2026-11-10 (écoute à l'aveugle : affiné gagne en darija)
     kaggle_tts_socle: str = ""            # "academy-tts-socle" une fois ce kernel créé (démarrage plus court)
     kaggle_tts_annonce_url: str = "https://moalim.online/api/v1/tts-kaggle/annonce"
@@ -147,8 +148,10 @@ class Settings(BaseSettings):
     # la sortie du kernel `kaggle_stt_source`, attachée au kernel de la voix).
     # MoulSot v4 (2026-11-09) : affiné sur le corpus v4 (95 h), CER 10,8 % -> 9,5 % sur 841 extraits de vidéos jamais
     # vues, darija générale stable (12,5 -> 12,7 %). Ne JAMAIS relancer le kernel source : sa sortie porte les poids.
-    kaggle_stt_modele: str = "moulsot_v4"
-    kaggle_stt_source: str = "academy-moulsot-v4"   # kernel d'entraînement, sur le compte Kaggle
+    # MoulSot v5 (2026-11-24, choisi par l'utilisateur) : v4 + voix Bodi (2 jeux) ; CER Bodi 4,1 -> 2,9 %, profs 9,6 -> 9,9 %.
+    # Source « compte/kernel » quand les poids sont sur un autre compte que kaggle_sources_proprietaire.
+    kaggle_stt_modele: str = "moulsot_v5"
+    kaggle_stt_source: str = "zouhairessaihi/academy-moulsot-v5"   # v4 : "moulsot_v4" / "academy-moulsot-v4"
     kaggle_stt_delai_s: float = 8.0       # au-delà, Gemini prend la main
 
     # TTS cache (filesystem)
