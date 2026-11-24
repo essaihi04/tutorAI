@@ -39,7 +39,7 @@ async function appel<T>(chemin: string, init: RequestInit = {}, entetes: Record<
 }
 
 /** L'état de la séance, interrogé toutes les 2,5 s (rien n'est renvoyé si rien n'a changé). */
-function useSeance(code: string, entetes: Record<string, string> = {}) {
+function useSeance(code: string, entetes: Record<string, string> = {}, voir = '') {
   const cle = JSON.stringify(entetes);
   const [etat, setEtat] = useState<EtatSeance | null>(null);
   const [perdue, setPerdue] = useState(false);
@@ -51,7 +51,7 @@ function useSeance(code: string, entetes: Record<string, string> = {}) {
     version.current = 0;
     const lire = async () => {
       try {
-        const d = await appel<EtatSeance & { inchange?: boolean; prof?: boolean }>(`/${code}?v=${version.current}`, {}, JSON.parse(cle));
+        const d = await appel<EtatSeance & { inchange?: boolean; prof?: boolean }>(`/${code}?v=${version.current}${voir ? `&q=${encodeURIComponent(voir)}` : ''}`, {}, JSON.parse(cle));
         if (fini || d.inchange) return;
         version.current = d.version;
         setEtat(d); setPerdue(false);
@@ -62,7 +62,7 @@ function useSeance(code: string, entetes: Record<string, string> = {}) {
     void lire();
     const t = window.setInterval(() => { void lire(); }, 2500);
     return () => { fini = true; window.clearInterval(t); };
-  }, [code, cle, tick]);
+  }, [code, cle, tick, voir]);
   /** relire tout de suite (après une action) */
   const relire = () => setTick(t => t + 1);
   return { etat, perdue, relire };
@@ -158,18 +158,18 @@ function Enonce({ p, q, grand, correction, donnees = true }: { p: PartieExamen; 
 
 // ── L'écran du professeur ─────────────────────────────────────────────────────────────────────────────────────────────
 
-const MEMO_PROF = 'classe-prof';
+const MEMO_PROF = () => `classe-prof:${configExamen().cle || 'tc'}`;
 type Prof = { code: string; cle: string };
-const lireProf = (): Prof | null => { try { return JSON.parse(sessionStorage.getItem(MEMO_PROF) || 'null'); } catch { return null; } };
+const lireProf = (): Prof | null => { try { return JSON.parse(sessionStorage.getItem(MEMO_PROF()) || 'null'); } catch { return null; } };
 
 export function ProfClasse() {
   const [prof, setProf] = useState<Prof | null>(() => lireProf());
   const [erreur, setErreur] = useState('');
-  const garder = (p: Prof | null) => { setProf(p); try { if (p) sessionStorage.setItem(MEMO_PROF, JSON.stringify(p)); else sessionStorage.removeItem(MEMO_PROF); } catch { /* rien */ } };
+  const garder = (p: Prof | null) => { setProf(p); try { if (p) sessionStorage.setItem(MEMO_PROF(), JSON.stringify(p)); else sessionStorage.removeItem(MEMO_PROF()); } catch { /* rien */ } };
   const commencer = async () => {
     setErreur('');
     try {
-      const d = await appel<{ code: string; cle_prof: string }>('', { method: 'POST', body: JSON.stringify({ sujet: 'tc' }) });
+      const d = await appel<{ code: string; cle_prof: string }>('', { method: 'POST', body: JSON.stringify({ sujet: configExamen().cle || 'tc' }) });
       await appel(`/${d.code}/question`, { method: 'POST', body: JSON.stringify({ question: configExamen().questions[0].q.id }) }, { 'X-Prof': d.cle_prof });
       garder({ code: d.code, cle: d.cle_prof });
     } catch (e) { setErreur((e as Error).message.replace(/^\d+$/, 'Le serveur ne répond pas : réessaie.')); }
@@ -177,7 +177,7 @@ export function ProfClasse() {
   if (!prof) return (
     <div className="min-h-[100dvh] bg-[#0f1a14] px-4 py-6 text-white sm:px-8" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <div className="mx-auto max-w-3xl">
-        <a href="./" className="text-sm text-emerald-200/80 underline">← Tronc Commun</a>
+        <a href="./" className="text-sm text-emerald-200/80 underline">← {configExamen().retour}</a>
         <h1 className="mt-2 text-3xl font-bold">Mode classe — évaluation au tableau</h1>
         <p className="mt-2 text-lg text-white/80">{configExamen().sujet.titre}</p>
         <ol className="mt-4 list-decimal space-y-1.5 pl-6 text-[17px] text-white/85">
@@ -385,6 +385,12 @@ function FicheEleve({ etat, q, id, code, onAutre, onFermer, onImage, onRapport }
 
 const MEMO_TEL = 'classe-telephone';
 const nouvelId = () => crypto.randomUUID?.() || `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+/** Le nom de l'élève, gardé sur ce téléphone pour les séances suivantes (24/11/2026) : il n'écrit son nom qu'une fois. */
+const MEMO_IDENTITE = 'classe-identite';
+type Identite = { nom: string; prenom: string; classe: string };
+const lireIdentite = (): Identite | null => { try { return JSON.parse(localStorage.getItem(MEMO_IDENTITE) || 'null'); } catch { return null; } };
+const garderIdentite = (d: Identite | null) => { try { if (d) localStorage.setItem(MEMO_IDENTITE, JSON.stringify(d)); else localStorage.removeItem(MEMO_IDENTITE); } catch { /* rien */ } };
+
 function idTelephone() {
   try {
     let t = sessionStorage.getItem(MEMO_TEL) || '';
@@ -430,7 +436,16 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
   const [tel] = useState(() => idTelephone());
   const [cleProf, setCleProf] = useState(() => (code ? cleProfTel(code) : ''));
   const entetes: Record<string, string> = { 'X-Telephone': tel, ...(cleProf ? { 'X-Prof-Tel': cleProf } : {}) };
-  const { etat, perdue, relire } = useSeance(code, entetes);
+  /** la question regardée sur le téléphone ('' : celle du tableau) */
+  const [vue, setVue] = useState('');
+  const { etat, perdue, relire } = useSeance(code, entetes, vue);
+  const [identite, setIdentite] = useState<Identite | null>(() => lireIdentite());
+  const entrer = async (d: Identite) => {
+    setErreur(''); setAttente(true);
+    try { await appel(`/${code}/participant`, { method: 'POST', body: JSON.stringify(d) }, { 'X-Telephone': tel }); garderIdentite(d); setIdentite(d); relire(); }
+    catch (e) { setErreur((e as Error).message.replace(/^\d+$/, 'Ça n’est pas passé : réessaie.')); }
+    finally { setAttente(false); }
+  };
   const [etats, setEtats] = useState<Record<string, EtatTel>>({});
   const [loupe, setLoupe] = useState('');
   const [voirDonnees, setVoirDonnees] = useState(false);
@@ -477,7 +492,7 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
   if (!code || perdue) return (
     <div className="min-h-[100dvh] bg-[#0f1a14] px-4 py-6 text-white" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <div className="mx-auto max-w-md">
-        <p className="text-sm text-emerald-200/80">Moalim · Tronc Commun · Mode classe</p>
+        <p className="text-sm text-emerald-200/80">Moalim · {configExamen().retour} · Mode classe</p>
         {perdue && <p className="mt-3 rounded-lg bg-rose-900/60 p-2">Séance introuvable ou terminée : vérifie le code au tableau.</p>}
         <form className="mt-4" onSubmit={e => { e.preventDefault(); if (/^\d{4}$/.test(saisie)) { setCode(saisie); history.replaceState(null, '', `?c=${saisie}`); window.location.reload(); } }}>
           <label className="block text-lg font-semibold">Le code affiché au tableau</label>
@@ -497,8 +512,14 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
   if (!estProf && !etat.moi) return (
     <div className="min-h-[100dvh] bg-[#0f1a14] px-4 py-5 text-white [@media(max-height:520px)]:py-2" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <div className="mx-auto max-w-xl">
-        <p className="text-sm text-emerald-200/80">Moalim · Tronc Commun · Classe {code}</p>
-        {!role && (<>
+        <p className="text-sm text-emerald-200/80">Moalim · {configExamen().retour} · Classe {code}</p>
+        {!role && identite && (
+          <div className="mt-3">
+            <button disabled={attente} onClick={() => void entrer(identite)} className="w-full rounded-2xl bg-amber-400 px-4 py-5 text-left text-xl font-bold text-black disabled:opacity-50">
+              🎒 Continuer : {identite.prenom} {identite.nom}{identite.classe ? <span className="font-normal"> · {identite.classe}</span> : null}</button>
+            <button onClick={() => { garderIdentite(null); setIdentite(null); }} className="mt-2 text-sm text-white/60 underline">Ce n’est pas moi</button>
+          </div>)}
+        {!role && !identite && (<>
           <p className="mt-3 text-xl font-semibold">Qui es-tu ?</p>
           <div className="mt-3 grid gap-3 [@media(max-height:520px)]:grid-cols-2">
             <button onClick={() => setRole('eleve')} className="rounded-2xl bg-amber-400 px-4 py-5 text-xl font-bold text-black">🎒 Je suis un élève</button>
@@ -507,12 +528,7 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
         </>)}
         {role === 'eleve' && (<>
           <p className="mt-3 text-lg font-semibold">Écris ton nom, une seule fois :</p>
-          <div className="mt-2"><FormNom libelle="Entrer dans la séance" attente={attente} onValider={async d => {
-            setErreur(''); setAttente(true);
-            try { await appel(`/${code}/participant`, { method: 'POST', body: JSON.stringify(d) }, { 'X-Telephone': tel }); relire(); }
-            catch (e) { setErreur((e as Error).message.replace(/^\d+$/, 'Ça n’est pas passé : réessaie.')); }
-            finally { setAttente(false); }
-          }} /></div>
+          <div className="mt-2"><FormNom libelle="Entrer dans la séance" attente={attente} onValider={d => void entrer(d)} /></div>
         </>)}
         {role === 'prof' && (
           <div className="mt-3 rounded-2xl bg-white/10 p-4 text-center">
@@ -521,28 +537,44 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
           </div>)}
         {role && <button onClick={() => { setRole(''); setErreur(''); }} className="mt-3 text-sm text-white/60 underline">← Revenir</button>}
         {erreur && <p className="mt-3 rounded-lg bg-rose-900/60 p-2">{erreur}</p>}
-        <p className="mt-4 text-xs text-white/50">Ton nom sert seulement pendant ce cours : rien n’est enregistré, tout s’efface à la fin de la séance.</p>
+        <p className="mt-4 text-xs text-white/50">Ton nom reste seulement sur ce téléphone (pour la prochaine fois) et pendant la séance : tout s’efface à la fin de la séance.</p>
       </div>
     </div>
   );
 
-  const x = etat.question ? trouver(etat.question) : undefined;
+  const qid = vue || etat.question;
+  const x = qid ? trouver(qid) : undefined;
   if (!x) return <div className="grid min-h-[100dvh] place-items-center bg-[#0f1a14] p-4 text-center text-white/80">Le professeur va projeter la première question.</div>;
   const { p, q } = x;
   const repondus = new Set(etat.reponses.map(r => r.eleve).filter(Boolean) as string[]);
   const eleveCible = estProf ? etat.participants.find(e => e.id === cible) : undefined;
+  const toutes = configExamen().questions;
+  const iq = toutes.findIndex(y => y.q.id === q.id);
+  const auTableau = q.id === etat.question;
+  const aller = (id: string) => { setVue(id === etat.question ? '' : id); setCible(''); setEnvoye(''); window.scrollTo(0, 0); };
+  const correction = etat.correction && auTableau;
 
   return (
     <div className="min-h-[100dvh] bg-[#d6d6d0] text-black" style={{ fontFamily: 'system-ui, sans-serif' }}>
-      <header className="sticky top-0 z-10 flex items-center gap-2 bg-[#0f1a14] px-3 py-1.5 text-sm text-white">
-        <span className="font-semibold">Classe {code}</span>
-        <span className="text-white/60">· question {q.id}</span>
+      <div className="sticky top-0 z-10">
+      <header className="flex items-center gap-2 bg-[#0f1a14] px-3 py-1.5 text-sm text-white">
+        <span className="shrink-0 whitespace-nowrap font-semibold">Classe {code}</span>
+        <span className="shrink-0 whitespace-nowrap text-white/60">· {q.id}{auTableau ? ' 📺' : ''}</span>
         <span className="ml-auto truncate">{estProf ? '👩‍🏫 Professeur' : etat.moi ? `🎒 ${etat.moi.prenom} ${etat.moi.nom}` : ''}</span>
-        {etat.correction && <span className="rounded bg-rose-200 px-2 text-xs font-semibold text-rose-950">Correction</span>}
+        {correction && <span className="rounded bg-rose-200 px-2 text-xs font-semibold text-rose-950">Correction</span>}
       </header>
+      <nav className="flex items-center gap-1.5 bg-[#1b2a22] px-2 py-1 text-sm text-white">
+        <button disabled={iq <= 0} onClick={() => aller(toutes[iq - 1].q.id)} className="rounded border border-white/30 px-2 py-1 disabled:opacity-30">←</button>
+        <select value={q.id} onChange={ev => aller(ev.target.value)} className="min-w-0 flex-1 rounded border border-white/30 bg-[#12301f] px-1 py-1">
+          {toutes.map(y => <option key={y.q.id} value={y.q.id}>Question {y.q.id}{y.q.id === etat.question ? ' (au tableau)' : ''}</option>)}
+        </select>
+        <button disabled={iq >= toutes.length - 1} onClick={() => aller(toutes[iq + 1].q.id)} className="rounded border border-white/30 px-2 py-1 disabled:opacity-30">→</button>
+        {!auTableau && <button onClick={() => aller(etat.question)} className="rounded bg-amber-400 px-2 py-1 font-semibold text-black">📺 Tableau</button>}
+      </nav>
+      </div>
       <div className="mx-auto grid max-w-5xl gap-2 p-2 [@media(orientation:landscape)_and_(max-height:520px)]:grid-cols-2">
         <section className="rounded-lg bg-white p-3 shadow">
-          <Enonce p={p} q={q} grand={false} correction={etat.correction} donnees={voirDonnees} />
+          <Enonce p={p} q={q} grand={false} correction={correction} donnees={voirDonnees} />
           {(p.intro || p.tableau || p.donnees?.length) && <button onClick={() => setVoirDonnees(v => !v)} className="mt-2 rounded border border-slate-400 px-2 py-0.5 text-sm">{voirDonnees ? 'Cacher les données' : 'Voir les données du sujet'}</button>}
         </section>
 
@@ -594,6 +626,7 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
   const trace = q.genre === 'triangle' || q.genre === 'histogramme';
   const enonceOcr = q.genre === 'qcm' || q.genre === 'vf'
     ? `${q.texte} ${q.items.map((it, k) => `${String.fromCharCode(97 + k)}) ${it.texte}${q.genre === 'qcm' ? ' ' + (it as { choix: string[] }).choix.map((c, m) => `${lettre(m)}. ${c}`).join(' ') : ''}`).join(' ')}`
+    : q.genre === 'histogramme' ? `${q.texte} Espèces et indices : ${q.especes.map(([n, i]) => `${n} ${i}`).join(' ; ')}`
     : q.texte;
 
   const photo = async (f: File) => {
@@ -601,7 +634,6 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
     try {
       let mini = await reduireImage(f, 480, 0.6);
       if (octets(mini) > 110_000) mini = await reduireImage(f, 360, 0.5);
-      if (trace) { poser({ phase: 'relire', mini, texte: '' }); return; }
       const grande = await reduireImage(f, 1280, 0.8);
       const { texte } = await appel<{ texte: string }>(`/${code}/lire`, { method: 'POST', body: JSON.stringify({
         image_b64: grande, image_mime: 'image/jpeg', question: q.id, enonce: enonceOcr.slice(0, 1500), titre: p.titre.slice(0, 300),
@@ -635,7 +667,22 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
       return publier({ ...noterChoix(q, choix), choix }, lu, e.mini);
     }
     if (q.genre === 'valeur') return publier(jugerValeur(q, texte), texte, e.mini);
-    if (trace) return publier({ fait: true, verdict: 'nonjuge', verdictMur: 'regarder', retour: 'Tracé à regarder ensemble avec la correction.' }, texte, e.mini);
+    if (trace) {
+      // 24/11/2026 : le tracé photographié est lu par l'IA (dessin décrit) puis noté sur les lignes de la correction
+      if (!texte) return publier({ fait: true, verdict: 'nonjuge', verdictMur: 'regarder', retour: 'Tracé à regarder ensemble avec la correction.' }, texte, e.mini);
+      poser({ phase: 'correction', erreur: undefined });
+      try {
+        const corps = {
+          diapo: { title: `${configExamen().sujet.niveau} — ${p.titre}`, speech: '' },
+          question: { type: 'open', enonce: enonceOcr.slice(0, 1500), attendu: q.correction.join(' '), matiere: configExamen().matiere, bareme: q.points, elements: q.correction },
+          reponse: texte.slice(0, 4000), tentative: 2, verdict: null,
+        };
+        const r = await appel<CorrectionTuteur>(`/${code}/corriger`, { method: 'POST', body: JSON.stringify(corps) });
+        return publier(etatDeCorrection(q, texte, r), texte, e.mini);
+      } catch {
+        return publier({ fait: true, verdict: 'nonjuge', verdictMur: 'regarder', retour: 'Tracé à regarder ensemble avec la correction.' }, texte, e.mini);
+      }
+    }
     if (q.genre === 'redaction') {
       poser({ phase: 'correction', erreur: undefined });
       try {
@@ -658,7 +705,7 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
   return (<>
     {(e.phase === 'vide' || e.phase === 'lecture') && (<>
       <label className={`block cursor-pointer rounded-xl px-4 py-4 text-center text-lg font-bold text-white [@media(max-height:520px)]:py-3 ${e.phase === 'lecture' ? 'animate-pulse bg-sky-700' : 'bg-black active:bg-slate-700'}`}>
-        {e.phase === 'lecture' ? (trace ? 'Préparation…' : '📷 Lecture de la feuille…') : trace ? `📷 Photographier ${eleve ? 'son' : 'mon'} tracé` : `📷 Photographier ${de} réponse`}
+        {e.phase === 'lecture' ? '📷 Lecture de la feuille…' : trace ? `📷 Photographier ${eleve ? 'son' : 'mon'} tracé` : `📷 Photographier ${de} réponse`}
         <input type="file" accept="image/*" capture="environment" className="hidden" disabled={e.phase === 'lecture'}
           onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f) void photo(f); }} />
       </label>
@@ -669,12 +716,12 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
     {(e.phase === 'relire' || e.phase === 'correction') && (<>
       <div className="flex gap-2">
         {e.mini && <img src={e.mini} alt="La photo" className="h-24 w-20 shrink-0 rounded border object-cover" onClick={() => onLoupe(e.mini!)} />}
-        <p className="text-sm text-slate-700">{trace ? 'Le tracé part au mur, à regarder ensemble. Un mot peut l’accompagner (la texture trouvée…).' : e.mini ? 'Relis ce qui a été lu sur la feuille ; corrige si besoin, puis envoie.' : 'Écris la réponse, puis envoie.'}</p>
+        <p className="text-sm text-slate-700">{trace ? 'Voici ton tracé tel que l’IA l’a lu : corrige si besoin, puis envoie pour la correction.' : e.mini ? 'Relis ce qui a été lu sur la feuille ; corrige si besoin, puis envoie.' : 'Écris la réponse, puis envoie.'}</p>
       </div>
       {(q.genre === 'qcm' || q.genre === 'vf') && (
         <Choix q={q} etat={{ fait: false, choix: e.choix }} onChoisir={(k, v) => poser({ choix: (e.choix || q.items.map(() => null)).map((c, m) => (m === k ? v : c)) })} />)}
       {q.genre !== 'qcm' && q.genre !== 'vf' && (
-        <textarea value={e.texte} onChange={ev => poser({ texte: ev.target.value })} rows={trace ? 2 : 5} dir="auto" placeholder={trace ? 'Un mot (facultatif)' : 'La réponse'}
+        <textarea value={e.texte} onChange={ev => poser({ texte: ev.target.value })} rows={trace ? 8 : 5} dir="auto" placeholder={trace ? 'La description du tracé' : 'La réponse'}
           className="mt-2 w-full rounded-md border border-slate-400 p-2 text-[18px] [@media(max-height:520px)]:h-24" style={{ fontFamily: CRAIE }} />)}
       <div className="mt-2 flex flex-wrap gap-2">
         <button disabled={!pret || e.phase === 'correction'} onClick={() => void envoyer()} className="rounded-lg bg-black px-5 py-2 font-semibold text-white disabled:opacity-40">

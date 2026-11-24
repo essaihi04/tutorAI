@@ -20,6 +20,7 @@ import '../services/audioUnlock';
 import CoursePlayer from '../components/course/CoursePlayer';
 import type { CourseDeck } from '../components/course/types';
 import Examen, { utiliserSujet } from './tronc-commun/Examen';
+import { ProfClasse, TelephoneClasse } from './tronc-commun/Classe';
 import Fiche from './tronc-commun/Fiche';
 import Retravailler from './tronc-commun/Retravailler';
 import { REVOIR_2BAC } from './tronc-commun/revoir';
@@ -148,6 +149,7 @@ function Accueil() {
         </div>
         <Retravailler revoir={(ex, q) => REVOIR_2BAC[ex]?.[q] || []} nomExamen={ex => `Examen de ${ex === 'examen_chimie' ? 'chimie' : 'physique'}`}
           nomCours={c => SEANCES.find(x => x.id === c)?.nom || c} />
+        <p className="mt-4 text-right text-sm [@media(max-height:520px)]:mt-2"><a href="?classe" className="text-white/45 underline hover:text-white/80">Mode classe (professeur)</a></p>
       </div>
     </div>
   );
@@ -190,11 +192,51 @@ function Cours({ id }: { id: string }) {
   );
 }
 
+/** L'examen d'une matière (« physique » ou « chimie ») ; `suivi` : seulement avec la fiche de l'élève (pas en classe). */
+function prendreSujet(ex: (typeof MATIERES)[number], suivi = true) {
+  utiliserSujet({ sujet: ex.sujet as never, piste: cle => ex.voix[cle], suivi, matiere: ex.cle, retour: '2ᵉ Bac PC', cle: `examen_${ex.cle}`, revoir: q => REVOIR_2BAC[`examen_${ex.cle}`]?.[q] || [] });
+}
+
+/** Mode classe (24/11/2026, demande de l'utilisateur : « ajouter le mode classe pour la 2ᵉ Bac ») : le prof choisit
+ * l'examen de physique ou de chimie (`?classe&examen=physique`), puis tout se passe comme au Tronc Commun. */
+function ChoixClasse() {
+  return (
+    <div className="min-h-[100dvh] bg-[#0f1a14] px-4 py-6 text-white sm:px-8" style={{ fontFamily: 'system-ui, sans-serif' }}>
+      <div className="mx-auto max-w-3xl">
+        <a href="./" className="text-sm text-emerald-200/80 underline">← 2ᵉ Bac PC</a>
+        <h1 className="mt-2 text-3xl font-bold">Mode classe — évaluation au tableau</h1>
+        <p className="mt-2 text-lg text-white/80">Choisis l’évaluation à projeter :</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {MATIERES.map(m => (
+            <a key={m.cle} href={`?classe&examen=${m.cle}`} className="rounded-2xl border border-white/20 bg-white/5 p-4 hover:bg-white/10">
+              <span className="inline-block rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: m.couleur }}>{m.nom}</span>
+              <p className="mt-2 text-lg font-semibold">{m.sujet.titre}</p>
+            </a>))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Le téléphone d'un élève (ou du prof) : la séance dit quel examen est projeté. */
+function TelephoneClasse2Bac({ code }: { code: string }) {
+  const [pret, setPret] = useState(!/^\d{4}$/.test(code));
+  useEffect(() => {
+    if (pret) return;
+    fetch(`/api/v1/public/classe/${code}`).then(r => (r.ok ? r.json() : null)).then(d => {
+      const ex = MATIERES.find(m => `examen_${m.cle}` === d?.sujet) || MATIERES[0];
+      prendreSujet(ex, false);
+    }).catch(() => prendreSujet(MATIERES[0], false)).finally(() => setPret(true));
+  }, []);
+  if (!pret) return <div className="grid min-h-[100dvh] place-items-center bg-[#0f1a14] p-4 text-center text-white/80">Connexion à la séance…</div>;
+  return <TelephoneClasse code={code} />;
+}
+
 function Page() {
   const params = new URLSearchParams(window.location.search);
   const ex = MATIERES.find(m => m.cle === params.get('examen'));
   if (ex) {
-    utiliserSujet({ sujet: ex.sujet as never, piste: cle => ex.voix[cle], suivi: true, matiere: 'physique', retour: '2ᵉ Bac PC', cle: `examen_${ex.cle}`, revoir: q => REVOIR_2BAC[`examen_${ex.cle}`]?.[q] || [] });
+    prendreSujet(ex);
     return <Examen />;
   }
   const id = params.get('cours');
@@ -203,6 +245,19 @@ function Page() {
 
 /** La fiche d'abord (une seule fois), comme au Tronc Commun. */
 function Bac2PCF() {
+  // mode classe : sans fiche ni suivi
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('classe')) {
+    const ex = MATIERES.find(m => m.cle === params.get('examen'));
+    if (!ex) return <ChoixClasse />;
+    prendreSujet(ex, false);
+    return <ProfClasse />;
+  }
+  if (params.has('c')) return <TelephoneClasse2Bac code={params.get('c') || ''} />;
+  return <AvecFiche />;
+}
+
+function AvecFiche() {
   const [eleve, setEleve] = useState<Eleve | null>(() => eleveEnregistre());
   if (!eleve) return <Fiche onEntree={setEleve} entete="Moalim · 2ᵉ Bac PC BIOF · physique-chimie" prefixe="2BACPCF" fond="#101826" />;
   return <Page />;

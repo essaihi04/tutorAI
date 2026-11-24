@@ -270,3 +270,16 @@ def test_telephone_prof_sans_code(client):
     client.post(f"/public/classe/{code}/demande-prof/decision", json={"telephone": "tel-eleve-farceur", "accepter": False}, headers=P)
     assert client.get(f"/public/classe/{code}/demande-prof", headers=E).json()["statut"] == "refuse"
     assert client.get(f"/public/classe/{code}", headers=E).json()["prof"] is False
+
+
+def test_telephone_regarde_une_autre_question(client):
+    """Navigation sur le téléphone (24/11/2026) : `?q=` donne les réponses d'une autre question que celle du tableau."""
+    code, P = seance(client)
+    client.post(f"/public/classe/{code}/question", json={"question": "1"}, headers=P)
+    T = {"X-Telephone": "tel-navigue-0001"}
+    inscrire(client, code, T, "Nora")
+    r = client.post(f"/public/classe/{code}/reponse", headers=T, json={"question": "2", "texte": "vrai", "note": 1, "sur": 1, "verdict": "juste"})
+    assert r.status_code == 200, r.text
+    assert client.get(f"/public/classe/{code}", headers=T).json()["reponses"] == []
+    vue = client.get(f"/public/classe/{code}?q=2", headers=T).json()
+    assert vue["question"] == "1" and len(vue["reponses"]) == 1 and vue["reponses"][0]["mien"] is True

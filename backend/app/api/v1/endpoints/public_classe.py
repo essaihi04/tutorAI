@@ -415,7 +415,8 @@ def _vue(r: Reponse, telephone: str) -> dict:
 
 
 @router.get("/{code}")
-async def etat(code: str, request: Request, v: int = Query(default=0), x_telephone: str | None = Header(default=None),
+async def etat(code: str, request: Request, v: int = Query(default=0), q: str = Query(default="", pattern=r"^[A-Za-z0-9_.-]{0,20}$"),
+               x_telephone: str | None = Header(default=None),
                x_prof: str | None = Header(default=None), x_prof_tel: str | None = Header(default=None)):
     """L'état de la séance (interrogé toutes les 2 à 3 s) ; `?v=<version>` : rien de neuf → `{inchange: true}`.
     Le téléphone : son élève, la liste des noms, le mur anonyme. L'écran du prof (`X-Prof`) : en plus, l'élève de chaque
@@ -426,7 +427,8 @@ async def etat(code: str, request: Request, v: int = Query(default=0), x_telepho
         return {"version": s.version, "inchange": True}
     prof = s.est_prof(x_prof, x_prof_tel)
     tel = re.sub(r"[^a-zA-Z0-9-]", "", x_telephone or "")[:40]
-    courantes = s.reponses.get(s.question, {})
+    # `q` : le téléphone regarde une autre question que celle du tableau (il navigue) ; ses réponses à elle
+    courantes = s.reponses.get(q or s.question, {})
     moi = s.eleve_du_telephone(tel) if tel else None
     d = {"code": s.code, "sujet": s.sujet, "version": s.version, "question": s.question, "correction": s.correction,
          "posees": s.posees, "participants": [_vue_participant(p) for p in s.participants.values()],
