@@ -563,6 +563,110 @@ class Travail:
         self.texte, self.langue, self.options = texte, langue, options
         self.fini = threading.Event()
         self.pcm = b""
+        self.essais = 0
+
+
+# ── Contrôle des nombres (24/11/2026, règle de l'utilisateur : aussi pour les réponses libres) ──
+# La voix dit parfois mal un nombre français placé juste après un mot arabe (« يعني vingt-deux », « و vingt-deux »
+# entendu « و ألف », « حتى ل huit cents » entendu « douze cents ») ou le dit en darija (« cinq » -> « خمسة »).
+# Chaque morceau qui contient un nombre français est transcrit par MoulSot ; si la suite des nombres entendue diffère
+# du texte, ou si un nombre est entendu en darija, le morceau est refait (2 fois au plus). Les morceaux sans nombre
+# ne passent pas par la transcription. Les lots (lot_sans_tunnel.py) font leur propre contrôle : option
+# « controle_nombres »: False.
+try:
+    from num2words import num2words as _n2w
+except ImportError:
+    subprocess.run([sys.executable, "-m", "pip", "-q", "install", "num2words"], capture_output=True)
+    try:
+        from num2words import num2words as _n2w
+    except ImportError:
+        _n2w = None
+import difflib as _dl
+import unicodedata as _ud
+_NB = set("zero un une deux trois quatre cinq six sept huit neuf dix onze douze treize quatorze quinze seize vingt trente "
+          "quarante cinquante soixante cent cents mille million millions virgule".split())
+_AR_FR = {"واحد": "un", "وحدة": "un", "جوج": "deux", "زوج": "deux", "اثنين": "deux", "تلاتة": "trois", "ثلاثة": "trois",
+          "ربعة": "quatre", "اربعة": "quatre", "خمسة": "cinq", "ستة": "six", "سبعة": "sept", "تمنية": "huit", "ثمانية": "huit",
+          "تسعة": "neuf", "عشرة": "dix", "حداش": "onze", "طناش": "douze", "تلطاش": "treize", "ربعطاش": "quatorze",
+          "خمسطاش": "quinze", "سطاش": "seize", "عشرين": "vingt", "تلاتين": "trente", "ربعين": "quarante", "خمسين": "cinquante",
+          "ستين": "soixante", "مية": "cent", "ميا": "cent", "مائة": "cent", "الف": "mille", "صفر": "zero"}
+
+
+def _chiffres(t):   # MoulSot écrit souvent en chiffres : « 22 », « 6,02 », « 37% »
+    t = str(t).replace("%", " pour cent ")
+    t = re.sub(r"(?<=\d)[,.](?=\d)", " virgule ", t)
+    t = re.sub(r"(?<!\d)0+(?=\d)", lambda m: " zéro" * len(m.group()) + " ", t)
+    return re.sub(r"\d+", lambda m: " " + _n2w(int(m.group()), lang="fr") + " ", t) if _n2w else t
+
+
+def _mots(t):   # sans accents ni hamza (NFD puis on retire les signes)
+    t = "".join(c for c in _ud.normalize("NFD", _chiffres(t).lower()) if _ud.category(c) != "Mn")
+    return re.findall(r"[\w']+", t.replace("-", " "))
+
+
+def _nombres(t):   # un nombre dit en darija compte comme son équivalent français (le cas « darija » est relevé à part)
+    out = []
+    for w in _mots(t):
+        w = _AR_FR.get(w, w)
+        if w in _NB:
+            out.append(w.replace("cents", "cent").replace("une", "un").replace("millions", "million"))
+    return out
+
+
+def fautes_nombres(stt, texte):
+    a, b = _nombres(texte), _nombres(stt)
+    out = []
+    if a != b:
+        m = _dl.SequenceMatcher(None, a, b, autojunk=False)
+        if max(len(a), len(b)) - sum(x.size for x in m.get_matching_blocks()):
+            out.append("NOMBRES " + " ".join(a) + " / " + " ".join(b))
+    dits = sorted({w for w in _mots(stt) if w in _AR_FR} - {w for w in _mots(texte) if w in _AR_FR})
+    if dits and a:
+        out.append("DARIJA " + " ".join(dits))
+    return out
+
+
+def _transcrire_pcm(pcm, attente=20):
+    """PCM 16 bits à SR -> texte MoulSot (None si le STT n'est pas prêt ou ne répond pas)."""
+    if STT.get("etat") != "pret" or not pcm:
+        return None
+    import numpy as np
+    w = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768
+    n = int(len(w) * 16000 / SR)
+    w16 = np.interp(np.linspace(0, len(w) - 1, n), np.arange(len(w)), w).astype(np.float32)
+    o = Travail("", "mixed")
+    o.texte = ""
+    with VERROU:
+        COMPTEUR[0] += 1
+        tid = COMPTEUR[0]
+        STT_EN_COURS[tid] = o
+    STT_ENTREE.put((tid, w16.tobytes(), "mixed"))
+    if not o.fini.wait(attente):
+        with VERROU:
+            STT_EN_COURS.pop(tid, None)
+        return None
+    return o.texte
+
+
+def _a_controler(t):
+    return (STT.get("etat") == "pret" and (t.options or {}).get("controle_nombres", True) is not False
+            and t.essais < 2 and bool(_nombres(t.texte)))
+
+
+def _controler(t, pcm):
+    try:
+        s = _transcrire_pcm(pcm)
+        f = fautes_nombres(s, t.texte) if s else []
+    except Exception as e:
+        say("contrôle des nombres échoué :", repr(e)[:150])
+        f = []
+    if f:
+        t.essais += 1
+        say(f"nombres, morceau refait ({t.essais}) :", t.texte[:60], f)
+        TRAVAUX.put(t)
+        return
+    t.pcm = pcm
+    t.fini.set()
 
 
 def recevoir():
@@ -571,8 +675,11 @@ def recevoir():
         with VERROU:
             t = EN_COURS.pop(tid, None)
         if t:
-            t.pcm = pcm
-            t.fini.set()
+            if pcm and _a_controler(t):
+                threading.Thread(target=_controler, args=(t, pcm), daemon=True).start()
+            else:
+                t.pcm = pcm
+                t.fini.set()
 
 
 threading.Thread(target=recevoir, daemon=True).start()

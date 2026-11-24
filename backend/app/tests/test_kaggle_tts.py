@@ -525,3 +525,22 @@ def test_cli_avec_le_jeton_du_compte(tmp_path, comptes, monkeypatch):
     assert vus["KAGGLE_USERNAME"] == "secours1" and vus["KAGGLE_API_TOKEN"] == "t2"
     kaggle_cli_reel("kernels", "list")
     assert vus["KAGGLE_USERNAME"] == "prof" and vus["KAGGLE_API_TOKEN"] == "jeton-kaggle"
+
+
+def test_controle_des_nombres_de_la_voix_en_direct():
+    """Un nombre mal dit (sauté, changé, ou dit en darija) fait refaire le morceau ; les chiffres de MoulSot comptent."""
+    import re, subprocess, sys
+    source = (Path(__file__).resolve().parents[2] / "kaggle_tts" / "serveur.py").read_text(encoding="utf-8")
+    bloc = source.split("# ── Contrôle des nombres")[1].split("\ndef _transcrire_pcm")[0]
+    ns = {"re": re, "subprocess": subprocess, "sys": sys}
+    exec(bloc.split("\n", 1)[1], ns)
+    f = ns["fautes_nombres"]
+    if ns["_n2w"] is None:
+        pytest.skip("num2words absent")
+    assert f("يعني 22 nucléons، و 22 كتساوي 14 زائد 8", "يعني vingt-deux nucléons، و vingt-deux كتساوي quatorze زائد huit") == []
+    assert f("6,02 fois 10 puissance 23", "six virgule zéro deux fois dix puissance vingt-trois") == []
+    assert f("37% من la valeur", "trente-sept pour cent من la valeur") == []
+    assert f("Ln de x كتساوي deux ناقص x", "Ln de x كتساوي جوج ناقص x") == []           # nombre darija écrit : pas de faute
+    assert f("يعني vingt-deux nucléons، و ألف", "يعني vingt-deux nucléons، و vingt-deux")[0].startswith("NOMBRES")
+    assert f("le rouge عند douze cents nanomètres", "le rouge عند huit cents nanomètres")[0].startswith("NOMBRES")
+    assert f("السوال خمسة حسب lambda", "السؤال cinq: حسب lambda") == ["DARIJA خمسة"]
