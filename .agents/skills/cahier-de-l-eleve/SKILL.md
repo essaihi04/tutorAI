@@ -126,6 +126,9 @@ diapositive) met en forme chaque ligne d'après son début ; écrire donc chaque
 | `\| a \| b \|` (lignes qui se suivent) | **un tableau** ; la 1ʳᵉ ligne est l'en-tête | en-tête jaune |
 | le reste | un paragraphe qui commence à gauche | blanc craie `#f5f1dc` |
 
+Cette charte est la 3ᵉ surface de la charte de couleurs des cours (skill `simulations-au-tableau`, règle 19 : objets aux
+couleurs du lexique, craie selon `docs/lexique-visuel/craie.md`, cahier selon ce tableau).
+
 Règles d'organisation :
 - **un titre seul sur sa ligne** (« 2. La texture du sol »), puis le contenu ; jamais « 1. Outils : carte, boussole… »
   (titre et contenu collés) ;

@@ -58,6 +58,11 @@ il ajoute ce qui est propre au Tronc Commun et les règles données par l'utilis
 8. **Révision du tuteur.** Un petit cours (12 à 16 diapos, environ 30 min) qui reprend les deux chapitres et refait chaque
    méthode sur de nouveaux exemples, en réutilisant les simulations des cours (un objet, un seul dessin).
 
+9. **La charte de couleurs** (demande de l'utilisateur, 25/11/2026, cours de /TCF) : skill `simulations-au-tableau`, règle 19 —
+   objets aux couleurs du lexique (`docs/lexique-visuel/`), code de la craie (`craie.md` : titres jaunes, données blanches,
+   résultats et conclusions verts, pièges roses), charte du cahier (`cahier-de-l-eleve` § 6). Les objets du Tronc Commun
+   physique-chimie sont déjà au lexique (montage à reflux, CCM, filtration, atome, mécanique) : on les réutilise.
+
 ## L'évaluation formative
 
 - Préparation à la vraie évaluation, **sans chronomètre** : 20 points prévus pour 50 minutes au plus, durée affichée comme
