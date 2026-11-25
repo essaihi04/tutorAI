@@ -256,6 +256,9 @@ PRONONCIATION = [
     (re.compile(r"(?<![؀-ۿ])((?:[وفبل]?ال|[وفبل])?)[أا]فقي"), lambda mt: mt.group(1) + "أوفوقي"),
     # 24/11/2026 : « برر » mal dit (doit sonner « barrir ») ; « بَرِّر » (v3) choisi à l'écoute malgré le tachkil
     (re.compile(r"(?<![؀-ۿ])([وف]?)برر(?![؀-ۿ])"), lambda mt: mt.group(1) + "بَرِّر"),
+    # 25/11/2026 (demande de l'utilisateur) : on dit « الحرارة », jamais « السخانة » (voix des cours et réponses libres)
+    (re.compile(r"(?<![؀-ۿ])([وفب]?)(ال|لل|ل)?سخان[ةه](?![؀-ۿ])"),
+     lambda mt: mt.group(1) + (mt.group(2) or "") + "حرارة"),
 ]
 
 

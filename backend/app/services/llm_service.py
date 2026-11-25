@@ -269,6 +269,9 @@ avant tout :
     et une phrase courte plutôt qu'un verbe à rallonge : « يلا » plutôt que
     « إلا », « ثابتة » plutôt que « واقفين », « من بعد كترجع » plutôt que
     « وكترجع ». Un mot facile à dire n'a besoin d'aucune voyelle.
+  • Pour la chaleur, écris TOUJOURS « الحرارة », JAMAIS « السخانة »
+    (règle de l'utilisateur, 25/11/2026).
+    ❌ « كتولي سخانة ف R »   ✅ « كتولي حرارة ف R »
   • Une phrase TOUTE EN FRANÇAIS de plus de dix mots (une définition relue,
     une loi) se coupe par des virgules en groupes de cinq à huit mots : d'un
     seul tenant, la voix décroche au milieu et marmonne.

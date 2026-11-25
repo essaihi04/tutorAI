@@ -28,6 +28,11 @@ _spec.loader.exec_module(tp)
     ("المحور الافقي", "المحور الأوفوقي"),
     ("برر علاش", "بَرِّر علاش"),
     ("التبرير ديالو", "التبرير ديالو"),
+    # 25/11/2026 : « الحرارة » à la place de « السخانة »
+    ("والسخانة كتزربها", "والحرارة كتزربها"),
+    ("السخانة كتأثر", "الحرارة كتأثر"),
+    ("كتولي سخانة ف R un", "كتولي حرارة ف R un"),
+    ("بالسخانة", "بالحرارة"),
     # 21/11/2026 : « lim » ; « la limite » choisi à l'écoute (_ecoute_lim/ecoute_3.mp3)
     ("lim de x ln x quand x tend vers zéro", "la limite de x ln x quand x tend vers zéro"),
     ("la lim de f", "la limite de f"),
