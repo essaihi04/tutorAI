@@ -139,15 +139,17 @@ const CAS = [
 function dessinerRoles(c, S, scene) {
   const pt = scene.petit, L = scene.L;
   let courant = 0; CAS.forEach((k, i) => { if (S.t > 0 && S.a(k.id)) courant = i; });
-  const E = window.Synthese.etale(S, CAS.map(k => k.id), L);
-  const visibles = pt ? (S.t <= 0 ? [0, 1] : courant < 2 ? [0, 1] : [2, 3]) : [0, 1, 2, 3].slice(0, E.n);
-  const n = pt ? 2 : E.n, r = pt ? 60 : E.taille(m => [0, 84, 80, 72, 64][m]), yB = pt ? 222 : 236;
+  // téléphone : la paire en cours seule (éthanol, puis pierre ponce), qui se partage elle aussi le cadre
+  const paire = S.t <= 0 ? [0, 1] : S.t >= (S.instant('sans_ponce') ?? 99) - .6 ? [2, 3] : [0, 1];
+  const E = window.Synthese.etale(S, (pt ? paire.map(i => CAS[i]) : CAS).map(k => k.id), L);
+  const visibles = (pt ? paire : [0, 1, 2, 3]).slice(0, E.n);
+  const n = E.n, r = pt ? E.taille(m => [0, 78, 60][m]) : E.taille(m => [0, 84, 80, 72, 64][m]), yB = pt ? 222 : 236;
   visibles.forEach((idx, j) => {
-    const k = CAS[idx], x = pt ? L * (j + .5) / n : E.x(j);
+    const k = CAS[idx], x = E.x(j);
     c.repere(k.id, x - r - 10, yB - r * 1.75 - 40, 2 * r + 20, r * 2.75 + 110, k.titre);
     if (S.t > 0 && !S.ecrit(c, k.id)) return;
     const chaud = idx >= 2, tt = S.t - M[k.id];
-    if (S.t > 0 && courant === idx) lueur(c, x - r - 12, yB - r * 1.75 - 44, 2 * r + 24, r * 2.75 + (chaud ? 138 : 112), { vive: true });
+    if (S.t > 0 && courant === idx) { const bw = Math.min(L / n - 8, Math.max(2 * r + 24, 170)); lueur(c, x - bw / 2, yB - r * 1.75 - 44, bw, r * 2.75 + (chaud ? 138 : 112), { vive: true }); }
     c.texte(k.titre, x, yB - r * 1.75 - 18, { couleur: 'jaune', taille: pt ? 24 : 19, gras: true, align: 'center', max: L / n - 8 });
     c.direct(() => {
       const g = c.ctx;

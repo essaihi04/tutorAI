@@ -87,3 +87,66 @@ réponse sur l’éprouvette), deux pointages qui remontaient le temps (applicat
 ## Dernier commit poussé sur `tcf-cours`
 
 `216f1ff1` (cours, voix, simulations et vérifications) ; ce rapport est complété par le commit qui suit.
+
+## Finitions (25/11/2026, `docs/tcf/BRIEF_FINITIONS.md`)
+
+Aucun texte parlé n’a changé : `lister_voix_tcf.py` réécrit `tc_chim_synthese_voix.json` à l’identique (git diff vide),
+et une comparaison champ à champ de l’ancien et du nouveau cours ne trouve de différences que dans `cahier` et
+`student_trace`. Les couleurs nommées par la voix sont gardées (billes jaunes et bleues, grains blancs du savon,
+couche blanche de la plaque, taches bleue et rouge de la CCM).
+
+### Ce qui a changé
+
+- **Le lexique d’abord.** Les objets de labo du cours sortent de `commun.js` et entrent, copiés mot pour mot, dans
+  `shared/lexique/lexique-chimie.js` (`Lexique.chimie`) : montage à reflux assemblé (`montageReflux`), ballon,
+  réfrigérant à boules, chauffe-ballon, potence, élévateur, tuyau, pierre ponce, vapeur, gouttelette ; CCM (plaque,
+  cuve et devant de cuve, capillaire, lampe UV, diiode) ; filtration (entonnoir et papier filtre, flocons du précipité) ;
+  éprouvette, tube, flacon et pictogramme corrosif, thermomètre, balance ; `LIQUIDES` (teintes des liquides) ; ions
+  d’une eau minérale (`ion`, `IONS` : Ca²⁺ prend la couleur du calcium du lexique, au lieu du jaune qui veut dire
+  carbone). Dans `commun.js`, `P.ballon`, `P.montage`… ne sont plus que des renvois ; la molécule d’eau est
+  `Lexique.h2o`, la bille d’une espèce `Lexique.bille`, le filet versé `Lexique.chimie.filet`. Chaque page charge
+  `lexique.js` puis `lexique-chimie.js`. Fiches : `docs/lexique-visuel/montage-reflux.md`, `ccm.md`, `filtration.md`
+  (+ index du README).
+- **Le code de la craie**, écrit en tête de `commun.js` et appliqué aux sept pages : jaune = titres, mots-clés,
+  « À toi », relation générale ; blanc = légendes, étapes, valeurs données ou mesurées, calcul intermédiaire ; vert =
+  résultats calculés et conclusions (comme `physics/ondes-tableau`) ; rose = erreurs, pièges, contre-exemples (le rouge
+  et l’orange de « lente », « deux couches », « perte de matière », soude corrosive sont passés au rose) ; flèches,
+  cotes et repères dans la couleur de l’objet (eau froide cyan, h cyan et H jaune, hauteurs de A en cyan et de B en
+  orange). Plus de bleu `#60a5fa` pour l’eau du réfrigérant (cyan).
+- **Le cahier** (§ 6 de `cahier-de-l-eleve`, dans le générateur `scripts/tcf/synthese/`) : numérotation alignée sur
+  les blocs (les diapos disaient « IV. » et « V. » là où le cahier dit « III. » et « 3. ») ; tableaux au lieu des
+  « ; » (naturelle / synthétique, éthanol / pierre ponce, phase fixe / phase mobile, une tache / plusieurs taches) ;
+  « Méthode : » devant chaque suite d’étapes (traitement, CCM, application, révision) ; « Remarque : » devant « plus
+  Rf est grand… » ; la ligne du montage coupée en deux (< 90 caractères).
+- **La simulation remplit son cadre.** Dans le lecteur (cadre ≈ 823 × 565 px à 1280 × 720), les vues « en cases »
+  posaient la première case à sa place finale, à gauche, et laissaient le reste vide pendant la voix. Maintenant les
+  cases DÉJÀ PARUES se partagent tout le cadre (`Synthese.cases`) et glissent en douceur quand la suivante arrive ;
+  même règle pour les vues dessinées à la main (`Synthese.etale` : rôles de l’éthanol et de la pierre ponce, à froid /
+  chauffé, les trois montages). Le glissement se fait dans les 0,6 s AVANT le moment, pour qu’un `play_until` figé sur
+  le moment montre une scène déjà en place (sinon deux ballons se chevauchaient). Vue « contenu » : ballon agrandi ;
+  usine de la chimie lourde qui sortait du cadre à gauche, recentrée ; « lente / rapide » qui chevauchaient « savon
+  formé » et la conclusion, posés à droite de leur barre ; encadré du montage « sans réfrigérant » élargi à son titre.
+- **Téléphone** (429 × 250) : légendes des rôles qui se chevauchaient, espacées ; paire en cours seule et en grand ;
+  ballon de la vue « contenu » plus grand, éprouvette qui ne sort plus par le haut.
+
+### Captures regardées
+
+Chaque vue (37) seule à 823 × 515 (cadre du lecteur), 760 × 420 et 429 × 250, à l’état final et à t = 2-3 s ; les vues à
+moments aux instants exacts (3,5 s et 6,5 s : arrivée de « avec chauffage », « sans réfrigérant », « avec éthanol ») ;
+le cours dans le lecteur /TCF à 1280 × 720 et 724 × 350 pendant la voix (diapos savon, contenu, rôles, types, espèce,
+chauffage). Aucune erreur console. Script de captures : écriture de la craie terminée d’un coup (horloge avancée) sur fond
+de tableau.
+
+### Vérifications
+
+`verifier_formules.py` (cours et dossier) : 0 ; `verifier_parcours.py` : rien ; `verifier_pointage.py` : 0 défaut ;
+`verifier_figures_cahier.py` : 0 erreur ; voix inchangée ; rejeu des 37 diapos à simulation (`rejouer_diapos.js` : chaque pointage, observation, `apres_reponse` et `allume` envoyé à la vraie page) : 0 défaut, aucune erreur console.
+
+### Ce qui reste
+
+- Le ballon du lexique (`Lexique.chimie.ballon`) est celui de `chimie/shared/chem-lab.js` (2ᵉ Bac) recopié : les pages de
+  2ᵉ Bac qui ont leur propre ballon, réfrigérant ou éprouvette ne sont pas encore branchées sur le lexique.
+- Le cyan / orange des hauteurs de A et de B (CCM) est un code de repère local, pas une couleur d’espèce du lexique
+  (les taches révélées sont toutes violet-gris).
+- Les fiches « Ce qu’il faut retenir » et la carte gardent leurs formules en cyan (pas l’ambre du cahier).
+- Au téléphone, les vues « masse » et « densité » ne montrent que l’écriture de l’étape (pas l’éprouvette).
