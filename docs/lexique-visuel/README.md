@@ -49,6 +49,8 @@ d'aspect, seules les variantes minoritaires prennent le dessin commun. Dans une 
 | milieux | hyaloplasme `[96,200,150]`, membrane `[250,204,96]`, matrice `[86,180,236]`, mitochondrie `[240,100,62]` | `Lexique.T` |
 
 Texte écrit SUR un objet clair : sombre et gras (`#0b1f2a`, `Lexique.etiquette`) ; légendes à côté : craie.
+La craie elle-même suit un code fixe (titres jaunes, légendes et données blanches, résultats et conclusions verts,
+pièges roses, ce qui désigne un objet dans la couleur de l'objet) : [craie.md](craie.md).
 
 ## Index des éléments
 
