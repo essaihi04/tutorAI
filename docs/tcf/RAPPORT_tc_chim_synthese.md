@@ -86,4 +86,4 @@ réponse sur l’éprouvette), deux pointages qui remontaient le temps (applicat
 
 ## Dernier commit poussé sur `tcf-cours`
 
-SHA_FINAL
+`216f1ff1` (cours, voix, simulations et vérifications) ; ce rapport est complété par le commit qui suit.
