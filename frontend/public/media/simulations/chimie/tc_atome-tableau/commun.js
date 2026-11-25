@@ -125,6 +125,7 @@
     }
     /** Le moment `nom` est-il atteint ? Si oui, la craie écrit la suite à partir de cet instant. */
     S.ecrit = (c, nom) => { const m = M(); if (!(nom in m) || S.t < m[nom] - 1e-6) return false; if (S.vu[nom] != null) c.depuis(S.vu[nom]); return true; };
+    S.momentDe = nom => { const m = M(); return nom in m ? m[nom] : null; };
     S.a = nom => { const m = M(); return nom in m && S.t >= m[nom] - 1e-6; };
     /** Progression 0..1 sur `d` secondes de scène après le moment `nom` (adoucie). */
     S.k = (nom, d = 1) => { const m = M(); return nom in m ? doux((S.t - m[nom]) / d) : 0; };
@@ -453,5 +454,74 @@
   /** « (K)²(L)⁶ » en exposants Unicode. */
   function structure(n) { return repartition(n).map((v, i) => `(${'KLM'[i]})${exposant(v)}`).join(''); }
 
-  window.Atome = { Scene, VW, VH, TAU, lueur, lignes, sim, param, doux, graine, P, boule, notation, ELEMENTS, repartition, structure, exposant, COUL };
+
+  /* ── Ajouts (session cloud, 25/11/2026) : l'atome entier, le comptage, le tableau de méthode ── */
+  /**
+   * Places FIXES de n électrons dans le nuage de rayon R autour de (cx, cy), entre .42·R et .88·R ; t (s) les fait
+   * tourner lentement (le nuage vit). Toujours les mêmes places pour un même (n, graine) : un électron compté garde sa place.
+   */
+  P.placesNuage = (cx, cy, R, n, o = {}) => {
+    const r = graine(o.graine || 21), out = [], t = o.t || 0;
+    for (let i = 0; i < n; i++) {
+      const a0 = i / Math.max(1, n) * TAU + (r() - .5) * .5, d = R * (.42 + .46 * r()), w = (.18 + .1 * r()) * (i % 2 ? 1 : -1);
+      out.push({ x: cx + d * Math.cos(a0 + w * t), y: cy + d * Math.sin(a0 + w * t) * .92 });
+    }
+    return out;
+  };
+  /**
+   * L'ATOME entier : nuage bleu ciel, noyau (Z protons, N neutrons) au centre, n électrons (défaut Z) dans le nuage.
+   * o : R (nuage), rn (bille du noyau), re (électron), t (rotation), ne (nombre d'électrons), litE (k premiers
+   * électrons allumés et numérotés), numeros / pale (noyau), alphaE. Renvoie { noyau, elec }.
+   */
+  P.atome = (ctx, cx, cy, Z, N, o = {}) => {
+    const R = o.R || 120, n = o.ne ?? Z;
+    P.nuage(ctx, cx, cy, R, { points: o.points ?? Math.round(R * 1.3), graine: o.graine || 9, alpha: o.alphaNuage ?? 1 });
+    const noyau = P.noyau(ctx, cx, cy, Z, N, { r: o.rn ?? 4, numeros: o.numeros, pale: o.pale, alpha: o.alphaNoyau ?? 1 });
+    const elec = P.placesNuage(cx, cy, R, n, { t: o.t || 0, graine: o.graineE || 21 });
+    const lit = o.litE || 0;
+    elec.forEach((q, i) => {
+      if (i < lit) P.halo(ctx, q.x, q.y, (o.re || 8) * 1.5, i === lit - 1);
+      P.electron(ctx, q.x, q.y, o.re || 8, { numero: i < lit ? i + 1 : null, alpha: o.alphaE ?? 1 });
+    });
+    return { noyau, elec };
+  };
+  /**
+   * Un noyau qu'on COMPTE : mode 'tous' (nucléons, dans l'ordre des places), 'p' (protons), 'n' (neutrons) ; k = nombre
+   * déjà allumé (chacun garde son numéro et sa lueur, le dernier plus vif) ; la famille non comptée est pâlie si o.palir.
+   */
+  P.noyauCompte = (ctx, cx, cy, Z, N, r, mode, k, o = {}) => {
+    const pos = nucleons(cx, cy, Z, N, r), a = o.alpha ?? 1;
+    const R = pos.reduce((m, q) => Math.max(m, Math.hypot(q.x - cx, q.y - cy)), 0) + r;
+    ctx.save(); ctx.globalAlpha *= a;
+    const g = ctx.createRadialGradient(cx, cy, R * .3, cx, cy, R * 1.6); g.addColorStop(0, 'rgba(244,114,182,.28)'); g.addColorStop(1, 'rgba(244,114,182,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.6, 0, TAU); ctx.fill(); ctx.restore();
+    const rang = q => mode === 'tous' ? pos.indexOf(q) + 1 : (q.t === mode ? q.k : 0);
+    [...pos].sort((u, v) => u.y - v.y).forEach(q => {
+      const n = rang(q), lit = n > 0 && n <= k, al = a * (o.palir && mode !== 'tous' && q.t !== mode ? .25 : 1);
+      if (lit) P.halo(ctx, q.x, q.y, r * 1.35, n === Math.floor(k));
+      if (q.t === 'p') P.proton(ctx, q.x, q.y, r, { alpha: al, numero: lit ? n : null });
+      else P.neutron(ctx, q.x, q.y, r, { alpha: al, numero: lit ? n : null });
+    });
+    return { pos, R };
+  };
+  /** Comptage : nombre allumé à l'instant, n éléments comptés pendant les d secondes qui MÈNENT au moment `nom`. */
+  const compte = (S, M, nom, n, d) => (S.t <= 0 || S.t >= M[nom] ? n : Math.max(0, Math.min(n, Math.floor((S.t - (M[nom] - d)) / d * n + 1e-6))));
+  /** Durée d'un comptage de n éléments (assez lente pour que l'œil suive, jamais plus de 6 s). */
+  const dureeCompte = n => Math.min(6, .5 + n * .32);
+  /** Un nombre qui vole de (x0, y0) à (x1, y1) pendant les .8 s qui MÈNENT au moment `nom` : à l'arrêt sur ce moment, il est
+   *  posé dans sa case (et y reste). Renvoie true quand il est arrivé. */
+  function vole(c, S, nom, txt, x0, y0, x1, y1, o = {}) {
+    const m = S.momentDe ? S.momentDe(nom) : null;
+    const u = S.t <= 0 || S.a(nom) ? 1 : (m == null ? 0 : Math.max(0, Math.min(1, (S.t - (m - .8)) / .8)));
+    if (u <= 0) return false;
+    const st = Object.assign({ couleur: 'jaune', taille: 22, align: 'center', gras: true }, o);
+    if (u < 1) { c.direct(() => c.texte(txt, x0 + (x1 - x0) * A_doux(u), y0 + (y1 - y0) * A_doux(u), Object.assign({}, st, { duree: .01 }))); S.scene.sale = true; return false; }
+    c.direct(() => c.texte(txt, x1, y1, Object.assign({}, st, { duree: .01 })));
+    return true;
+  }
+  const A_doux = u => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
+  /** Progression 0..1 pendant les d secondes qui MÈNENT au moment `nom` (ce que la voix nomme est fini à l'arrêt). */
+  const avant = (S, nom, d = 1) => { if (S.t <= 0) return 1; const m = S.momentDe(nom); return m == null ? 0 : Math.max(0, Math.min(1, (S.t - (m - d)) / d)); };
+
+  window.Atome = { compte, dureeCompte, vole, avant, Scene, VW, VH, TAU, lueur, lignes, sim, param, doux, graine, P, boule, notation, ELEMENTS, repartition, structure, exposant, COUL };
 })();

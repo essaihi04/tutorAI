@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les dimensions de l’atome — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_atome-tableau/atome.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Les dimensions de l’atome : rayon de l’atome 10⁻¹⁰ m, rayon du noyau 10⁻¹⁵ m, cent mille fois plus petit ; si le noyau était une bille d’un millimètre au centre d’un stade, l’atome aurait la taille du stade"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/chimie/tc_atome-tableau/commun.js"></script>
+<script>
+/*
+ * Les dimensions de l’atome (diapos at_d1, at_d2). Vues (?vue=) :
+ *  rapport : l’atome (nuage) et son rayon 10⁻¹⁰ m ; le noyau, invisible à cette échelle, agrandi : 10⁻¹⁵ m ;
+ *            le rapport 10⁻¹⁰/10⁻¹⁵ = 10⁵ ; du vide (structure lacunaire).
+ *            Moments : atome 1,5 ; noyau 4,5 ; rapport 7,5 ; vide 10 ; fin 11,5.
+ *  stade   : une bille d’1 mm (le noyau) ; × 10⁵ = 100 m ; la caméra recule : la bille est au centre d’un stade,
+ *            les électrons sur les tribunes ; entre les deux, du vide.
+ *            Moments : bille 1,5 ; fois 4 ; stade 7 ; electrons 9,5 ; vide 11,5 ; fin 12,5.
+ */
+const A = window.Atome, { P, avant } = A;
+const VUE = A.param('vue', 'rapport');
+const MOMENTS = { rapport: { atome: 1.5, noyau: 4.5, rapport: 7.5, vide: 10 }, stade: { bille: 1.5, fois: 4, stade: 7, electrons: 9.5, vide: 11.5 } }[VUE] || {};
+const FIN = VUE === 'stade' ? 12.5 : 11.5;
+
+function dessinerRapport(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L * .27 : L * .25, cy = 220, R = pt ? 160 : 155, lx = pt ? L * .74 : L * .5, lR = pt ? 95 : 78;
+  const kN = avant(S, 'noyau', 1.2);
+  c.direct(() => {
+    const g = c.ctx;
+    P.nuage(g, cx, cy, R, { points: 200 });
+    P.placesNuage(cx, cy, R, 4, { t: S.t > 0 ? S.scene.maintenant() * .4 : 0 }).forEach(q => P.electron(g, q.x, q.y, 8));
+    g.fillStyle = '#f472b6'; g.beginPath(); g.arc(cx, cy, 1.2, 0, A.TAU); g.fill();
+    if (kN > 0) {
+      g.save(); g.globalAlpha = kN; g.strokeStyle = 'rgba(226,232,240,.5)'; g.setLineDash([5, 6]); g.lineWidth = 1.4;
+      g.beginPath(); g.moveTo(cx + 3, cy - 3); g.lineTo(lx - lR * .7, cy - lR * .7); g.moveTo(cx + 3, cy + 3); g.lineTo(lx - lR * .7, cy + lR * .7); g.stroke(); g.setLineDash([]);
+      g.fillStyle = 'rgba(15,30,25,.6)'; g.beginPath(); g.arc(lx, cy, lR, 0, A.TAU); g.fill(); g.strokeStyle = '#cbd5e1'; g.lineWidth = 5; g.beginPath(); g.arc(lx, cy, lR, 0, A.TAU); g.stroke();
+      P.noyau(g, lx, cy, 6, 6, { r: pt ? 11 : 10 }); g.restore();
+    }
+  });
+  if (S.t > 0) sc.sale = true;
+  c.repere('atome', cx - R, cy - R, 2 * R, 2 * R, 'l’atome');
+  if (S.t <= 0 || S.a('atome')) { c.cote(cx, cy + 6, cx + R, cy + 6, '', { couleur: 'cyan', largeur: 2 }); }
+  const t = pt ? 30 : 22;
+  if (pt) {
+    const der = S.t <= 0 ? 'vide' : ['vide', 'rapport', 'noyau', 'atome'].find(n => S.a(n));
+    const txt = { atome: 'r_atome ≈ 10⁻¹⁰ m', noyau: 'r_noyau ≈ 10⁻¹⁵ m', rapport: '⟦10⁻¹⁰|10⁻¹⁵⟧ = 10⁵', vide: 'surtout du vide' }[der];
+    if (der && (der !== 'vide' || S.conclusions)) { c.texte(txt, L / 2, der === 'rapport' ? 62 : 52, { couleur: 'jaune', taille: 30, align: 'center', gras: true }); c.repere(der, L / 2 - 150, 14, 300, 60, txt); }
+    return;
+  }
+  if (S.t <= 0 || S.ecrit(c, 'atome')) c.texte('r_atome ≈ 10⁻¹⁰ m', cx + R / 2, cy + 40, { couleur: 'cyan', taille: t, align: 'center', gras: true });
+  if (S.t <= 0 || S.ecrit(c, 'noyau')) { c.texte('r_noyau ≈ 10⁻¹⁵ m', lx, cy + lR + 36, { couleur: 'rose', taille: t, align: 'center', gras: true }); c.texte('(noyau agrandi)', lx, cy - lR - 14, { couleur: 'faible', taille: 16, align: 'center' }); c.repere('noyau', lx - lR, cy - lR, 2 * lR, 2 * lR, 'le noyau agrandi'); }
+  const x = L * .67;
+  if (S.t <= 0 || S.ecrit(c, 'rapport')) {
+    c.texte('⟦r_atome|r_noyau⟧ = ⟦10⁻¹⁰|10⁻¹⁵⟧', x, 120, { couleur: 'blanc', taille: 24, gras: true, max: L - x - 10 });
+    c.texte('= 10⁻¹⁰⁺¹⁵ = 10⁵', x, 190, { couleur: 'jaune', taille: 26, gras: true, max: L - x - 10 });
+    c.repere('rapport', x - 6, 70, L - x - 8, 136, 'le rapport des rayons');
+  }
+  if ((S.t <= 0 || S.ecrit(c, 'vide')) && S.conclusions) {
+    c.texte('noyau 100 000 fois plus petit', x, 270, { couleur: 'cyan', taille: 20, max: L - x - 10 });
+    c.rect(x - 8, 290, L - x - 10, 60, { couleur: 'jaune', fond: 'jaune', fondAlpha: .08, largeur: 1.6 });
+    c.texte('l’atome : surtout du vide', x + 4, 318, { couleur: 'jaune', taille: 21, gras: true, max: L - x - 26 });
+    c.texte('(structure lacunaire)', x + 4, 342, { couleur: 'jaune', taille: 17, max: L - x - 26 });
+    c.repere('vide', x - 8, 290, L - x - 10, 60, 'structure lacunaire');
+  }
+}
+
+function dessinerStade(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L * .5 : L * .38, cy = 225;
+  const z = avant(S, 'stade', 2.2);        // 0 : la bille en grand ; 1 : le stade entier
+  const W = pt ? 520 : 470, H = W * .62, k = 1 + 7 * (1 - z);   // le stade final W × H ; k : la caméra recule
+  const rb = 34 * (1 - z) + 3 * z;
+  c.direct(() => {
+    const g = c.ctx;
+    if (z > 0.02) { g.save(); g.beginPath(); g.rect(cx - W * .62, 0, W * 1.24, 420); g.clip(); P.stade(g, cx - W * k / 2, cy - H * k / 2, W * k, H * k, Math.min(1, z * 1.5)); g.restore(); }
+    if (z >= 1 && (S.t <= 0 || S.a('electrons'))) {
+      const k = avant(S, 'electrons', 1);
+      for (let i = 0; i < 8; i++) { const a = i / 8 * A.TAU + .3 + (S.t > 0 ? S.scene.maintenant() * .15 : 0); P.electron(g, cx + Math.cos(a) * W * .45, cy + Math.sin(a) * H * .45, 7, { alpha: k }); }
+    }
+    P.halo(g, cx, cy, rb * 1.6 + (z > .9 ? 6 : 0), z > .9);
+    P.proton(g, cx, cy, rb, { texte: rb > 10 });
+  });
+  if (S.t > 0) sc.sale = true;
+  c.repere('bille', cx - 40, cy - 40, 80, 80, 'la bille : le noyau');
+  const t = pt ? 30 : 22;
+  if (pt) {
+    const der = S.t <= 0 ? 'vide' : ['vide', 'electrons', 'stade', 'fois', 'bille'].find(n => S.a(n));
+    const txt = { bille: 'noyau : une bille de 1 mm', fois: '1 mm × 10⁵ = 100 m', stade: 'l’atome : un stade', electrons: 'électrons : les tribunes', vide: 'entre les deux : du vide' }[der];
+    if (der) { c.texte(txt, L / 2, 44, { couleur: 'jaune', taille: 30, align: 'center', gras: true, max: L - 16 }); c.repere(der, L / 2 - 180, 12, 360, 44, txt); }
+    return;
+  }
+  const x = L * .72;
+  if (S.t <= 0 || S.ecrit(c, 'bille')) { c.texte('le noyau = une bille', x, 90, { couleur: 'rose', taille: t, gras: true, max: L - x - 10 }); c.texte('de 1 mm', x, 120, { couleur: 'rose', taille: t, gras: true }); c.repere('bille_txt', x - 6, 64, L - x - 10, 64, 'la bille de 1 mm'); }
+  if (S.t <= 0 || S.ecrit(c, 'fois')) { c.texte('× 10⁵ :', x, 175, { couleur: 'jaune', taille: t, gras: true }); c.texte('1 mm × 10⁵ = 10⁵ mm = 100 m', x, 205, { couleur: 'jaune', taille: 18, max: L - x - 10 }); c.repere('fois', x - 6, 150, L - x - 10, 64, '× 10⁵'); }
+  if (S.t <= 0 || S.ecrit(c, 'stade')) { c.texte('l’atome = le stade', x, 260, { couleur: 'cyan', taille: t, gras: true, max: L - x - 10 }); c.repere('stade', cx - W / 2, cy - H / 2, W, H, 'le stade : l’atome'); }
+  if (S.t <= 0 || S.ecrit(c, 'electrons')) c.texte('les électrons : sur les tribunes', x, 300, { couleur: 'cyan', taille: 18, max: L - x - 10 });
+  if (S.t <= 0 || S.ecrit(c, 'vide')) { c.texte('entre les deux : du vide', x, 350, { couleur: 'vert', taille: t, gras: true, max: L - x - 10 }); c.repere('vide', x - 6, 326, L - x - 10, 36, 'du vide'); }
+}
+
+const S = A.sim({
+  id: 'tc_atome_dimensions_' + VUE, titre: 'Les dimensions de l’atome', vue: VUE, moments: MOMENTS, fin: FIN, graine: 31,
+  motifs: { atome: 'r_atome ≈ 10⁻¹⁰ m', noyau: 'r_noyau ≈ 10⁻¹⁵ m', rapport: 'le rapport : 10⁵', vide: 'du vide', bille: 'une bille de 1 mm', fois: '× 10⁵', stade: 'le stade', electrons: 'les électrons sur les tribunes' },
+  dessiner: (c, S, sc) => (VUE === 'stade' ? dessinerStade : dessinerRapport)(c, S, sc),
+  ceQuiSeVoit: S => {
+    const a = n => S.t <= 0 || S.a(n);
+    if (VUE === 'stade') return ['Une bille d’1 mm : le noyau.', a('fois') ? '1 mm × 10⁵ = 100 m.' : '', a('stade') ? 'La bille au centre d’un stade : l’atome.' : '', a('electrons') ? 'Les électrons sur les tribunes.' : '', a('vide') ? 'Entre les deux : du vide.' : ''].join(' ');
+    return ['L’atome : un nuage, rayon ≈ 10⁻¹⁰ m.', a('noyau') ? 'Le noyau, agrandi : rayon ≈ 10⁻¹⁵ m.' : '', a('rapport') ? 'Rapport : 10⁻¹⁰/10⁻¹⁵ = 10⁵.' : '', a('vide') && S.conclusions ? 'L’atome est surtout du vide (structure lacunaire).' : ''].join(' ');
+  },
+  texte: 'Rayon d’un atome ≈ 10⁻¹⁰ m ; rayon du noyau ≈ 10⁻¹⁵ m ; le noyau est 10⁵ fois plus petit : l’atome est surtout du vide (structure lacunaire). Image : une bille d’1 mm au centre d’un stade de 100 m.',
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

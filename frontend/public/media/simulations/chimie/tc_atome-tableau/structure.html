@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Structure de l’atome — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_atome-tableau/atome.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La structure de l’atome : un noyau positif fait de protons et de neutrons, entouré d’un nuage d’électrons négatifs ; l’écriture du noyau A Z X ; la neutralité ; le tableau des particules"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/chimie/tc_atome-tableau/commun.js"></script>
+<script>
+/*
+ * Structure de l’atome (diapos at_s1 à at_s7). Vues (?vue=) :
+ *  atome      : l’atome de carbone : le nuage d’électrons, le noyau au centre, agrandi dans la loupe.
+ *               Moments : nuage 1,5 ; electrons 4 ; noyau 6,5 ; vide 9 ; fin 10.
+ *  electron   : l’électron agrandi, sa charge q = −e, e = 1,6 × 10⁻¹⁹ C, sa masse.
+ *               Moments : electron 1,5 ; charge 4 ; e 6,5 ; masse 9 ; fin 10.
+ *  noyau      : le noyau de carbone agrandi : les protons s’allument et se comptent (6), puis les neutrons (6) ;
+ *               nucléons = protons + neutrons ; m_p ≈ m_n. Moments : noyau 1,5 ; protons 5 ; neutrons 9 ; nucleons 11,5 ; fin 13.
+ *  notation   : ¹²₆C : A = nucléons comptés (12), Z = protons comptés (6), N = A − Z = 6 (neutrons comptés).
+ *               Moments : symbole 1,5 ; A 6 ; Z 9,5 ; N 13 ; fin 14.
+ *  neutralite : le noyau +6e, les électrons comptés (6) −6e, la somme 0 : neutre ; nombre d’électrons = Z.
+ *               Moments : noyau 2 ; electrons 5,5 ; charges 8 ; neutre 10 ; regle 12 ; fin 13.
+ *  tableau    : la méthode du tableau (&atome=C | O | Cl | Al) : la notation, puis protons comptés → la case ; N = A − Z,
+ *               neutrons comptés → la case ; électrons comptés → la case. Moments calculés : notation, protons, neutrons,
+ *               electrons, fin.
+ * set_parameters {conclusions: false} : la règle écrite reste cachée.
+ */
+const A = window.Atome, { P, lueur, compte, dureeCompte, vole, avant } = A;
+const VUE = A.param('vue', 'atome');
+const ATOMES = { C: [6, 12, 'C', 'carbone'], O: [8, 16, 'O', 'oxygène'], Cl: [17, 35, 'Cl', 'chlore'], Al: [13, 27, 'Al', 'aluminium'], Na: [11, 23, 'Na', 'sodium'] };
+const AT = ATOMES[A.param('atome', 'C')] || ATOMES.C;
+const [Z, AA, SYM, NOM] = AT, N = AA - Z;
+const MOMENTS = (() => {
+  if (VUE === 'tableau') {
+    const m = { notation: 1.5 }; let t = m.notation;
+    t += 2 + dureeCompte(Z); m.protons = t; t += 2.4 + dureeCompte(N); m.neutrons = t; t += 2.4 + dureeCompte(Z); m.electrons = t;
+    return m;
+  }
+  return {
+    atome: { nuage: 1.5, electrons: 4, noyau: 6.5, vide: 9 },
+    electron: { electron: 1.5, charge: 4, e: 6.5, masse: 9 },
+    noyau: { noyau: 1.5, protons: 5, neutrons: 9, nucleons: 11.5 },
+    notation: { symbole: 1.5, A: 6, Z: 9.5, N: 13 },
+    neutralite: { noyau: 2, electrons: 5.5, charges: 8, neutre: 10, regle: 12 },
+  }[VUE] || {};
+})();
+const FIN = VUE === 'tableau' ? MOMENTS.electrons + 1.5 : ({ atome: 10, electron: 10, noyau: 13, notation: 14, neutralite: 13 }[VUE] || 10);
+const tps = () => S.scene.maintenant();
+
+/* ── l’atome : nuage, électrons, noyau ── */
+function dessinerAtome(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L * .3 : L * .3, cy = 215, R = pt ? 160 : 165, lx = L * .76, lR = pt ? 100 : 110;
+  const kN = avant(S, 'nuage', 1.2), kE = avant(S, 'electrons', 1), kZ = avant(S, 'noyau', 1.2);
+  c.direct(() => {
+    const g = c.ctx;
+    P.nuage(g, cx, cy, R, { alpha: kN, points: 220 });
+    P.noyau(g, cx, cy, 6, 6, { r: 2.2 });
+    if (kE > 0) P.placesNuage(cx, cy, R, 6, { t: S.t > 0 ? tps() : 0 }).forEach(q => P.electron(g, q.x, q.y, 9, { alpha: kE }));
+    if (kZ > 0) {
+      g.save(); g.globalAlpha = kZ;
+      g.strokeStyle = 'rgba(226,232,240,.55)'; g.setLineDash([6, 6]); g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(cx + 6, cy - 6); g.lineTo(lx - lR * .7, cy - lR * .7); g.moveTo(cx + 6, cy + 6); g.lineTo(lx - lR * .7, cy + lR * .7); g.stroke(); g.setLineDash([]);
+      g.fillStyle = 'rgba(15,30,25,.55)'; g.beginPath(); g.arc(lx, cy, lR, 0, A.TAU); g.fill();
+      g.strokeStyle = '#cbd5e1'; g.lineWidth = 5; g.beginPath(); g.arc(lx, cy, lR, 0, A.TAU); g.stroke();
+      P.noyau(g, lx, cy, 6, 6, { r: pt ? 15 : 16 });
+      g.restore();
+    }
+  });
+  if (S.t > 0) sc.sale = true;
+  c.repere('nuage', cx - R, cy - R, 2 * R, 2 * R, 'le nuage d’électrons');
+  if (S.t <= 0 || S.a('electrons')) c.repere('electrons', cx - R * .9, cy - R * .9, R * 1.8, R * 1.8, 'les électrons');
+  if (S.t <= 0 || S.a('noyau')) c.repere('noyau', lx - lR, cy - lR, 2 * lR, 2 * lR, 'le noyau, agrandi');
+  const t = pt ? 30 : 20;
+  if (pt) {
+    const der = S.t <= 0 ? 'vide' : ['vide', 'noyau', 'electrons', 'nuage'].find(n => S.a(n));
+    const txt = { nuage: 'un nuage', electrons: 'des électrons (−)', noyau: 'au centre : le noyau (+)', vide: 'noyau minuscule + nuage' }[der];
+    if (der) c.texte(txt, L / 2, 40, { couleur: 'jaune', taille: 30, align: 'center', gras: true });
+    return;
+  }
+  if (S.ecrit(c, 'nuage') || S.t <= 0) c.texte('le nuage électronique', cx, 32, { couleur: 'cyan', taille: t, align: 'center', gras: true });
+  if (S.ecrit(c, 'electrons') || S.t <= 0) c.texte('des électrons : charge −', cx, 406, { couleur: 'cyan', taille: t, align: 'center' });
+  if (S.ecrit(c, 'noyau') || S.t <= 0) { c.texte('le noyau : charge +', lx, cy - lR - 18, { couleur: 'rose', taille: t, align: 'center', gras: true }); c.texte('(agrandi)', lx, cy + lR + 30, { couleur: 'faible', taille: 16, align: 'center' }); }
+  if ((S.ecrit(c, 'vide') || S.t <= 0) && S.conclusions) c.texte('le noyau est minuscule, au centre', lx, cy + lR + 54, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
+}
+
+/* ── l’électron ── */
+function dessinerElectron(c, S, sc) {
+  const L = sc.L, pt = sc.petit, ex = pt ? L * .2 : L * .22, ey = 200, k = avant(S, 'electron', 1);
+  c.direct(() => { const g = c.ctx; P.nuage(g, ex, ey, 130, { alpha: .45 * k, points: 120 }); P.electron(g, ex, ey, 38, { alpha: k, texte: true }); });
+  c.repere('electron', ex - 40, ey - 40, 80, 80, 'l’électron');
+  if (!pt) c.texte('l’électron', ex, ey + 80, { couleur: 'cyan', taille: 22, align: 'center', gras: true });
+  const x = pt ? L * .42 : L * .44, lignesE = [
+    ['charge', 'charge : q = −e', 'cyan'],
+    ['e', 'e = 1,6 × 10⁻¹⁹ C', 'jaune'],
+    ['e', 'e : la charge élémentaire ; C : le coulomb', 'faible'],
+    ['masse', 'masse : m_e = 9,1 × 10⁻³¹ kg', 'blanc'],
+  ];
+  if (pt) {
+    const der = S.t <= 0 ? 'masse' : ['masse', 'e', 'charge'].find(n => S.a(n));
+    const l = lignesE.find(q => q[0] === der && q[2] !== 'faible');
+    if (l) { c.texte(l[1], x, 210, { couleur: l[2], taille: 30, gras: true, max: L - x - 10 }); c.repere(der, x, 180, L - x - 10, 40, l[1]); }
+    return;
+  }
+  lignesE.forEach(([nom, txt, coul], i) => {
+    const y = 110 + i * 62 + (i >= 3 ? 10 : 0);
+    if (S.t <= 0 || S.ecrit(c, nom)) { c.texte(txt, x, y, { couleur: coul, taille: coul === 'faible' ? 18 : 25, gras: coul !== 'faible', max: L - x - 20 }); c.repere(nom, x - 6, y - 30, L - x - 14, 40, txt); }
+  });
+}
+
+/* ── le noyau : protons et neutrons comptés ── */
+function dessinerNoyau(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L * .28 : L * .27, cy = 215, r = pt ? 24 : 23;
+  const kp = compte(S, MOMENTS, 'protons', 6, 2.6), kn = compte(S, MOMENTS, 'neutrons', 6, 2.6);
+  const mode = S.t <= 0 || S.a('nucleons') ? 'tous' : S.a('protons') ? 'n' : 'p';
+  const k = S.t <= 0 || S.a('nucleons') ? 0 : mode === 'p' ? kp : kn;
+  c.direct(() => {
+    const g = c.ctx;
+    // ce qui a déjà été compté garde sa lueur : protons (pendant les neutrons) dessinés allumés
+    const pos = P.nucleons(cx, cy, 6, 6, r);
+    if (mode === 'n') pos.filter(q => q.t === 'p').forEach(q => P.halo(g, q.x, q.y, r * 1.2, false));
+    P.noyauCompte(g, cx, cy, 6, 6, r, mode === 'tous' ? 'p' : mode, k, { palir: false });
+  });
+  const res = P.nucleons(cx, cy, 6, 6, r), R = res.reduce((m, q) => Math.max(m, Math.hypot(q.x - cx, q.y - cy)), 0) + r;
+  c.repere('noyau', cx - R, cy - R, 2 * R, 2 * R, 'le noyau');
+  const x = pt ? L * .55 : L * .52, t = pt ? 28 : 22;
+  if (pt) {
+    const der = S.t <= 0 ? 'nucleons' : ['nucleons', 'neutrons', 'protons', 'noyau'].find(n => S.a(n));
+    const txt = { noyau: 'le noyau', protons: '6 protons : +e', neutrons: '6 neutrons : 0', nucleons: 'nucléons = p + n' }[der];
+    if (der) { c.texte(txt, x, 200, { couleur: der === 'neutrons' ? 'blanc' : der === 'protons' ? 'rose' : 'jaune', taille: 30, gras: true, max: L - x - 8 }); c.repere(der, x, 170, L - x - 8, 40, txt); }
+    return;
+  }
+  if (S.t <= 0 || S.ecrit(c, 'noyau')) c.texte('le noyau de l’atome de carbone', cx, 40, { couleur: 'jaune', taille: 21, align: 'center', gras: true });
+  if (S.t <= 0 || S.ecrit(c, 'protons')) {
+    c.direct(() => P.proton(c.ctx, x + 14, 92, 15));
+    c.texte('6 protons : charge +e', x + 40, 100, { couleur: 'rose', taille: t, gras: true });
+    c.texte('m_p = 1,673 × 10⁻²⁷ kg', x + 40, 132, { couleur: 'blanc', taille: 20 });
+    c.repere('protons', x - 4, 70, L - x - 10, 74, 'les protons');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'neutrons')) {
+    c.direct(() => P.neutron(c.ctx, x + 14, 192, 15));
+    c.texte('6 neutrons : charge 0 (neutres)', x + 40, 200, { couleur: 'blanc', taille: t, gras: true, max: L - x - 50 });
+    c.texte('m_n = 1,675 × 10⁻²⁷ kg', x + 40, 232, { couleur: 'blanc', taille: 20 });
+    c.repere('neutrons', x - 4, 170, L - x - 10, 74, 'les neutrons');
+  }
+  if ((S.t <= 0 || S.ecrit(c, 'nucleons')) && S.conclusions) {
+    c.rect(x - 6, 282, L - x - 14, 88, { couleur: 'jaune', fond: 'jaune', fondAlpha: .08, largeur: 1.6 });
+    c.texte('nucléons = protons + neutrons', x + 6, 316, { couleur: 'jaune', taille: t, gras: true, max: L - x - 30 });
+    c.texte('m_p ≈ m_n', x + 6, 352, { couleur: 'cyan', taille: t, gras: true });
+    c.repere('nucleons', x - 6, 282, L - x - 14, 88, 'les nucléons');
+  }
+}
+
+/* ── l’écriture ᴬ_Z X ── */
+function dessinerNotation(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L * .72 : L * .76, cy = 220, r = pt ? 22 : 21;
+  const kA = compte(S, MOMENTS, 'A', 12, 3.2), kZ = compte(S, MOMENTS, 'Z', 6, 2.4), kNn = compte(S, MOMENTS, 'N', 6, 2.4);
+  let mode = 'tous', k = 0;
+  if (S.t > 0) { if (S.a('Z') && !S.a('N') || (S.t > MOMENTS.Z - 2.4 && !S.a('Z'))) { mode = 'p'; k = kZ; } else if (S.a('N') || S.t > MOMENTS.N - 2.4) { mode = 'n'; k = kNn; } else if (S.t > MOMENTS.A - 3.2) { mode = 'tous'; k = kA; } }
+  c.direct(() => P.noyauCompte(c.ctx, cx, cy, 6, 6, r, mode, k, { palir: true }));
+  c.repere('noyau', cx - 80, cy - 80, 160, 160, 'le noyau de carbone');
+  const nx = pt ? L * .22 : L * .2, ny = pt ? 250 : 175, tn = pt ? 110 : 96;
+  const kS = avant(S, 'symbole', .8);
+  if (kS > 0) {
+    c.direct(() => { c.ctx.save(); c.ctx.globalAlpha = kS; A.notation(c, '12', '6', 'C', nx, ny, { taille: tn }); c.ctx.restore(); });
+    c.repere('symbole', nx - tn * .7, ny - tn, tn * 1.6, tn * 1.2, 'l’écriture du noyau');
+    c.repere('A', nx - tn * .7, ny - tn * 1.02, tn * .66, tn * .55, 'A, en haut');
+    c.repere('Z', nx - tn * .7, ny - tn * .1, tn * .66, tn * .5, 'Z, en bas');
+  }
+  if (S.t <= 0 || S.a('A') || S.t > MOMENTS.A - 3.2) if (!pt || mode === 'tous') {
+    const y = pt ? 52 : ny + 70;
+    if (S.t <= 0 || S.a('A')) c.texte(pt ? 'A = 12 nucléons' : 'A = 12 : nombre de nucléons (nombre de masse)', pt ? L / 2 : 20, y, { couleur: 'jaune', taille: pt ? 30 : 20, gras: true, align: pt ? 'center' : 'left', max: pt ? L - 20 : cx - 100 });
+  }
+  if ((S.t <= 0 || S.a('Z')) && (!pt || mode === 'p')) {
+    const y = pt ? 52 : ny + 106;
+    c.texte(pt ? 'Z = 6 protons' : 'Z = 6 : nombre de protons (numéro atomique)', pt ? L / 2 : 20, y, { couleur: 'rose', taille: pt ? 30 : 20, gras: true, align: pt ? 'center' : 'left', max: pt ? L - 20 : cx - 100 });
+  }
+  if ((S.t <= 0 || S.a('N')) && (!pt || mode === 'n')) {
+    const y = pt ? 52 : ny + 150;
+    c.texte('N = A − Z = 12 − 6 = 6 neutrons', pt ? L / 2 : 20, y, { couleur: 'blanc', taille: pt ? 30 : 23, gras: true, align: pt ? 'center' : 'left', max: pt ? L - 20 : cx - 100 });
+    if (!pt) c.repere('N', 14, y - 28, cx - 110, 38, 'N = A − Z');
+  }
+}
+
+/* ── la neutralité ── */
+function dessinerNeutralite(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L * .28 : L * .27, cy = 215, R = pt ? 165 : 160;
+  const kE = compte(S, MOMENTS, 'electrons', 6, 3);
+  c.direct(() => {
+    const g = c.ctx;
+    const tE = S.t > 0 && S.a('electrons') ? tps() * .3 : 0;
+    P.nuage(g, cx, cy, R, { points: 180 });
+    const lit = S.t <= 0 ? 0 : (S.a('noyau') && !S.a('electrons') && S.t < MOMENTS.electrons - 3 ? 0 : 0);
+    P.noyau(g, cx, cy, 6, 6, { r: pt ? 10 : 9, numeros: S.t > 0 && S.a('noyau') && !S.a('electrons') && S.t < MOMENTS.electrons - 3 ? { p: 6 } : {} });
+    P.placesNuage(cx, cy, R, 6, { t: tE }).forEach((q, i) => { if (i < kE && S.t > 0 && !S.a('charges')) P.halo(g, q.x, q.y, 13, i === kE - 1); P.electron(g, q.x, q.y, 10, { numero: S.t > 0 && i < kE && !S.a('charges') ? i + 1 : null }); });
+  });
+  if (S.t > 0 && S.a('electrons')) sc.sale = true;
+  c.repere('noyau', cx - 30, cy - 30, 60, 60, 'le noyau');
+  c.repere('electrons', cx - R, cy - R, 2 * R, 2 * R, 'les électrons');
+  const x = pt ? L * .56 : L * .55, t = pt ? 28 : 23;
+  const lignesN = [
+    ['noyau', 'noyau : 6 protons → +6e', 'rose'],
+    ['electrons', '6 électrons → −6e', 'cyan'],
+    ['charges', '+6e + (−6e) = 0', 'jaune'],
+    ['neutre', 'l’atome est neutre', 'vert'],
+    ['regle', 'nombre d’électrons = Z', 'jaune'],
+  ];
+  if (pt) {
+    const der = S.t <= 0 ? 'regle' : ['regle', 'neutre', 'charges', 'electrons', 'noyau'].find(n => S.a(n));
+    const l = lignesN.find(q => q[0] === der);
+    if (l && (der !== 'regle' || S.conclusions)) { c.texte(l[1], x, 210, { couleur: l[2], taille: 30, gras: true, max: L - x - 8 }); c.repere(der, x, 180, L - x - 8, 40, l[1]); }
+    return;
+  }
+  lignesN.forEach(([nom, txt, coul], i) => {
+    if (nom === 'regle' && !S.conclusions) return;
+    const y = 90 + i * 64;
+    if (S.t <= 0 || S.ecrit(c, nom)) {
+      if (nom === 'regle') c.rect(x - 8, y - 32, L - x - 10, 46, { couleur: 'jaune', fond: 'jaune', fondAlpha: .08, largeur: 1.6 });
+      c.texte(txt, x, y, { couleur: coul, taille: t, gras: true, max: L - x - 20 });
+      c.repere(nom, x - 8, y - 32, L - x - 10, 46, txt);
+    }
+  });
+}
+
+/* ── la méthode du tableau ── */
+function dessinerTableau(c, S, sc) {
+  const L = sc.L, pt = sc.petit, M = MOMENTS;
+  const big = Z > 10, cx = pt ? L * .24 : L * .22, cy = pt ? 240 : 250, R = pt ? 150 : (big ? 150 : 140), rn = big ? (pt ? 10 : 9.5) : (pt ? 13 : 12.5), re = big ? 9 : 10;
+  const dP = dureeCompte(Z), dN = dureeCompte(N), dE = dureeCompte(Z);
+  const F = { protons: M.protons - .9, neutrons: M.neutrons - .9, electrons: M.electrons - .9 };   // le comptage finit, puis le nombre vole
+  const kp = compte(S, F, 'protons', Z, dP), kn = compte(S, F, 'neutrons', N, dN), ke = compte(S, F, 'electrons', Z, dE);
+  const enP = S.t > 0 && S.t > F.protons - dP && !S.a('protons'), enN = S.t > 0 && S.t > F.neutrons - dN && !S.a('neutrons'), enE = S.t > 0 && S.t > F.electrons - dE && !S.a('electrons');
+  const showE = S.t <= 0 || S.t > F.electrons - dE - .6;
+  c.direct(() => {
+    const g = c.ctx;
+    P.nuage(g, cx, cy, R, { points: 170, alpha: showE ? 1 : .55 });
+    const mode = enN ? 'n' : 'p', k = enP ? kp : enN ? kn : 0;
+    P.noyauCompte(g, cx, cy, Z, N, rn, mode, k, { palir: enP || enN });
+    if (showE) P.placesNuage(cx, cy, R, Z, { graine: 31 }).forEach((q, i) => { const lit = enE && i < ke; if (lit) P.halo(g, q.x, q.y, re * 1.4, i === ke - 1); P.electron(g, q.x, q.y, re, { numero: lit ? i + 1 : null }); });
+  });
+  c.repere('atome', cx - R, cy - R, 2 * R, 2 * R, 'l’atome de ' + NOM);
+  c.repere('noyau', cx - 50, cy - 50, 100, 100, 'le noyau');
+  // la notation, au-dessus de l’atome
+  const nx = pt ? L * .08 : cx - 70, ny = pt ? 70 : 72, tn = pt ? 62 : 56;
+  if (S.t <= 0 || S.ecrit(c, 'notation')) { A.notation(c, String(AA), String(Z), SYM, nx + 40, ny, { taille: tn }); c.repere('notation', nx - 10, ny - tn, tn * 2.4, tn * 1.3, 'l’écriture du noyau'); }
+  // le tableau
+  const tx = pt ? L * .48 : L * .46, tw = L - tx - 14, cw = [tw * .38, tw * .27, tw * .35], ty = pt ? 95 : 112, rh = pt ? 72 : 62, ts = pt ? 30 : 22;
+  const colX = [tx, tx + cw[0], tx + cw[0] + cw[1], tx + tw];
+  const ligne = (i, nom) => ty + rh * (i + 1);
+  if (S.t <= 0 || S.ecrit(c, 'notation')) {
+    c.rect(tx, ty, tw, rh * 4, { couleur: 'faible', largeur: 1.4, arrondi: 4, duree: .3 });
+    for (let i = 1; i < 4; i++) c.ligne(tx, ty + rh * i, tx + tw, ty + rh * i, { couleur: 'faible', largeur: 1.2, duree: .1 });
+    for (let j = 1; j < 3; j++) c.ligne(colX[j], ty, colX[j], ty + rh * 4, { couleur: 'faible', largeur: 1.2, duree: .1 });
+    ['particule', 'nombre', 'charge'].forEach((h, j) => c.texte(h, (colX[j] + colX[j + 1]) / 2, ty + rh * .62, { couleur: 'jaune', taille: ts * .9, align: 'center', gras: true }));
+    [['protons', 'rose'], ['neutrons', 'blanc'], ['électrons', 'cyan']].forEach(([n, k2], i) => c.texte(n, colX[0] + 10, ligne(i) + rh * .62, { couleur: k2, taille: ts * .92, gras: true, max: cw[0] - 14 }));
+    c.repere('tableau', tx, ty, tw, rh * 4, 'le tableau');
+  }
+  const cell = (i, j) => [(colX[j] + colX[j + 1]) / 2, ligne(i) + rh * .66];
+  const fly = (nom, i, nb, ch, src) => {
+    if (!(S.t <= 0 || S.a(nom))) return;
+    const [x1, y1] = cell(i, 1), [x2, y2] = cell(i, 2);
+    if (vole(c, S, nom, String(nb), src[0], src[1], x1, y1, { taille: ts + 4 })) c.texte(ch, x2, y2, { couleur: 'jaune', taille: ts + 2, align: 'center', gras: true });
+    c.repere('case_' + nom, colX[1], ligne(i), colX[3] - colX[1], rh, nom);
+  };
+  fly('protons', 0, Z, `+${Z}e`, [cx, cy]);
+  if ((S.t <= 0 || S.t > F.neutrons - dN - 1.2) && !pt) c.texte(`N = A − Z = ${AA} − ${Z} = ${N}`, tx, ty + rh * 4 + 40, { couleur: 'blanc', taille: 22, gras: true });
+  if (pt && S.t > F.neutrons - dN - 1.2 && !S.a('neutrons')) c.texte(`N = ${AA} − ${Z} = ${N}`, tx, ty + rh * 4 + 40, { couleur: 'blanc', taille: 28, gras: true });
+  if (S.t <= 0 || S.t > F.neutrons - dN - 1.2) c.repere('calcul_N', tx, ty + rh * 4 + 12, tw, 36, 'N = A − Z');
+  fly('neutrons', 1, N, '0', [cx, cy]);
+  fly('electrons', 2, Z, `−${Z}e`, [cx, cy - R * .6]);
+}
+
+const DESSINS = { atome: dessinerAtome, electron: dessinerElectron, noyau: dessinerNoyau, notation: dessinerNotation, neutralite: dessinerNeutralite, tableau: dessinerTableau };
+function voir(S) {
+  const a = n => S.t <= 0 || S.a(n);
+  switch (VUE) {
+    case 'atome': return ['L’atome de carbone : un nuage bleu.', a('electrons') ? 'Six électrons (−) bougent dans le nuage.' : '', a('noyau') ? 'Au centre, un noyau minuscule (+), agrandi dans la loupe : billes + et billes grises.' : '', a('vide') ? 'Le noyau est minuscule au centre.' : ''].join(' ');
+    case 'electron': return ['L’électron, agrandi.', a('charge') ? 'q = −e.' : '', a('e') ? 'e = 1,6 × 10⁻¹⁹ C (charge élémentaire, le coulomb).' : '', a('masse') ? 'm_e = 9,1 × 10⁻³¹ kg.' : ''].join(' ');
+    case 'noyau': return ['Le noyau de carbone agrandi.', a('protons') ? '6 protons comptés : charge +e, m_p = 1,673 × 10⁻²⁷ kg.' : '', a('neutrons') ? '6 neutrons comptés : neutres, m_n = 1,675 × 10⁻²⁷ kg.' : '', a('nucleons') ? 'Nucléons = protons + neutrons ; m_p ≈ m_n.' : ''].join(' ');
+    case 'notation': return ['L’écriture ¹²₆C.', a('A') ? 'A = 12 nucléons comptés.' : '', a('Z') ? 'Z = 6 protons comptés.' : '', a('N') ? 'N = A − Z = 6 neutrons comptés.' : ''].join(' ');
+    case 'neutralite': return ['Un atome de carbone.', a('noyau') ? 'Noyau : 6 protons, +6e.' : '', a('electrons') ? '6 électrons comptés, −6e.' : '', a('charges') ? '+6e − 6e = 0.' : '', a('neutre') ? 'L’atome est neutre.' : '', a('regle') && S.conclusions ? 'Nombre d’électrons = Z.' : ''].join(' ');
+    case 'tableau': return [`L’atome ${AA}/${Z} ${SYM} (${NOM}) et un tableau particule / nombre / charge.`, a('protons') ? `Protons : ${Z}, charge +${Z}e.` : '', a('neutrons') ? `N = ${AA} − ${Z} = ${N} neutrons, charge 0.` : '', a('electrons') ? `Électrons : ${Z}, charge −${Z}e.` : ''].join(' ');
+  }
+  return '';
+}
+const S = A.sim({
+  id: 'tc_atome_structure_' + VUE + (VUE === 'tableau' ? '_' + SYM : ''), titre: 'Structure de l’atome : ' + VUE, vue: VUE, moments: MOMENTS, fin: FIN, graine: 23,
+  motifs: { nuage: 'le nuage', electrons: 'les électrons', noyau: 'le noyau', vide: 'un noyau minuscule', electron: 'l’électron', charge: 'q = −e', e: 'e = 1,6 × 10⁻¹⁹ C', masse: 'la masse de l’électron', protons: 'les protons', neutrons: 'les neutrons', nucleons: 'les nucléons', symbole: 'l’écriture', A: 'A', Z: 'Z', N: 'N = A − Z', charges: 'les charges', neutre: 'neutre', regle: 'électrons = Z', notation: 'la notation' },
+  dessiner: (c, S, sc) => (DESSINS[VUE] || dessinerAtome)(c, S, sc),
+  ceQuiSeVoit: voir,
+  texte: 'L’atome : un noyau positif (protons de charge +e, neutrons neutres) entouré d’électrons de charge −e ; écriture A Z X : A nucléons, Z protons, N = A − Z neutrons ; l’atome est neutre : Z électrons.',
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

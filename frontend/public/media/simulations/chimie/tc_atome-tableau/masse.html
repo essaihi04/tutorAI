@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La masse de l’atome — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_atome-tableau/atome.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La masse de l’atome : sur une balance, un proton pèse presque deux mille électrons ; on néglige les électrons, la masse est dans le noyau : m ≈ A × mp"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/chimie/tc_atome-tableau/commun.js"></script>
+<script>
+/*
+ * La masse de l’atome (diapos at_m1 à at_m3). Vues (?vue=) :
+ *  somme   : m = Z·m_p + N·m_n + Z·m_e ; une balance : un proton sur un plateau (il descend), un électron sur l’autre
+ *            (presque rien) ; m_p ≈ 1 840 × m_e ; on néglige les électrons ; m_p ≈ m_n → m ≈ A·m_p.
+ *            Moments : formule 1,5 ; proton 4 ; electron 6,5 ; rapport 9 ; neglige 11 ; approx 13,5 ; fin 15.
+ *  methode : la méthode (&atome=O | C | Cl) : A lu sur l’écriture, les nucléons comptés, m ≈ A·m_p, l’application
+ *            numérique, le résultat. Moments : donnees 1,5 ; A (calculé) ; relation ; an ; resultat ; fin.
+ * set_parameters {conclusions: false} : le résultat reste caché (question au tableau).
+ */
+const A = window.Atome, { P, compte, dureeCompte, avant } = A;
+const VUE = A.param('vue', 'somme');
+const ATOMES = { O: [8, 16, 'O', '26,72', '2,67'], C: [6, 12, 'C', '20,04', '2,00'], Cl: [17, 35, 'Cl', '58,45', '5,84'] };
+const AT = ATOMES[A.param('atome', 'O')] || ATOMES.O;
+const [Z, AA, SYM, PROD, RES] = AT, N = AA - Z;
+const MOMENTS = VUE === 'methode' ? (() => { const m = { donnees: 1.5 }; m.A = m.donnees + 1.5 + dureeCompte(AA) * .7; m.relation = m.A + 2.5; m.an = m.relation + 2.5; m.calcul = m.an + 2.5; m.resultat = m.calcul + 2.5; return m; })()
+  : { formule: 1.5, proton: 4, electron: 6.5, rapport: 9, neglige: 11, approx: 13.5 };
+const FIN = VUE === 'methode' ? MOMENTS.resultat + 1.5 : 15;
+
+function dessinerSomme(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L * .5 : L * .3, yb = pt ? 380 : 370, w = pt ? 300 : 260;
+  // la balance : un proton à gauche la fait descendre ; un électron à droite ne la relève presque pas
+  const kp = avant(S, 'proton', 1.2), ke = avant(S, 'electron', 1.2);
+  const angle = -.32 * kp + .0002 * ke;   // − : plateau gauche plus bas
+  c.direct(() => {
+    const g = c.ctx, b = A.P.balance(g, cx, yb, w, angle);
+    if (kp > 0) P.proton(g, b.gauche.x, b.gauche.y - 18 - (1 - kp) * 120, 18, { alpha: Math.min(1, kp * 2) });
+    if (ke > 0) P.electron(g, b.droite.x, b.droite.y - 12 - (1 - ke) * 120, 9, { alpha: Math.min(1, ke * 2) });
+  });
+  c.repere('balance', cx - w / 2 - 20, yb - w * .9, w + 40, w * .9, 'la balance');
+  if (pt) {
+    const der = S.t <= 0 ? 'approx' : ['approx', 'neglige', 'rapport', 'electron', 'proton', 'formule'].find(n => S.a(n));
+    const txt = { formule: 'm = Z·m_p + N·m_n + Z·m_e', proton: 'un proton', electron: 'un électron : presque rien', rapport: 'm_p ≈ 1 840 × m_e', neglige: 'on néglige les électrons', approx: 'm ≈ A·m_p' }[der];
+    if (der && (der !== 'approx' || S.conclusions)) c.texte(txt, L / 2, 46, { couleur: 'jaune', taille: 30, align: 'center', gras: true, max: L - 16 });
+    return;
+  }
+  const x = L * .52, t = 22;
+  if (S.t <= 0 || S.ecrit(c, 'formule')) { c.texte('m = Z·m_p + N·m_n + Z·m_e', L / 2, 40, { couleur: 'blanc', taille: 26, gras: true, align: 'center' }); c.repere('formule', L / 2 - 200, 12, 400, 40, 'la masse de l’atome'); }
+  if (S.t <= 0 || S.ecrit(c, 'proton')) c.texte('un proton', cx - w / 2, yb + 30, { couleur: 'rose', taille: t, align: 'center', gras: true });
+  if (S.t <= 0 || S.ecrit(c, 'electron')) c.texte('un électron', cx + w / 2, yb + 30, { couleur: 'cyan', taille: t, align: 'center', gras: true });
+  if (S.t <= 0 || S.ecrit(c, 'rapport')) {
+    c.texte('⟦m_p|m_e⟧ = ⟦1,673 × 10⁻²⁷|9,1 × 10⁻³¹⟧ ≈ 1 840', x, 128, { couleur: 'jaune', taille: 22, gras: true, max: L - x - 10 });
+    c.texte('un proton pèse ≈ 1 840 électrons', x, 186, { couleur: 'cyan', taille: 20, max: L - x - 10 });
+    c.repere('rapport', x - 6, 90, L - x - 10, 106, 'm_p ≈ 1 840 × m_e');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'neglige')) { c.texte('m_e ≪ m_p : on néglige les électrons', x, 236, { couleur: 'orange', taille: t, gras: true, max: L - x - 10 }); c.repere('neglige', x - 6, 212, L - x - 10, 34, 'on néglige les électrons'); }
+  if ((S.t <= 0 || S.ecrit(c, 'approx')) && S.conclusions) {
+    c.texte('m_p ≈ m_n', x, 284, { couleur: 'blanc', taille: t, gras: true });
+    c.rect(x - 8, 302, L - x - 14, 74, { couleur: 'jaune', fond: 'jaune', fondAlpha: .1, largeur: 2 });
+    c.texte('m ≈ A·m_p', x + 10, 342, { couleur: 'jaune', taille: 30, gras: true });
+    c.texte('la masse est dans le noyau', x + 10, 368, { couleur: 'jaune', taille: 18 });
+    c.repere('approx', x - 8, 302, L - x - 14, 74, 'm ≈ A·m_p');
+  }
+}
+
+function dessinerMethode(c, S, sc) {
+  const L = sc.L, pt = sc.petit, M = MOMENTS, cx = pt ? L * .2 : L * .2, cy = pt ? 250 : 240, r = AA > 20 ? 11 : 15;
+  const dA = dureeCompte(AA) * .7, kA = compte(S, M, 'A', AA, dA), compter = S.t > 0 && S.t > M.A - dA && !S.a('relation');
+  c.direct(() => P.noyauCompte(c.ctx, cx, cy, Z, N, r, 'tous', compter ? kA : 0));
+  c.repere('noyau', cx - 80, cy - 80, 160, 160, 'le noyau');
+  if (S.t <= 0 || S.ecrit(c, 'donnees')) { A.notation(c, String(AA), String(Z), SYM, cx + 6, pt ? 90 : 84, { taille: pt ? 64 : 58 }); c.repere('donnees', cx - 60, 30, 140, 70, 'l’écriture du noyau'); }
+  const x = pt ? L * .42 : L * .4, t = pt ? 30 : 25;
+  const L1 = [
+    ['A', `A = ${AA} nucléons`, 'jaune'],
+    ['relation', 'm ≈ A·m_p', 'cyan'],
+    ['an', `m ≈ ${AA} × 1,67 × 10⁻²⁷ kg`, 'blanc'],
+    ['calcul', `m ≈ ${PROD} × 10⁻²⁷ kg`, 'blanc'],
+    ['resultat', `m ≈ ${RES} × 10⁻²⁶ kg`, 'jaune'],
+  ];
+  if (pt) {
+    const der = S.t <= 0 ? 'resultat' : ['resultat', 'calcul', 'an', 'relation', 'A'].find(n => S.a(n));
+    const l = L1.find(q => q[0] === der);
+    if (l && (der !== 'resultat' || S.conclusions)) { c.texte(l[1], x, 230, { couleur: l[2], taille: 30, gras: true, max: L - x - 8 }); c.repere(der, x, 200, L - x - 8, 40, l[1]); }
+    return;
+  }
+  L1.forEach(([nom, txt, coul], i) => {
+    if (nom === 'resultat' && !S.conclusions) return;
+    const y = 80 + i * 70;
+    if (S.t <= 0 || S.ecrit(c, nom)) {
+      if (nom === 'resultat') c.rect(x - 10, y - 34, L - x - 10, 48, { couleur: 'jaune', fond: 'jaune', fondAlpha: .1, largeur: 2 });
+      c.texte(txt, x, y, { couleur: coul, taille: t, gras: true, max: L - x - 20 });
+      c.repere(nom, x - 10, y - 34, L - x - 10, 48, txt);
+    }
+  });
+}
+
+const S = A.sim({
+  id: 'tc_atome_masse_' + VUE + (VUE === 'methode' ? '_' + SYM : ''), titre: 'La masse de l’atome', vue: VUE, moments: MOMENTS, fin: FIN, graine: 29,
+  motifs: { formule: 'la masse de l’atome', proton: 'un proton', electron: 'un électron', rapport: 'm_p ≈ 1 840 × m_e', neglige: 'on néglige les électrons', approx: 'm ≈ A·m_p', donnees: 'les données', A: 'A', relation: 'la relation', an: 'l’application numérique', calcul: 'le produit', resultat: 'le résultat' },
+  dessiner: (c, S, sc) => (VUE === 'methode' ? dessinerMethode : dessinerSomme)(c, S, sc),
+  ceQuiSeVoit: S => {
+    const a = n => S.t <= 0 || S.a(n);
+    if (VUE === 'methode') return [`L’écriture ${AA}/${Z} ${SYM} et son noyau.`, a('A') ? `A = ${AA} nucléons comptés.` : '', a('relation') ? 'm ≈ A·m_p.' : '', a('an') ? `m ≈ ${AA} × 1,67 × 10⁻²⁷ kg.` : '', a('calcul') ? `m ≈ ${PROD} × 10⁻²⁷ kg.` : '', a('resultat') && S.conclusions ? `m ≈ ${RES} × 10⁻²⁶ kg.` : ''].join(' ');
+    return ['m = Z·m_p + N·m_n + Z·m_e.', a('proton') ? 'Un proton sur le plateau gauche : il descend.' : '', a('electron') ? 'Un électron sur le plateau droit : la balance ne bouge presque pas.' : '', a('rapport') ? 'm_p/m_e ≈ 1 840.' : '', a('neglige') ? 'On néglige les électrons.' : '', a('approx') && S.conclusions ? 'm_p ≈ m_n, donc m ≈ A·m_p.' : ''].join(' ');
+  },
+  texte: 'La masse d’un atome : m = Z·mp + N·mn + Z·me ; un électron est environ 1 840 fois plus léger qu’un proton, on le néglige ; mp ≈ mn, donc m ≈ A·mp : la masse est dans le noyau.',
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
