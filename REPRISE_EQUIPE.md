@@ -463,7 +463,8 @@ modifié. Tout est prêt :
      /2bacpcf (`python -I scripts/publier_2bacpcf.py --public-secours "C:/Users/HP/Desktop/ai-tutor-bac/frontend/public"`).
 
 ### Voix des 171 pistes « facteurs édaphiques » (activités 4 à 7)
-La session voix de l'équipe (« Vérification fichier équipe MD ») les génère, en 4 parties. Ne pas les relancer en
+**FAIT le 25/11** : générées, écoutées, branchées (`da059f9f`) et en ligne sur /tronc-commun (republié à 7 h 04). Voir
+§ 3 duodecies. Historique : la session voix de l'équipe (« Vérification fichier équipe MD ») les a générées, en 4 parties. Ne pas les relancer en
 parallèle. Mes deux lots du 24/11 (comptes 3 et 4, kernels `academy-tts-lot` et `academy-tts-lot2`, liste
 `/srv/corpus_v4/voix_lot/liste_tc_edaph_suite.json`) sont restés en `QUEUED` et sont abandonnés. Pour les brancher,
 poser les MP3 ne suffit pas : il faut lancer `scripts/brancher_voix_edaph.py <frontend/public> --cours <cours.json>
@@ -488,7 +489,76 @@ poser les MP3 ne suffit pas : il faut lancer `scripts/brancher_voix_edaph.py <fr
 - 2ᵉ Bac : les totaux `COURS` des révisions affichent encore 38/39 diapositives (il y en a 27/26) ; le relais PC +
   téléphone (`?t`) n'est pas sur /2bacpcf ; la facturation Mistral reste à régler par l'utilisateur.
 
+## 3 duodecies. Reprise du 25 novembre 2026 — voix v6, MoulSot v5, contrôle des nombres, pistes fautives des exercices
+
+Session « Vérification fichier équipe MD » (voix). Skills à lire d'abord : `voix-du-cours` (§ 3 bis, 3 ter, 3 quater)
+et `prononciation`.
+
+### Modèles adoptés (en ligne)
+- Voix **Bodi v6** : `ferdaous04/academy-v6-bodi` ; STT **MoulSot v5** : `zouhairessaihi/academy-moulsot-v5`
+  (`backend/app/config.py` : `kaggle_tts_modele`, `kaggle_stt_modele`, `kaggle_stt_source`). Datasets privés : un compte
+  Kaggle qui lance un lot doit y avoir accès (partage fait à la main par l'utilisateur ; ferdaous04, zouhairessaihi et
+  miftahi marchent, zahraoui pas vérifié).
+- Les bancs MoulSot sont biaisés (MoulSot juge MoulSot) : **l'utilisateur décide à l'écoute**.
+
+### Contrôle des nombres (en ligne, `3bec49bd`)
+- La voix rate souvent un nombre français placé juste après un mot arabe (« يعني vingt-deux », « السؤال cinq »).
+- Chaque prise est transcrite par MoulSot et ses nombres sont comparés au texte (`fautes_nombres`, dans
+  `backend/kaggle_tts/serveur.py` et dans le bloc LOT de `/srv/corpus_v4/voix_lot/lot_sans_tunnel.py`).
+- Lot : 3 prises au plus. La prise 1 dit le texte normal ; la prise 2 « D » coupe juste avant le nombre et recolle les
+  deux parties ; la prise 3 « C » met un point avant le nombre.
+- Voix en direct : un morceau avec un nombre faux est refait 2 fois au plus.
+
+### Pistes fautives des exercices (402 pistes, 8 parties d'environ 50)
+
+| Partie | État |
+|---|---|
+| 1 | en ligne (`6effd3ef`) |
+| 2 à 6 | générées, WAV dans `att_` sur le VPS, pages publiées, **attendent l'écoute de l'utilisateur** |
+| 7 | en ligne (`f12e5507` + `f64031f4`) : 47 pistes + les 4 pistes avec أفقي ; 4 pistes reprises au choix de l'utilisateur (tirages a/b/c) |
+| 8 | générée le 25/11 (compte miftahi), page publiée, attend l'écoute (10 pistes encore signalées) |
+
+- Pages d'écoute (privées, autonomes, MP3 en base64) : `https://moalim.online/_ecoute_5245cd64121a9f401104c2e4/index.html`.
+  On y trouve aussi les 4 parties des facteurs édaphiques, la comparaison « يعني + nombre » A/C (12 phrases,
+  sans réponse de l'utilisateur) et les reprises de la partie 7.
+- Les 2 pistes de la partie 6 qui disent أفقي sont déjà refaites avec la nouvelle écriture (WAV dans `att_`) : les poser
+  avec la partie 6.
+- **Poser une partie après l'écoute** : dans un worktree PARTIEL de origin/main (`frontend/public/media/exercices`,
+  `scripts/voix`, `scripts/exercices/generateurs`), lancer
+  `python -X utf8 scripts/voix/poser_partie.py 2 <liste_fautes_ex_pN.json> <worktree>`. La liste est sur le VPS dans
+  `/srv/corpus_v4/voix_lot/`. Retirer d'abord les pistes que l'utilisateur marque. Ensuite `git add --sparse -A`, commit,
+  push, puis déployer **avec son accord**.
+- **Une piste marquée à l'écoute** : faire un petit lot de tirages a/b plus une version reformulée c, et des écritures
+  pour un mot mal dit, puis publier une page groupée (skill `voix-du-cours` § 3 quater).
+
+### Prononciation ajoutée (en ligne)
+- `texte_parle.py` : « أفقي » s'écrit « أوفوقي » pour sonner « ofoqi » ; « برر » s'écrit « بَرِّر » pour sonner « barrir »
+  (choix de l'utilisateur à l'écoute, tests dans `test_texte_parle.py`).
+- Les pistes **des cours** déjà en ligne qui contiennent ces mots (une dizaine de cours) n'ont **pas** été régénérées :
+  à décider avec l'utilisateur.
+- Texte : écrire un mot français en lettres françaises avant un nombre (« ف la figure deux », pas « بالفيكور deux »).
+
+### Scripts (VPS `/srv/corpus_v4/voix_lot/`, copies dans `scripts/voix/`)
+- `LISTE=… KERNEL_LOT=academy-tts-<P> bash lancer_lot.sh N` pousse une partie sur le compte N (1 ferdaous04,
+  2 zouhairessaihi, 3 miftahi, 4 zahraoui).
+- `suivre_partie.sh N <P>` attend la partie, la récupère dans `att_` et garde la sortie dans `/tmp/sortie_<P>`.
+- `chaine.sh N P1 P2…` enchaîne les parties, avec au plus 2 sessions GPU par compte.
+- `page_partie.py "<titre>"` fabrique la page d'écoute, lancé dans un dossier qui contient `liste.json`, `rapport.json`
+  et `voix/`.
+- Colab de l'utilisateur (T4) : `construire_colab.py`, `urls_poids.py`, `colab_run.py`, `poser_colab.py`
+  (skill § 3 ter).
+
+### Pièges vus
+- Un lot peut rester `QUEUED` des heures : le relancer sur un autre compte.
+- Tronc commun : les « : » et « / » d'un id deviennent « __ » dans le nom du MP3. Toujours compter les voix manquantes
+  sur le serveur : un mauvais compte le 24/11 a lancé 3 lots inutiles (tc1 à tc3), dont rien n'a été posé.
+- Une règle `r"\1…"` écrite par heredoc devient l'octet 0x01 : écrire `lambda mt: mt.group(1) + "…"` et lancer le test.
+- Jamais deux déploiements en même temps (`pgrep -f deploy-ubuntu.sh` d'abord).
+- À la fin : supprimer `/var/www/moalim/_colab_*` et `/var/www/moalim/_ecoute_*`.
+
 ## 4. Ce qui attend une décision
+- Écouter les parties 2 à 6 et 8 des pistes fautives des exercices, puis les poser (§ 3 duodecies).
+- Régénérer ou non les pistes des cours qui disent أفقي / برر (§ 3 duodecies).
 - Écouter et choisir les 38 mots douteux (§ 3 nonies), puis les symboles chimiques douteux.
 - Pousser les 9 commits de voix du worktree, reposer physique ch9, déployer, puis rafraîchir le lien libre (§ 3 decies).
 - Repeindre aussi ballon, milieux, types, carte et bilan du chapitre des ondes, si l'utilisateur le veut (§ 3 octies).
