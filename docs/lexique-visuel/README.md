@@ -19,9 +19,9 @@ dans les prochains cours, le glucose doit garder la même forme et les mêmes co
 
 | Module | Objet global | Contenu | Branché sur |
 |---|---|---|---|
-| `lexique.js` | `window.Lexique` | atomes et molécules (glucose, acides pyruvique et lactique, éthanol, CO₂, H₂O, O₂, H₃O⁺, HO⁻), proton, électron, neutron, Ca²⁺, ATP/ADP/Pi, NAD, FAD, CoA, cellule, mitochondrie, membrane, protéine, levure, bécher simple | SVT ch1 (via `peinture.js`) |
-| `lexique-physique.js` | `Lexique.physique` | générateur, bornes, condensateur (réaliste, armatures, symbole), résistor, interrupteur, bobine (réaliste, symbole), noyau de fer, lampe, ampèremètre/voltmètre, ohmmètre, oscilloscope, GBF, cordons ; ondes (corde, perle, poignée, micro, écran, trace, front) ; `lumiere.couleurDe(λ)` ; `GRANDEURS` | RC, RL, RLC (15 pages) |
-| `lexique-chimie.js` | `Lexique.chimie` | bécher, bain, goutte, filet, pipette, compte-gouttes, glaçon, pH-mètre et sonde, conductimètre et cellule, bulles ; `SOLUTIONS`, `BBT` | chimie ch9 à ch13 (25 pages) |
+| `lexique.js` | `window.Lexique` | atomes et molécules (glucose, acides pyruvique et lactique, éthanol, CO₂, H₂O, O₂, H₃O⁺, HO⁻), proton, électron, neutron, modèle de l'atome (noyau, nuage, couches K L M, charge d'un ion), Ca²⁺, ATP/ADP/Pi, NAD, FAD, CoA, cellule, mitochondrie, membrane, protéine, levure, bécher simple | SVT ch1 (via `peinture.js`), chimie TC atome |
+| `lexique-physique.js` | `Lexique.physique` | générateur, bornes, condensateur (réaliste, armatures, symbole), résistor, interrupteur, bobine (réaliste, symbole), noyau de fer, lampe, ampèremètre/voltmètre, ohmmètre, oscilloscope, GBF, cordons ; ondes (corde, perle, poignée, micro, écran, trace, front) ; `lumiere.couleurDe(λ)` ; `GRANDEURS` ; mécanique : `MECANIQUE` (couleurs des vecteurs), `mecanique` (point d'enregistrement, G, table à coussin d'air, autoporteur, règle, chrono, flèche), `ECRITURE` (code de la craie) | RC, RL, RLC (15 pages) ; mouvement et inertie (TC, 14 pages) |
+| `lexique-chimie.js` | `Lexique.chimie` | bécher, bain, goutte, filet, pipette, compte-gouttes, glaçon, pH-mètre et sonde, conductimètre et cellule, bulles ; `SOLUTIONS`, `BBT` ; montage à reflux (`montageReflux`, ballon, réfrigérant à boules, chauffe-ballon, potence, élévateur, tuyau, pierre ponce, vapeur, gouttelette), CCM (plaque, cuve, capillaire, lampe UV, diiode), filtration (entonnoir, flocons), éprouvette, tube, flacon, thermomètre, balance, ions (`ion`, `IONS`) ; `LIQUIDES` | chimie ch9 à ch13 (25 pages), TC synthèse (7 pages) |
 | `lexique-genetique.js` | `window.Molecules` = `Lexique.genetique` | ADN, ARN, bases, nucléotides, ribosome, ARNt, acides aminés, protéine, noyau, cytoplasme, hématie | SVT ch4 (12 pages) |
 | `lexique-muscle.js` | `window.MoleculesPeintes` = `Lexique.muscle` | actine, myosine, tropomyosine, troponine, Ca²⁺, pastille ATP, réticulum, cuve, fibre | SVT ch2 (4 pages) |
 | `lexique-maths.js` | `Lexique.maths` | `ROLES` (courbe cyan, point jaune, tangente orange, asymptote pointillé blanc, + vert, − rouge), `tangente()`, `asymptote()`, `couleurSigne()` | les six cours de maths (chargé par `maths-tableau.js`) |
@@ -49,6 +49,8 @@ d'aspect, seules les variantes minoritaires prennent le dessin commun. Dans une 
 | milieux | hyaloplasme `[96,200,150]`, membrane `[250,204,96]`, matrice `[86,180,236]`, mitochondrie `[240,100,62]` | `Lexique.T` |
 
 Texte écrit SUR un objet clair : sombre et gras (`#0b1f2a`, `Lexique.etiquette`) ; légendes à côté : craie.
+La craie elle-même suit un code fixe (titres jaunes, légendes et données blanches, résultats et conclusions verts,
+pièges roses, ce qui désigne un objet dans la couleur de l'objet) : [craie.md](craie.md).
 
 ## Index des éléments
 
@@ -73,11 +75,15 @@ Texte écrit SUR un objet clair : sombre et gras (`#0b1f2a`, `Lexique.etiquette`
 | HO⁻ | [ho.md](ho.md) | `ho` |
 | Ca²⁺ | [calcium.md](calcium.md) | `calcium` |
 | Atome (C, H, O, N, P) | ci-dessous | `atome(ctx, x, y, 'C')`, `chaine`, `positionsChaine` |
+| Atome (modèle) : noyau, nuage, couches K L M, ion | [atome.md](atome.md) | `noyau`, `nuage`, `placesNuage`, `couche`, `placesCouche`, `atomeModele`, `charge` |
 | Cellule, hyaloplasme, noyau | [cellule.md](cellule.md) | `cellule` |
 | Mitochondrie, membrane interne, sphère pédonculée | [mitochondrie.md](mitochondrie.md) | `mitochondrie`, `membrane`, `spherePedonculee` |
 | Protéine | [proteine.md](proteine.md) | `proteine` |
 | Levure | [levure.md](levure.md) | `levure` |
 | Bécher | [becher.md](becher.md) | `becher` |
+| Montage à reflux (ballon, réfrigérant, chauffe-ballon, potence) | [montage-reflux.md](montage-reflux.md) | `Lexique.chimie.montageReflux`, `ballon`, `refrigerant`, `chauffeBallon` |
+| CCM (plaque, cuve, capillaire, lampe UV) | [ccm.md](ccm.md) | `Lexique.chimie.plaque`, `cuve`, `cuveDevant` |
+| Filtration, précipité, éprouvette, flacon, ions | [filtration.md](filtration.md) | `Lexique.chimie.entonnoir`, `flocons`, `ion` |
 | **Physique** | | |
 | Générateur, GBF | [generateur.md](generateur.md) | `physique.generateur`, `gbf`, `borne` |
 | Condensateur | [condensateur.md](condensateur.md) | `physique.condensateur`, `armatures`, `symboleCondo` |
@@ -88,6 +94,7 @@ Texte écrit SUR un objet clair : sombre et gras (`#0b1f2a`, `Lexique.etiquette`
 | Ampèremètre, voltmètre, ohmmètre | [appareils-de-mesure.md](appareils-de-mesure.md) | `physique.cadran`, `ohmmetre` |
 | Oscilloscope | [oscilloscope.md](oscilloscope.md) | `physique.oscillo`, `ondes.oscillo`, `ondes.trace` |
 | Couleurs des grandeurs (u_C, i, u_R, u_b, E) | [grandeurs-electriques.md](grandeurs-electriques.md) | `physique.GRANDEURS` |
+| Mécanique : v⃗, P⃗, R⃗, T⃗, F⃗, OM⃗, i⃗ j⃗, G, points, trajectoire ; autoporteur, table à coussin d'air | [mecanique.md](mecanique.md) | `physique.MECANIQUE`, `physique.mecanique.*`, `physique.ECRITURE` |
 | Corde, perle, point M | [corde.md](corde.md) | `physique.ondes.corde`, `perle` |
 | Micro | [micro.md](micro.md) | `physique.ondes.micro` |
 | Lumière (λ → couleur) | [lumiere.md](lumiere.md) | `physique.lumiere.couleurDe` |

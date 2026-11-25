@@ -17,6 +17,8 @@
  *   rose   [244,114,182]         un PROTON / ion H⁺ (« H+ » écrit dessus) ; le proton du noyau atomique est le même
  *   bleu ciel [96,200,250]       un ÉLECTRON (« e− » écrit dessus)
  *   gris   [160,168,180]         un NEUTRON ; ADP (carte vide)
+ *   (atome) noyau = amas rose/gris à halo rose ; nuage = brume bleu ciel ; couche K, L, M = anneau bleu pâle (jaune allumée) ;
+ *           ion = anneau pointillé rose (cation +) ou bleu ciel (anion −) — voir docs/lexique-visuel/atome.md
  *   doré   [250,190,60]          l'ATP (carte d'énergie pleine) ; orange [240,140,60] le phosphate Pi
  *   cyan   [34,190,220]          le transporteur NAD⁺ / NADH,H⁺ (le « taxi ») ; vert [110,200,90] FAD / FADH₂
  *   violet [160,120,240]         une PROTÉINE (transporteur membranaire, enzyme) ; indigo [110,120,230] le coenzyme A
@@ -452,19 +454,19 @@
   function proton(ctx, x, y, o = {}) {
     const r = (o.r ?? 7) * (o.echelle ?? 1), a = o.alpha ?? 1;
     bille(ctx, x, y, r, C.proton, { alpha: a });
-    if (o.texte !== false && r >= 6) etiquette(ctx, o.nom ?? 'H+', x, y, { taille: Math.max(9, r * 1.3), couleur: '#3b0a24', alpha: a });
+    if (o.texte !== false && r >= 6) etiquette(ctx, o.nom ?? 'H+', x, y, { taille: o.taille ?? Math.max(9, r * 1.3), couleur: '#3b0a24', alpha: a });
   }
   /** Un ÉLECTRON : petite bille bleu ciel marquée « e− ». */
   function electron(ctx, x, y, o = {}) {
     const r = (o.r ?? 6) * (o.echelle ?? 1), a = o.alpha ?? 1;
     bille(ctx, x, y, r, C.electron, { alpha: a });
-    if (o.texte !== false && r >= 5.5) etiquette(ctx, 'e−', x, y, { taille: Math.max(9, r * 1.5), couleur: '#06283d', alpha: a });
+    if (o.texte !== false && r >= 5.5) etiquette(ctx, o.nom ?? 'e−', x, y, { taille: o.taille ?? Math.max(9, r * 1.5), couleur: '#06283d', alpha: a });
   }
   /** Un NEUTRON : bille grise (noyau atomique). */
   function neutron(ctx, x, y, o = {}) {
     const r = (o.r ?? 7) * (o.echelle ?? 1), a = o.alpha ?? 1;
     bille(ctx, x, y, r, C.neutron, { alpha: a });
-    if (o.texte && r >= 6) etiquette(ctx, 'n', x, y, { taille: r * 1.3, alpha: a });
+    if ((o.texte || o.nom != null) && r >= 6) etiquette(ctx, o.nom ?? 'n', x, y, { taille: o.taille ?? r * 1.3, couleur: '#111827', alpha: a });
   }
   /** L'ion OXONIUM H₃O⁺ : l'eau (O rouge + H blancs) avec un 3e H et la charge + (anneau rose). */
   function h3o(ctx, x, y, o = {}) {
@@ -489,6 +491,148 @@
   function calcium(ctx, x, y, o = {}) {
     const r = (o.r ?? 4.4) * (o.echelle ?? 1), a = o.alpha ?? 1;
     ctx.save(); ctx.shadowColor = 'rgba(224,242,254,.9)'; ctx.shadowBlur = 7; bille(ctx, x, y, r, C.calcium, { alpha: a }); ctx.restore();
+  }
+
+
+  /* ───────────────────────── L'atome : noyau, nuage, couches K L M, ions (25 novembre 2026) ───────────────────────── */
+  /* Fiche : docs/lexique-visuel/atome.md. Premier cours : chimie Tronc Commun « Modèle de l'atome ».
+   * Le proton du noyau est la bille rose (« + » dessus), le neutron la bille grise, l'électron la bille bleu ciel « e− » ;
+   * le noyau est un amas serré avec un halo rose (il est chargé +) ; le nuage est une brume bleu ciel (chargée −) ;
+   * une couche électronique est un anneau fin bleu très pâle, jaune quand on la montre ; la charge d'un ion est un
+   * anneau autour de l'atome : rose pour un cation (+), bleu ciel pour un anion (−), comme H₃O⁺ et HO⁻. */
+  const COUCHES = ['K', 'L', 'M'], CAPACITE = [2, 8, 8];
+  /** Les places des Z + N nucléons d'un noyau (spirale serrée, protons et neutrons mêlés de façon fixe) :
+   *  [{x, y, t: 'p' | 'n', k}] (k : rang parmi les protons ou les neutrons, 1…). */
+  function nucleons(cx, cy, Z, N, r) {
+    const n = Z + N, out = [], ordre = [];
+    let p = 0, q = 0;
+    for (let i = 0; i < n; i++) {
+      const prendP = q >= N || (p < Z && (p + .5) / Z <= (q + .5) / N);
+      if (prendP) { ordre.push('p'); p++; } else { ordre.push('n'); q++; }
+    }
+    let kp = 0, kn = 0;
+    for (let i = 0; i < n; i++) {
+      const rr = n === 1 ? 0 : r * 1.9 * Math.sqrt(i + .35) * .55, an = i * 2.39996, t = ordre[i];
+      out.push({ x: cx + rr * Math.cos(an), y: cy + rr * Math.sin(an), t, k: t === 'p' ? ++kp : ++kn, i: i + 1 });
+    }
+    return out;
+  }
+  /** Allumer une bille qu'on compte : halo jaune doux (vive : la dernière allumée). */
+  function allume(ctx, x, y, r, vive = false) {
+    ctx.save(); ctx.shadowColor = 'rgba(250,204,21,.95)'; ctx.shadowBlur = vive ? 18 : 10;
+    ctx.fillStyle = `rgba(250,204,21,${vive ? .45 : .28})`; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.restore();
+  }
+  /**
+   * Le NOYAU : amas de Z protons (roses « + ») et N neutrons (gris), halo rose. o : r (bille, 9), alpha, pale ('p' | 'n' :
+   * cette famille pâlie), compte : { mode: 'tous' | 'p' | 'n', k } (les k premiers portent leur numéro et s'allument),
+   * numeros : { p, n } (les p premiers protons et n premiers neutrons numérotés). Renvoie { pos, R } (R : rayon de l'amas).
+   */
+  function noyau(ctx, cx, cy, Z, N, o = {}) {
+    const r = o.r ?? 9, a = o.alpha ?? 1, pos = nucleons(cx, cy, Z, N, r);
+    const R = pos.reduce((m, q) => Math.max(m, Math.hypot(q.x - cx, q.y - cy)), 0) + r;
+    ctx.save(); ctx.globalAlpha *= a;
+    const g = ctx.createRadialGradient(cx, cy, R * .3, cx, cy, R * 1.6); g.addColorStop(0, rgba(C.proton, .28)); g.addColorStop(1, rgba(C.proton, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.6, 0, TAU); ctx.fill(); ctx.restore();
+    const cp = o.compte, nums = o.numeros || {};
+    const rang = q => cp ? (cp.mode === 'tous' ? q.i : q.t === cp.mode ? q.k : 0) : q.k;
+    const lim = q => cp ? cp.k : (q.t === 'p' ? nums.p || 0 : nums.n || 0);
+    [...pos].sort((u, v) => u.y - v.y).forEach(q => {
+      const n = rang(q), lit = n > 0 && n <= lim(q);
+      const pali = cp ? (cp.palir && cp.mode !== 'tous' && q.t !== cp.mode) : o.pale === q.t;
+      const al = a * (pali ? (cp ? .25 : .22) : 1);
+      if (lit && al > .3) allume(ctx, q.x, q.y, r * 1.32, n === Math.floor(lim(q)));
+      const nom = lit ? String(n) : (q.t === 'p' ? '+' : null);
+      if (q.t === 'p') proton(ctx, q.x, q.y, { r, alpha: al, nom, texte: r >= 6, taille: Math.max(10, r * (lit ? 1.15 : 1.45)) });
+      else neutron(ctx, q.x, q.y, { r, alpha: al, nom, taille: Math.max(10, r * 1.15) });
+    });
+    return { pos, R };
+  }
+  /** Le NUAGE électronique : brume bleu ciel, plus dense près du noyau (o.alpha, o.graine, o.points). */
+  function nuage(ctx, cx, cy, R, o = {}) {
+    const r = graine(o.graine || 9), a = o.alpha ?? 1;
+    ctx.save(); ctx.globalAlpha *= a;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R); g.addColorStop(0, rgba(C.electron, .32)); g.addColorStop(.6, rgba(C.electron, .13)); g.addColorStop(1, rgba(C.electron, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(165,225,255,.85)';
+    const n = o.points ?? 260;
+    for (let i = 0; i < n; i++) { const u = r(), d = R * Math.pow(u, .75) * .98, an = r() * TAU, rr = .9 + r() * 1.3; ctx.globalAlpha = a * (1 - d / R) * .9; ctx.beginPath(); ctx.arc(cx + d * Math.cos(an), cy + d * Math.sin(an), rr, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+  /** Places FIXES de n électrons dans un nuage de rayon R (entre .42 R et .88 R) ; o.t les fait tourner lentement. */
+  function placesNuage(cx, cy, R, n, o = {}) {
+    const r = graine(o.graine || 21), out = [], t = o.t || 0;
+    for (let i = 0; i < n; i++) {
+      const a0 = i / Math.max(1, n) * TAU + (r() - .5) * .5, d = R * (.42 + .46 * r()), w = (.18 + .1 * r()) * (i % 2 ? 1 : -1);
+      out.push({ x: cx + d * Math.cos(a0 + w * t), y: cy + d * Math.sin(a0 + w * t) * .92 });
+    }
+    return out;
+  }
+  /** Une COUCHE électronique : anneau fin bleu pâle de rayon R ; o.vive : allumée (jaune), o.couleur, o.alpha. */
+  function couche(ctx, cx, cy, R, o = {}) {
+    ctx.save(); ctx.globalAlpha *= o.alpha ?? 1;
+    ctx.strokeStyle = o.couleur || (o.vive ? 'rgba(250,204,21,.95)' : 'rgba(186,230,253,.6)'); ctx.lineWidth = o.vive ? 3 : 2;
+    if (o.vive) { ctx.shadowColor = 'rgba(250,204,21,.8)'; ctx.shadowBlur = 12; }
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke(); ctx.restore();
+  }
+  /** Les places des électrons d'une couche de capacité `cap` (2 : en haut et en bas ; 8 : 4 paires aux points cardinaux). */
+  function placesCouche(cx, cy, R, cap) {
+    const out = [];
+    for (let i = 0; i < cap; i++) {
+      let an;
+      if (cap <= 2) an = -Math.PI / 2 + i * Math.PI;
+      else { const paire = [0, 2, 1, 3][Math.floor(i / 2) % 4], cote = i % 2 ? 1 : -1; an = -Math.PI / 2 + paire * Math.PI / 2 + cote * Math.min(.32, 24 / R); }
+      out.push({ x: cx + R * Math.cos(an), y: cy + R * Math.sin(an) });
+    }
+    return out;
+  }
+  /** Une place vide d'une couche (cercle pointillé). */
+  function placeVide(ctx, x, y, r = 9, a = .6) {
+    ctx.save(); ctx.strokeStyle = `rgba(186,230,253,${a})`; ctx.setLineDash([3, 3]); ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); ctx.restore();
+  }
+  /** La répartition de n électrons (Z ≤ 18) sur K, L, M : [K, L, M] sans les couches vides de la fin. */
+  function repartition(n) { const k = Math.min(2, n), l = Math.max(0, Math.min(8, n - 2)), m = Math.max(0, n - 10); return [k, l, m].filter((v, i) => v > 0 || i === 0); }
+  /**
+   * L'ATOME en modèle : noyau au centre et ses électrons. o.forme 'nuage' (défaut : nuage + électrons à leurs places) ou
+   * 'couches' (anneaux K, L, M de rayons o.rayons, électrons sur leurs places) ; o.ne : nombre d'électrons (Z par défaut,
+   * Z − q pour un ion) ; o.R (rayon du nuage / de la couche externe), o.rn (bille du noyau), o.re (électron), o.t (rotation),
+   * o.charge : dessine l'anneau de charge (Z − ne). Renvoie { noyau, elec, R }.
+   */
+  function atomeModele(ctx, cx, cy, Z, N, o = {}) {
+    const R = o.R || 120, n = o.ne ?? Z, re = o.re || 8;
+    let elec = [];
+    if (o.forme === 'couches') {
+      const rep = repartition(n), nc = Math.max(rep.length, o.nCouches || 0);
+      const Rs = o.rayons || Array.from({ length: Math.max(1, nc) }, (_, i) => R * (i + 1) / Math.max(1, nc));
+      for (let i = 0; i < nc; i++) couche(ctx, cx, cy, Rs[i], {});
+      const nyau = noyau(ctx, cx, cy, Z, N, { r: o.rn ?? 4, alpha: o.alphaNoyau ?? 1 });
+      rep.forEach((v, i) => placesCouche(cx, cy, Rs[i], CAPACITE[i]).slice(0, v).forEach(p => { electron(ctx, p.x, p.y, { r: re, alpha: o.alphaE ?? 1 }); elec.push(p); }));
+      if (o.charge) charge(ctx, cx, cy, R + re + 8, Z - n);
+      return { noyau: nyau, elec, R, rayons: Rs };
+    }
+    nuage(ctx, cx, cy, R, { points: o.points ?? Math.round(R * 1.3), graine: o.graine || 9, alpha: o.alphaNuage ?? 1 });
+    const nyau = noyau(ctx, cx, cy, Z, N, { r: o.rn ?? 4, alpha: o.alphaNoyau ?? 1, numeros: o.numeros, pale: o.pale, compte: o.compte });
+    elec = placesNuage(cx, cy, R, n, { t: o.t || 0, graine: o.graineE || 21 });
+    const lit = o.litE || 0;
+    elec.forEach((q, i) => {
+      if (i < lit) allume(ctx, q.x, q.y, re * 1.5, i === lit - 1);
+      electron(ctx, q.x, q.y, { r: re, alpha: o.alphaE ?? 1, nom: i < lit ? String(i + 1) : undefined, taille: i < lit ? Math.max(10, re * 1.2) : undefined });
+    });
+    if (o.charge) charge(ctx, cx, cy, R + 6, Z - n);
+    return { noyau: nyau, elec, R };
+  }
+  /**
+   * La CHARGE d'un ion : anneau autour de l'atome (rayon R), rose pour un cation (q > 0), bleu ciel pour un anion (q < 0),
+   * et la charge écrite en haut à droite (« + », « 2− »). q = 0 : rien.
+   */
+  function charge(ctx, cx, cy, R, q, o = {}) {
+    if (!q) return;
+    const c = q > 0 ? C.proton : C.electron, a = o.alpha ?? 1;
+    ctx.save(); ctx.globalAlpha *= a; ctx.strokeStyle = rgba(c, .85); ctx.lineWidth = o.epaisseur ?? 2.4; ctx.setLineDash([10, 6]);
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke(); ctx.restore();
+    if (o.texte !== false) {
+      const s = (Math.abs(q) > 1 ? Math.abs(q) : '') + (q > 0 ? '+' : '−'), x = cx + R * .74, y = cy - R * .74;
+      etiquette(ctx, s, x + 10, y - 10, { taille: o.taille ?? 26, couleur: q > 0 ? '#f9a8d4' : '#7dd3fc', alpha: a });
+    }
   }
 
   /* ───────────────────────── Énergie : ATP, ADP, Pi ───────────────────────── */
@@ -543,7 +687,7 @@
   const coa = (ctx, x, y, o = {}) => taxi(ctx, x, y, { wVide: 48, wPlein: 48, ...o, etat: 'oxyde' }, C.coa, 'CoA', 'CoA');
 
   window.Lexique = {
-    version: '2026-11-18', T, C, R, PAS, POLICE, ENCRE, graine, rgba,
+    version: '2026-11-25', T, C, R, PAS, POLICE, ENCRE, graine, rgba,
     // peinture de base
     bille, liaison, capsule, eclat, bulleGaz, etiquette, formule,
     // milieux vivants
@@ -551,6 +695,8 @@
     // atomes et molécules
     atome, positionsChaine, chaine, glucose, acidePyruvique, acideLactique, ethanol, moleculeOrganique,
     co2, h2o, o2, hydrogene, proton, electron, neutron, h3o, ho, calcium,
+    // l'atome (25 novembre 2026) : noyau, nuage, couches K L M, ions
+    COUCHES, CAPACITE, nucleons, allume, noyau, nuage, placesNuage, couche, placesCouche, placeVide, repartition, atomeModele, charge,
     atp, pi, nad, fad, coa,
   };
 })();
