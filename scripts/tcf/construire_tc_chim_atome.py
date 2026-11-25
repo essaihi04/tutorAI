@@ -106,9 +106,9 @@ D['at_ouverture_cours'] = diapo(
     'les ions et l’élément chimique, et comment ses électrons se rangent en couches. C’est la base de toute la chimie '
     'que tu feras jusqu’au bac. Comment allons-nous travailler ? Tu écoutes bien, tu réponds aux questions au tableau, '
     'et quand le cours s’arrête, tu écris dans ton cahier. Allons-y !',
-    'مرحبا بيك فدرس جديد: Modèle de l’atome. فهاد الدرس غادي نتعلمو كيفاش العلماء اكتشفو l’atome، شنو فيه، كيفاش '
+    'مرحبا بيك فدرس جديد: Modèle de l’atome. فهاد الدرس غادي نتعلمو كيفاش العلماء لقاو l’atome، شنو فيه، كيفاش '
     'نكتبو le noyau ديالو، شحال la masse ديالو و شحال كبير، شنو هما les ions و l’élément chimique، وكيفاش les '
-    'électrons ديالو كيترتبو ف les couches. هادي هي الأساس ديال كاع la chimie اللي غادي تقرا حتى للباك. كيفاش غادي '
+    'électrons ديالو كيتقسمو على les couches. هادي هي الأساس ديال كاع la chimie اللي غادي تقرا حتى للباك. كيفاش غادي '
     'نخدمو؟ تسمع مزيان، تجاوب على الأسئلة فالسبورة، وملي يوقف الدرس، تكتب ف الدفتر ديالك. يلا نبداو!',
     centre=[ce('غادي نتعلمو', 'On apprend : l’atome, son noyau, ses électrons'),
             ce('هادي هي الأساس', 'Pourquoi : la base de toute la chimie'),
@@ -124,9 +124,9 @@ D['at_o1_situation'] = diapo(
     'on voit des petites boules serrées les unes contre les autres. Ce sont les atomes. Toute la matière, le cuivre, '
     'l’eau, l’air et ton corps, est faite d’atomes liés les uns aux autres. Alors voici la question de ce cours : '
     'qu’est-ce qu’un atome, et de quoi est-il fait ?',
-    'شوف هاد la pièce ديال le cuivre. بواحد la loupe، كنكبروها: كنشوفو des grains. كنكبرو كثر، بزاف: كنشوفو '
-    'كويرات صغار لاصقين فبعضياتهم. هادو هما les atomes. كاع la matière، le cuivre، الما، الهوا، وحتى الجسم ديالك، '
-    'مصنوعة من les atomes مربوطين مع بعضياتهم. إذن هادا هو السؤال ديال هاد الدرس: شنو هو l’atome، وشنو فيه؟',
+    'شوف هاد la pièce ديال le cuivre. بواحد la loupe، نشوفوها من قريب: كنشوفو des grains. نقربو كثر، بزاف: كنشوفو '
+    'des petites boules لاصقين فبعضياتهم. هادو هما les atomes. كاع la matière، le cuivre، الما، الهوا، وحتى الجسم ديالك، '
+    'فيها غير les atomes لاصقين مع بعضياتهم. إذن هادا هو السؤال ديال هاد الدرس: شنو هو l’atome، وشنو فيه؟',
     pointage=[rp('هاد la pièce', 'piece'), pu('بواحد la loupe', 'loupe'), pu('كنكبرو كثر', 'atomes'),
               rp('هادو هما les atomes', 'atomes'), pu('هادا هو السؤال', 'questions')],
     centre=[ce('هادو هما les atomes', 'la matière = des atomes')],
@@ -142,8 +142,8 @@ D['at_p1_modele'] = diapo(
     'vu, même avec le meilleur microscope de l’école. Alors les savants imaginent un modèle de l’atome. Quand une nouvelle '
     'expérience ne colle plus avec le modèle, on change le modèle. C’est exactement l’histoire de l’atome.',
     'قبل ما نهضرو على l’atome، واحد الفكرة مهمة: le modèle. هادي هي la Terre، الحقيقية. وهادا le globe: هو modèle '
-    'ديال la Terre، صغير وساهل، ولكن كيعاونا نفهموها. l’atome صغير بزاف، ما كيتشافش، حتى بأحسن microscope ديال '
-    'المدرسة. إذن العلماء كيتخيلو واحد le modèle ديال l’atome. ملي كتجي واحد التجربة جديدة وما كتوافقش مع le '
+    'ديال la Terre، صغير وساهل، ولكن كيعاونا نفهموها. l’atome صغير بزاف، ما يمكنش نشوفوه، حتى بأحسن microscope ديال '
+    'المدرسة. إذن العلماء كيديرو واحد le modèle ديال l’atome. ملي كتجي واحد التجربة جديدة وما كتوافقش مع le '
     'modèle، كنبدلو le modèle. هادي هي بالضبط القصة ديال l’atome.',
     pointage=[pu('هادي هي la Terre', 'terre'), pu('وهادا le globe', 'globe'), rp('وهادا le globe', 'globe'),
               pu('l’atome صغير بزاف', 'atome'), pu('كنبدلو le modèle', 'change')],
@@ -153,11 +153,11 @@ D['at_p1_modele'] = diapo(
     q=question('qcm', 'Pourquoi les savants ont-ils changé plusieurs fois le modèle de l’atome ?',
                ['Parce que l’atome a changé de forme', 'Parce qu’une nouvelle expérience ne collait plus avec l’ancien modèle', 'Parce qu’on a enfin vu l’atome à l’œil nu'],
                1, 'شوف هاد السؤال: علاش العلماء بدلو le modèle ديال l’atome بزاف ديال المرات؟',
-               ('برافو! ملي كتجي تجربة جديدة وما كتوافقش مع le modèle، كنبدلوه.', 'Oui : une nouvelle expérience qui ne colle plus oblige à changer le modèle.'),
+               ('برافو! ملي تجربة جديدة كتبين حاجة أخرى، كنبدلو le modèle.', 'Oui : une nouvelle expérience qui ne colle plus oblige à changer le modèle.'),
                {0: (('لا، l’atome ما تبدلش. اللي تبدل هو الفكرة ديالنا عليه. فكر فالتجارب.', 'Non : l’atome n’a pas changé, c’est notre idée de lui qui change. Pense aux expériences.'),
-                    ('الجواب: تجربة جديدة ما كتوافقش مع le modèle القديم، إذن كنبدلو le modèle.', 'Réponse : une nouvelle expérience ne collait plus, on a changé le modèle.')),
-                2: (('لا، l’atome صغير بزاف، ما كيتشافش بالعين. شنو اللي كيخلينا نبدلو le modèle؟', 'Non : l’atome est bien trop petit pour être vu. Qu’est-ce qui fait changer un modèle ?'),
-                    ('الجواب: تجربة جديدة. l’atome ما كيتشافش، والتجارب هي اللي كتبدل le modèle.', 'Réponse : une nouvelle expérience ; l’atome ne se voit pas, ce sont les expériences qui changent le modèle.'))}))
+                    ('الجواب: تجربة جديدة بينات حاجة أخرى، إذن كنبدلو le modèle.', 'Réponse : une nouvelle expérience ne collait plus, on a changé le modèle.')),
+                2: (('لا، l’atome صغير بزاف، ما يمكنش نشوفوه بالعين. علاش كنبدلو le modèle؟', 'Non : l’atome est bien trop petit pour être vu. Qu’est-ce qui fait changer un modèle ?'),
+                    ('الجواب: تجربة جديدة. ما يمكنش نشوفو l’atome، والتجارب هي اللي كتبدل le modèle.', 'Réponse : une nouvelle expérience ; l’atome ne se voit pas, ce sont les expériences qui changent le modèle.'))}))
 
 D['at_p2_charges'] = diapo(
     'at_p2_charges', 'Rappel : la charge électrique', 'Deux sortes de charges : positive (+) et négative (−).',
@@ -170,8 +170,8 @@ D['at_p2_charges'] = diapo(
     'rapprochent : elles s’attirent. Retiens la règle : même signe, elles se repoussent ; signes contraires, elles '
     's’attirent.',
     'باش نفهمو l’atome، خاصنا اللول نعرفو la charge électrique. كاينين جوج أنواع: la charge positive، كنكتبوها '
-    'plus، و la charge négative، كنكتبوها moins. شوف: deux charges positives كيتباعدو، يعني se repoussent. deux '
-    'charges négatives حتى هوما se repoussent. ولكن واحد positive وواحد négative كيتقربو: s’attirent. حفظ la règle: '
+    'plus، و la charge négative، كنكتبوها moins. شوف: deux charges positives، شوف: se repoussent. deux '
+    'charges négatives حتى هوما se repoussent. ولكن واحد positive وواحد négative: s’attirent. حفظ la règle: '
     'même signe، se repoussent؛ signes contraires، s’attirent.',
     pointage=[pu('deux charges positives', 'plus_plus'), pu('deux charges négatives', 'moins_moins'),
               pu('ولكن واحد positive', 'plus_moins'), pu('حفظ la règle', 'regle'), rp('حفظ la règle', 'regle')],
@@ -190,11 +190,11 @@ D['at_p3_ballon'] = diapo(
     'moins : il est chargé négativement. Les cheveux ont quatre plus et deux moins : ils sont chargés positivement. '
     'Et voilà : plus et moins, ils s’attirent, les cheveux se dressent vers le ballon.',
     'طريقة ثانية باش نشوفو la charge. واحد le ballon والشعر: كل واحد فيه quatre charges plus و quatre charges moins. '
-    'نفس العدد ديال plus و moins: إذن neutres. دابا كنحكو le ballon مع الشعر. deux charges négatives صغار كيدوزو '
+    'نفس العدد ديال plus و moins: إذن neutres. دابا كنضربو le ballon فالشعر بزاف ديال المرات. deux charges négatives صغار كيدوزو '
     'من الشعر ل le ballon: هادو هما les électrons. دابا le ballon فيه quatre plus و six moins: chargé négativement. '
     'والشعر فيه quatre plus و deux moins: chargé positivement. وها هو: plus و moins، s’attirent، والشعر كينوض '
     'نيشان ل le ballon.',
-    pointage=[rp('واحد le ballon', 'ballon'), pu('إذن neutres', 'neutres'), pu('دابا كنحكو', 'frotter'),
+    pointage=[rp('واحد le ballon', 'ballon'), pu('إذن neutres', 'neutres'), pu('دابا كنضربو', 'frotter'),
               pu('دابا le ballon فيه', 'charges'), rp('دابا le ballon فيه', 'ballon'), rp('والشعر فيه', 'cheveux'),
               pu('وها هو', 'attire')],
     centre=[ce('إذن neutres', 'neutre : autant de + que de −'), ce('chargé négativement', 'gagne des électrons → chargé −')],
@@ -241,7 +241,7 @@ D['at_p5_calculs'] = diapo(
     'trois, cinq. Deuxième règle, pour diviser, on retranche les exposants : dix puissance moins dix sur dix puissance '
     'moins quinze, égale dix puissance cinq. Et une dernière chose : vingt fois dix puissance moins vingt-sept, on l’écrit '
     'deux fois dix puissance moins vingt-six. On garde un seul chiffre avant la virgule.',
-    'جوج ديال les règles كافيين. اللولة: dix puissance deux fois dix puissance trois، يعني cent fois mille، cent mille. '
+    'deux règles، وصافي. اللولة: dix puissance deux fois dix puissance trois، يعني cent fois mille، cent mille. '
     'نحسبو les zéros: un، deux، trois، quatre، cinq. إذن dix puissance cinq. كنزيدو les exposants: deux plus trois، '
     'cinq. la règle الثانية، باش نقسمو، كننقصو les exposants: dix puissance moins dix sur dix puissance moins quinze، '
     'égale dix puissance cinq. وحاجة أخيرة: vingt fois dix puissance moins vingt-sept، كنكتبوها deux fois dix '
@@ -274,11 +274,11 @@ D['at_h1_elements'] = diapo(
     'Il y a le feu. Il y a la fumée qui monte : pour eux, c’est l’air. Il y a de la vapeur d’eau : c’est l’eau. Et à la '
     'fin, il reste la cendre : c’est la terre. Alors ils ont pensé que toute la matière est faite de quatre éléments : '
     'la terre, l’eau, le feu et l’air. C’est le tout premier modèle.',
-    'نبداو القصة، من زمان بزاف، عند les Grecs. كانو كيشوفو واحد الحطبة كتشعل. كاين le feu. كاينة '
+    'نبداو القصة، من زمان بزاف، عند les Grecs. كانو كيشوفو واحد العود فالعافية. كاين le feu. كاينة '
     'la fumée كتطلع: بالنسبة ليهم، هادي هي l’air. كاين la vapeur d’eau: هادي هي l’eau. وفالأخير، كتبقى la cendre: '
     'هادي هي la terre. إذن قالو بلي كاع la matière مصنوعة من quatre éléments: la terre، l’eau، le feu و l’air. هادا '
     'هو أول modèle.',
-    pointage=[rp('واحد الحطبة', 'bois'), pu('كاين le feu', 'feu'), pu('كاينة la fumée', 'fumee'),
+    pointage=[rp('واحد العود', 'bois'), pu('كاين le feu', 'feu'), pu('كاينة la fumée', 'fumee'),
               pu('كاين la vapeur', 'vapeur'), pu('كتبقى la cendre', 'cendre'), pu('quatre éléments', 'quatre'),
               rp('quatre éléments', 'quatre')],
     centre=[ce('quatre éléments', 'terre · eau · feu · air')],
@@ -313,7 +313,7 @@ D['at_h3_thomson'] = diapo(
     'ف mille huit cent quatre-vingt-dix-sept، العالم Thomson دار واحد التجربة فواحد le tube ديال الزاج. كيخرجو des '
     'particules صغار من واحد la plaque. شوف: كيمشيو نيشان ل la plaque positive. تفكر la règle: signes contraires، '
     's’attirent. إذن هاد les particules négatives: هادو هما les électrons. إذن la sphère pleine ديال Dalton ما بقاتش '
-    'كافية. Thomson عطا modèle جديد: واحد الكورة ديال matière positive، و les électrons داخلها، بحال الزبيب فالخبز. '
+    'كافية. Thomson عطا modèle جديد: واحد الكورة ديال matière positive، و les électrons فيها، بحال الزبيب فالخبز. '
     'كنسميوه le pain aux raisins.',
     pointage=[pu('واحد le tube', 'tube'), rp('واحد le tube', 'tube'), pu('شوف: كيمشيو', 'devie'), rp('شوف: كيمشيو', 'devie'),
               pu('هادو هما les électrons', 'electron'), pu('واحد الكورة', 'pain'), rp('واحد الكورة', 'pain'),
@@ -327,8 +327,8 @@ D['at_h3_thomson'] = diapo(
                ('برافو! les électrons négatifs، داخل واحد الكورة ديال matière positive، بحال الزبيب فالخبز.', 'Oui : des particules négatives dans une boule de matière positive, comme des raisins dans un pain.'),
                {0: (('لا، هادا هو le modèle ديال Dalton. Thomson لقى des particules عندهم charge.', 'Non : ça, c’est le modèle de Dalton. Thomson a trouvé des particules chargées.'),
                     ('الجواب: les électrons négatifs، داخل matière positive. des sphères pleines هادا Dalton.', 'Réponse : des électrons négatifs dans une matière positive ; les sphères pleines, c’est Dalton.')),
-                1: (('لا. les électrons كيمشيو ل la plaque positive: شنو هي la charge ديالهم؟', 'Non : les électrons vont vers la plaque + ; quelle est donc leur charge ?'),
-                    ('signes contraires كيتجادبو: les électrons négatifs، داخل matière positive.', 'Signes contraires s’attirent : les électrons sont négatifs, dans une matière positive.'))}))
+                1: (('لا. les électrons كيمشيو للجيهة ديال la plaque positive: شنو هي la charge ديالهم؟', 'Non : les électrons vont vers la plaque + ; quelle est donc leur charge ?'),
+                    ('signes contraires، s’attirent: les électrons négatifs، داخل matière positive.', 'Signes contraires s’attirent : les électrons sont négatifs, dans une matière positive.'))}))
 
 D['at_h4_montage'] = diapo(
     'at_h4_montage', 'L’expérience de Rutherford : le montage', 'Des particules α (chargées +) envoyées sur une feuille d’or très mince.',
@@ -339,9 +339,9 @@ D['at_h4_montage'] = diapo(
     'À gauche, une boîte de plomb : elle envoie des particules alpha, toutes petites, chargées positivement. Au centre, '
     'une feuille d’or très très mince. Tout autour, un écran fluorescent : quand une particule le touche, il fait un petit '
     'éclair. Comme ça, on voit où chaque particule arrive.',
-    'تقريبا ف mille neuf cent dix، العالم Rutherford بغا يتأكد من le modèle ديال Thomson. شوف le montage، من الفوق. '
+    'تقريبا ف mille neuf cent dix، العالم Rutherford بغا يتحقق من le modèle ديال Thomson. شوف le montage، من الفوق. '
     'على اليسر، واحد la boîte ديال le plomb: كتصيفط des particules alpha، صغار بزاف، chargées positivement. فالوسط، '
-    'واحد la feuille d’or رقيقة بزاف. وداير بيها، واحد l’écran fluorescent: ملي كتقيسو شي particule، كيدير واحد '
+    'واحد la feuille d’or رقيقة بزاف. وداير بيها، واحد l’écran fluorescent: ملي كتوصل ليه شي particule، كيدير واحد '
     'éclair صغير. هكا كنشوفو فين كتوصل كل particule.',
     pointage=[pu('على اليسر', 'source'), rp('على اليسر', 'source'), pu('كتصيفط des particules alpha', 'faisceau'),
               pu('فالوسط', 'feuille'), rp('فالوسط', 'feuille'), pu('وداير بيها', 'ecran'), rp('وداير بيها', 'ecran'),
@@ -359,23 +359,23 @@ D['at_h5_resultats'] = diapo(
     'déviées. Quelques-unes sont déviées sur le côté. Et une très rare revient en arrière, comme une balle qui rebondit '
     'sur un mur. Rutherford a été très surpris : avec le pain aux raisins, toutes devaient passer.',
     'دابا كنضربو بزاف ديال les particules alpha على la feuille d’or، وكنشوفو les éclairs على l’écran. شوف مزيان '
-    'فين كيوصلو. تقريبا كاع les particules كيدوزو نيشان، من وسط la feuille، بلا ما يتعوجو. شي وحدين كيتعوجو على '
-    'الجنب. وواحدة نادرة بزاف كترجع اللور، بحال كورة كتضرب فالحيط. Rutherford تفاجأ بزاف: مع le pain aux raisins، '
+    'فين كيوصلو. تقريبا كاع les particules كيدوزو نيشان، من وسط la feuille، بلا ما يبدلو الطريق. شي وحدين كيتعوجو على '
+    'الجنب. وواحدة قليلة بزاف كترجع اللور، بحال كورة كتضرب فالحيط. Rutherford ما فهمش: مع le pain aux raisins، '
     'كاملين كان خاصهم يدوزو.',
     demarrer='reset',
     pointage=[pu('دابا كنضربو', 'tir'), pu('تقريبا كاع les particules', 'traversent'), pu('شي وحدين كيتعوجو', 'deviees'),
-              rp('شي وحدين كيتعوجو', 'deviees'), pu('وواحدة نادرة', 'rebondit'), rp('وواحدة نادرة', 'rebondit'),
-              pu('Rutherford تفاجأ', 'bilan')],
+              rp('شي وحدين كيتعوجو', 'deviees'), pu('وواحدة قليلة', 'rebondit'), rp('وواحدة قليلة', 'rebondit'),
+              pu('Rutherford ما فهمش', 'bilan')],
     centre=[ce('كيدوزو نيشان', 'la plupart : tout droit'), ce('كترجع اللور', 'très rares : retour')],
     observation=obs('شوف مزيان فين كيوصلو.', 'Où arrivent presque toutes les particules α ?',
                     'فين كيوصلو تقريبا كاع les particules alpha؟',
                     [('Regarde les éclairs les plus nombreux sur l’écran.', 'شوف فين كاينين بزاف ديال les éclairs.', 'traversent'),
                      ('Sont-ils derrière la feuille, ou du côté de la source ?', 'واش من ور la feuille، ولا من جيهة la boîte؟', None)],
                     ['Elles reviennent toutes en arrière', 'Presque toutes passent tout droit à travers la feuille', 'Elles restent toutes collées à la feuille'], 1,
-                    [('لا، غير واحدة نادرة بزاف اللي رجعات. شوف فين كاينين كثر ديال les éclairs.', 'Non : une seule, très rare, revient. Regarde où sont la plupart des éclairs.'),
+                    [('لا، غير واحدة قليلة بزاف اللي رجعات. شوف فين كاينين كثر ديال les éclairs.', 'Non : une seule, très rare, revient. Regarde où sont la plupart des éclairs.'),
                      ('برافو! تقريبا كاملين دازو نيشان من وسط la feuille.', 'Oui : presque toutes traversent la feuille tout droit.'),
                      ('لا، les éclairs كاينين على l’écran، ماشي على la feuille. فين كاينين كثرهم؟', 'Non : les éclairs sont sur l’écran, pas sur la feuille. Où sont-ils surtout ?')],
-                    ('الجواب: تقريبا كاع les particules دازو نيشان من وسط la feuille، بلا ما يتعوجو.', 'Presque toutes les particules α traversent la feuille tout droit, sans déviation.'),
+                    ('الجواب: تقريبا كاع les particules دازو نيشان من وسط la feuille، بلا ما يبدلو الطريق.', 'Presque toutes les particules α traversent la feuille tout droit, sans déviation.'),
                     gestes=[pu('', 'traversent') | {}, {'repere': 'traversent'}], sim_avant={'conclusions': False}, sim_apres={'conclusions': True}),
     cahier='La plupart des α traversent la feuille d’or sans déviation ; quelques-unes sont déviées ; très rares reviennent.',
     comps=['C1'])
@@ -391,10 +391,10 @@ D['at_h6_interpretation'] = diapo(
     'loin des noyaux ne rencontre rien : elle passe tout droit. Une particule qui passe près d’un noyau : plus et plus, '
     'ils se repoussent, elle est déviée. Et une particule qui arrive droit sur un noyau revient en arrière. Conclusion : '
     'l’atome est surtout du vide, avec au centre un noyau très petit et positif.',
-    'كيفاش نفسرو هادشي؟ نكبرو la feuille d’or: مصنوعة من des atomes. Rutherford تخيل كل atome بحال واحد البلاصة '
+    'كيفاش نفسرو هادشي؟ نكبرو la feuille d’or: فيها des atomes. Rutherford تخيل كل atome بحال واحد البلاصة '
     'كبيرة تقريبا خاوية، وفالوسط واحد le noyau صغير بزاف، chargé positivement. particule alpha اللي كدوز بعيدة على les '
     'noyaux ما كتلقى والو: كدوز نيشان. particule اللي كدوز قريبة من شي noyau: plus و plus، se repoussent، '
-    'كتتعوج. و particule اللي جاية نيشان على le noyau كترجع اللور. la conclusion: l’atome فيه غير الخوا تقريبا، '
+    'كتبدل الطريق. و particule اللي جاية نيشان على le noyau كترجع اللور. la conclusion: l’atome فيه غير الخوا تقريبا، '
     'وفالوسط واحد le noyau صغير بزاف و positif.',
     pointage=[pu('نكبرو la feuille', 'zoom'), rp('نكبرو la feuille', 'zoom'), pu('اللي كدوز بعيدة', 'vide'), rp('اللي كدوز بعيدة', 'vide'),
               pu('اللي كدوز قريبة', 'devie'), rp('اللي كدوز قريبة', 'devie'), pu('اللي جاية نيشان', 'rebond'), rp('اللي جاية نيشان', 'rebond'),
@@ -404,9 +404,9 @@ D['at_h6_interpretation'] = diapo(
     comps=['C1'],
     q=question('qcm', 'Pourquoi la plupart des particules α traversent-elles la feuille d’or sans être déviées ?',
                ['Parce que la feuille d’or est trouée', 'Parce que l’atome est surtout du vide', 'Parce que les particules α n’ont pas de charge'], 1,
-               'شوف هاد السؤال: علاش تقريبا كاع les particules alpha كيدوزو من la feuille d’or بلا ما يتعوجو؟',
+               'شوف هاد السؤال: علاش تقريبا كاع les particules alpha كيدوزو من la feuille d’or بلا ما يبدلو الطريق؟',
                ('برافو! l’atome فيه غير الخوا تقريبا، و le noyau صغير بزاف: ما كتلقى والو.', 'Oui : l’atome est surtout du vide ; le noyau est minuscule, la particule ne rencontre rien.'),
-               {0: (('لا، la feuille ما فيهاش ثقوب كبار. فكر فشنو كاين داخل l’atome.', 'Non : la feuille n’a pas de trous. Pense à ce qu’il y a dans l’atome.'),
+               {0: (('لا، la feuille ماشي مثقوبة. فكر فشنو كاين داخل l’atome.', 'Non : la feuille n’a pas de trous. Pense à ce qu’il y a dans l’atome.'),
                     ('الجواب: l’atome فيه غير الخوا تقريبا، داكشي علاش كيدوزو.', 'Réponse : l’atome est surtout du vide ; c’est pour ça qu’elles passent.')),
                 2: (('لا، les particules alpha chargées positivement. شنو كاين داخل l’atome؟', 'Non : les particules α sont chargées + . Qu’y a-t-il dans l’atome ?'),
                     ('الجواب: l’atome فيه غير الخوا تقريبا؛ les particules alpha عندهم charge plus.', 'Réponse : l’atome est surtout du vide ; les α sont bien chargées +.'))}))
@@ -419,7 +419,7 @@ D['at_h7_bohr'] = diapo(
     'Après Rutherford, le savant Bohr, en mille neuf cent treize, précise le modèle. Au centre, le noyau. Autour, des '
     'orbites, des cercles de rayon bien défini. Et les électrons tournent sur ces orbites. C’est comme les planètes qui '
     'tournent autour du Soleil : le noyau joue le rôle du Soleil, les électrons sont les planètes.',
-    'من بعد Rutherford، العالم Bohr، ف mille neuf cent treize، زاد وضح le modèle. فالوسط، le noyau. ودايرين بيه، des '
+    'من بعد Rutherford، العالم Bohr، ف mille neuf cent treize، زاد شرح le modèle. فالوسط، le noyau. ودايرين بيه، des '
     'orbites، يعني دوائر عندهم rayon محدد. و les électrons كيدورو على هاد les orbites. بحال les planètes اللي كيدورو '
     'على الشمس: le noyau هو الشمس، و les électrons هما les planètes.',
     pointage=[pu('فالوسط، le noyau', 'noyau'), rp('فالوسط، le noyau', 'noyau'), pu('des orbites', 'orbites'), rp('des orbites', 'orbites'),
@@ -437,10 +437,10 @@ D['at_h8_nuage'] = diapo(
     'c’est le nuage électronique. Voici toute l’histoire en une frise : les quatre éléments, Dalton, Thomson, Rutherford, '
     'Bohr, et le nuage d’aujourd’hui. Chaque modèle a changé à cause d’une nouvelle expérience.',
     'ف mille neuf cent vingt-six، العلماء Schrödinger و De Broglie بينو بلي ما يمكنش نعرفو بالضبط فين كاين l’électron. '
-    'إذن les orbites كيتمسحو. l’électron كاين شي بلاصة فواحد السحابة دايرة ب le noyau: هادا هو le nuage '
+    'إذن les orbites كيمشيو. l’électron كاين شي بلاصة ف le nuage داير ب le noyau: هادا هو le nuage '
     'électronique. هادي هي القصة كاملة فواحد la frise: les quatre éléments، Dalton، Thomson، Rutherford، Bohr، و le '
     'nuage ديال اليوم. كل modèle تبدل بسبب واحد التجربة جديدة.',
-    pointage=[pu('les orbites كيتمسحو', 'flou'), pu('هادا هو le nuage', 'nuage'), rp('هادا هو le nuage', 'nuage'),
+    pointage=[pu('les orbites كيمشيو', 'flou'), pu('هادا هو le nuage', 'nuage'), rp('هادا هو le nuage', 'nuage'),
               pu('هادي هي القصة', 'frise'), rp('les quatre éléments، Dalton', 'modele_1'), pu('و le nuage ديال اليوم', 'frise_fin'),
               rp('كل modèle تبدل', 'frise')],
     centre=[ce('هادا هو le nuage', 'aujourd’hui : le nuage électronique')],
@@ -463,11 +463,11 @@ D['at_s1_atome'] = diapo(
     'les électrons, qui bougent tout le temps : ils sont chargés négativement. Et au centre, tout petit, le noyau : '
     'il est chargé positivement. Agrandissons-le dans la loupe : il est fait de petites billes. Retiens : un noyau '
     'positif au centre, entouré d’un nuage d’électrons négatifs.',
-    'هادا هو l’atome كيفما كنشوفوه اليوم، هنا l’atome ديال le carbone. اللول، le nuage électronique. داخلو، les '
+    'هادا هو l’atome كيفما كنعرفوه اليوم، هنا l’atome ديال le carbone. اللول، le nuage électronique. فيه les '
     'électrons، اللي كيتحركو ديما: chargés négativement. وفالوسط، صغير بزاف، le noyau: chargé positivement. نكبروه '
     'ف la loupe: مصنوع من كويرات صغار. حفظ: noyau positif فالوسط، داير بيه nuage ديال les électrons négatifs.',
-    pointage=[pu('اللول، le nuage', 'nuage'), rp('اللول، le nuage', 'nuage'), pu('داخلو، les', 'electrons'), rp('داخلو، les', 'electrons'),
-              pu('نكبروه', 'noyau'), rp('نكبروه', 'noyau'), pu('حفظ: noyau positif', 'vide')],
+    pointage=[pu('اللول، le nuage', 'nuage'), rp('اللول، le nuage', 'nuage'), pu('فيه les', 'electrons'), rp('فيه les', 'electrons'),
+              pu('نشوفوه من قريب', 'noyau'), rp('نشوفوه من قريب', 'noyau'), pu('حفظ: noyau positif', 'vide')],
     centre=[ce('حفظ: noyau positif', 'atome = noyau (+) + nuage d’électrons (−)')],
     cahier='II. Les constituants de l’atome', comps=['C2'])
 
@@ -480,7 +480,7 @@ D['at_s2_electron'] = diapo(
     'virgule six fois dix puissance moins dix-neuf coulomb. Le coulomb, noté C, c’est l’unité de la charge électrique. '
     'Et sa masse est très très petite : m e égale neuf virgule un fois dix puissance moins trente et un kilogramme.',
     'نشوفو l’électron من قريب. la charge ديالو هي q égale moins e. le petit e، هي la charge élémentaire: e égale un '
-    'virgule six fois dix puissance moins dix-neuf coulomb. le coulomb، كنكتبوه C، هو l’unité ديال la charge '
+    'virgule six fois dix puissance moins dix-neuf coulomb. le coulomb، رمزو C، هو l’unité ديال la charge '
     'électrique. و la masse ديالو صغيرة بزاف: m e égale neuf virgule un fois dix puissance moins trente et un kilogramme.',
     pointage=[pu('نشوفو l’électron', 'electron'), rp('نشوفو l’électron', 'electron'), pu('q égale moins e', 'charge'),
               pu('le petit e', 'e'), pu('و la masse ديالو', 'masse')],
@@ -497,22 +497,22 @@ D['at_s3_noyau'] = diapo(
     'sept trois fois dix puissance moins vingt-sept kilogramme. Les autres billes sont les neutrons : un, deux, trois, '
     'quatre, cinq, six. Le neutron est neutre, sa charge est nulle, et sa masse est presque la même que celle du proton. '
     'Les protons et les neutrons ensemble s’appellent les nucléons.',
-    'ندخلو ل le noyau ديال l’atome ديال le carbone. فيه جوج أنواع ديال الكويرات. les protons اللول: نحسبوهم. un، '
+    'ندخلو ل le noyau ديال l’atome ديال le carbone. فيه deux sortes ديال les boules. les protons اللول: نحسبوهم. un، '
     'deux، trois، quatre، cinq، six: six protons. كل proton عندو la charge plus e، و la masse ديالو un virgule six sept '
-    'trois fois dix puissance moins vingt-sept kilogramme. الكويرات الأخرين هما les neutrons: un، deux، trois، quatre، '
+    'trois fois dix puissance moins vingt-sept kilogramme. les boules الأخرى هما les neutrons: un، deux، trois، quatre، '
     'cinq، six. le neutron neutre، la charge ديالو nulle، و la masse ديالو تقريبا بحال ديال le proton. les protons و '
     'les neutrons مع بعض كنسميوهم les nucléons.',
     pointage=[rp('ندخلو ل le noyau', 'noyau'), pu('نحسبوهم', 'protons'), rp('six protons', 'protons'),
-              pu('الكويرات الأخرين', 'neutrons'), rp('le neutron neutre', 'neutrons'), pu('مع بعض كنسميوهم', 'nucleons'), rp('مع بعض كنسميوهم', 'nucleons')],
+              pu('les boules الأخرى', 'neutrons'), rp('le neutron neutre', 'neutrons'), pu('مع بعض كنسميوهم', 'nucleons'), rp('مع بعض كنسميوهم', 'nucleons')],
     centre=[ce('la charge plus e', 'proton : +e'), ce('nulle', 'neutron : 0'), ce('les nucléons', 'nucléons = protons + neutrons')],
     cahier='| Particule | Charge | Masse |\n| électron | −e | 9,1 × 10⁻³¹ kg |\n| proton | +e | 1,673 × 10⁻²⁷ kg |\n| neutron | 0 | 1,675 × 10⁻²⁷ kg |',
     comps=['C2'],
     q=question('qcm', 'Le noyau d’un atome est formé…', ['de protons et d’électrons', 'de protons et de neutrons', 'd’électrons et de neutrons'], 1,
-               'شوف هاد السؤال: le noyau ديال l’atome، من شنو مصنوع؟',
+               'شوف هاد السؤال: le noyau ديال l’atome، شنو فيه؟',
                ('برافو! le noyau فيه les protons و les neutrons، يعني les nucléons.', 'Oui : le noyau est formé de protons et de neutrons, les nucléons.'),
                {0: (('لا. les électrons ماشي فوسط le noyau. فين كاينين؟', 'Non : les électrons ne sont pas dans le noyau. Où sont-ils ?'),
                     ('les électrons كاينين ف le nuage. le noyau فيه les protons و les neutrons.', 'Les électrons sont dans le nuage ; le noyau contient protons et neutrons.')),
-                2: (('لا. les électrons ف le nuage، ماشي ف le noyau. شنو هما الكويرات positives ديال le noyau؟', 'Non : les électrons sont dans le nuage. Comment s’appellent les billes + du noyau ?'),
+                2: (('لا. les électrons ف le nuage، ماشي ف le noyau. شنو هما les boules positives ديال le noyau؟', 'Non : les électrons sont dans le nuage. Comment s’appellent les billes + du noyau ?'),
                     ('le noyau فيه les protons، chargés plus، و les neutrons. les électrons داير بيه.', 'Le noyau contient les protons (+) et les neutrons ; les électrons sont autour.'))}))
 
 D['at_s4_notation'] = diapo(
@@ -631,13 +631,13 @@ D['at_m1_masse'] = diapo(
     'comme mille huit cent quarante électrons ! Alors on néglige les électrons. Et comme m p est presque égale à m n, '
     'chaque nucléon pèse environ m p : m environ égale A fois m p. La masse de l’atome est dans son noyau.',
     'شحال la masse ديال l’atome؟ كنجمعو كلشي: la masse ديال Z protons، plus ديال N neutrons، plus ديال Z électrons. '
-    'ولكن شوف la balance. كنحطو واحد le proton: كتميل. من الجيهة الأخرى، كنحطو واحد l’électron: تقريبا ما '
-    'كتتحركش. نحسبو le rapport: m p sur m e، تقريبا mille huit cent quarante. واحد le proton وزنو بحال mille huit cent '
-    'quarante électrons! إذن كنهملو les électrons. وحيت m p تقريبا égale m n، كل nucléon وزنو تقريبا m p: m environ '
+    'ولكن شوف la balance. كنحطو واحد le proton: كتهبط. من الجيهة الأخرى، كنحطو واحد l’électron: تقريبا ما '
+    'كتتحركش. نحسبو le rapport: m p sur m e، تقريبا mille huit cent quarante. واحد le proton تقيل بحال mille huit cent '
+    'quarante électrons! إذن ما كنحسبوش les électrons، كنقولو négligeables. وحيت m p تقريبا égale m n، كل nucléon عندو تقريبا m p: m environ '
     'égale A fois m p. la masse ديال l’atome كاينة ف le noyau ديالو.',
     pointage=[pu('كنجمعو كلشي', 'formule'), rp('كنجمعو كلشي', 'formule'), rp('ولكن شوف la balance', 'balance'),
               pu('كنحطو واحد le proton', 'proton'), pu('كنحطو واحد l’électron', 'electron'), pu('نحسبو le rapport', 'rapport'),
-              rp('نحسبو le rapport', 'rapport'), pu('إذن كنهملو', 'neglige'), pu('وحيت m p', 'approx'), rp('A fois m p', 'approx')],
+              rp('نحسبو le rapport', 'rapport'), pu('إذن ما كنحسبوش', 'neglige'), pu('وحيت m p', 'approx'), rp('A fois m p', 'approx')],
     centre=[ce('كنجمعو كلشي', 'm = Z·m_p + N·m_n + Z·m_e'), ce('mille huit cent quarante électrons', 'm_p ≈ 1 840 × m_e'), ce('A fois m p', 'm ≈ A·m_p')],
     cahier='III. La masse et les dimensions de l’atome\nFormule : m ≈ A·m_p (m_p ≈ 1,67 × 10⁻²⁷ kg) : la masse de l’atome est dans le noyau.',
     comps=['C4'])
@@ -688,7 +688,7 @@ D['at_m3_toi'] = diapo(
                ('برافو! m environ égale douze fois un virgule six sept fois dix puissance moins vingt-sept، يعني تقريبا deux fois dix puissance moins vingt-six kilogramme.', 'Oui : m ≈ 12 × 1,67 × 10⁻²⁷ ≈ 2,0 × 10⁻²⁶ kg.'),
                {0: (('هادي ضربتي ف Z، six. la relation فيها A، le nombre de nucléons.', 'Tu as multiplié par Z = 6 ; la relation utilise A, le nombre de nucléons.'),
                     ('A égale douze، ماشي six: douze fois un virgule six sept كيعطي vingt virgule zéro quatre، يعني deux fois dix puissance moins vingt-six.', 'A = 12, pas 6 : 12 × 1,67 = 20,04 → 2,0 × 10⁻²⁶ kg.')),
-                2: (('الحساب قريب، ولكن شوف la puissance de dix ملي كتنقل la virgule.', 'Le calcul est proche, mais regarde la puissance de dix quand tu déplaces la virgule.'),
+                2: (('الحساب قريب، ولكن شوف la puissance de dix ملي كتحرك la virgule.', 'Le calcul est proche, mais regarde la puissance de dix quand tu déplaces la virgule.'),
                     ('vingt fois dix puissance moins vingt-sept كيساوي deux fois dix puissance moins vingt-six، ماشي moins vingt-sept.', '20 × 10⁻²⁷ = 2,0 × 10⁻²⁶ kg, pas 10⁻²⁷.'))},
                demo=('les données: A égale douze، m p environ égale un virgule six sept fois dix puissance moins vingt-sept kilogramme. '
                      'la relation: m environ égale A fois m p. l’application: m environ égale douze fois un virgule six sept fois dix puissance moins vingt-sept. '
@@ -712,7 +712,7 @@ D['at_d1_rapport'] = diapo(
     'puissance moins quinze، كننقصو les exposants، dix puissance cinq. le noyau صغير ب cent mille مرة من l’atome! '
     'بيناتهم كاين الخوا: كنقولو بلي l’atome عندو structure lacunaire.',
     pointage=[pu('le rayon ديالو تقريبا dix puissance moins dix', 'atome'), rp('le rayon ديالو تقريبا dix puissance moins dix', 'atome'),
-              pu('نكبروه', 'noyau'), rp('نكبروه', 'noyau'), pu('نحسبو le rapport', 'rapport'), rp('نحسبو le rapport', 'rapport'),
+              pu('نشوفوه من قريب', 'noyau'), rp('نشوفوه من قريب', 'noyau'), pu('نحسبو le rapport', 'rapport'), rp('نحسبو le rapport', 'rapport'),
               pu('بيناتهم كاين الخوا', 'vide'), rp('بيناتهم كاين الخوا', 'vide')],
     centre=[ce('dix puissance cinq', 'r_atome/r_noyau = 10⁵')],
     cahier='Formule : r_atome ≈ 10⁻¹⁰ m ; r_noyau ≈ 10⁻¹⁵ m ; r_atome/r_noyau = 10⁵\nDonc l’atome est surtout du vide : structure lacunaire.',
@@ -727,11 +727,11 @@ D['at_d2_stade'] = diapo(
     'fois plus grand : un millimètre fois dix puissance cinq, ça fait cent mètres. Reculons : la bille est au centre '
     'd’un stade de foot ! Les électrons seraient tout là-bas, sur les tribunes. Et entre la bille et les tribunes, du '
     'vide, rien que du vide.',
-    'طريقة ثانية باش نشوفو هاد الخوا. تخيل بلي le noyau واحد البيلة صغيرة ديال un millimètre. l’atome كبر منها ب cent '
+    'طريقة ثانية باش نشوفو هاد الخوا. تخيل بلي le noyau واحد الكورة صغيورة ديال un millimètre. l’atome كبر منها ب cent '
     'mille مرة: un millimètre fois dix puissance cinq، كيعطي cent mètres. نرجعو اللور: البيلة فالوسط ديال واحد '
-    'الملعب ديال الكورة! les électrons غادي يكونو بعاد، فوق les tribunes. وبين البيلة و les tribunes، الخوا، غير الخوا.',
+    'الملعب ديال الكورة! les électrons غادي يكونو بعاد، فوق les tribunes. وبين الكورة و les tribunes، الخوا، غير الخوا.',
     pointage=[pu('تخيل بلي le noyau', 'bille'), rp('تخيل بلي le noyau', 'bille'), pu('un millimètre fois', 'fois'),
-              pu('نرجعو اللور', 'stade'), rp('نرجعو اللور', 'stade'), pu('les électrons غادي يكونو', 'electrons'), pu('وبين البيلة', 'vide')],
+              pu('نرجعو اللور', 'stade'), rp('نرجعو اللور', 'stade'), pu('les électrons غادي يكونو', 'electrons'), pu('وبين الكورة', 'vide')],
     centre=[ce('كيعطي cent mètres', '1 mm × 10⁵ = 100 m')],
     comps=['C5'],
     q=question('qcm', 'Le rayon d’un atome est environ … fois plus grand que celui de son noyau.', ['10²', '10⁵', '10¹⁵'], 1,
@@ -760,7 +760,7 @@ D['at_e1_isotopes'] = diapo(
     'même Z, mais A différent.',
     'هادو trois noyaux ديال le carbone: carbone douze، carbone treize و carbone quatorze. نحسبو les protons ديالهم: كل '
     'واحد فيه six. نفس Z، égale six: كاملين atomes ديال le carbone. دابا les neutrons: six فاللول، sept فالثاني، huit '
-    'فالثالث. ما عندهمش نفس A. كنقولو بلي هادو des isotopes: même Z، ولكن A différent.',
+    'فالثالث. A ماشي بحال بحال. كنقولو بلي هادو des isotopes: même Z، ولكن A différent.',
     pointage=[pu('carbone douze', 'c12'), pu('carbone treize', 'c13'), pu('carbone quatorze', 'c14'),
               pu('نحسبو les protons', 'protons'), pu('دابا les neutrons', 'neutrons'), pu('كنقولو بلي هادو des isotopes', 'definition'),
               rp('كنقولو بلي هادو des isotopes', 'definition')],
@@ -842,7 +842,7 @@ D['at_e4_conservation'] = diapo(
     'تجربة. فهاد le bécher، واحد la solution ديال le sulfate de cuivre: زرقا، بسبب les ions cuivre، Cu deux plus. '
     'ب le compte-gouttes، كنزيدو la soude، اللي فيها les ions hydroxyde، H O moins. شوف مزيان شنو كيوقع ف le bécher. '
     'كيتكون واحد le précipité زرق وكيطيح للتحت: هادا هو l’hydroxyde de cuivre. les ions cuivre خرجو من la solution، '
-    'ولكن le cuivre ما تمشاش: كاين ف le précipité. l’élément cuivre كيبقى، كنقولو se conserve.',
+    'ولكن le cuivre ما مشاش: كاين ف le précipité. l’élément cuivre كيبقى، كنقولو se conserve.',
     pointage=[pu('فهاد le bécher', 'becher'), rp('فهاد le bécher', 'becher'), pu('ب le compte-gouttes', 'soude'),
               pu('كيتكون واحد le précipité', 'precipite'), rp('كيتكون واحد le précipité', 'precipite'), pu('les ions cuivre خرجو', 'cuivre'),
               pu('l’élément cuivre كيبقى', 'conserve')],
@@ -873,7 +873,7 @@ D['at_c1_couches'] = diapo(
     'les électrons ماشي مرتبين كيفما جا: كاينين على des couches داير بيهم le noyau. la couche اللولة سميتها K: نحسبو '
     'les places ديالها، une، deux. la couche K كتاخد deux électrons على الأكثر. la couche الثانية، L: un، deux، حتى huit '
     'places. الثالثة، M: huit places حتى هي، ل les atomes ديال هاد الدرس. la règle اللولة: la couche فيها عدد محدود '
-    'ديال les électrons. la règle الثانية: كنعمرو K اللول، من بعد L، من بعد M.',
+    'ديال les électrons. la règle الثانية: كنحطو les électrons ف K اللول، من بعد L، من بعد M.',
     pointage=[rp('داير بيهم le noyau', 'noyau'), pu('la couche اللولة', 'k'), rp('la couche K كتاخد', 'k'), pu('la couche الثانية', 'l'),
               rp('la couche الثانية', 'l'), pu('الثالثة، M', 'm'), rp('الثالثة، M', 'm'), pu('la règle اللولة', 'regle1'), pu('la règle الثانية', 'regle2')],
     centre=[ce('deux électrons على الأكثر', 'K : 2 · L : 8 · M : 8'), ce('la règle الثانية', 'on remplit K, puis L, puis M')],
@@ -918,7 +918,7 @@ D['at_c3_toi'] = diapo(
     'Les couches du chlore', 'Les dix-sept électrons attendent ; ils tombent après ta réponse',
     'À toi, avec l’atome de chlore. Z égale dix-sept. Voici ses électrons, qui attendent d’être placés. Fais les étapes '
     'dans ta tête : combien d’électrons, puis K, puis L, puis M. Ensuite choisis la bonne structure au tableau.',
-    'دابا نتا، مع l’atome ديال le chlore. Z égale dix-sept. هادو هما les électrons ديالو، كيتسناو نحطوهم. دير les '
+    'دابا نتا، مع l’atome ديال le chlore. Z égale dix-sept. هادو هما les électrons ديالو، خاصنا نحطوهم. دير les '
     'étapes فراسك: شحال من électron، من بعد K، من بعد L، من بعد M. ومن بعد ختار la structure الصحيحة فالسبورة.',
     demarrer='reset',
     pointage=[pu('هادو هما les électrons', 'compte'), rp('هادو هما les électrons', 'electrons')],
@@ -931,7 +931,7 @@ D['at_c3_toi'] = diapo(
     q=question('qcm', 'La structure électronique de l’atome de chlore (Z = 17) est…', ['(K)²(L)⁸(M)⁷', '(K)²(L)⁷(M)⁸', '(K)⁸(L)⁸(M)¹'], 0,
                'شوف هاد السؤال: شنو هي la structure électronique ديال l’atome ديال le chlore، Z égale dix-sept؟',
                ('برافو! K deux، L huit، M sept. la couche externe هي M، فيها sept électrons.', 'Oui : (K)²(L)⁸(M)⁷ ; couche externe M, 7 électrons.'),
-               {1: (('L كتاخد huit، ماشي sept. عمر L كاملة عاد دوز ل M.', 'L prend 8 électrons : remplis-la entièrement avant M.'),
+               {1: (('L كتاخد huit، ماشي sept. L خاصها تكون عامرة قبل M.', 'L prend 8 électrons : remplis-la entièrement avant M.'),
                     ('K deux، L huit، والباقي sept ف M: K deux، L huit، M sept.', 'K : 2, L : 8, et les 7 restants dans M : (K)²(L)⁸(M)⁷.')),
                 2: (('K كتاخد غير deux électrons على الأكثر.', 'K ne prend que 2 électrons au plus.'),
                     ('K deux، L huit، M sept: dix-sept électrons.', '(K)²(L)⁸(M)⁷ : 2 + 8 + 7 = 17.'))},
@@ -949,10 +949,10 @@ D['at_c4_ion'] = diapo(
     'il en a perdu un. Onze moins un, dix électrons. Comptons-les : un, deux, jusqu’à dix. On remplit : K deux, saturée. '
     'L huit, saturée aussi. La structure de Na plus : K deux, L huit. Sa couche externe, L, est saturée.',
     'و ل l’ion؟ الفرق الوحيد هو le nombre ديال les électrons. l’ion sodium Na plus: l’atome فيه onze électrons، خسر '
-    'واحد. onze moins un، dix électrons. نحسبوهم: un، deux، حتى dix. كنعمرو: K deux، saturée. L huit، saturée حتى '
+    'واحد. onze moins un، dix électrons. نحسبوهم: un، deux، حتى dix. كنحطو: K deux، saturée. L huit، saturée حتى '
     'هي. la structure ديال Na plus: K deux، L huit. la couche externe ديالو، L، saturée.',
     demarrer='reset',
-    pointage=[pu('onze moins un', 'compte'), rp('نحسبوهم', 'electrons'), pu('كنعمرو: K deux', 'k'), pu('L huit، saturée حتى', 'l'),
+    pointage=[pu('onze moins un', 'compte'), rp('نحسبوهم', 'electrons'), pu('كنحطو: K deux', 'k'), pu('L huit، saturée حتى', 'l'),
               pu('la structure ديال Na plus', 'structure'), rp('la structure ديال Na plus', 'structure_txt'), pu('la couche externe ديالو', 'externe')],
     centre=[ce('onze moins un', 'Na⁺ : 11 − 1 = 10 électrons'), ce('K deux، L huit.', 'Na⁺ : (K)²(L)⁸')],
     cahier='Exemple : Na⁺ : 11 − 1 = 10 électrons → (K)²(L)⁸ ; couche externe L saturée.',
@@ -990,7 +990,7 @@ D['at_b1_bilan'] = diapo(
     'فيه غير الخوا تقريبا. deux: noyau فيه les protons و les neutrons، داير بيه les électrons. trois: A، le nombre de '
     'nucléons، Z، le nombre de protons، و N égale A moins Z. quatre: la masse، m environ égale A fois m p. cinq: dix '
     'puissance moins dix mètre ل l’atome، dix puissance moins quinze ل le noyau. six: les isotopes، les ions و l’élément '
-    'chimique، كلشي على حساب Z. sept: les couches K، L، M، اللي كنعمروهم بالترتيب.',
+    'chimique، كلشي على حساب Z. sept: les couches K، L، M، بالترتيب.',
     pointage=[pu('un: القصة', 'histoire'), pu('deux: noyau', 'constituants'), pu('trois: A', 'ecriture'), pu('quatre: la masse', 'masse'),
               pu('cinq: dix', 'dimensions'), pu('six: les isotopes', 'element'), pu('sept: les couches', 'couches')],
     cahier='Fiche : N = A − Z ; électrons = Z ; m ≈ A·m_p ; r_atome/r_noyau = 10⁵ ; (K)²(L)⁸(M)…',
@@ -1030,7 +1030,7 @@ D['at_fermeture_cours'] = diapo(
     'conseils dans ton cahier. Tu as bien travaillé, bon courage !',
     'وصلنا للخر ديال الدرس: Modèle de l’atome. شنو خاصك تحفظ؟ ثلاثة ديال الأفكار. اللولة: le noyau فيه Z protons و N '
     'égale A moins Z neutrons، و l’atome neutre فيه Z électrons. الثانية: la masse ديال l’atome كاينة ف le noyau، m '
-    'environ égale A fois m p. الثالثة: les électrons كيعمرو K، من بعد L، من بعد M. دابا، كيفاش تراجع؟ عاود قرا الدفتر '
+    'environ égale A fois m p. الثالثة: les électrons كيمشيو ل K، من بعد L، من بعد M. دابا، كيفاش تراجع؟ عاود قرا الدفتر '
     'ديالك، وعاود دير les trois méthodes بوحدك. فالحساب، كتب la relation، من بعد l’application numérique، من بعد le '
     'résultat مع l’unité ديالو، حيت كل وحدة عندها النقطة ديالها. ونهار الفرض، قسم الوقت ديالك، وبدا بالسؤال اللي ساهل '
     'عليك. وقبل الفرض، ترتاح مزيان فالليل. كتب هادشي ف الدفتر ديالك. راك خدمتي مزيان، الله يعاونك!',
@@ -1092,7 +1092,7 @@ COMPETENCES = [
      ['at_c1_couches', 'at_c2_methode', 'at_c3_toi', 'at_c4_ion'],
      [R('C7_r1', 'libre', 'Donne la structure électronique de l’atome d’azote (Z = 7) et sa couche externe.', 'شوف هاد السؤال: عطيني la structure électronique ديال l’azote، Z égale sept، و la couche externe ديالو.', '(K)²(L)⁵ ; couche externe : L, 5 électrons.'),
       R('C7_r2', 'qcm', 'La couche L peut contenir au plus…', 'شوف هاد السؤال: la couche L، شحال كتاخد على الأكثر؟', options=['2 électrons', '8 électrons', '18 électrons'], correct=1),
-      R('C7_r3', 'vrai_faux', 'On remplit la couche L avant la couche K.', 'شوف هاد الجملة: كنعمرو la couche L قبل la couche K. vrai ou faux؟', correct=False)]),
+      R('C7_r3', 'vrai_faux', 'On remplit la couche L avant la couche K.', 'شوف هاد الجملة: كنحطو les électrons ف la couche L قبل la couche K. vrai ou faux؟', correct=False)]),
 ]
 
 
@@ -1252,6 +1252,49 @@ def assembler():
         'activities': acts, 'competences': comps, 'seances': SEANCES}
 
 
+
+# Mots rares pour la voix (scripts/voix/verifier_mots.py) : réécrits partout (texte parlé, mots du pointage, réactions)
+# par des mots courants du corpus de la voix, après l'écriture des diapos.
+REMPLACER = [
+    ('كنكبرو كثر، بزاف', 'نقربو كثر، بزاف'), ('كنكبرو كثر', 'نقربو كثر'),
+    ('مصنوعة من des sphères', 'فيها des sphères'), ('ما يمكنش نقطعوهم', 'ما يمكنش نقسموهم'),
+    ('كيتعوجو', 'كيمشيو'), ('نكبروه ف la loupe: مصنوع من كويرات صغار', 'نشوفوه من قريب ف la loupe: فيه des petites boules'),
+    ('نكبروه', 'نشوفوه من قريب'), ('تقريبا ما كتتحركش', 'تقريبا ما كتبدل والو'), ('ما كتتحركش', 'ما كتبدل والو'),
+    ('البيلة فالوسط ديال واحد الملعب ديال الكورة', 'الكورة الصغيورة فالوسط ديال واحد le stade'),
+    ('الملعب ديال الكورة', 'le stade'), ('البيلة', 'الكورة'),
+    ('la couche K عمرات', 'la couche K عامرة'), ('عمرات', 'عامرة'), ('كنعمرو', 'كنحطو'),
+    ('واحد الحطبة كتشعل', 'واحد العود كيتحرق'), ('الحطبة', 'العود'), ('كويرات صغار', 'des petites boules'), ('كويرات', 'boules'),
+    ('مصنوعة', 'فيها'), ('مصنوع', 'فيه'),
+    ('كيربح', 'كياخد'), ('يخسر ولا يربح', 'يخسر ولا ياخد'), ('ربح deux', 'خدا deux'), ('ربح', 'خدا'),
+    ('بلا ما يبدلو الطريق', 'بحال إلا ما كاين والو'), ('كنكتبوها plus', 'الرمز ديالها plus'), ('كنكتبوها moins', 'الرمز ديالها moins'),
+    ('رمزو C', 'الرمز ديالو C'), ('كنحسبوهم: six', 'نحسبو: six'), ('كنحسبوهم', 'نحسبو'),
+    ('و pleines، ما يمكنش نقسموهم', 'و pleines'), ('ولكن le cuivre ما مشاش', 'ولكن le cuivre باقي'),
+    ('ماشي مرتبين كيفما جا', 'ماشي فأي بلاصة'), ('لا، la feuille ماشي مثقوبة', 'لا، la feuille كاملة'),
+    ('صغير بزاف حتى ما كيبانش هنا', 'صغير بزاف، هنا ما يمكنش نشوفوه'), ('إذن ما كنحسبوش les électrons', 'إذن نحيدو les électrons'),
+    ('ما كنحسبوش', 'نحيدو'), ('ما كتوافقش مع le modèle', 'كتبين حاجة أخرى'), ('وما كتوافقش', 'و كتبين حاجة أخرى'),
+    ('le proton تقيل بحال', 'le proton عندو la masse ديال'),
+]
+
+
+NOMBRES_FR = r'(?:un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt|trente|cent|mille|zéro)'
+
+
+def remplacer(o):
+    if isinstance(o, str):
+        for a, b in REMPLACER:
+            o = o.replace(a, b)
+        # jamais un mot darija collé devant un nombre français (skill voix-du-cours § 1 ; scripts/voix/nombres_fr.py)
+        o = re.sub(r'حتى (?=' + NOMBRES_FR + r'\b)', 'jusqu’à ', o)
+        o = re.sub(r'تقريبا (?=' + NOMBRES_FR + r'\b)', 'environ ', o)
+        o = re.sub(r'(?:كيساوي|كيعطي) (?=(?:plus |moins )?' + NOMBRES_FR + r'\b)', 'égale ', o)
+        o = re.sub(r'\bف (?=mille)', 'en ', o)
+        return o
+    if isinstance(o, list):
+        return [remplacer(x) for x in o]
+    if isinstance(o, dict):
+        return {k: (remplacer(v) if k in ('mixed', 'mot', 'parole', 'dit', 'enonce_dit', 'apres_mot') or isinstance(v, (dict, list)) else v) for k, v in o.items()}
+    return o
+
 # ═════════════════════════════════ CONTRÔLES ═════════════════════════════════
 
 INTERDIT = re.compile(r'[0-9=+×÷/<>≈²³⁰¹⁴-⁹₀-₉αβΔ%]')
@@ -1325,7 +1368,7 @@ def controler(cours):
 
 
 if __name__ == '__main__':
-    cours = assembler()
+    cours = remplacer(assembler())
     err = controler(cours)
     for e in err:
         print('ERREUR', e)
