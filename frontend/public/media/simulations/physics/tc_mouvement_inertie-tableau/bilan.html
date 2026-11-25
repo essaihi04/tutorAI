@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu'il faut retenir — le mouvement et le principe d'inertie</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La fiche « Ce qu’il faut retenir » du mouvement et du principe d’inertie (neuf blocs), ou la carte du chapitre avec ses neuf branches"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Écrire</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * Bilan du cours « Le mouvement et le principe d'inertie » (diapos mi_b1_bilan et mi_b2_carte), adapté de la fiche du
+ * cours « La sortie écologique ».
+ *  ?vue=fiche (défaut) : neuf blocs, un par compétence C1 à C9 : définition, relation, piège (⚠).
+ *  ?vue=carte : la carte du chapitre, neuf branches autour de « Le mouvement et le principe d'inertie ».
+ * play_until {moment: <bloc>} écrit le bloc (ou la branche) et l'allume ; les blocs déjà dits restent écrits.
+ * set_parameters {lacunes: [{id: C1..C9, statut}], acquis_ids} : blocs à reprendre (rouge), à revoir (orange), acquis (✓).
+ * Moments : prerequis 1 ; relativite 3 ; reperes 5 ; trajectoire 7 ; vitesse 9 ; mru 11 ; mcu 13 ; inertie 15 ;
+ * masse 17 ; fin 19.
+ */
+const { lueur, lignes } = window.Mvt;
+const VUE = window.Mvt.param('vue', 'fiche') === 'carte' ? 'carte' : 'fiche';
+const BLOCS = [
+  { id: 'prerequis', titre: '1 · Forces', comps: ['C1'], court: 'P = m·g ; compensation', def: 'Force : point, droite, sens, intensité (N). Poids vertical, vers le bas, en G.', f: 'P = m·g   (g = 10 N/kg)', att: 'se compensent : même droite, sens contraires, même intensité' },
+  { id: 'relativite', titre: '2 · Relativité', comps: ['C2'], court: 'référentiel', def: 'Le mouvement dépend du référentiel : on le choisit avant toute étude.', f: 'référentiel terrestre : le sol', att: 'repos ou mouvement : toujours « par rapport à »' },
+  { id: 'reperes', titre: '3 · Repères', comps: ['C3'], court: 'OM⃗, t = 0', def: 'Repère d’espace (O, i⃗, j⃗, k⃗) et repère de temps (origine des dates t = 0).', f: '^OM = x·^i + y·^j + z·^k', att: 'x peut être négatif' },
+  { id: 'trajectoire', titre: '4 · Trajectoire', comps: ['C4'], court: 'positions successives', def: 'Trajectoire : ensemble des positions successives d’un point du mobile.', f: 'rectiligne · circulaire · curviligne', att: 'elle dépend du référentiel (la valve)' },
+  { id: 'vitesse', titre: '5 · Vitesse', comps: ['C5'], court: 'v_m, v_i', def: 'Vitesse moyenne et instantanée (enregistrement, τ entre deux points).', f: 'v_m = ⟦d|Δt⟧   v_i = ⟦M_{i−1}M_{i+1}|2τ⟧', att: '1 m/s = 3,6 km/h' },
+  { id: 'mru', titre: '6 · MRU', comps: ['C6'], court: 'x(t) = v·t + x₀', def: 'MRU : trajectoire rectiligne et vitesse constante ; v⃗ tangent, dans le sens du mouvement.', f: 'x(t) = v_x·t + x₀', att: 'axe inversé : v_x = −v' },
+  { id: 'mcu', titre: '7 · MCU', comps: ['C7'], court: 'ω, T, f', def: 'MCU : trajectoire circulaire et vitesse constante.', f: 'ω = ⟦v|R⟧   T = ⟦2π|ω⟧   f = ⟦1|T⟧', att: 'ω en rad/s, T en s, f en Hz' },
+  { id: 'inertie', titre: '8 · Principe d’inertie', comps: ['C8'], court: 'v⃗G constant', def: 'Référentiel galiléen : solide isolé ou pseudo-isolé ⇒ G au repos ou en MRU.', f: 'Σ^F = ^0  ⇔  ^v_G constant', att: 'seul G est toujours en MRU' },
+  { id: 'masse', titre: '9 · Centre de masse', comps: ['C9'], court: 'barycentre', def: 'Relation barycentrique, O quelconque ; homogène : C et G confondus.', f: 'OG⃗ = ⟦m₁·OG⃗₁ + m₂·OG⃗₂|m₁ + m₂⟧', att: 'prendre O en G₁ simplifie le calcul' },
+];
+const M = {}; BLOCS.forEach((b, i) => { M[b.id] = 1 + 2 * i; });
+const texteV = window.Mvt.texteV;
+let LAC = null, ACQ = [];
+function statut(b) { if (!LAC) return null; const l = LAC.filter(x => b.comps.includes(x.id)); if (l.some(x => x.statut === 'non_acquis')) return 'non_acquis'; if (l.length) return 'partiel'; return ACQ.some(a => b.comps.includes(a)) ? 'acquis' : null; }
+function anneau(c, b, x, y, w, h) {
+  const st = statut(b); if (!st) return;
+  const coul = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'], acquis: ['vert', '✓ acquis'] }[st];
+  c.rect(x - 3, y - 3, w + 6, h + 6, { couleur: coul[0], largeur: 2.6, duree: .1 });
+  c.texte(coul[1], x + w - 6, y + 16, { couleur: coul[0], taille: 15, align: 'right', duree: .1 });
+}
+function dessinerFiche(c, S, scene) {
+  if (S.running) S.focus = null;
+  const L = scene.L, tt = 15;
+  // le plancher du texte (téléphone) agrandit l'écriture : on coupe les lignes et on espace à la taille réelle
+  const ts = Math.max(tt, c.tailleMin && c.echelle ? c.tailleMin / c.echelle : tt), f = ts / tt;
+  // deux colonnes ; si tout ne tient pas en hauteur (petit cadre : l'écriture grandit), une colonne et des pages :
+  // la page montrée est celle du dernier bloc dit (ou touché)
+  // deux colonnes (trois si le cadre est très large), remplies dans l'ordre ; une colonne pleine passe à la suivante,
+  // la dernière pleine ouvre une page (la page montrée est celle du dernier bloc dit ou touché)
+  const mise = (cols) => {
+    const w = (L - 12 - cols * 12) / cols; let col = 0, y = 4, pg = 0; const out = [], pgs = [];
+    BLOCS.forEach((b) => {
+      const dl = lignes(c, b.def, w - 16, ts), frac = /⟦/.test(b.f), h = (22 + dl.length * 17 + (frac ? 34 : 20) + 18) * f;
+      if (y + h > 414 && y > 4) { col++; y = 4; if (col >= cols) { col = 0; pg++; } }
+      out.push({ x: 12 + col * (w + 12), y, w, h }); pgs.push(pg); y += h + 4;
+    });
+    return { out, pgs, bas: 0 };
+  };
+  const m = mise(L >= 1150 ? 3 : 2);
+  const place = m.out, pages = m.pgs; window.__basFiche = m.bas;
+  let dernier = 0; BLOCS.forEach((b, i) => { if (S.t <= 0 || S.a(b.id)) dernier = i; });
+  if (S.focus != null) dernier = S.focus;
+  const pageVue = pages[dernier];
+  BLOCS.forEach((b, i) => {
+    if (pages[i] !== pageVue) return;
+    const p = place[i];
+    c.repere(b.id, p.x, p.y, p.w, p.h, b.titre);
+    if (S.t > 0 && !S.ecrit(c, b.id)) return;
+    const actif = S.t > 0 && S.a(b.id) && (i === BLOCS.length - 1 || !S.a(BLOCS[i + 1].id));
+    if (actif) lueur(c, p.x - 2, p.y - 2, p.w + 4, p.h + 4, { vive: true });
+    c.rect(p.x, p.y, p.w, p.h, { couleur: 'tresfaible', largeur: 1.2, duree: .1 });
+    c.texte(b.titre, p.x + 8, p.y + 19 * f, { couleur: 'jaune', taille: 17, gras: true, max: p.w - 16 });
+    const dl = lignes(c, b.def, p.w - 16, ts); dl.forEach((l, k) => c.texte(l, p.x + 8, p.y + (37 + k * 17) * f, { couleur: 'blanc', taille: tt }));
+    const frac = /⟦/.test(b.f), yf = p.y + (37 + dl.length * 17 + (frac ? 13 : 2)) * f;
+    texteV(c, b.f, p.x + 8, yf, { couleur: 'cyan', taille: 16, max: p.w - 16 });
+    c.texte('⚠ ' + b.att, p.x + 8, yf + (frac ? 24 : 18) * f, { couleur: 'orange', taille: 15, max: p.w - 16 });
+    anneau(c, b, p.x, p.y, p.w, p.h);
+  });
+}
+const COURT = { prerequis: 'Forces', relativite: 'Référentiel', reperes: 'Repères', trajectoire: 'Trajectoire', vitesse: 'Vitesse', mru: 'MRU', mcu: 'MCU', inertie: 'Inertie', masse: 'Barycentre' };
+function dessinerCarte(c, S, scene) {
+  const pt = scene.petit, L = scene.L, cx = L / 2, cy = 212, rx = L / 2 - 100, ry = 172, bw = pt ? Math.min(190, L / 4.2) : Math.min(200, L / 4.6), bh = pt ? 46 : 50;
+  c.direct(() => { const g = c.ctx; g.save(); g.fillStyle = 'rgba(250,204,21,.12)'; g.beginPath(); g.ellipse(cx, cy, 104, 34, 0, 0, Math.PI * 2); g.fill(); g.restore(); });
+  c.texte('Le mouvement', cx, cy - (pt ? 8 : 4), { couleur: 'jaune', taille: pt ? 30 : 22, gras: true, align: 'center' }); c.texte('et l’inertie', cx, cy + (pt ? 26 : 20), { couleur: 'jaune', taille: pt ? 30 : 22, gras: true, align: 'center' });
+  c.repere('centre', cx - 104, cy - 34, 208, 68, 'le mouvement et le principe d’inertie');
+  BLOCS.forEach((b, i) => {
+    const a = -Math.PI / 2 + i * 2 * Math.PI / BLOCS.length, x = cx + Math.cos(a) * rx, y = cy + Math.sin(a) * ry, bx = Math.max(6, Math.min(L - bw - 6, x - bw / 2)), by = Math.max(6, Math.min(414 - bh, y - bh / 2));
+    c.repere(b.id, bx, by, bw, bh, b.titre + ' : ' + b.court);
+    if (S.t > 0 && !S.ecrit(c, b.id)) return;
+    const actif = S.t > 0 && S.a(b.id) && (i === BLOCS.length - 1 || !S.a(BLOCS[i + 1].id));
+    c.ligne(cx + Math.cos(a) * 100, cy + Math.sin(a) * 34, bx + bw / 2, by + (y > cy ? 0 : bh), { couleur: 'faible', largeur: 1.6 });
+    if (actif) lueur(c, bx - 2, by - 2, bw + 4, bh + 4, { vive: true });
+    c.rect(bx, by, bw, bh, { couleur: 'tresfaible', largeur: 1.2, duree: .1 });
+    if (pt) c.texte(COURT[b.id], bx + bw / 2, by + 32, { couleur: 'jaune', taille: 26, gras: true, align: 'center', max: bw - 6 });
+    else {
+      c.texte(b.titre.replace(/^\d · /, ''), bx + bw / 2, by + 22, { couleur: 'jaune', taille: 17, gras: true, align: 'center', max: bw - 10 });
+      c.texte(b.court, bx + bw / 2, by + 44, { couleur: 'cyan', taille: 15, align: 'center', max: bw - 10 });
+    }
+    anneau(c, b, bx, by, bw, bh);
+  });
+}
+const S = window.Mvt.sim({
+  id: 'tc_mi_bilan_' + VUE, titre: VUE === 'fiche' ? 'Ce qu’il faut retenir' : 'La carte du chapitre', vue: VUE, moments: M, fin: 19, graine: 41, lancer: 'Écrire',
+  motifs: Object.fromEntries(BLOCS.map(b => [b.id, b.titre])),
+  accueil: VUE === 'fiche' ? 'La fiche du cours : touche un bloc pour le relire.' : 'La carte du chapitre : touche une branche.', fini: VUE === 'fiche' ? 'La fiche est écrite : recopie-la dans ton cahier.' : 'Neuf branches autour du mouvement et du principe d’inertie.',
+  dessiner: (c, S, sc) => (VUE === 'fiche' ? dessinerFiche(c, S, sc) : dessinerCarte(c, S, sc)),
+  parametres: p => {
+    if (Array.isArray(p.lacunes)) LAC = p.lacunes.map(l => ({ id: String(l.id || ''), statut: String(l.statut || 'non_acquis') }));
+    if (Array.isArray(p.acquis_ids)) ACQ = p.acquis_ids.map(String);
+  },
+  schemaParametres: { lacunes: '[{id: C1..C9, label, statut: non_acquis|partiel}]', acquis: '[labels]', acquis_ids: '[C1, ..]' },
+  etatParametres: () => ({ lacunes: LAC ? LAC.length : null }),
+  ceQuiSeVoit: S => {
+    const ecrits = BLOCS.filter(b => S.t <= 0 || S.a(b.id));
+    return (VUE === 'fiche' ? 'Fiche « Ce qu’il faut retenir » : ' : 'Carte du chapitre : ') + ecrits.map(b => b.titre + ' (' + window.Tableau.lisible(b.f.replace(/\^/g, '')) + ')').join(' ; ') + '.' + (LAC ? ' À reprendre : ' + (BLOCS.filter(b => ['non_acquis', 'partiel'].includes(statut(b))).map(b => b.titre).join(', ') || 'rien') + '.' : '');
+  },
+  texte: BLOCS.map(b => b.titre + ' : ' + b.def + ' ' + window.Tableau.lisible(b.f.replace(/\^/g, '')) + '. Attention : ' + b.att + '.').join(' '),
+  explication: { bilan: BLOCS.map(b => ({ repere: b.id, texte: b.def })) },
+  apres: (S, scene, pont) => {
+    const canvas = document.getElementById('canvas');
+    canvas.addEventListener('pointerdown', e => {
+      const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+      const rect = window.Tableau.REPERES;
+      for (const b of BLOCS) { const d = rect[b.id]; if (!d || !d.rect) continue; const rr = d.rect; if (e.clientX >= rr.x && e.clientX <= rr.x + rr.width && e.clientY >= rr.y && e.clientY <= rr.y + rr.height) { S.focus = BLOCS.indexOf(b); scene.sale = true; window.Tableau.bulle(document.getElementById('feedback'), b.def + ' ⚠ ' + b.att); pont.noter('touche', { moment: b.id }); pont.emettre(); return; } }
+    });
+    document.getElementById('imprimer').onclick = () => {
+      const avant = S.t;
+      window.Tableau.imprimer({ titre: VUE === 'fiche' ? 'Ce qu’il faut retenir — le mouvement et le principe d’inertie' : 'La carte du chapitre — le mouvement et le principe d’inertie', scene,
+        pages: [{ nom: VUE === 'fiche' ? 'la fiche' : 'la carte', preparer: () => { S.t = 19; S.vu = {}; } }], restaurer: () => { S.t = avant; scene.sale = true; } });
+      pont.noter('imprimer', { pages: 1 }); pont.emettre();
+    };
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -99,7 +99,55 @@ function dessinerReaction(c, S, sc) {
   ], { dy: 48, px: 330, py: 50, pw: 420, taille: 21 });
 }
 
+
+/* ── vue compense : un anneau tiré par deux dynamomètres (5 N chacun, sens contraires) ── */
+const MC = { anneau: .5, f1: 2, f2: 4, droite: 6, intensites: 8, somme: 10 };
+/** Un dynamomètre peint (tube transparent, ressort, index rouge, graduations), crochet en (xc, y), corps vers `sens`. */
+function dynamometre(g, xc, y, sens, lu) {
+  const L = 190, h = 34, x0 = sens > 0 ? xc + 16 : xc - 16 - L;
+  g.save();
+  P.ombre(g, () => { const gr = g.createLinearGradient(0, y - h / 2, 0, y + h / 2); gr.addColorStop(0, 'rgba(226,232,240,.95)'); gr.addColorStop(.5, 'rgba(148,163,184,.9)'); gr.addColorStop(1, 'rgba(71,85,105,.95)'); g.fillStyle = gr; g.beginPath(); g.roundRect(x0, y - h / 2, L, h, 8); g.fill(); }, 6);
+  g.fillStyle = 'rgba(15,23,42,.85)'; g.fillRect(x0 + 18, y - 9, L - 36, 18);
+  g.strokeStyle = '#e2e8f0'; g.lineWidth = 1; g.fillStyle = '#e2e8f0'; g.font = '600 11px sans-serif'; g.textAlign = 'center';
+  for (let k = 0; k <= 10; k++) { const xx = sens > 0 ? x0 + 22 + k * (L - 44) / 10 : x0 + L - 22 - k * (L - 44) / 10; g.beginPath(); g.moveTo(xx, y - 9); g.lineTo(xx, y - (k % 5 ? 4 : 1)); g.stroke(); if (k % 5 === 0) g.fillText(String(k), xx, y + 8); }
+  const xi = sens > 0 ? x0 + 22 + lu * (L - 44) / 10 : x0 + L - 22 - lu * (L - 44) / 10;
+  g.strokeStyle = '#f87171'; g.lineWidth = 3; g.beginPath(); g.moveTo(xi, y - 10); g.lineTo(xi, y + 10); g.stroke();
+  // la tige et le crochet
+  g.strokeStyle = '#94a3b8'; g.lineWidth = 3; g.beginPath(); g.moveTo(xc + sens * 4, y); g.lineTo(sens > 0 ? x0 : x0 + L, y); g.stroke();
+  // la main qui tire (poignée)
+  const xp = sens > 0 ? x0 + L : x0; g.fillStyle = '#e0ac83'; g.beginPath(); g.ellipse(xp + sens * 18, y, 18, 15, 0, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+function dessinerCompense(c, S, sc) {
+  const L = sc.L, pt = sc.petit, A = [L / 2, pt ? 230 : 205], u = 30;   // 1 N = 30 unités
+  c.direct(() => { const g = c.ctx;
+    dynamometre(g, A[0] - 22, A[1], -1, S.t <= 0 ? 5 : 5 * S.k('f1', 1.2));
+    dynamometre(g, A[0] + 22, A[1], 1, S.t <= 0 ? 5 : 5 * S.k('f2', 1.2));
+    g.strokeStyle = '#cbd5e1'; g.lineWidth = 6; g.beginPath(); g.arc(A[0], A[1], 22, 0, Math.PI * 2); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 1.5; g.beginPath(); g.arc(A[0] - 2, A[1] - 2, 21, Math.PI * 1.1, Math.PI * 1.6); g.stroke(); });
+  c.repere('anneau', A[0] - 28, A[1] - 28, 56, 56, 'l’anneau');
+  c.repere('dyn1', A[0] - 250, A[1] - 20, 230, 40, 'le dynamomètre de gauche');
+  c.repere('dyn2', A[0] + 20, A[1] - 20, 230, 40, 'le dynamomètre de droite');
+  const tv = pt ? 30 : 24;
+  if (S.t <= 0 || S.ecrit(c, 'f1')) { vecteur(c, A[0], A[1] - 50, A[0] - 5 * u, A[1] - 50, { couleur: 'violet', nom: 'F_1', nx: A[0] - 5 * u - 8, ny: A[1] - 62, align: 'right', taille: tv }); c.repere('f1', A[0] - 5 * u - 40, A[1] - 80, 5 * u + 40, 44, 'la force F1, vers la gauche'); }
+  if (S.t <= 0 || S.ecrit(c, 'f2')) { vecteur(c, A[0], A[1] - 50, A[0] + 5 * u, A[1] - 50, { couleur: 'orange', nom: 'F_2', nx: A[0] + 5 * u + 8, ny: A[1] - 62, taille: tv }); c.repere('f2', A[0], A[1] - 80, 5 * u + 40, 44, 'la force F2, vers la droite'); }
+  if (S.t <= 0 || S.ecrit(c, 'droite')) { c.ligne(40, A[1], L - 40, A[1], { couleur: 'faible', largeur: 1.4, pointille: [8, 7] }); c.repere('droite', 40, A[1] - 8, L - 80, 16, 'la même droite d’action'); if (S.t > 0 && !S.a('intensites')) lueur(c, 36, A[1] - 9, L - 72, 18, { vive: true }); }
+  if ((S.t <= 0 || S.a('intensites')) && !pt) { c.texte('5 N', A[0] - 140, A[1] + 50, { couleur: 'violet', taille: 22, gras: true, align: 'center' }); c.texte('5 N', A[0] + 140, A[1] + 50, { couleur: 'orange', taille: 22, gras: true, align: 'center' }); }
+  if (S.a('intensites') && S.t > 0 && !S.a('somme')) { lueur(c, A[0] - 210, A[1] - 12, 120, 24, { vive: true }); lueur(c, A[0] + 90, A[1] - 12, 120, 24, { vive: true }); }
+  panneau(c, S, sc, 30, pt ? 0 : 316, L - 60, [
+    { m: 'droite', t: 'même droite d’action, sens contraires', c: 'blanc' },
+    { m: 'intensites', t: 'même intensité : F₁ = F₂ = 5 N', c: 'jaune' },
+    { m: 'somme', t: '^F_1 + ^F_2 = ^0 : elles se compensent', c: 'jaune', g: true, r: 'somme' },
+  ], { dy: 36, px: 20, py: 44, pw: L - 40, taille: 22, taillePetit: 26 });
+  if (!pt && (S.t <= 0 || S.a('anneau'))) c.texte('l’anneau reste immobile', A[0], 60, { couleur: 'cyan', taille: 20, align: 'center' });
+}
+
 window.Mvt.vues('tc_mi_forces', {
+  compense: { titre: 'Deux forces qui se compensent', moments: MC, fin: 12, dessiner: dessinerCompense,
+    motifs: { anneau: 'l’anneau', f1: 'la force F1', f2: 'la force F2', droite: 'la même droite', intensites: '5 N et 5 N', somme: 'F1 + F2 = 0' },
+    accueil: 'Un anneau tenu par deux dynamomètres.', fini: 'Même droite, sens contraires, même intensité : F1 + F2 = 0, l’anneau reste immobile.',
+    voir: S => ['Un anneau entre deux dynamomètres tirés en sens contraires ; il reste immobile.', S.a('f1') && 'Flèche violette F1 vers la gauche.', S.a('f2') && 'Flèche orange F2 vers la droite.', S.a('droite') && 'La droite d’action commune en pointillé.', S.a('intensites') && 'Les deux dynamomètres indiquent 5 N.', S.a('somme') && 'F1 + F2 = 0 : les deux forces se compensent.'].filter(Boolean).join(' '),
+    texte: 'Deux forces se compensent si elles ont la même droite d’action, des sens contraires et la même intensité : F1 + F2 = 0. Ici 5 N et 5 N.' },
   force: { titre: 'Une force et ses quatre caractéristiques', moments: MF, fin: 13, dessiner: dessinerForce,
     motifs: { action: 'la personne pousse la caisse', point: 'le point d’application', droite: 'la droite d’action', sens: 'le sens', intensite: 'l’intensité', echelle: 'l’échelle', compte: 'les carreaux comptés' },
     accueil: 'Une personne pousse une caisse.', fini: 'F : point A, horizontale, vers la droite, 200 N → 2 carreaux.',

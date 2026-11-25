@@ -78,9 +78,10 @@ function dessinerBus(c, S, sc) {
 }
 
 /* ── vue tableau ── */
-const MT = { grille: .5, rA: 2, rbus: 5, rroute: 8.5, conclusion: 12 };
+const MT = { grille: .5, rA: 2, rB: 4.5, rbus: 7, rroute: 9.5, conclusion: 12.5 };
 const LIGNES = [
   { id: 'rA', nom: 'par rapport à A', court: '/ A', cases: [null, 'm', 'm'] },
+  { id: 'rB', nom: 'par rapport à B', court: '/ B', cases: ['m', null, 'm'] },
   { id: 'rbus', nom: 'par rapport au bus', court: '/ bus', cases: ['r', 'm', 'm'] },
   { id: 'rroute', nom: 'par rapport à la route', court: '/ route', cases: ['m', 'm', 'r'] },
 ];
@@ -98,13 +99,13 @@ function dessinerTableau(c, S, sc) {
     c.texte('B', gens.B[0], gens.B[1] - 16, { couleur: 'jaune', taille: 20, gras: true, align: 'center', duree: .05 });
     c.texte('C', xC + 22, 300, { couleur: 'jaune', taille: 20, gras: true, duree: .05 });
   }
-  const x0 = pt ? 14 : L - 480, colL = pt ? 190 : 200, colW = pt ? (L - x0 - colL - 14) / 3 : 92, rh = pt ? 66 : 62, y0 = pt ? 30 : 46;
+  const x0 = pt ? 14 : L - 480, colL = pt ? 190 : 200, colW = pt ? (L - x0 - colL - 14) / 3 : 92, rh = pt ? 50 : 52, y0 = pt ? 26 : 40;
   const ts = pt ? 30 : 20;
   // en-têtes
   ['A', 'B', 'C'].forEach((n, j) => c.texte(n, x0 + colL + (j + .5) * colW, y0 + rh * .62, { couleur: 'jaune', taille: ts + 2, gras: true, align: 'center', duree: .05 }));
-  for (let i = 0; i <= 3; i++) c.ligne(x0, y0 + (i + 1) * rh, x0 + colL + 3 * colW, y0 + (i + 1) * rh, { couleur: 'tresfaible', largeur: 1.2, duree: .05 });
-  for (let j = 0; j <= 3; j++) c.ligne(x0 + colL + j * colW, y0 + rh * .1, x0 + colL + j * colW, y0 + 4 * rh, { couleur: 'tresfaible', largeur: 1.2, duree: .05 });
-  c.repere('tableau', x0, y0, colL + 3 * colW, 4 * rh, 'le tableau : au repos ou en mouvement');
+  for (let i = 0; i <= 4; i++) c.ligne(x0, y0 + (i + 1) * rh, x0 + colL + 3 * colW, y0 + (i + 1) * rh, { couleur: 'tresfaible', largeur: 1.2, duree: .05 });
+  for (let j = 0; j <= 3; j++) c.ligne(x0 + colL + j * colW, y0 + rh * .1, x0 + colL + j * colW, y0 + 5 * rh, { couleur: 'tresfaible', largeur: 1.2, duree: .05 });
+  c.repere('tableau', x0, y0, colL + 3 * colW, 5 * rh, 'le tableau : au repos ou en mouvement');
   LIGNES.forEach((ln, i) => {
     const y = y0 + (i + 1) * rh;
     if (t >= MT[ln.id]) {
@@ -124,9 +125,9 @@ function dessinerTableau(c, S, sc) {
     });
   });
   if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'conclusion'))) {
-    c.texte('Le mouvement est relatif :', pt ? x0 : x0, y0 + 4 * rh + (pt ? 44 : 44), { couleur: 'jaune', taille: pt ? 28 : 21, gras: true, max: L - x0 - 10 });
-    if (!pt) c.texte('il dépend du corps de référence.', x0, y0 + 4 * rh + 74, { couleur: 'jaune', taille: 21, max: L - x0 - 10 });
-    c.repere('conclusion', x0, y0 + 4 * rh + 16, L - x0 - 10, pt ? 40 : 70, 'le mouvement est relatif');
+    c.texte('Le mouvement est relatif :', pt ? x0 : x0, y0 + 5 * rh + 40, { couleur: 'jaune', taille: pt ? 28 : 21, gras: true, max: L - x0 - 10 });
+    if (!pt) c.texte('il dépend du corps de référence.', x0, y0 + 5 * rh + 70, { couleur: 'jaune', taille: 21, max: L - x0 - 10 });
+    c.repere('conclusion', x0, y0 + 5 * rh + 14, L - x0 - 10, pt ? 40 : 70, 'le mouvement est relatif');
   }
 }
 
@@ -202,11 +203,11 @@ window.Mvt.vues('tc_mi_bus', {
     accueil: 'Un bus, trois personnes : A, B et C.', fini: 'A reste à sa place dans le bus ; C reste à sa place au bord de la route ; B bouge par rapport aux deux.',
     voir: S => ['Un bus jaune sur la route ; A assis à l’avant, B debout, C au bord de la route.', S.a('roule') && 'Le bus roule vers la droite.', S.a('marche') && 'B marche vers l’arrière du bus.', S.a('A') && 'A allumé : il reste à la même place dans le bus.', S.a('B') && 'B allumé.', S.a('C') && 'C allumé : il reste à la même place au bord de la route.'].filter(Boolean).join(' '),
     texte: 'Un bus roule. A est assis à l’avant, B marche vers l’arrière, C est au bord de la route.' },
-  tableau: { titre: 'Au repos ou en mouvement ?', moments: MT, fin: 14, dessiner: dessinerTableau,
-    motifs: { grille: 'le tableau', rA: 'par rapport à A', rbus: 'par rapport au bus', rroute: 'par rapport à la route', conclusion: 'le mouvement est relatif' },
+  tableau: { titre: 'Au repos ou en mouvement ?', moments: MT, fin: 15, dessiner: dessinerTableau,
+    motifs: { grille: 'le tableau', rA: 'par rapport à A', rB: 'par rapport à B', rbus: 'par rapport au bus', rroute: 'par rapport à la route', conclusion: 'le mouvement est relatif' },
     accueil: 'Le tableau : au repos ou en mouvement ?', fini: 'Le mouvement est relatif : il dépend du corps de référence.',
-    voir: S => ['Tableau colonnes A, B, C.', S.a('rA') && 'Par rapport à A : B en mouvement, C en mouvement.', S.a('rbus') && 'Par rapport au bus : A au repos, B en mouvement, C en mouvement.', S.a('rroute') && 'Par rapport à la route : A en mouvement, B en mouvement, C au repos.', S.a('conclusion') && S.conclusions && 'Le mouvement est relatif.'].filter(Boolean).join(' '),
-    texte: 'Par rapport à A : B et C en mouvement. Par rapport au bus : A au repos, B et C en mouvement. Par rapport à la route : A et B en mouvement, C au repos. Le mouvement est relatif.' },
+    voir: S => ['Tableau colonnes A, B, C.', S.a('rA') && 'Par rapport à A : B en mouvement, C en mouvement.', S.a('rB') && 'Par rapport à B : A en mouvement, C en mouvement.', S.a('rbus') && 'Par rapport au bus : A au repos, B en mouvement, C en mouvement.', S.a('rroute') && 'Par rapport à la route : A en mouvement, B en mouvement, C au repos.', S.a('conclusion') && S.conclusions && 'Le mouvement est relatif.'].filter(Boolean).join(' '),
+    texte: 'Par rapport à A : B et C en mouvement. Par rapport à B : A et C en mouvement. Par rapport au bus : A au repos, B et C en mouvement. Par rapport à la route : A et B en mouvement, C au repos. Le mouvement est relatif.' },
   referentiel: { titre: 'Le référentiel', moments: MR, fin: 10.5, dessiner: dessinerReferentiel,
     motifs: { scene: 'la rue', terrestre: 'le référentiel terrestre', bus: 'le référentiel lié au bus', conducteur: 'le conducteur' },
     accueil: 'Une rue, une maison, un arbre et un bus.', fini: 'Référentiel terrestre : le sol ; référentiel lié au bus : le bus.',
