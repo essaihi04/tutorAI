@@ -20,7 +20,7 @@ import AdminCourseEditor from '../components/admin/AdminCourseEditor';
 import AdminVisualLibrary from '../components/admin/AdminVisualLibrary';
 import AdminAvisProfs from '../components/admin/AdminAvisProfs';
 import AdminTroncCommun from '../components/admin/AdminTroncCommun';
-import Admin2BacPCF from '../components/admin/Admin2BacPCF';
+import Admin2BacPCF, { LIEN_TCF } from '../components/admin/Admin2BacPCF';
 import AdminClasses from '../components/admin/AdminClasses';
 import AdminRetention from '../components/admin/AdminRetention';
 
@@ -358,7 +358,7 @@ function ResetPasswordModal({ userId, userName, onClose }: { userId: string; use
 
 // ─── Main Dashboard ──────────────────────────────────────────
 
-type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'courses' | 'visuals' | 'visits' | 'avisProfs' | 'retention' | 'troncCommun' | 'bac2pcf' | 'classes';
+type Tab = 'overview' | 'users' | 'promoCodes' | 'inscriptions' | 'usage' | 'requests' | 'mockExams' | 'courses' | 'visuals' | 'visits' | 'avisProfs' | 'retention' | 'troncCommun' | 'bac2pcf' | 'tcf' | 'classes';
 
 // URL de partage public Umami pour le site Moalim
 // Cette URL est publique par nature (genere via Umami: Settings -> Websites -> Moalim -> Edit -> Enable share URL)
@@ -656,6 +656,7 @@ export default function AdminDashboard() {
     { key: 'avisProfs', label: 'Avis des profs', icon: MessageCircle },
     { key: 'troncCommun', label: 'Tronc Commun', icon: Users },
     { key: 'bac2pcf', label: '2ᵉ Bac PC', icon: Users },
+    { key: 'tcf', label: 'Tronc Commun PC', icon: Users },
     { key: 'classes', label: 'Mode classe', icon: Users },
     { key: 'retention', label: 'Rétention', icon: TrendingUp },
     { key: 'visuals', label: 'Bibliothèque', icon: Image },
@@ -1383,6 +1384,7 @@ export default function AdminDashboard() {
         {activeTab === 'retention' && <AdminRetention />}
         {activeTab === 'troncCommun' && <AdminTroncCommun />}
         {activeTab === 'bac2pcf' && <Admin2BacPCF />}
+        {activeTab === 'tcf' && <Admin2BacPCF key="tcf" lien={LIEN_TCF} />}
         {activeTab === 'classes' && <AdminClasses />}
 
         {/* ──── UNIFIED VISUAL LIBRARY TAB ──── */}

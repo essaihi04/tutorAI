@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La trajectoire — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un ballon frappé laisse ses positions successives ; trois trajectoires rectiligne, circulaire et curviligne ; la valve d’une roue de vélo vue par le cycliste (un cercle) et par un piéton (une courbe en arches)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * La trajectoire (diapos mi_m8_trajectoire, mi_m9_formes, mi_m10_valve).
+ *  ?vue=ballon : un ballon frappé ; un point tous les 0,4 s marque sa position ; la courbe passe par les points.
+ *                Moments : tir 0,5 ; vol 1,2 ; points 6,4 ; trajectoire 7,4 ; definition 9 ; fin 11.
+ *  ?vue=formes : rectiligne (voiture sur une route droite), circulaire (valve d'une roue qui tourne sur place),
+ *                curviligne (ballon). Moments : rectiligne 0,8 ; circulaire 4,5 ; curviligne 8 ; fin 11,5.
+ *  ?vue=valve  : la valve d'une roue de vélo vue par le cycliste (un cercle) puis par un piéton au bord de la route
+ *                (une courbe en arches). Moments : cycliste 1 ; pieton 5,5 ; compare 11 ; fin 12,5.
+ *                set_parameters {conclusions: false} : les noms des formes restent cachés (question d'observation).
+ */
+const { P, lueur, panneau, HEX } = window.Mvt;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const TAU = Math.PI * 2;
+
+/* ── vue ballon ── */
+const MB = { tir: .5, vol: 1.2, points: 6.4, trajectoire: 7.4, definition: 9 };
+const ballonPos = (L, u) => [70 + u * (L - 170), 360 - 4 * 250 * u * (1 - u)];
+function dessinerBallon(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, n = 13;
+  c.direct(() => { const g = c.ctx, gr = g.createLinearGradient(0, 372, 0, 420); gr.addColorStop(0, '#3f8f3a'); gr.addColorStop(1, '#1f4d1d'); g.fillStyle = gr; g.fillRect(0, 372, L, 48); });
+  c.direct(() => P.personne(c.ctx, 40, 384, 120, { couleur: '#2563eb' }));
+  const u = clamp((t - MB.vol) / 5, 0, 1), k = Math.floor(u * (n - 1) + 1e-6);
+  for (let i = 0; i <= k; i++) { const [x, y] = ballonPos(L, i / (n - 1)); c.direct(() => P.point(c.ctx, x, y, 5)); }
+  const [bx, by] = ballonPos(L, u);
+  c.direct(() => P.ballon(c.ctx, bx, by - 0, 17, u * 12));
+  c.repere('ballon', bx - 17, by - 17, 34, 34, 'le ballon');
+  c.repere('points', 60, 100, L - 150, 270, 'les positions successives du ballon');
+  if (S.t <= 0 || S.a('points')) for (let i = 0; i < n; i++) { const [x, y] = ballonPos(L, i / (n - 1)); if (S.t > 0 && S.a('points') && !S.a('trajectoire') && t >= MB.points + i * .07) lueur(c, x - 9, y - 9, 18, 18, { vive: true }); }
+  if (S.t <= 0 || S.ecrit(c, 'trajectoire')) { c.courbe(v => ballonPos(L, v), 60, { couleur: 'cyan', largeur: 2.4, pointille: [9, 6] }); c.repere('trajectoire', 60, 100, L - 150, 270, 'la trajectoire du ballon (curviligne)'); }
+  if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'definition'))) {
+    c.texte(pt ? 'trajectoire = positions successives' : 'la trajectoire : l’ensemble des positions successives', L / 2, 50, { couleur: 'jaune', taille: pt ? 28 : 22, gras: true, align: 'center', max: L - 40 });
+    c.repere('definition', 20, 26, L - 40, 34, 'la définition de la trajectoire');
+  }
+}
+
+/* ── vue formes ── */
+const MF = { rectiligne: .8, circulaire: 4.5, curviligne: 8 };
+function panneauForme(c, S, sc, k, x, w, pt) {
+  const t = S.t <= 0 ? 99 : S.t, cle = ['rectiligne', 'circulaire', 'curviligne'][k], t0 = MF[cle], u = clamp((t - t0) / 3, 0, 1), cx = x + w / 2;
+  const coul = ['cyan', 'vert', 'orange'][k];
+  if (k === 0) {
+    c.direct(() => P.sol(c.ctx, x + 6, 236, w - 12, 56, { route: true }));
+    for (let i = 0; i <= Math.floor(u * 8); i++) c.direct(() => P.point(c.ctx, x + 20 + i * (w - 40) / 8, 262, 5));
+    c.direct(() => P.voiture(c.ctx, x + 20 + u * (w - 40) - 45, 246, 90));
+    if (u >= 1 || S.t <= 0) c.ligne(x + 14, 262, x + w - 14, 262, { couleur: coul, largeur: 2, pointille: [8, 6] });
+  } else if (k === 1) {
+    const cy = 230, r = Math.min(80, w * .3), a = -Math.PI / 2 + u * TAU;
+    for (let i = 0; i <= Math.floor(u * 12); i++) { const b = -Math.PI / 2 + i * TAU / 12; c.direct(() => P.point(c.ctx, cx + Math.cos(b) * r * .9, cy + Math.sin(b) * r * .9, 4.5)); }
+    c.direct(() => P.roue(c.ctx, cx, cy, r, a));
+    if (u >= 1 || S.t <= 0) c.cercle(cx, cy, r * .9, { couleur: coul, largeur: 2, pointille: [8, 6] });
+  } else {
+    const pos = v => [x + 20 + v * (w - 40), 330 - 4 * 170 * v * (1 - v)];
+    for (let i = 0; i <= Math.floor(u * 10); i++) { const [px, py] = pos(i / 10); c.direct(() => P.point(c.ctx, px, py, 4.5)); }
+    const [bx, by] = pos(u); c.direct(() => P.ballon(c.ctx, bx, by, 14, u * 10));
+    if (u >= 1 || S.t <= 0) c.courbe(pos, 40, { couleur: coul, largeur: 2, pointille: [8, 6] });
+  }
+  c.texte(cle, cx, 390, { couleur: coul, taille: pt ? 32 : 24, gras: true, align: 'center' });
+  c.repere(cle, x + 6, 130, w - 12, 280, 'la trajectoire ' + cle);
+}
+function dessinerFormes(c, S, sc) {
+  const L = sc.L, pt = sc.petit;
+  if (pt) { const k = S.t <= 0 ? 2 : S.a('curviligne') ? 2 : S.a('circulaire') ? 1 : 0; panneauForme(c, S, sc, k, 60, L - 120, pt); return; }
+  const w = (L - 20) / 3;
+  [0, 1, 2].forEach(k => { if (S.t <= 0 || S.ecrit(c, ['rectiligne', 'circulaire', 'curviligne'][k])) panneauForme(c, S, sc, k, 10 + k * w, w, pt); });
+}
+
+/* ── vue valve ── */
+const MV = { cycliste: 1, pieton: 5.5, compare: 11 };
+function dessinerValve(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t;
+  // en haut : la roue vue par le cycliste (l'axe ne bouge pas par rapport à lui)
+  const r1 = pt ? 62 : 70, c1 = [pt ? 170 : 200, 128];
+  const u1 = clamp((t - MV.cycliste) / 4, 0, 1), a1 = Math.PI / 2 - u1 * TAU;
+  const n1 = Math.floor(u1 * 16);
+  for (let i = 0; i <= n1; i++) { const b = Math.PI / 2 - i * TAU / 16; c.direct(() => P.point(c.ctx, c1[0] + Math.cos(b) * r1 * .9, c1[1] + Math.sin(b) * r1 * .9, 4)); }
+  c.direct(() => P.roue(c.ctx, c1[0], c1[1], r1, a1));
+  c.texte(pt ? 'cycliste' : 'vue du cycliste', c1[0] + r1 + 30, 70, { couleur: 'cyan', taille: pt ? 28 : 21, gras: true });
+  c.repere('cycliste', c1[0] - r1, c1[1] - r1, 2 * r1, 2 * r1, 'la trajectoire de la valve vue par le cycliste');
+  if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'compare'))) { c.cercle(c1[0], c1[1], r1 * .9, { couleur: 'jaune', largeur: 2.2, pointille: [8, 6] }); c.texte('un cercle', c1[0] + r1 + 30, 112, { couleur: 'jaune', taille: pt ? 30 : 22, gras: true }); c.repere('cercle', c1[0] + r1 + 24, 88, 180, 32, 'un cercle : trajectoire circulaire'); }
+  // en bas : la même roue vue par un piéton au bord de la route (elle roule)
+  const r2 = pt ? 46 : 52, sol = 398;
+  c.direct(() => P.sol(c.ctx, 0, sol, L, 22, { route: false }));
+  const x0 = 70, tours = 1.5, u2 = clamp((t - MV.pieton) / 5, 0, 1), th = u2 * tours * TAU, cx = x0 + r2 * th;
+  // valve au départ en bas (au contact) : angle de la valve (sens trigo du canvas) = π/2 + angle de rotation
+  const valve = th0 => [x0 + r2 * th0 - r2 * .9 * Math.sin(th0), sol - r2 + r2 * .9 * Math.cos(th0)];
+  const n2 = Math.floor(u2 * 24);
+  for (let i = 0; i <= n2; i++) { const p = valve(i * tours * TAU / 24); c.direct(() => P.point(c.ctx, p[0], p[1], 4)); }
+  c.direct(() => P.roue(c.ctx, cx, sol - r2, r2, Math.PI / 2 + th));
+  c.texte(pt ? 'piéton' : 'vue du piéton', L - 20, 236, { couleur: 'cyan', taille: pt ? 28 : 21, gras: true, align: 'right' });
+  c.repere('pieton', x0 - r2, sol - 2 * r2, r2 * tours * TAU + 2 * r2, 2 * r2, 'la trajectoire de la valve vue par le piéton');
+  if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'compare'))) { c.courbe(v => valve(v * tours * TAU), 80, { couleur: 'jaune', largeur: 2.2, pointille: [8, 6] }); c.texte('une courbe en arches', L - 20, 276, { couleur: 'jaune', taille: pt ? 28 : 22, gras: true, align: 'right' }); c.repere('arches', L - 300, 252, 280, 32, 'une courbe : trajectoire curviligne'); }
+  c.ligne(10, 205, L - 10, 205, { couleur: 'tresfaible', largeur: 1, duree: .05 });
+  if (S.a('pieton') && S.t > 0 && !S.a('compare')) lueur(c, 8, 210, L - 16, 205, {});
+  else if (S.a('cycliste') && S.t > 0 && !S.a('pieton')) lueur(c, 8, 26, L - 16, 176, {});
+}
+
+window.Mvt.vues('tc_mi_trajectoire', {
+  ballon: { titre: 'La trajectoire', moments: MB, fin: 11, dessiner: dessinerBallon,
+    motifs: { tir: 'le tir', vol: 'le ballon vole', points: 'les positions', trajectoire: 'la trajectoire', definition: 'la définition' },
+    accueil: 'Un ballon frappé.', fini: 'La trajectoire est l’ensemble des positions successives.',
+    voir: S => ['Un joueur, un ballon, un terrain.', S.a('vol') && 'Le ballon vole et laisse un point à chaque instant.', S.a('points') && 'Les points s’allument.', S.a('trajectoire') && 'Courbe cyan qui passe par tous les points.', S.a('definition') && S.conclusions && 'La trajectoire : l’ensemble des positions successives.'].filter(Boolean).join(' '),
+    texte: 'La trajectoire est l’ensemble des positions successives occupées par le point mobile au cours du mouvement.' },
+  formes: { titre: 'Trois formes de trajectoire', moments: MF, fin: 11.5, dessiner: dessinerFormes,
+    motifs: { rectiligne: 'rectiligne', circulaire: 'circulaire', curviligne: 'curviligne' },
+    accueil: 'Trois mouvements.', fini: 'Rectiligne (une droite), circulaire (un cercle), curviligne (une courbe).',
+    voir: S => [S.a('rectiligne') && 'Une voiture sur une route droite : points alignés, trajectoire rectiligne.', S.a('circulaire') && 'La valve d’une roue qui tourne : points sur un cercle, trajectoire circulaire.', S.a('curviligne') && 'Un ballon : points sur une courbe, trajectoire curviligne.'].filter(Boolean).join(' ') || 'Trois cadres.',
+    texte: 'Une trajectoire peut être rectiligne (une droite), circulaire (un cercle) ou curviligne (une courbe).' },
+  valve: { titre: 'La valve vue par le cycliste et par le piéton', moments: MV, fin: 12.5, dessiner: dessinerValve,
+    motifs: { cycliste: 'la vue du cycliste', pieton: 'la vue du piéton', compare: 'les deux trajectoires' },
+    accueil: 'La valve rouge d’une roue de vélo.', fini: 'Cycliste : un cercle ; piéton : une courbe en arches.',
+    voir: S => ['En haut : la roue vue par le cycliste. En bas : la roue vue par un piéton au bord de la route.', S.a('cycliste') && 'En haut, la valve laisse des points sur un cercle.', S.a('pieton') && 'En bas, la roue roule ; la valve laisse des points en arches.', S.a('compare') && S.conclusions && 'Cycliste : un cercle ; piéton : une courbe en arches.'].filter(Boolean).join(' '),
+    texte: 'La valve d’une roue : pour le cycliste, trajectoire circulaire ; pour le piéton, trajectoire curviligne en arches. La trajectoire dépend du référentiel.' },
+});
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

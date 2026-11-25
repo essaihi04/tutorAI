@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappels de mathématiques — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels : un repère et un vecteur position, la lecture d’un graphique, la droite x = a·t + b avec sa pente et son ordonnée à l’origine"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * Rappels de mathématiques (diapos mi_r4_vecteur, mi_r5_graphique, mi_r6_droite).
+ *  ?vue=vecteur : repère (O, i⃗, j⃗), carreau = 1 m ; M(3 ; 2) ; 3 carreaux sur x puis 2 sur y comptés en allumant ;
+ *                 OM⃗ = 3·i⃗ + 2·j⃗. Moments : repere 0,5 ; i 2 ; j 3,5 ; point 5 ; x 6,5 ; y 9 ; om 11 ; ecriture 12,5 ; fin 14.
+ *  ?vue=lire    : la droite x = 2t + 1 ; lire x à t = 2 s : 5 m. Moments : axes 0,5 ; unites 2 ; courbe 4 ; lecture 6 ;
+ *                 valeur 8 ; fin 10.
+ *  ?vue=droite  : x = a·t + b sur la même droite : b = 1 m (à t = 0), a = Δx/Δt = (7 − 3)/(3 − 1) = 2 m/s.
+ *                 Moments : courbe 0,5 ; b 2,5 ; points 4,5 ; dx 6,5 ; dt 8 ; pente 9,5 ; equation 11 ; fin 13.
+ */
+const { P, lueur, panneau, vecteur, texteV, graphique, HEX } = window.Mvt;
+
+/* ── vue vecteur ── */
+const MV = { repere: .5, i: 2, j: 3.5, point: 5, x: 6.5, y: 9, om: 11, ecriture: 12.5 };
+function dessinerVecteur(c, S, sc) {
+  const L = sc.L, pt = sc.petit, u = 66, O = [70, 360], X = k => O[0] + k * u, Y = k => O[1] - k * u;
+  c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = 'rgba(148,163,184,.18)'; g.lineWidth = 1; for (let k = 0; k <= 5; k++) { g.beginPath(); g.moveTo(X(k), Y(0)); g.lineTo(X(k), Y(4.6)); g.stroke(); } for (let k = 0; k <= 4; k++) { g.beginPath(); g.moveTo(X(0), Y(k)); g.lineTo(X(5.2), Y(k)); g.stroke(); } g.restore(); });
+  c.fleche(X(0), Y(0), X(5.4), Y(0), { couleur: 'blanc', largeur: 1.8 }); c.fleche(X(0), Y(0), X(0), Y(4.8), { couleur: 'blanc', largeur: 1.8 });
+  c.texte('x', X(5.4) + 4, Y(0) + 22, { couleur: 'blanc', taille: pt ? 28 : 20 }); c.texte('y', X(0) - 26, Y(4.8) + 12, { couleur: 'blanc', taille: pt ? 28 : 20 });
+  c.texte('O', X(0) - 12, Y(0) + 24, { couleur: 'blanc', taille: pt ? 28 : 20, align: 'right' });
+  c.repere('repere', X(0), Y(4.6), 5.2 * u, 4.6 * u, 'le repère (O, i, j)');
+  if (S.t <= 0 || S.ecrit(c, 'i')) { vecteur(c, X(0), Y(0), X(1), Y(0), { couleur: 'cyan', nom: 'i', nx: X(.42), ny: Y(0) + 36, taille: pt ? 30 : 22, point: false }); c.repere('i', X(0), Y(0) - 10, u, 46, 'le vecteur unitaire i (1 m)'); }
+  if (S.t <= 0 || S.ecrit(c, 'j')) { vecteur(c, X(0), Y(0), X(0), Y(1), { couleur: 'cyan', nom: 'j', nx: X(0) - 34, ny: Y(.5) + 10, taille: pt ? 30 : 22, point: false }); c.repere('j', X(0) - 36, Y(1), 46, u, 'le vecteur unitaire j (1 m)'); }
+  if (S.t <= 0 || S.ecrit(c, 'point')) { c.point(X(3), Y(2), 6, 'jaune'); c.texte('M', X(3) + 10, Y(2) - 10, { couleur: 'jaune', taille: pt ? 30 : 22, gras: true }); c.repere('M', X(3) - 10, Y(2) - 10, 20, 20, 'le point M'); }
+  const tm = S.t <= 0 ? 99 : S.t;
+  if (S.t <= 0 || S.a('x')) for (let k = 0; k < 3; k++) if (tm >= MV.x + k * .8) lueur(c, X(k) + 3, Y(0) - 12, u - 6, 24, { vive: tm < MV.x + (k + 1) * .8 && !S.a('y'), numero: k + 1, nx: X(k + .5), ny: Y(0) - 20, align: 'center', taille: pt ? 30 : 20 });
+  if (S.t <= 0 || S.a('x')) c.repere('x', X(0), Y(0) - 12, 3 * u, 24, 'x_M = 3 : trois carreaux sur l’axe x');
+  if (S.t <= 0 || S.a('y')) for (let k = 0; k < 2; k++) if (tm >= MV.y + k * .8) lueur(c, X(3) - 12, Y(k + 1) + 3, 24, u - 6, { vive: tm < MV.y + (k + 1) * .8 && !S.a('om'), numero: k + 1, nx: X(3) + 30, ny: Y(k + .4), align: 'center', taille: pt ? 30 : 20 });
+  if (S.t <= 0 || S.a('y')) c.repere('y', X(3) - 12, Y(2), 24, 2 * u, 'y_M = 2 : deux carreaux vers le haut');
+  if (S.t <= 0 || S.ecrit(c, 'om')) { vecteur(c, X(0), Y(0), X(3), Y(2), { couleur: 'rose', nom: 'OM', nx: X(1.1), ny: Y(1.25), taille: pt ? 30 : 22, point: false }); c.repere('OM', X(0), Y(2), 3 * u, 2 * u, 'le vecteur position OM'); }
+  panneau(c, S, sc, L - 300, 70, 285, [
+    { m: 'point', t: 'M (3 ; 2)', c: 'jaune', g: true, taille: 24 },
+    { m: 'x', t: 'x_M = 3', c: 'cyan' },
+    { m: 'y', t: 'y_M = 2', c: 'cyan' },
+    { m: 'ecriture', t: '^OM = 3·^i + 2·^j', c: 'rose', g: true, taille: 24, r: 'ecriture' },
+  ], { dy: 52, px: 380, py: 46, pw: 370 });
+}
+
+/* ── vue lire (et droite) : la droite x = 2t + 1 ── */
+const AX = { min: 0, max: 4.5, pas: 1, nom: 't', unite: 's', lab: [1, 2, 3, 4] }, AY = { min: 0, max: 10, pas: 1, nom: 'x', unite: 'm', lab: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+const ML = { axes: .5, unites: 2, courbe: 4, lecture: 6, valeur: 8 };
+function repereGraph(c, sc) { return graphique(c, 70, 34, 340, 340, AX, sc.petit ? Object.assign({}, AY, { lab: [2, 4, 6, 8] }) : AY, { taille: sc.petit ? 24 : 16, tailleNom: sc.petit ? 26 : 18, petit: sc.petit }); }
+function droite(c, R, S, nom) { if (S.t <= 0 || S.ecrit(c, nom)) { c.ligne(R.X(0), R.Y(1), R.X(4.25), R.Y(9.5), { couleur: 'cyan', largeur: 2.8 }); c.repere('droite', R.X(0), R.Y(9.5), R.X(4.25) - R.X(0), R.Y(1) - R.Y(9.5), 'la droite x = 2t + 1'); } }
+function dessinerLire(c, S, sc) {
+  const L = sc.L, R = repereGraph(c, sc);
+  c.repere('axe_t', R.X(0), R.Y(0) - 10, R.X(4.5) - R.X(0) + 40, 40, 'l’axe horizontal : le temps t en secondes');
+  c.repere('axe_x', R.X(0) - 40, R.Y(10), 50, R.Y(0) - R.Y(10), 'l’axe vertical : la position x en mètres');
+  if (S.a('unites') && S.t < ML.courbe) { lueur(c, R.X(0) - 4, R.Y(0) + 4, R.X(4.5) - R.X(0) + 70, 34, { vive: true }); lueur(c, R.X(0) - 36, R.Y(10) - 30, 70, R.Y(0) - R.Y(10) + 30, {}); }
+  droite(c, R, S, 'courbe');
+  if (S.t <= 0 || S.ecrit(c, 'lecture')) { c.ligne(R.X(2), R.Y(0), R.X(2), R.Y(5), { couleur: 'jaune', largeur: 2, pointille: [7, 6] }); c.point(R.X(2), R.Y(5), 6, 'jaune'); c.repere('lecture', R.X(2) - 8, R.Y(5), 16, R.Y(0) - R.Y(5), 'on monte de t = 2 s jusqu’à la droite'); }
+  if (S.t <= 0 || S.ecrit(c, 'valeur')) { c.ligne(R.X(2), R.Y(5), R.X(0), R.Y(5), { couleur: 'jaune', largeur: 2, pointille: [7, 6] }); lueur(c, R.X(0) - 34, R.Y(5) - 14, 40, 28, { vive: true }); c.repere('valeur', R.X(0) - 34, R.Y(5) - 14, 40, 28, 'x = 5 m'); }
+  panneau(c, S, sc, L - 330, 70, 315, [
+    { m: 'unites', t: 'horizontal : t (en s)', c: 'cyan' },
+    { m: 'unites', t: 'vertical : x (en m)', c: 'cyan' },
+    { m: 'lecture', t: 'à t = 2 s : on monte…', c: 'blanc' },
+    { m: 'valeur', t: '… x = 5 m', c: 'jaune', g: true, taille: 24, r: 'resultat' },
+  ], { dy: 50, px: 420, py: 46, pw: 330 });
+}
+const MD = { courbe: .5, b: 2.5, points: 4.5, dx: 6.5, dt: 8, pente: 9.5, equation: 11 };
+function dessinerDroite(c, S, sc) {
+  const L = sc.L, R = repereGraph(c, sc), pt = sc.petit;
+  droite(c, R, S, 'courbe');
+  if (S.t <= 0 || S.ecrit(c, 'b')) { lueur(c, R.X(0) - 14, R.Y(1) - 14, 28, 28, { vive: !S.a('points') }); c.texte('b = 1', R.X(0) + 18, R.Y(1) + 26, { couleur: 'orange', taille: pt ? 28 : 20, gras: true }); c.repere('b', R.X(0) - 14, R.Y(1) - 14, 28, 28, 'b : la valeur de x à t = 0'); }
+  if (S.t <= 0 || S.ecrit(c, 'points')) { c.point(R.X(1), R.Y(3), 6, 'jaune'); c.point(R.X(3), R.Y(7), 6, 'jaune'); if (!pt) { c.texte('(1 ; 3)', R.X(1) - 12, R.Y(3) - 10, { couleur: 'jaune', taille: 17, align: 'right' }); c.texte('(3 ; 7)', R.X(3) - 12, R.Y(7) - 10, { couleur: 'jaune', taille: 17, align: 'right' }); } c.repere('points', R.X(1) - 8, R.Y(7) - 8, R.X(3) - R.X(1) + 16, R.Y(3) - R.Y(7) + 16, 'deux points de la droite'); }
+  if (S.t <= 0 || S.ecrit(c, 'dt')) { c.cote(R.X(1), R.Y(3) + 0, R.X(3), R.Y(3), '', { couleur: 'vert' }); c.texte('Δt = 2 s', R.X(2), R.Y(3) + 26, { couleur: 'vert', taille: pt ? 28 : 19, align: 'center', gras: true }); c.repere('dt', R.X(1), R.Y(3) - 6, R.X(3) - R.X(1), 34, 'Δt = 3 − 1 = 2 s'); }
+  if (S.t <= 0 || S.ecrit(c, 'dx')) { c.cote(R.X(3), R.Y(3), R.X(3), R.Y(7), '', { couleur: 'orange' }); c.texte('Δx = 4 m', R.X(3) + 12, R.Y(5), { couleur: 'orange', taille: pt ? 28 : 19, gras: true }); c.repere('dx', R.X(3) - 6, R.Y(7), 100, R.Y(3) - R.Y(7), 'Δx = 7 − 3 = 4 m'); }
+  panneau(c, S, sc, L - 330, 60, 315, [
+    { m: 'courbe', t: 'x = a·t + b', c: 'cyan', g: true, taille: 24 },
+    { m: 'b', t: 'b = x à t = 0 : b = 1 m', c: 'orange' },
+    { m: 'pente', t: 'a = ⟦Δx|Δt⟧ = ⟦7 − 3|3 − 1⟧ = ⟦4|2⟧ = 2', c: 'jaune', r: 'pente' },
+    { m: 'equation', t: 'x = 2·t + 1', c: 'jaune', g: true, taille: 26, r: 'equation' },
+  ], { dy: 54, px: 420, py: 46, pw: 330 });
+}
+
+window.Mvt.vues('tc_mi_maths', {
+  vecteur: { titre: 'Un vecteur et ses coordonnées', moments: MV, fin: 14, dessiner: dessinerVecteur,
+    motifs: { repere: 'le repère', i: 'le vecteur i', j: 'le vecteur j', point: 'le point M', x: 'trois carreaux sur x', y: 'deux carreaux sur y', om: 'le vecteur OM', ecriture: 'OM = 3i + 2j' },
+    accueil: 'Un repère (O, i, j) et un point M.', fini: 'OM = 3·i + 2·j : M (3 ; 2).',
+    voir: S => ['Repère quadrillé (O, i, j), un carreau = 1 m.', S.a('i') && 'Flèche cyan i sur l’axe x.', S.a('j') && 'Flèche cyan j sur l’axe y.', S.a('point') && 'Point M jaune.', S.a('x') && 'Trois carreaux allumés sur x : x_M = 3.', S.a('y') && 'Deux carreaux allumés vers le haut : y_M = 2.', S.a('om') && 'Flèche rose OM de O à M.', S.a('ecriture') && 'OM = 3i + 2j.'].filter(Boolean).join(' '),
+    texte: 'Dans un repère (O, i, j), le point M (3 ; 2) a pour vecteur position OM = 3·i + 2·j : 3 et 2 sont ses coordonnées.' },
+  lire: { titre: 'Lire un graphique', moments: ML, fin: 10, dessiner: dessinerLire,
+    motifs: { axes: 'le graphique', unites: 'les axes et leurs unités', courbe: 'la droite', lecture: 'on monte de t = 2 s', valeur: 'x = 5 m' },
+    accueil: 'Un graphique x en fonction de t.', fini: 'À t = 2 s, on lit x = 5 m.',
+    voir: S => ['Graphique : t (s) à l’horizontale, x (m) à la verticale.', S.a('unites') && 'Axes allumés.', S.a('courbe') && 'Droite cyan.', S.a('lecture') && 'Pointillé jaune de t = 2 s jusqu’à la droite.', S.a('valeur') && 'Pointillé vers l’axe x : x = 5 m allumé.'].filter(Boolean).join(' '),
+    texte: 'Lire un graphique : d’abord les axes et leurs unités ; pour t = 2 s, on monte jusqu’à la droite puis on va à l’axe x : x = 5 m.' },
+  droite: { titre: 'La droite x = a·t + b', moments: MD, fin: 13, dessiner: dessinerDroite,
+    motifs: { courbe: 'la droite', b: 'b, à t = 0', points: 'deux points', dx: 'Δx', dt: 'Δt', pente: 'la pente a', equation: 'x = 2t + 1' },
+    accueil: 'Une droite : x = a·t + b.', fini: 'a = 2 m/s, b = 1 m : x = 2t + 1.',
+    voir: S => ['La droite x en fonction de t.', S.a('b') && 'b = 1 allumé sur l’axe x (t = 0).', S.a('points') && 'Points (1 ; 3) et (3 ; 7).', S.a('dt') && 'Δt = 2 s.', S.a('dx') && 'Δx = 4 m.', S.a('pente') && 'a = Δx/Δt = 2.', S.a('equation') && 'x = 2t + 1.'].filter(Boolean).join(' '),
+    texte: 'Une droite x = a·t + b : b est la valeur de x à t = 0, a = Δx/Δt est la pente. Ici b = 1 m, a = (7 − 3)/(3 − 1) = 2 m/s : x = 2t + 1.' },
+});
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

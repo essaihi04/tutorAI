@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Identifier une espèce : ses caractéristiques physiques — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_synthese-tableau/synthese.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Identifier l’espèce synthétisée par ses caractéristiques physiques : température de fusion ou d’ébullition comparée aux tables, solubilité, masse volumique et densité mesurées et calculées"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
+<script src="/media/simulations/chimie/tc_synthese-tableau/commun.js"></script>
+<script>
+/*
+ * Les caractéristiques physiques, cinq vues :
+ *   ?vue=pourquoi    (sy_i1_pourquoi)     moments : produit, temperature, solubilite, densite, tables
+ *   ?vue=temperature (sy_i2_temperature)  moments : chauffe, monte, fond, tables, compare, atoi, reponse
+ *   ?vue=solubilite  (sy_i3_solubilite)   moments : sucre, huile, bilan
+ *   ?vue=masse       (sy_i4_masse)        moments : tare, verse, pese, formule, calcul
+ *   ?vue=densite     (sy_i5_densite)      moments : eau, rho_eau, formule, calcul, flotte, atoi, reponse
+ * set_parameters {conclusions: false} : la réponse de « À toi » reste cachée (moment reponse).
+ */
+const { P, lueur, param } = window.Synthese;
+const VUE = ['pourquoi', 'temperature', 'solubilite', 'masse', 'densite'].includes(param('vue')) ? param('vue') : 'temperature';
+const M_pourquoi = { produit: .5, temperature: 3, solubilite: 5.5, densite: 8, tables: 10.5 };
+const M_temperature = { chauffe: .5, monte: 2.5, fond: 7, tables: 9.5, compare: 12, atoi: 15, reponse: 18 };
+const M_solubilite = { sucre: .5, huile: 4, bilan: 7.5 };
+const M_masse = { tare: .5, verse: 2.5, pese: 5.5, formule: 8, calcul: 10.5 };
+const M_densite = { eau: .5, rho_eau: 3, formule: 5.5, calcul: 8, flotte: 10.5, atoi: 13.5, reponse: 16.5 };
+const M = { pourquoi: M_pourquoi, temperature: M_temperature, solubilite: M_solubilite, masse: M_masse, densite: M_densite }[VUE];
+const FIN = Math.max(...Object.values(M)) + 3;
+const k01 = v => Math.max(0, Math.min(1, v));
+const fr = v => String(v).replace('.', ',');
+
+/* ── pourquoi : comparer avec les tables ── */
+const CASES_POURQUOI = [
+  { id: 'produit', titre: 'notre produit', l1: 'est-ce la bonne espèce ?', peindre: (g, x, y, k) => P.flacon(g, x, y - k * .3, k * .34, k * .56, { nom: '?', col: P.LIQ.produit, bouchon: '#15803d' }) },
+  { id: 'temperature', titre: 'température', l1: 'de fusion ou d’ébullition', peindre: (g, x, y, k) => P.thermometre(g, x, y - k * .35, k * .6, .6) },
+  { id: 'solubilite', titre: 'solubilité', l1: 'se dissout ou non', peindre: (g, x, y, k) => { P.tube(g, x - k * .12, y - k * .35, k * .13, k * .6, { couches: [{ f: .6, col: P.LIQ.eau }] }); P.tube(g, x + k * .12, y - k * .35, k * .13, k * .6, { couches: [{ f: .45, col: P.LIQ.eau }, { f: .65, col: P.LIQ.huile }] }); } },
+  { id: 'densite', titre: 'masse volumique', l1: 'et densité', peindre: (g, x, y, k) => { P.balance(g, x, y + k * .12, k * .62, k * .18, '8 g'); P.eprouvette(g, x, y - k * .38, k * .12, k * .48, .5, P.LIQ.produit); } },
+];
+/* ── température : fusion, comparaison, puis à toi (ébullition) ── */
+function dessinerTemperature(c, S, scene) {
+  const pt = scene.petit, L = scene.L, tous = S.t <= 0;
+  const atoi = tous || S.a('atoi');
+  const xg = pt ? L * .3 : L * .26, xd = pt ? L * .6 : L * .56;
+  const theta = atoi ? 78 : Math.round(20 + 102 * (tous ? 1 : S.kl('monte', 4.5)));
+  const fondu = !atoi && (tous || S.a('fond'));
+  const montrerExp = !pt || !(S.a('tables') && !atoi) || false;
+  if (montrerExp || pt && !S.a('tables')) {
+    c.direct(() => {
+      const g = c.ctx;
+      P.chauffeBallon(g, xg, 330, 190, 46, 1);
+      P.becher(g, xg - 80, 196, 160, 136, .78, [253, 186, 116, .35]);       // le bain chaud
+      if (atoi) P.tube(g, xg - 10, 90, 34, 200, { couches: [{ f: .38, col: P.LIQ.alcool }] });
+      else { P.tube(g, xg - 10, 90, 34, 200, { couches: fondu ? [{ f: .14, col: [240, 240, 240, .55] }] : [] }); if (!fondu) P.flocons(g, xg - 22, 266, 24, 14, 12, 1); }
+      if (atoi) for (let i = 0; i < 5; i++) { const f = (S.t * .9 + i / 5) % 1; g.strokeStyle = 'rgba(255,255,255,.8)'; g.beginPath(); g.arc(xg - 10 + Math.sin(i * 3) * 6, 278 - f * 60, 2, 0, 7); g.stroke(); }
+      P.thermometre(g, xg + 32, 70, 210, theta / 160);
+    });
+    c.texte(`${theta} °C`, xg + 32, 56, { couleur: 'orange', taille: pt ? 34 : 28, gras: true, align: 'center', duree: .05 });
+    c.repere('thermometre', xg + 14, 30, 40, 270, 'le thermomètre');
+    if (!pt) c.texte('bain d’huile', xg - 78, 188, { couleur: 'orange', taille: 15 });
+    c.repere('tube', xg - 30, 90, 44, 210, atoi ? 'le liquide qui bout' : 'le solide dans le tube');
+    if (!atoi && S.a('fond') && S.t < M.tables) c.texte(pt ? 'il fond !' : 'à 122 °C, le solide fond', xg - 10, 400, { couleur: 'cyan', taille: pt ? 30 : 20, gras: true, align: 'center' });
+    if (atoi && !pt) c.texte('le liquide bout à 78 °C', xg - 10, 400, { couleur: 'cyan', taille: 20, gras: true, align: 'center' });
+    if (!atoi && (tous || S.a('fond'))) c.repere('fond', xg - 40, 230, 80, 60, 'la fusion à 122 °C');
+  }
+  // la table de référence
+  if (tous || S.ecrit(c, atoi ? 'atoi' : 'tables')) {
+    if (pt && !atoi && !S.a('tables')) return;
+    const lignes = atoi ? [['eau', '100 °C'], ['éthanol', '78 °C'], ['cyclohexane', '81 °C']] : [['acide benzoïque', '122 °C'], ['aspirine', '135 °C'], ['paracétamol', '169 °C']];
+    const x0 = pt ? 30 : xd, w = pt ? L - 60 : Math.min(330, L - xd - 16), y0 = pt ? 60 : 90, hl = pt ? 64 : 50;
+    c.texte(atoi ? 'table : température d’ébullition' : 'table : température de fusion', x0, y0 - 18, { couleur: 'jaune', taille: pt ? 26 : 19, gras: true, max: w });
+    c.rect(x0, y0, w, hl * 3, { couleur: 'blanc', largeur: 1.4, arrondi: 4 });
+    lignes.forEach(([n, v], i) => {
+      const y = y0 + i * hl;
+      if (i) c.ligne(x0, y, x0 + w, y, { couleur: 'faible', largeur: 1 });
+      const bon = atoi ? i === 1 : i === 0, montre = atoi ? (tous || S.a('reponse')) && S.conclusions : (tous || S.a('compare'));
+      if (bon && montre) lueur(c, x0 + 2, y + 2, w - 4, hl - 4, { vive: true });
+      c.texte(n, x0 + 12, y + hl * .64, { couleur: 'blanc', taille: pt ? 28 : 20, max: w * .62 });
+      c.texte(v, x0 + w - 12, y + hl * .64, { couleur: 'cyan', taille: pt ? 28 : 20, align: 'right' });
+    });
+    c.ligne(x0 + w * .66, y0, x0 + w * .66, y0 + hl * 3, { couleur: 'faible', largeur: 1 });
+    c.repere(atoi ? 'table_atoi' : 'tables', x0, y0 - 30, w, hl * 3 + 30, 'la table des valeurs');
+    if (!atoi && (tous || S.a('compare'))) { c.texte(pt ? '= acide benzoïque' : 'même valeur : c’est l’acide benzoïque', x0, y0 + hl * 3 + 40, { couleur: 'vert', taille: pt ? 26 : 19, gras: true, max: w + 20 }); c.repere('compare', x0, y0 + hl * 3 + 12, w, 36, 'la conclusion'); }
+    if (atoi && (tous || S.a('reponse')) && S.conclusions) { c.texte('même valeur : c’est l’éthanol', x0, y0 + hl * 3 + 40, { couleur: 'vert', taille: pt ? 26 : 19, gras: true, max: w + 20 }); c.repere('reponse', x0, y0 + hl * 3 + 12, w, 36, 'la réponse'); }
+    if (atoi && !pt) c.texte('À toi : quel liquide ?', x0, 30, { couleur: 'orange', taille: 20, gras: true });
+  }
+}
+/* ── solubilité ── */
+const CASES_SOLU = [
+  { id: 'sucre', titre: 'sucre + eau', l1: 'il disparaît : il se dissout', l2: 'soluble dans l’eau', c2: 'vert', peindre: (g, x, y, k, S, tt) => { const f = S.t <= 0 ? 1 : k01((tt - .5) / 2.5); P.verre(g, x, y - k * .25, k * .42, k * .55, P.LIQ.eau); for (let i = 0; i < 6; i++) { const a = 1 - f; if (a > 0) { g.globalAlpha = a; P.cristal(g, x - k * .1 + (i % 3) * k * .1, y - k * .4 + Math.min(1, f * 3 + (S.t <= 0 ? 1 : k01(tt))) * k * .45 + Math.floor(i / 3) * 6, k * .03); g.globalAlpha = 1; } } } },
+  { id: 'huile', titre: 'huile + eau', l1: 'elle reste au-dessus', l2: 'non soluble dans l’eau', c2: 'rouge', peindre: (g, x, y, k, S, tt) => { const f = S.t <= 0 ? 1 : k01(tt / 2); P.tube(g, x, y - k * .38, k * .17, k * .72, { couches: [{ f: .45, col: P.LIQ.eau }, { f: .45 + .2 * f, col: P.LIQ.huile }] }); } },
+];
+/* ── masse volumique ── */
+function dessinerMasse(c, S, scene) {
+  const pt = scene.petit, L = scene.L, tous = S.t <= 0, xb = pt ? L * .24 : L * .24;
+  const v = tous ? 10 : Math.round(10 * S.kl('verse', 2.5)), m = tous || S.a('pese') ? 8 : Math.round(.8 * v * (S.a('verse') ? 1 : 0));
+  const montrerExp = !pt || !S.a('formule') || tous && false;
+  if (montrerExp) {
+    c.direct(() => { const g = c.ctx; P.balance(g, xb, 330, 230, 70, `${m} g`); P.eprouvette(g, xb, 110, 50, 220, v / 20, P.LIQ.produit); });
+    c.texte(`V = ${v} mL`, xb + 50, 160, { couleur: 'cyan', taille: pt ? 30 : 22, gras: true });
+    c.repere('balance', xb - 115, 320, 230, 80, 'la balance : m');
+    c.repere('eprouvette', xb - 30, 100, 60, 230, 'l’éprouvette : V');
+    if (S.a('tare') && !S.a('verse') && !tous) c.texte('éprouvette vide : 0 g', xb, 90, { couleur: 'blanc', taille: pt ? 26 : 18, align: 'center' });
+  }
+  const xf = pt ? 40 : L * .52;
+  if (tous || S.ecrit(c, 'formule')) {
+    if (pt && S.a('calcul') && !tous) {} else {
+      c.texte('ρ = ⟦m|V⟧', xf, pt ? 110 : 130, { couleur: 'jaune', taille: pt ? 44 : 36, gras: true });
+      c.texte('masse volumique', xf, pt ? 170 : 180, { couleur: 'blanc', taille: pt ? 26 : 18 });
+      c.repere('formule', xf - 6, pt ? 60 : 90, 200, 60, 'la relation ρ = m/V');
+    }
+  }
+  if (tous || S.ecrit(c, 'calcul')) {
+    c.texte('ρ = ⟦8 g|10 mL⟧', xf, pt ? 110 : 250, { couleur: 'cyan', taille: pt ? 38 : 30 });
+    c.texte('ρ = 0,8 g/mL', xf, pt ? 190 : 320, { couleur: 'vert', taille: pt ? 40 : 32, gras: true });
+    c.repere('calcul', xf - 6, pt ? 60 : 210, 240, 130, 'le calcul de ρ');
+  }
+}
+/* ── densité ── */
+function dessinerDensite(c, S, scene) {
+  const pt = scene.petit, L = scene.L, tous = S.t <= 0, atoi = tous || S.a('atoi');
+  const xb = L * .2;
+  if (!pt || (!S.a('formule') && !atoi) || (atoi && !tous)) {
+    const eau = !atoi;
+    c.direct(() => { const g = c.ctx; P.balance(g, xb, 330, 220, 70, eau ? (S.t <= 0 || S.a('eau') ? '10 g' : '0 g') : '22 g'); P.eprouvette(g, xb, 110, 50, 220, eau ? .5 : 1, eau ? P.LIQ.eau : [196, 181, 253, .5]); });
+    c.texte(eau ? 'eau : V = 10 mL' : 'liquide B : V = 20 mL', xb + 44, 150, { couleur: 'cyan', taille: pt ? 26 : 20, gras: true, max: pt ? L * .5 : L * .3 });
+    c.texte(eau ? 'm = 10 g' : 'm = 22 g', xb + 44, 184, { couleur: 'cyan', taille: pt ? 26 : 20, gras: true });
+    c.repere(eau ? 'eau' : 'atoi', xb - 110, 100, 260, 300, eau ? 'l’eau : 10 mL pèsent 10 g' : 'le liquide B : 20 mL, 22 g');
+  }
+  const xf = pt ? 30 : L * .5;
+  if (!atoi || tous) {
+    if (tous || S.ecrit(c, 'rho_eau')) { if (!pt || !S.a('formule')) { c.texte('ρ(eau) = ⟦10 g|10 mL⟧ = 1 g/mL', pt ? xf + L * .4 : xf, pt ? 240 : 80, { couleur: 'cyan', taille: pt ? 26 : 24, max: pt ? L * .55 : L - xf - 10 }); c.repere('rho_eau', xf - 6, 40, 300, 60, 'ρ de l’eau'); } }
+    if (tous || S.ecrit(c, 'formule')) { if (!pt || !S.a('calcul')) { c.texte('d = ⟦ρ|ρ(eau)⟧', xf, pt ? 120 : 160, { couleur: 'jaune', taille: pt ? 44 : 34, gras: true }); c.texte('sans unité', xf + (pt ? 0 : 190), pt ? 180 : 160, { couleur: 'blanc', taille: pt ? 26 : 18 }); c.repere('formule', xf - 6, 120, 280, 60, 'la relation de la densité'); } }
+    if (tous || S.ecrit(c, 'calcul')) { if (!pt || !S.a('flotte')) { c.texte('d = ⟦0,8|1⟧ = 0,8', xf, pt ? 130 : 240, { couleur: 'vert', taille: pt ? 40 : 30, gras: true }); c.repere('calcul', xf - 6, 200, 260, 60, 'le calcul de d'); } }
+    if (tous || S.ecrit(c, 'flotte')) {
+      const xt = pt ? L * .6 : L * .84;
+      c.direct(() => P.tube(c.ctx, xt, 250, 40, 150, { couches: [{ f: .4, col: P.LIQ.eau }, { f: .62, col: P.LIQ.produit }] }));
+      c.texte(pt ? 'd < 1 : il flotte' : 'd < 1 : le liquide flotte sur l’eau', pt ? 30 : xf, pt ? 200 : 320, { couleur: 'orange', taille: pt ? 30 : 21, gras: true, max: pt ? L * .5 : L * .3 });
+      c.repere('flotte', xt - 24, 240, 48, 170, 'le liquide flotte sur l’eau');
+    }
+  } else {
+    c.texte('À toi : calcule ρ puis d', xf, 90, { couleur: 'orange', taille: pt ? 28 : 22, gras: true, max: L - xf - 10 });
+    if ((tous || S.a('reponse')) && S.conclusions) {
+      c.texte('ρ = ⟦22 g|20 mL⟧ = 1,1 g/mL', xf, 170, { couleur: 'cyan', taille: pt ? 28 : 24, max: L - xf - 10 });
+      c.texte('d = ⟦1,1|1⟧ = 1,1', xf, 250, { couleur: 'vert', taille: pt ? 32 : 28, gras: true });
+      c.texte('d > 1 : il coule sous l’eau', xf, 320, { couleur: 'orange', taille: pt ? 26 : 20, max: L - xf - 10 });
+      c.repere('reponse', xf - 6, 130, 300, 210, 'la réponse');
+    }
+  }
+}
+const V = {
+  pourquoi: { cases: CASES_POURQUOI, bas: 'mêmes valeurs que dans les tables → même espèce', basMoment: 'tables' },
+  solubilite: { cases: CASES_SOLU, bas: 'solubilité : capacité d’une espèce à se dissoudre dans un solvant', basMoment: 'bilan' },
+}[VUE];
+const DESSINS = { temperature: dessinerTemperature, masse: dessinerMasse, densite: dessinerDensite };
+const S = window.Synthese.sim({
+  id: 'tc_synthese_constantes_' + VUE, titre: 'Caractéristiques physiques : ' + VUE, vue: VUE, moments: M, fin: FIN, graine: 41,
+  motifs: { produit: 'notre produit', temperature: 'la température', solubilite: 'la solubilité', densite: 'la densité', tables: 'les tables', chauffe: 'on chauffe', monte: 'la température monte', fond: 'le solide fond', compare: 'même valeur', atoi: 'à toi', reponse: 'la réponse', sucre: 'le sucre', huile: 'l’huile', bilan: 'la solubilité', tare: 'l’éprouvette vide', verse: 'on verse 10 mL', pese: 'la masse', formule: 'la relation', calcul: 'le calcul', eau: 'l’eau', rho_eau: 'ρ de l’eau', flotte: 'il flotte' },
+  accueil: 'Comment reconnaître l’espèce obtenue ?', debut: 'Regarde…', fini: 'Comparer avec les valeurs des tables.',
+  dessiner: (c, S, sc) => V ? window.Synthese.cases(c, S, sc, V.cases, { bas: V.bas, basMoment: V.basMoment, M }) : DESSINS[VUE](c, S, sc),
+  ceQuiSeVoit: S => {
+    const a = n => S.t <= 0 || S.a(n);
+    if (VUE === 'temperature') return a('atoi') ? 'À toi : un liquide bout à 78 °C ; table d’ébullition : eau 100 °C, éthanol 78 °C, cyclohexane 81 °C.' + (a('reponse') && S.conclusions ? ' Même valeur : c’est l’éthanol.' : '') : `On chauffe un solide blanc dans un tube ; le thermomètre monte.` + (a('fond') ? ' À 122 °C le solide fond.' : '') + (a('tables') ? ' Table de fusion : acide benzoïque 122 °C, aspirine 135 °C, paracétamol 169 °C.' : '') + (a('compare') ? ' Même valeur : c’est l’acide benzoïque.' : '');
+    if (VUE === 'masse') return 'Une éprouvette sur la balance (tarée à 0 g).' + (a('verse') ? ' On verse V = 10 mL du liquide.' : '') + (a('pese') ? ' La balance affiche m = 8 g.' : '') + (a('formule') ? ' ρ = m/V.' : '') + (a('calcul') ? ' ρ = (8 g)/(10 mL) = 0,8 g/mL.' : '');
+    if (VUE === 'densite') return a('atoi') ? 'À toi : liquide B, V = 20 mL, m = 22 g.' + (a('reponse') && S.conclusions ? ' ρ = 1,1 g/mL ; d = 1,1 ; il coule sous l’eau.' : '') : '10 mL d’eau pèsent 10 g : ρ(eau) = 1 g/mL.' + (a('formule') ? ' d = ρ/ρ(eau), sans unité.' : '') + (a('calcul') ? ' d = 0,8/1 = 0,8.' : '') + (a('flotte') ? ' d < 1 : le liquide flotte sur l’eau.' : '');
+    return V.cases.filter(k => a(k.id)).map(k => k.titre + ' : ' + [k.l1, k.l2].filter(Boolean).join(', ')).join(' ; ') + (a(V.basMoment) ? '. ' + V.bas + '.' : '.');
+  },
+  texte: 'Caractéristiques physiques d’une espèce : température de fusion ou d’ébullition, solubilité, masse volumique ρ = m/V, densité d = ρ/ρ(eau) (sans unité, ρ(eau) = 1 g/mL). On compare avec les valeurs des tables.',
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

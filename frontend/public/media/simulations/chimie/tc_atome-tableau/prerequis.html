@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prérequis de l’atome — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_atome-tableau/atome.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Les prérequis du cours sur l’atome : la matière faite d’atomes, les charges électriques qui s’attirent ou se repoussent, le ballon frotté, les puissances de dix et ce qu’est un modèle"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/chimie/tc_atome-tableau/commun.js"></script>
+<script>
+/*
+ * Prérequis du cours « Modèle de l’atome » (diapos at_p1 à at_p6). Vues (?vue=) :
+ *  zoom       : une pièce de cuivre ; la loupe grossit, grossit encore… jusqu’aux atomes (petites boules serrées).
+ *               Moments : objet 1 ; loupe 3 ; atomes 6 ; questions 8,5 ; fin 10.
+ *  charges    : deux boules + s’écartent, deux boules − s’écartent, une + et une − se rapprochent ; la règle.
+ *               Moments : plus_plus 2,5 ; moins_moins 5 ; plus_moins 7,5 ; regle 9 ; fin 10,5.
+ *  ballon     : un ballon et des cheveux, neutres (4 + et 4 − chacun, comptés) ; on frotte : 2 électrons passent des cheveux
+ *               au ballon ; ballon −2, cheveux +2 ; les cheveux se dressent vers le ballon.
+ *               Moments : neutres 4 ; frotter 7 ; charges 9 ; attire 11 ; fin 12,5.
+ *  puissances : 1 m divisé par 10, encore, encore… 10⁻¹, 10⁻², 10⁻³ ; puis les places après la virgule s’allument une à
+ *               une jusqu’à 10 : 10⁻¹⁰ m ; puis 10⁻¹⁵ m. Moments : metre 1 ; dixieme 2,5 ; centieme 4 ; millieme 5,5 ;
+ *               places 10 ; atome 11 ; noyau 13 ; fin 14.
+ *  calculs    : 10² × 10³ = 10⁵ (les zéros comptés) ; la règle du produit ; ⟦10⁻¹⁰|10⁻¹⁵⟧ = 10⁵ ; 20 × 10⁻²⁷ = 2 × 10⁻²⁶.
+ *               Moments : produit 3,5 ; regle_produit 5 ; quotient 8 ; ecriture 11 ; fin 12.
+ *  modele     : la Terre (peinte) et le globe, son modèle ; l’atome, trop petit pour être vu : on en fait des modèles, qui
+ *               changent quand une expérience ne colle plus. Moments : terre 1,5 ; globe 4 ; atome 6,5 ; change 9 ; fin 10.
+ * set_parameters {conclusions: false} : la règle écrite reste cachée.
+ */
+const A = window.Atome, { P, lueur } = A;
+const VUE = A.param('vue', 'zoom');
+const MOMENTS = {
+  zoom: { objet: 1, loupe: 3, atomes: 6, questions: 8.5 },
+  charges: { plus_plus: 2.5, moins_moins: 5, plus_moins: 7.5, regle: 9 },
+  ballon: { neutres: 4, frotter: 7, charges: 9, attire: 11 },
+  puissances: { metre: 1, dixieme: 2.5, centieme: 4, millieme: 5.5, places: 10, atome: 11, noyau: 13 },
+  calculs: { produit: 3.5, regle_produit: 5, quotient: 8, ecriture: 11 },
+  modele: { terre: 1.5, globe: 4, atome: 6.5, change: 9 },
+}[VUE] || {};
+const FIN = { zoom: 10, charges: 10.5, ballon: 12.5, puissances: 14, calculs: 12, modele: 10 }[VUE] || 10;
+const fr = window.Tableau.fr;
+/** Progression 0..1 pendant les d secondes qui MÈNENT au moment `nom` (le comptage finit pile au moment). */
+const av = (S, nom, d) => Math.max(0, Math.min(1, (S.t - (MOMENTS[nom] - d)) / d));
+
+/* ── zoom : la matière est faite d’atomes ── */
+function piece(g, x, y, r) {
+  P.ombre(g, () => { const gr = g.createRadialGradient(x - r * .3, y - r * .35, r * .1, x, y, r); gr.addColorStop(0, '#ffd7a8'); gr.addColorStop(.5, '#c87533'); gr.addColorStop(1, '#6e3510');
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, A.TAU); g.fill(); }, 10);
+  g.strokeStyle = 'rgba(255,220,180,.6)'; g.lineWidth = 2; g.beginPath(); g.arc(x, y, r * .82, 0, A.TAU); g.stroke();
+  g.fillStyle = 'rgba(110,53,16,.55)'; g.font = `700 ${r * .55}px serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('1', x, y + 2);
+}
+function dessinerZoom(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cy = 220, x1 = pt ? L * .2 : L * .17, x2 = L * .5, x3 = pt ? L * .8 : L * .82, R = pt ? 105 : 120;
+  if (S.t <= 0 || S.ecrit(c, 'objet')) {
+    c.direct(() => piece(c.ctx, x1, cy, pt ? 70 : 62));
+    c.texte('une pièce de cuivre', x1, cy + (pt ? 112 : 96), { couleur: 'blanc', taille: pt ? 28 : 18, align: 'center' });
+    c.repere('piece', x1 - 64, cy - 64, 128, 128, 'la pièce de cuivre');
+  }
+  if (S.ecrit(c, 'loupe')) {
+    const k = S.k('loupe', 1.6);
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = k; g.beginPath(); g.arc(x2, cy, R, 0, A.TAU); g.clip();
+      const gr = g.createLinearGradient(x2 - R, cy - R, x2 + R, cy + R); gr.addColorStop(0, '#d98a45'); gr.addColorStop(1, '#7a3c12'); g.fillStyle = gr; g.fillRect(x2 - R, cy - R, 2 * R, 2 * R);
+      const r = A.graine(3); for (let i = 0; i < 26; i++) { g.strokeStyle = 'rgba(60,25,5,.45)'; g.lineWidth = 2; g.beginPath(); const a = r() * 6, xx = x2 + (r() - .5) * 2 * R, yy = cy + (r() - .5) * 2 * R; g.moveTo(xx, yy); g.lineTo(xx + Math.cos(a) * 40, yy + Math.sin(a) * 40); g.stroke(); }
+      g.restore(); g.strokeStyle = '#cbd5e1'; g.lineWidth = 6; g.beginPath(); g.arc(x2, cy, R, 0, A.TAU); g.stroke(); });
+    c.ligne(x1 + 50, cy - 20, x2 - R, cy - 30, { couleur: 'faible', pointille: [6, 6] });
+    if (!pt) c.texte('× 1 000 : des grains', x2, cy + R + 28, { couleur: 'blanc', taille: 18, align: 'center' });
+    c.repere('loupe', x2 - R, cy - R, 2 * R, 2 * R, 'la loupe : la pièce grossie');
+  }
+  if (S.ecrit(c, 'atomes')) {
+    const k = S.k('atomes', 1.6);
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = k; g.beginPath(); g.arc(x3, cy, R, 0, A.TAU); g.clip(); g.fillStyle = 'rgba(30,20,10,.6)'; g.fillRect(x3 - R, cy - R, 2 * R, 2 * R);
+      const rb = 15; for (let j = -5; j <= 5; j++) for (let i = -5; i <= 5; i++) { const xx = x3 + i * rb * 2 + (j % 2 ? rb : 0), yy = cy + j * rb * 1.73; if (Math.hypot(xx - x3, yy - cy) < R + rb) A.boule(g, xx, yy, rb * .95, [205, 127, 50]); }
+      g.restore(); g.strokeStyle = '#cbd5e1'; g.lineWidth = 6; g.beginPath(); g.arc(x3, cy, R, 0, A.TAU); g.stroke(); });
+    c.ligne(x2 + R, cy - 30, x3 - R, cy - 30, { couleur: 'faible', pointille: [6, 6] });
+    c.texte(pt ? 'des atomes' : 'encore plus gros : des atomes', x3, cy + R + (pt ? 34 : 28), { couleur: 'jaune', taille: pt ? 30 : 19, align: 'center' });
+    c.repere('atomes', x3 - R, cy - R, 2 * R, 2 * R, 'les atomes de cuivre');
+  }
+  if (S.ecrit(c, 'questions') && S.conclusions) {
+    c.texte('Qu’est-ce qu’un atome ?', L / 2, pt ? 52 : 40, { couleur: 'jaune', taille: pt ? 30 : 24, align: 'center', gras: true });
+    if (!pt) c.texte('De quoi est-il fait ?', L / 2, 70, { couleur: 'cyan', taille: 20, align: 'center' });
+    c.repere('questions', L / 2 - 200, 14, 400, 64, 'les questions');
+  }
+}
+
+/* ── charges : attraction et répulsion ── */
+function dessinerCharges(c, S, sc) {
+  const L = sc.L, pt = sc.petit, r = pt ? 28 : 26, cols = [L / 6, L / 2, L * 5 / 6], y = 200;
+  const ligne = (i, s1, s2, nom, txt) => {
+    const x = cols[i];
+    const prog = Math.max(0, Math.min(1, (S.t - (MOMENTS[nom] - 2)) / 2));
+    const attire = s1 !== s2, d0 = 44, d = attire ? d0 - 14 * prog : d0 + 22 * prog;
+    c.direct(() => { P.charge(c.ctx, x - d, y, r, s1); P.charge(c.ctx, x + d, y, r, s2); });
+    if (prog > .05) {
+      const fl = attire ? [[x - d + r + 4, y, x - d + r + 14], [x + d - r - 4, y, x + d - r - 14]] : [[x - d - r - 4, y, x - d - r - 24], [x + d + r + 4, y, x + d + r + 24]];
+      for (const [a, yy, b] of fl) c.fleche(a, yy, b, yy, { couleur: attire ? 'vert' : 'orange', largeur: 2.6 });
+    }
+    c.repere(nom, x - d - r, y - r, 2 * (d + r), 2 * r, txt);
+    if (S.ecrit(c, nom)) c.texte(attire ? 's’attirent' : 'se repoussent', x, y + (pt ? 72 : 62), { couleur: attire ? 'vert' : 'orange', taille: pt ? 30 : 21, align: 'center', gras: true });
+  };
+  ligne(0, 1, 1, 'plus_plus', 'deux charges positives');
+  ligne(1, -1, -1, 'moins_moins', 'deux charges négatives');
+  ligne(2, 1, -1, 'plus_moins', 'une charge positive et une négative');
+  if (!pt) c.texte('charge positive : +   ·   charge négative : −', L / 2, 60, { couleur: 'blanc', taille: 19, align: 'center' });
+  if (S.ecrit(c, 'regle') && S.conclusions) {
+    c.texte('même signe : se repoussent', L / 2, pt ? 330 : 318, { couleur: 'orange', taille: pt ? 30 : 22, align: 'center', gras: true });
+    c.texte('signes contraires : s’attirent', L / 2, pt ? 372 : 352, { couleur: 'vert', taille: pt ? 30 : 22, align: 'center', gras: true });
+    c.repere('regle', L / 2 - 220, 296, 440, 66, 'la règle');
+  }
+}
+
+/* ── ballon : frotter, neutre, chargé ── */
+function ballon(g, x, y, r) {
+  P.ombre(g, () => { const gr = g.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r * 1.1); gr.addColorStop(0, '#fecaca'); gr.addColorStop(.5, '#dc2626'); gr.addColorStop(1, '#7f1d1d');
+    g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, r, r * 1.15, 0, 0, A.TAU); g.fill(); }, 10);
+  g.fillStyle = '#991b1b'; g.beginPath(); g.moveTo(x - 7, y + r * 1.15 + 8); g.lineTo(x + 7, y + r * 1.15 + 8); g.lineTo(x, y + r * 1.15 - 2); g.fill();
+  g.strokeStyle = 'rgba(226,232,240,.7)'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(x, y + r * 1.15 + 8); g.quadraticCurveTo(x + 14, y + r * 1.15 + 40, x - 4, y + r * 1.15 + 70); g.stroke();
+}
+function tete(g, x, y, s, dresse) {
+  P.ombre(g, () => { g.fillStyle = '#e0ac83'; g.beginPath(); g.ellipse(x, y, s * .8, s, 0, 0, A.TAU); g.fill(); }, 8);
+  g.lineCap = 'round';
+  for (let i = -9; i <= 9; i++) {
+    const a0 = -Math.PI / 2 + i * .15, x0 = x + Math.cos(a0) * s * .76, y0 = y + Math.sin(a0) * s * .94;
+    // au repos : les cheveux retombent sur la tête ; attirés : ils se dressent vers le ballon (à droite)
+    const lib = [Math.cos(a0) * .5 + .3, Math.sin(a0) * .3 + .7], dr = [1, -.25 + i * .03], k = dresse;
+    const dx = lib[0] * (1 - k) + dr[0] * k, dy = lib[1] * (1 - k) + dr[1] * k, l = s * (.45 + .6 * k);
+    g.strokeStyle = i % 2 ? '#3f2a1c' : '#5b3a24'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(x0 + dx * l * .5, y0 + dy * l * .5 - 6 * (1 - k), x0 + dx * l, y0 + dy * l); g.stroke();
+  }
+  g.fillStyle = '#1f2937'; g.beginPath(); g.arc(x - s * .32, y + s * .1, 3, 0, A.TAU); g.arc(x + s * .32, y + s * .1, 3, 0, A.TAU); g.fill();
+  g.strokeStyle = '#9a3412'; g.lineWidth = 2; g.beginPath(); g.arc(x, y + s * .42, s * .2, .2, Math.PI - .2); g.stroke();
+}
+function dessinerBallon(c, S, sc) {
+  const L = sc.L, pt = sc.petit, xb = L * .68, yb = 205, rb = pt ? 92 : 84, xt = L * .25, yt = 235, st = pt ? 80 : 74;
+  const frotte = S.kl('frotter', 1.8), attire = S.k('attire', 1.2);
+  const dx = (S.a('frotter') && !S.a('charges')) ? Math.sin(S.t * 14) * 18 * (1 - S.kl('frotter', 2)) : 0;
+  c.direct(() => { tete(c.ctx, xt, yt, st, attire); ballon(c.ctx, xb - 60 * attire + dx, yb, rb); });
+  c.repere('ballon', xb - rb, yb - rb * 1.15, 2 * rb, 2.3 * rb, 'le ballon');
+  c.repere('cheveux', xt - st, yt - st * 1.4, 2 * st, 2.2 * st, 'les cheveux');
+  // les charges : 4 + et 4 − sur chacun ; 2 électrons passent des cheveux au ballon
+  const pos = (x, y, i, n, R) => { const a = -Math.PI / 2 + i / n * A.TAU; return [x + R * Math.cos(a), y + R * Math.sin(a)]; };
+  const kN = av(S, 'neutres', 2.5), nAllum = Math.floor(kN * 8 + .001);
+  c.direct(() => {
+    const g = c.ctx, xB = xb - 60 * attire + dx, rq = pt ? 13 : 11;
+    for (let i = 0; i < 4; i++) { const [x, y] = pos(xB, yb, i * 2, 8, rb * .55); if (i < nAllum && !S.a('frotter')) P.halo(g, x, y, rq * 1.4, i === nAllum - 1); P.charge(g, x, y, rq, 1); }
+    for (let i = 0; i < 4; i++) { const [x, y] = pos(xB, yb, i * 2 + 1, 8, rb * .55); if (i + 4 < nAllum && !S.a('frotter')) P.halo(g, x, y, rq * 1.4, i + 4 === nAllum - 1); P.charge(g, x, y, rq, -1); }
+    for (let i = 0; i < 4; i++) { const [x, y] = pos(xt, yt + st * .45, i * 2, 8, st * .32); P.charge(g, x, y, rq, 1); }
+    for (let i = 0; i < 4; i++) {
+      const [x0, y0] = pos(xt, yt + st * .45, i * 2 + 1, 8, st * .32);
+      if (i < 2) { const [x9, y9] = [xB - rb * .25 + i * 22, yb + rb * .62]; const u = A.doux(frotte); P.charge(g, x0 + (x9 - x0) * u, y0 + (y9 - y0) * u - Math.sin(u * Math.PI) * 60, rq, -1); }
+      else P.charge(g, x0, y0, rq, -1);
+    }
+  });
+  const tq = pt ? 30 : 19;
+  if (S.ecrit(c, 'neutres')) {
+    if (!S.a('charges')) {
+      c.texte('ballon : 4 + et 4 − → neutre', xb, 40, { couleur: 'blanc', taille: tq, align: 'center' });
+      if (!pt) c.texte('cheveux : 4 + et 4 − → neutres', xt, 40, { couleur: 'blanc', taille: tq, align: 'center' });
+    }
+    c.repere('neutres', xb - 150, 16, 300, 34, 'autant de + que de − : neutre');
+  }
+  if (S.ecrit(c, 'frotter') && !S.a('charges')) c.texte('on frotte : 2 électrons passent', L / 2, 392, { couleur: 'cyan', taille: tq, align: 'center' });
+  if (S.ecrit(c, 'charges') && S.conclusions) {
+    c.texte('ballon : 4 + et 6 − → chargé −', xb, 40, { couleur: 'cyan', taille: tq, align: 'center', gras: true });
+    c.texte(pt ? 'cheveux : chargés +' : 'cheveux : 4 + et 2 − → chargés +', xt, pt ? 90 : 40, { couleur: 'rose', taille: tq, align: 'center', gras: true });
+    c.repere('charges', L / 2 - 300, 16, 600, 34, 'les charges après le frottement');
+  }
+  if (S.ecrit(c, 'attire') && S.conclusions) {
+    c.texte('+ et − : ils s’attirent', L / 2, 392, { couleur: 'vert', taille: pt ? 30 : 22, align: 'center', gras: true });
+    c.repere('attire', L / 2 - 160, 370, 320, 32, 'les cheveux attirés par le ballon');
+  }
+}
+
+/* ── puissances de dix ── */
+function dessinerPuissances(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = pt ? 30 : 22;
+  const etapes = [['metre', '1 m', '1 m'], ['dixieme', '0,1 m', '10⁻¹ m'], ['centieme', '0,01 m', '10⁻² m  (1 cm)'], ['millieme', '0,001 m', '10⁻³ m  (1 mm)']];
+  if (!S.a('places') || !pt) {
+    const x0 = pt ? 40 : 40, wMax = L - 80;
+    etapes.forEach(([nom, a, b], i) => {
+      if (!(S.t <= 0 || S.ecrit(c, nom))) return;
+      const y = (pt ? 70 : 60) + i * (pt ? 62 : 44), w = Math.max(6, wMax / Math.pow(10, i) * (pt ? .55 : .5));
+      c.direct(() => { const g = c.ctx, gr = g.createLinearGradient(x0, y - 9, x0, y + 9); gr.addColorStop(0, '#fde68a'); gr.addColorStop(1, '#b45309'); g.fillStyle = gr; g.fillRect(x0, y - 9, w, 18);
+        g.fillStyle = 'rgba(120,53,15,.8)'; for (let k = 0; k <= 10; k++) g.fillRect(x0 + k * w / 10 - .5, y - 9, 1, k % 5 ? 6 : 10); });
+      c.texte(i ? a + '  =  ' + b : '1 m', x0 + Math.max(w, 60) + 18, y + 7, { couleur: i ? 'jaune' : 'blanc', taille: t });
+      if (i) c.texte('÷ 10', x0 - 4, y - 18, { couleur: 'cyan', taille: pt ? 22 : 15 });
+      c.repere(nom, x0, y - 12, Math.max(w, 60) + 260, 24, b);
+    });
+  }
+  if (S.t <= 0 || S.t > MOMENTS.places - 4) {
+    const y = pt ? 210 : 270, n = 10, k = S.t <= 0 ? 1 : av(S, 'places', 3.6), lit = Math.min(n, Math.floor(k * n + .001)), chiffres = '0,0000000001'.split('');
+    const tc = pt ? 36 : 30, w = tc * (pt ? .78 : .95), xs = L / 2 - chiffres.length * w / 2;
+    chiffres.forEach((ch, i) => {
+      const place = i - 1;   // la place après la virgule (1…10)
+      if (place >= 1 && place <= lit) lueur(c, xs + i * w - 3, y - tc, w + 4, tc + 8, { vive: place === lit, numero: place, nx: xs + i * w + w / 2, ny: y + tc * .9, taille: pt ? 22 : 17 });
+      c.texte(ch, xs + i * w, y, { couleur: i === chiffres.length - 1 ? 'jaune' : 'blanc', taille: tc, duree: .05 });
+    });
+    c.repere('places', xs - 4, y - tc, chiffres.length * w + 8, tc + 30, 'les places après la virgule');
+    if (lit >= n) c.texte('= 10⁻¹⁰ m : le 1 est à la 10ᵉ place', L / 2, y + (pt ? 82 : 64), { couleur: 'jaune', taille: t, align: 'center', gras: true });
+  }
+  if (S.ecrit(c, 'atome')) {
+    c.texte('taille d’un atome : 10⁻¹⁰ m', pt ? L / 2 : L * .3, pt ? 360 : 384, { couleur: 'cyan', taille: t, align: 'center', gras: true });
+    c.repere('atome', (pt ? L / 2 : L * .3) - 170, 360, 340, 34, 'la taille d’un atome');
+  }
+  if (S.ecrit(c, 'noyau') && !pt) {
+    c.texte('noyau : 10⁻¹⁵ m (15 places)', L * .72, 384, { couleur: 'rose', taille: t, align: 'center', gras: true });
+    c.repere('noyau', L * .72 - 170, 360, 340, 34, 'la taille d’un noyau');
+  }
+  if (S.ecrit(c, 'noyau') && pt) { c.texte('noyau : 10⁻¹⁵ m', L / 2, 400, { couleur: 'rose', taille: t, align: 'center', gras: true }); c.repere('noyau', L / 2 - 120, 376, 240, 32, 'la taille d’un noyau'); }
+}
+
+/* ── calculs avec les puissances de dix ── */
+function dessinerCalculs(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = pt ? 32 : 26, x = pt ? 30 : 60;
+  const vue = (nom, suivant) => (S.t <= 0 || S.a(nom)) && (!pt || !suivant || !S.a(suivant));
+  if (vue('produit', 'quotient')) {
+    const y = pt ? 70 : 60;
+    c.texte('10² × 10³ = 100 × 1 000 = 100 000', x, y, { couleur: 'blanc', taille: t });
+    if (S.t <= 0 || S.t > MOMENTS.produit - 2.4) {
+      const k = (S.t <= 0 ? 1 : av(S, 'produit', 2.4)) * 5, w = c.largeurTexte('0', t), x0 = x + c.largeurTexte('10² × 10³ = 100 × 1 000 = 1', t);
+      for (let i = 0; i < 5; i++) if (i < k) lueur(c, x0 + i * w - 1, y - t * .8, w + 2, t, { vive: i === Math.floor(k) - 1 || i === 4 && k >= 5, numero: i + 1, nx: x0 + i * w + w / 2, ny: y + t * .9, taille: 17 });
+      if (k >= 5) c.texte('5 zéros → 10² × 10³ = 10⁵', x, y + (pt ? 64 : 50), { couleur: 'jaune', taille: t, gras: true });
+      c.repere('produit', x, y - t, L - 2 * x, t + 30, '10² × 10³ = 10⁵');
+    }
+  }
+  if (S.ecrit(c, 'regle_produit') && vue('regle_produit', 'quotient')) {
+    const y = pt ? 190 : 150;
+    c.texte('10ᵃ × 10ᵇ = 10ᵃ⁺ᵇ', x, y, { couleur: 'jaune', taille: t + 2, gras: true });
+    c.texte('(on ajoute les exposants)', x + c.largeurTexte('10ᵃ × 10ᵇ = 10ᵃ⁺ᵇ    ', t + 2), y, { couleur: 'faible', taille: pt ? 24 : 19 });
+    c.repere('regle_produit', x, y - t, 520, t + 10, 'on ajoute les exposants');
+  }
+  if (S.ecrit(c, 'quotient') && vue('quotient', 'ecriture')) {
+    const y = pt ? 110 : 230;
+    c.texte('⟦10⁻¹⁰|10⁻¹⁵⟧ = 10⁻¹⁰⁺¹⁵ = 10⁵', x, y, { couleur: 'blanc', taille: t });
+    c.texte('(on retranche les exposants)', x, y + (pt ? 70 : 46), { couleur: 'faible', taille: pt ? 24 : 19 });
+    c.repere('quotient', x, y - t * 1.4, 520, t * 2.4, '10⁻¹⁰ divisé par 10⁻¹⁵ = 10⁵');
+  }
+  if (S.ecrit(c, 'ecriture') && vue('ecriture')) {
+    const y = pt ? 120 : 340;
+    c.texte('20 × 10⁻²⁷ = 2 × 10¹ × 10⁻²⁷ = 2 × 10⁻²⁶', x, y, { couleur: 'cyan', taille: t, max: L - 2 * x });
+    if (S.conclusions) c.texte('un seul chiffre avant la virgule', x, y + (pt ? 60 : 40), { couleur: 'jaune', taille: pt ? 26 : 20 });
+    c.repere('ecriture', x, y - t, L - 2 * x, t + 40, '20 × 10⁻²⁷ = 2 × 10⁻²⁶');
+  }
+}
+
+/* ── modele : la Terre et le globe ── */
+function terre(g, x, y, r) {
+  P.ombre(g, () => { const gr = g.createRadialGradient(x - r * .3, y - r * .35, r * .1, x, y, r); gr.addColorStop(0, '#7dd3fc'); gr.addColorStop(.6, '#1d4ed8'); gr.addColorStop(1, '#0b1f4d'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, A.TAU); g.fill(); }, 14);
+  g.save(); g.beginPath(); g.arc(x, y, r, 0, A.TAU); g.clip(); g.fillStyle = 'rgba(34,139,34,.85)';
+  for (const [dx, dy, rx, ry, a] of [[-.3, -.2, .32, .22, .4], [.25, .1, .25, .38, -.2], [-.1, .45, .2, .12, 0], [.4, -.45, .18, .1, .3]]) { g.beginPath(); g.ellipse(x + dx * r, y + dy * r, rx * r, ry * r, a, 0, A.TAU); g.fill(); }
+  g.fillStyle = 'rgba(255,255,255,.55)'; for (const [dx, dy] of [[-.5, .1], [.1, -.55], [.3, .55]]) { g.beginPath(); g.ellipse(x + dx * r, y + dy * r, r * .22, r * .06, .3, 0, A.TAU); g.fill(); }
+  g.restore();
+}
+function dessinerModele(c, S, sc) {
+  const L = sc.L, pt = sc.petit, y = 190, x1 = L * .2, x2 = L * .5, x3 = L * .8, t = pt ? 28 : 19;
+  if (S.t <= 0 || S.ecrit(c, 'terre')) {
+    c.direct(() => terre(c.ctx, x1, y, pt ? 80 : 72));
+    c.texte('la Terre (vraie)', x1, y + (pt ? 120 : 108), { couleur: 'blanc', taille: t, align: 'center' });
+    c.repere('terre', x1 - 75, y - 75, 150, 150, 'la Terre');
+  }
+  if (S.ecrit(c, 'globe')) {
+    c.direct(() => { const g = c.ctx; terre(g, x2, y - 10, pt ? 58 : 52);
+      g.strokeStyle = '#d4a373'; g.lineWidth = 5; g.beginPath(); g.arc(x2, y - 10, (pt ? 58 : 52) + 8, Math.PI * .6, Math.PI * 1.6); g.stroke();
+      g.fillStyle = '#92400e'; g.fillRect(x2 - 4, y + 50, 8, 26); g.beginPath(); g.ellipse(x2, y + 80, 40, 9, 0, 0, A.TAU); g.fill(); });
+    c.texte('le globe : un modèle', x2, y + (pt ? 120 : 108), { couleur: 'jaune', taille: t, align: 'center', gras: true });
+    if (!pt) c.texte('plus petit, plus simple', x2, y + 134, { couleur: 'faible', taille: 16, align: 'center' });
+    c.repere('globe', x2 - 65, y - 75, 130, 170, 'le globe, modèle de la Terre');
+  }
+  if (S.ecrit(c, 'atome')) {
+    c.direct(() => P.nuage(c.ctx, x3, y, pt ? 80 : 70, { points: 160 }));
+    c.texte('?', x3, y + 16, { couleur: 'jaune', taille: pt ? 64 : 54, align: 'center', gras: true });
+    c.texte(pt ? 'atome : invisible' : 'l’atome : trop petit pour être vu', x3, y + (pt ? 120 : 108), { couleur: 'cyan', taille: t, align: 'center' });
+    c.repere('atome', x3 - 75, y - 75, 150, 150, 'l’atome');
+  }
+  if (S.ecrit(c, 'change') && S.conclusions) {
+    c.texte('on fait un modèle ; une nouvelle expérience → on le change', L / 2, pt ? 52 : 46, { couleur: 'jaune', taille: pt ? 26 : 21, align: 'center', gras: true, max: L - 30 });
+    c.repere('change', L / 2 - 300, 22, 600, 34, 'le modèle change avec les expériences');
+  }
+}
+
+const DESSINS = { zoom: dessinerZoom, charges: dessinerCharges, ballon: dessinerBallon, puissances: dessinerPuissances, calculs: dessinerCalculs, modele: dessinerModele };
+const MOTIFS = {
+  objet: 'une pièce de cuivre', loupe: 'la loupe : des grains', atomes: 'encore plus gros : des atomes', questions: 'qu’est-ce qu’un atome ?',
+  plus_plus: 'deux charges + se repoussent', moins_moins: 'deux charges − se repoussent', plus_moins: 'une + et une − s’attirent', regle: 'la règle',
+  neutres: 'autant de + que de − : neutre', frotter: 'deux électrons passent des cheveux au ballon', charges: 'ballon chargé −, cheveux chargés +', attire: 'ils s’attirent',
+  metre: '1 m', dixieme: '10⁻¹ m', centieme: '10⁻² m', millieme: '10⁻³ m', places: 'dix places après la virgule', atome: '10⁻¹⁰ m', noyau: '10⁻¹⁵ m',
+  produit: '10² × 10³ = 10⁵', regle_produit: 'on ajoute les exposants', quotient: 'on retranche les exposants', ecriture: '2 × 10⁻²⁶',
+  terre: 'la Terre', globe: 'le globe, un modèle', atome_m: 'l’atome', change: 'le modèle change',
+};
+function voir(S) {
+  const a = n => S.a(n);
+  switch (VUE) {
+    case 'zoom': return ['Une pièce de cuivre.', a('loupe') ? 'La loupe la grossit : des grains.' : '', a('atomes') ? 'Grossie encore : des petites boules serrées, les atomes.' : '', a('questions') && S.conclusions ? 'Écrit : Qu’est-ce qu’un atome ? De quoi est-il fait ?' : ''].join(' ');
+    case 'charges': return ['Trois paires de boules chargées.', a('plus_plus') ? 'Deux + s’écartent (se repoussent).' : '', a('moins_moins') ? 'Deux − s’écartent.' : '', a('plus_moins') ? 'Une + et une − se rapprochent (s’attirent).' : '', a('regle') && S.conclusions ? 'Règle écrite : même signe, se repoussent ; signes contraires, s’attirent.' : ''].join(' ');
+    case 'ballon': return ['Un ballon et une tête aux cheveux.', a('neutres') ? 'Chacun a 4 charges + et 4 charges − : neutre.' : '', a('frotter') ? 'On frotte : 2 électrons (−) passent des cheveux au ballon.' : '', a('charges') ? 'Ballon : 4 + et 6 −, chargé − ; cheveux : 4 + et 2 −, chargés +.' : '', a('attire') ? 'Les cheveux se dressent vers le ballon : ils s’attirent.' : ''].join(' ');
+    case 'puissances': return ['Une règle de 1 m divisée par 10 à chaque ligne : 10⁻¹ m, 10⁻² m (1 cm), 10⁻³ m (1 mm).', a('places') ? 'Le nombre 0,0000000001 : ses dix places après la virgule s’allument une à une ; 10⁻¹⁰ m.' : '', a('atome') ? 'Taille d’un atome : 10⁻¹⁰ m.' : '', a('noyau') ? 'Taille d’un noyau : 10⁻¹⁵ m.' : ''].join(' ');
+    case 'calculs': return ['10² × 10³ = 100 000 : cinq zéros, 10⁵.', a('regle_produit') ? 'Règle : 10ᵃ × 10ᵇ = 10ᵃ⁺ᵇ.' : '', a('quotient') ? '10⁻¹⁰/10⁻¹⁵ = 10⁵ (on retranche les exposants).' : '', a('ecriture') ? '20 × 10⁻²⁷ = 2 × 10⁻²⁶ (un seul chiffre avant la virgule).' : ''].join(' ');
+    case 'modele': return ['La Terre peinte.', a('globe') ? 'Le globe, son modèle : plus petit, plus simple.' : '', a('atome') ? 'L’atome : un nuage avec un point d’interrogation, trop petit pour être vu.' : '', a('change') && S.conclusions ? 'Écrit : on fait un modèle ; une nouvelle expérience, on le change.' : ''].join(' ');
+  }
+  return '';
+}
+const S = A.sim({
+  id: 'tc_atome_prerequis_' + VUE, titre: 'Prérequis : ' + VUE, vue: VUE, moments: MOMENTS, fin: FIN, graine: 11,
+  motifs: MOTIFS, accueil: '', debut: 'Regarde…', fini: 'Terminé.',
+  dessiner: (c, S, sc) => (DESSINS[VUE] || dessinerZoom)(c, S, sc),
+  ceQuiSeVoit: voir,
+  texte: 'Prérequis : la matière faite d’atomes, la charge électrique (+ et −, attraction et répulsion), les puissances de dix, ce qu’est un modèle.',
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

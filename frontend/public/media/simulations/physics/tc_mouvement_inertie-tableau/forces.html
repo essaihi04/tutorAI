@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappel : la force — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels sur les forces : une personne pousse une caisse (la force et ses quatre caractéristiques), le poids d’une boule, un livre posé sur une table (le poids et la réaction qui se compensent)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * Rappels du chapitre 2 du livre (diapos mi_r1_force, mi_r2_poids, mi_r3_reaction).
+ *  ?vue=force    : une personne pousse une caisse ; F = 200 N ; échelle 1 carreau ↔ 100 N → 2 carreaux comptés.
+ *                  Moments : action 0,5 ; point 2 ; droite 4 ; sens 6 ; intensite 8 ; echelle 10 ; compte 11 ; fin 13.
+ *  ?vue=poids    : une boule de m = 2 kg ; P = m·g = 2 × 10 = 20 N ; échelle 1 carreau ↔ 10 N → 2 carreaux.
+ *                  Moments : boule 0,5 ; point 2 ; droite 3,5 ; sens 5 ; relation 6,5 ; calcul 8 ; echelle 10 ; fin 12.
+ *  ?vue=reaction : un livre de 1 kg posé sur une table : P⃗ vers le bas en G, R⃗ vers le haut au contact, même droite,
+ *                  sens opposés, même intensité 10 N ; P⃗ + R⃗ = 0⃗. Moments : livre 0,5 ; poids 2 ; reaction 4 ;
+ *                  droite 6 ; compense 8 ; valeurs 10 ; fin 12.
+ */
+const { P, lueur, panneau, vecteur, nomVecteur, HEX } = window.Mvt;
+const carreaux = (c, x, y, n, k, cote, S, t0, dt, petit) => {   // n carreaux de côté `cote` le long de x, allumés un à un
+  for (let i = 0; i < n; i++) {
+    c.rect(x + i * cote, y, cote, cote, { couleur: 'tresfaible', largeur: 1, arrondi: 1, duree: .05 });
+    if (S && S.t >= t0 + i * dt) lueur(c, x + i * cote + 2, y + 2, cote - 4, cote - 4, { vive: S.t < t0 + (i + 1) * dt, numero: i + 1, nx: x + (i + .5) * cote, ny: y - 8, align: 'center', taille: petit ? 30 : 20 });
+  }
+};
+const carreauxV = (c, x, y, n, cote, S, t0, dt, petit) => {   // vers le bas
+  for (let i = 0; i < n; i++) {
+    c.rect(x, y + i * cote, cote, cote, { couleur: 'tresfaible', largeur: 1, arrondi: 1, duree: .05 });
+    if (S && S.t >= t0 + i * dt) lueur(c, x + 2, y + i * cote + 2, cote - 4, cote - 4, { vive: S.t < t0 + (i + 1) * dt, numero: i + 1, nx: x - 12, ny: y + (i + .65) * cote, align: 'right', taille: petit ? 30 : 20 });
+  }
+};
+
+/* ── vue force ── */
+const MF = { action: .5, point: 2, droite: 4, sens: 6, intensite: 8, echelle: 10, compte: 11 };
+function dessinerForce(c, S, sc) {
+  const L = sc.L, pt = sc.petit, sol = 372, cx = 250, cw = 175, ch = 150, A = [cx, sol - 75], cote = 62;
+  c.direct(() => { P.sol(c.ctx, 0, sol, L, 40); P.caisse(c.ctx, cx, sol, cw, ch); P.personne(c.ctx, cx - 84, sol, 215, { bras: 'pousse', couleur: '#8b5cf6' }); });
+  c.repere('caisse', cx, sol - ch, cw, ch, 'la caisse');
+  c.repere('personne', cx - 130, sol - 215, 100, 215, 'la personne qui pousse');
+  if (S.t <= 0 || S.ecrit(c, 'point')) { c.direct(() => { const g = c.ctx; g.fillStyle = HEX.violet; g.beginPath(); g.arc(A[0], A[1], 6, 0, 7); g.fill(); }); c.texte('A', A[0] - 12, A[1] - 12, { couleur: 'violet', taille: pt ? 30 : 22, gras: true, align: 'right' }); c.repere('A', A[0] - 12, A[1] - 12, 24, 24, 'le point d’application A'); }
+  if (S.t <= 0 || S.ecrit(c, 'droite')) { c.ligne(40, A[1], L - 330, A[1], { couleur: 'faible', largeur: 1.4, pointille: [8, 7] }); c.repere('droite', 40, A[1] - 8, L - 370, 16, 'la droite d’action (horizontale)'); }
+  if (S.t <= 0 || S.ecrit(c, 'sens')) { vecteur(c, A[0], A[1], A[0] + 2 * cote, A[1], { couleur: 'violet', nom: 'F', nx: A[0] + 2 * cote + 10, ny: A[1] + 8, taille: pt ? 30 : 22 }); c.repere('vecteur', A[0], A[1] - 14, 2 * cote + 14, 28, 'le vecteur force F'); }
+  if (S.t <= 0 || S.ecrit(c, 'echelle')) carreaux(c, A[0], A[1] - 150, 2, 0, cote, S.t <= 0 ? { t: 99 } : S, MF.compte, .9, pt);
+  if (S.t <= 0 || S.a('echelle')) c.repere('carreaux', A[0], A[1] - 150, 2 * cote, cote, 'deux carreaux de 100 N');
+  panneau(c, S, sc, L - 320, 60, 305, [
+    { m: 'point', t: 'Point d’application : A', c: 'violet', r: 'l_point' },
+    { m: 'droite', t: 'Direction : horizontale', c: 'blanc', r: 'l_droite' },
+    { m: 'sens', t: 'Sens : vers la droite', c: 'blanc', r: 'l_sens' },
+    { m: 'intensite', t: 'Intensité : F = 200 N', c: 'jaune', g: true, r: 'l_intensite' },
+    { m: 'echelle', t: 'Échelle : 1 carreau ↔ 100 N', c: 'cyan', r: 'l_echelle' },
+    { m: 'compte', t: '200 N → 2 carreaux', c: 'jaune', g: true, r: 'l_compte' },
+  ], { dy: 46, px: 330, py: 50, pw: 420, taille: 21 });
+}
+
+/* ── vue poids ── */
+const MP = { boule: .5, point: 2, droite: 3.5, sens: 5, relation: 6.5, calcul: 8, echelle: 10 };
+function dessinerPoids(c, S, sc) {
+  const L = sc.L, pt = sc.petit, G = [230, 150], r = 66, cote = 62;
+  c.direct(() => { P.sol(c.ctx, 0, 392, L, 28); P.boule(c.ctx, G[0], G[1], r, '#fecaca', '#ef4444', '#7f1d1d'); });
+  c.repere('boule', G[0] - r, G[1] - r, 2 * r, 2 * r, 'la boule de 2 kg');
+  if (!pt) c.texte('m = 2 kg', G[0] + r + 12, G[1] - r + 10, { couleur: 'blanc', taille: 20 });
+  if (S.t <= 0 || S.ecrit(c, 'point')) { c.direct(() => P.G(c.ctx, G[0], G[1])); c.texte('G', G[0] + 12, G[1] - 10, { couleur: 'blanc', taille: pt ? 30 : 22, gras: true }); c.repere('G', G[0] - 10, G[1] - 10, 20, 20, 'G, le centre de la boule'); }
+  if (S.t <= 0 || S.ecrit(c, 'droite')) { c.ligne(G[0], 40, G[0], 388, { couleur: 'faible', largeur: 1.4, pointille: [8, 7] }); c.repere('verticale', G[0] - 8, 40, 16, 330, 'la verticale qui passe par G'); }
+  if (S.t <= 0 || S.ecrit(c, 'sens')) { vecteur(c, G[0], G[1], G[0], G[1] + 2 * cote, { couleur: 'rouge', nom: 'P', nx: G[0] + 14, ny: G[1] + 2 * cote, taille: pt ? 30 : 22 }); c.repere('P', G[0] - 12, G[1], 50, 2 * cote + 10, 'le poids P, vers le bas'); }
+  if (S.t <= 0 || S.ecrit(c, 'echelle')) carreauxV(c, G[0] + 110, G[1], 2, cote, S.t <= 0 ? { t: 99 } : S, MP.echelle + .6, .9, pt);
+  if (S.t <= 0 || S.a('echelle')) c.repere('carreaux', G[0] + 110, G[1], cote, 2 * cote, 'deux carreaux de 10 N');
+  panneau(c, S, sc, L - 340, 60, 325, [
+    { m: 'point', t: 'Point d’application : G', c: 'rose', r: 'l_point' },
+    { m: 'droite', t: 'Direction : la verticale', c: 'blanc' },
+    { m: 'sens', t: 'Sens : vers le bas', c: 'blanc' },
+    { m: 'relation', t: 'P = m · g   (g = 10 N/kg)', c: 'jaune', g: true, r: 'relation' },
+    { m: 'calcul', t: 'P = 2 × 10 = 20 N', c: 'jaune', g: true, r: 'calcul' },
+    { m: 'echelle', t: '1 carreau ↔ 10 N : 2 carreaux', c: 'cyan', r: 'l_echelle' },
+  ], { dy: 46, px: 330, py: 50, pw: 420, taille: 21 });
+}
+
+/* ── vue réaction ── */
+const MR = { livre: .5, poids: 2, reaction: 4, droite: 6, compense: 8, valeurs: 10 };
+function dessinerReaction(c, S, sc) {
+  const L = sc.L, pt = sc.petit, plan = 270, lx = 130, lw = 200, lh = 56, G = [lx + lw / 2, plan - lh / 2], C = [lx + lw / 2, plan];
+  c.direct(() => { const g = c.ctx; P.sol(g, 20, plan, 430, 28, { bois: true }); g.fillStyle = '#7c4a1e'; g.fillRect(50, plan + 28, 20, 122); g.fillRect(400, plan + 28, 20, 122); P.livre(g, lx, plan, lw, lh); });
+  c.repere('livre', lx, plan - lh, lw, lh, 'le livre posé sur la table');
+  c.repere('table', 20, plan, 430, 28, 'la table (le support)');
+  if (S.t <= 0 || S.ecrit(c, 'poids')) { c.direct(() => P.G(c.ctx, G[0], G[1], 4)); vecteur(c, G[0] - 3, G[1], G[0] - 3, G[1] + 125, { couleur: 'rouge', nom: 'P', nx: G[0] - 40, ny: G[1] + 118, taille: pt ? 30 : 22 }); c.repere('P', G[0] - 44, G[1] + 18, 50, 110, 'le poids P du livre'); }
+  if (S.t <= 0 || S.ecrit(c, 'reaction')) { vecteur(c, C[0] + 3, C[1], C[0] + 3, C[1] - 125, { couleur: 'bleu', nom: 'R', nx: C[0] + 14, ny: C[1] - 104, taille: pt ? 30 : 22 }); c.repere('R', C[0], C[1] - 128, 48, 70, 'la réaction R de la table'); }
+  if (S.t <= 0 || S.ecrit(c, 'droite')) { c.ligne(G[0], 60, G[0], 405, { couleur: 'faible', largeur: 1.4, pointille: [8, 7] }); c.repere('droite', G[0] - 8, 60, 16, 345, 'la même droite (verticale)'); }
+  panneau(c, S, sc, L - 300, 60, 285, [
+    { m: 'poids', t: '^P : vers le bas', c: 'rouge' },
+    { m: 'reaction', t: '^R : vers le haut', c: 'bleu' },
+    { m: 'droite', t: 'même droite, sens opposés', c: 'blanc' },
+    { m: 'compense', t: '^P + ^R = ^0', c: 'jaune', g: true, taille: 24, r: 'somme' },
+    { m: 'valeurs', t: 'P = R = 10 N', c: 'jaune', g: true, r: 'valeurs' },
+  ], { dy: 48, px: 330, py: 50, pw: 420, taille: 21 });
+}
+
+window.Mvt.vues('tc_mi_forces', {
+  force: { titre: 'Une force et ses quatre caractéristiques', moments: MF, fin: 13, dessiner: dessinerForce,
+    motifs: { action: 'la personne pousse la caisse', point: 'le point d’application', droite: 'la droite d’action', sens: 'le sens', intensite: 'l’intensité', echelle: 'l’échelle', compte: 'les carreaux comptés' },
+    accueil: 'Une personne pousse une caisse.', fini: 'F : point A, horizontale, vers la droite, 200 N → 2 carreaux.',
+    voir: S => ['Une personne pousse une caisse vers la droite.', S.a('point') && 'Point A au contact de la main.', S.a('droite') && 'Droite d’action horizontale en pointillé.', S.a('sens') && 'Flèche violette F vers la droite.', S.a('intensite') && 'F = 200 N.', S.a('echelle') && 'Échelle : 1 carreau pour 100 N.', S.a('compte') && 'Deux carreaux allumés : 1, 2.'].filter(Boolean).join(' '),
+    texte: 'Une force se représente par un vecteur : point d’application, direction, sens, intensité (en newton, N). F = 200 N, échelle 1 carreau pour 100 N : 2 carreaux.' },
+  poids: { titre: 'Le poids d’un corps', moments: MP, fin: 12, dessiner: dessinerPoids,
+    motifs: { boule: 'la boule', point: 'le point G', droite: 'la verticale', sens: 'vers le bas', relation: 'P = m·g', calcul: 'le calcul', echelle: 'l’échelle' },
+    accueil: 'Une boule de 2 kg.', fini: 'P = m·g = 20 N, vertical, vers le bas, appliqué en G.',
+    voir: S => ['Boule rouge de 2 kg.', S.a('point') && 'G au centre.', S.a('droite') && 'Verticale en pointillé.', S.a('sens') && 'Flèche rouge P vers le bas.', S.a('relation') && 'P = m·g.', S.a('calcul') && 'P = 2 × 10 = 20 N.', S.a('echelle') && 'Deux carreaux de 10 N allumés.'].filter(Boolean).join(' '),
+    texte: 'Le poids P = m·g, vertical, vers le bas, appliqué au centre d’inertie G ; g = 10 N/kg. m = 2 kg : P = 20 N.' },
+  reaction: { titre: 'Poids et réaction qui se compensent', moments: MR, fin: 12, dessiner: dessinerReaction,
+    motifs: { livre: 'le livre sur la table', poids: 'le poids', reaction: 'la réaction', droite: 'la même droite', compense: 'P + R = 0', valeurs: 'P = R = 10 N' },
+    accueil: 'Un livre de 1 kg posé sur une table.', fini: 'P⃗ + R⃗ = 0⃗ : P = R = 10 N.',
+    voir: S => ['Un livre posé sur une table en bois.', S.a('poids') && 'Flèche rouge P vers le bas.', S.a('reaction') && 'Flèche bleue R vers le haut, au contact.', S.a('droite') && 'Même droite verticale.', S.a('compense') && 'P + R = 0.', S.a('valeurs') && 'P = R = 10 N.'].filter(Boolean).join(' '),
+    texte: 'Un livre de 1 kg posé sur une table est soumis à son poids P (vers le bas) et à la réaction R de la table (vers le haut, perpendiculaire à la table). Elles se compensent : même droite, sens opposés, même intensité, P + R = 0. P = R = 10 N.' },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

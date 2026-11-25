@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le traitement : obtenir le savon — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_synthese-tableau/synthese.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Après le chauffage à reflux : on laisse refroidir, on verse dans l’eau salée concentrée, le savon précipite, on filtre et on obtient le savon"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
+<script src="/media/simulations/chimie/tc_synthese-tableau/commun.js"></script>
+<script>
+/*
+ * Le traitement du mélange (synthèse du savon), trois vues :
+ *   ?vue=refroidir (sy_t1_refroidir)  moments : arret, salee, verser, precipite
+ *   ?vue=filtrer   (sy_t2_filtrer)    moments : filtrer, savon, attention
+ *   ?vue=etapes    (sy_t3_etapes)     moments : e1, e2, e3, savon
+ */
+const { P, param } = window.Synthese;
+const VUE = ['refroidir', 'filtrer', 'etapes'].includes(param('vue')) ? param('vue') : 'refroidir';
+const M_refroidir = { arret: .5, salee: 3.5, verser: 6.5, precipite: 10 };
+const M_filtrer = { filtrer: .5, savon: 5, attention: 8 };
+const M_etapes = { e1: .5, e2: 3, e3: 5.5, savon: 8 };
+const M = { refroidir: M_refroidir, filtrer: M_filtrer, etapes: M_etapes }[VUE];
+const k01 = v => Math.max(0, Math.min(1, v));
+
+function becherSale(g, x, y, k, flocons = 0, niveau = .55) {
+  const w = k * .5, h = k * .52;
+  P.becher(g, x - w / 2, y - h / 2, w, h, niveau, P.LIQ.salee);
+  if (flocons > 0) P.flocons(g, x - w * .36, y - h / 2 + h * (1 - niveau) - 2, w * .72, h * .16, Math.round(18 * flocons), 1);
+}
+const V = {
+  refroidir: { cases: [
+    { id: 'arret', titre: 'on arrête le chauffage', l1: 'on laisse refroidir', peindre: (g, x, y, k, S, tt) => { const f = S.t <= 0 ? 1 : k01(tt / 2.5); P.chauffeBallon(g, x, y + k * .24, k * .5, k * .15, 1 - f); P.ballon(g, x, y + k * .06, k * .19, { couches: [{ f: .5, col: P.LIQ.melange }], bulles: f < .8 ? S.t : null, agite: .5 * (1 - f) }); P.thermometre(g, x + k * .33, y - k * .25, k * .4, .8 - .6 * f); if (f < .6) for (let i = 0; i < 3; i++) P.vapeur(g, x, y - k * .3 - i * k * .07, k * .05, .6 * (1 - f)); } },
+    { id: 'salee', titre: 'de l’eau salée concentrée', l1: 'beaucoup de sel dissous dans l’eau', peindre: (g, x, y, k, S, tt) => { becherSale(g, x, y + k * .05, k); const f = S.t <= 0 ? 1 : k01(tt / 2); if (f < 1) for (let i = 0; i < 4; i++) P.cristal(g, x - k * .1 + i * k * .06, y - k * .35 + f * k * .3 + i * 4, k * .025); } },
+    { id: 'verser', titre: 'on verse le mélange', l1: 'dans l’eau salée', peindre: (g, x, y, k, S, tt) => { const f = S.t <= 0 ? 1 : k01(tt / 2.5); g.save(); g.translate(x - k * .18, y - k * .22); g.rotate(1.1 * Math.min(1, f * 1.6)); P.ballon(g, 0, 0, k * .13, { couches: [{ f: .5 * (1 - f), col: P.LIQ.melange }] }); g.restore(); if (f > .1 && f < .95) P.filet(g, x - k * .02, y - k * .22, y + k * .1, P.LIQ.melange); const fl = S.t <= 0 || S.a('precipite') ? 1 : 0; becherSale(g, x + k * .05, y + k * .15, k * .9, fl, .62); } },
+  ], bas: 'le savon précipite : il devient solide (flocons blancs)', basMoment: 'precipite' },
+  filtrer: { cases: [
+    { id: 'filtrer', titre: 'on filtre', l1: 'le liquide passe, le savon reste', peindre: (g, x, y, k, S, tt) => { const f = S.t <= 0 ? 1 : k01(tt / 4); P.becher(g, x - k * .2, y + k * .12, k * .4, k * .3, .15 + .3 * f, P.LIQ.salee); P.entonnoir(g, x, y - k * .3, k * .4, k * .38, { solide: .3 + .7 * f, goutte: S.t, chute: k * .2 }); } },
+    { id: 'savon', titre: 'le savon obtenu', l1: 'un solide', c1: 'vert', peindre: (g, x, y, k) => P.savon(g, x, y - k * .05, k * .55, k * .28) },
+    { id: 'attention', titre: 'attention', coul: 'orange', l1: 'il reste de la soude :', l2: 'pas sur la peau', c1: 'orange', c2: 'orange', peindre: (g, x, y, k) => { P.gant(g, x - k * .2, y, k * .32); P.lunettes(g, x + k * .2, y - k * .05, k * .3); } },
+  ] },
+  etapes: { cases: [
+    { id: 'e1', titre: '1. chauffage à reflux', l1: '20 min', peindre: (g, x, y, k, S) => P.montage(g, x + k * .05, y + k * .48, { s: k / 430, couches: [{ f: .45, col: P.LIQ.melange }], ponce: true, chaud: 1, bulles: S.t, agite: .5, phase: S.t }) },
+    { id: 'e2', titre: '2. refroidir, eau salée', l1: 'le savon précipite', peindre: (g, x, y, k) => becherSale(g, x, y, k * 1.1, 1, .6) },
+    { id: 'e3', titre: '3. filtrer', l1: 'le savon reste sur le filtre', peindre: (g, x, y, k, S) => { P.becher(g, x - k * .18, y + k * .12, k * .36, k * .28, .4, P.LIQ.salee); P.entonnoir(g, x, y - k * .3, k * .38, k * .36, { solide: 1, goutte: S.t, chute: k * .2 }); } },
+    { id: 'savon', titre: 'le savon', c1: 'vert', l1: 'l’espèce synthétisée', peindre: (g, x, y, k) => P.savon(g, x, y, k * .55, k * .28) },
+  ] },
+}[VUE];
+const FIN = Math.max(...Object.values(M)) + 3.5;
+const S = window.Synthese.sim({
+  id: 'tc_synthese_traitement_' + VUE, titre: 'Le traitement : ' + VUE, vue: VUE, moments: M, fin: FIN, graine: 37,
+  motifs: Object.fromEntries(V.cases.map(k => [k.id, k.titre]).concat(V.basMoment ? [[V.basMoment, V.bas]] : [])),
+  accueil: 'Après le chauffage à reflux : obtenir le savon.', debut: 'Regarde…', fini: V.bas || 'Le savon est obtenu.',
+  dessiner: (c, S, sc) => window.Synthese.cases(c, S, sc, V.cases, { bas: V.bas, basMoment: V.basMoment, M }),
+  ceQuiSeVoit: S => V.cases.filter(k => S.t <= 0 || S.a(k.id)).map(k => k.titre + ' : ' + [k.l1, k.l2].filter(Boolean).join(' ')).join(' ; ') + ((S.t <= 0 || (V.basMoment && S.a(V.basMoment))) && V.bas ? '. ' + V.bas + '.' : '.'),
+  texte: 'Traitement : on arrête le chauffage, on laisse refroidir, on verse le mélange dans une solution concentrée de chlorure de sodium (eau salée) : le savon précipite ; on filtre : le savon reste sur le filtre.',
+  explication: { [VUE]: V.cases.map(k => ({ repere: k.id, texte: k.titre })) },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

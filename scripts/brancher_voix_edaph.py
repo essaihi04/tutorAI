@@ -51,6 +51,7 @@ def main():
     a = ap.parse_args()
     cours = json.load(open(a.cours, encoding='utf-8'))
     pistes = json.load(open(a.voix, encoding='utf-8'))['pistes']
+    deck = cours.get('id') or DECK   # 25/11/2026 : sert aussi aux cours de /TCF (même convention de chemins)
 
     slides = {s['id']: s for act in cours['activities'] for s in act['slides']}
     rappels = {r['id']: r for c in cours.get('competences', []) for r in c.get('rappels', [])}
@@ -91,7 +92,7 @@ def main():
 
     poses, manquants, perimes, inconnus = {}, 0, [], []
     for p in pistes:
-        f = os.path.join(a.public, 'media', 'audio', 'courses', DECK, p['type'], idsur(p['id']) + '.mp3')
+        f = os.path.join(a.public, 'media', 'audio', 'courses', deck, p['type'], idsur(p['id']) + '.mp3')
         if not os.path.isfile(f):
             manquants += 1; continue
         c = cible(p)
@@ -100,7 +101,7 @@ def main():
         obj, champ, texte = c
         if (texte or '').strip() != p['texte'].strip():
             perimes.append(f"{p['type']} {p['id']}"); continue
-        url = f"/media/audio/courses/{DECK}/{p['type']}/{idsur(p['id'])}.mp3"
+        url = f"/media/audio/courses/{deck}/{p['type']}/{idsur(p['id'])}.mp3"
         if champ == '__diapo__':
             obj.setdefault('audio', {})['mixed'] = {'url': url, 'duration_ms': duree_ms(f), 'version': a.version,
                 'speech_hash': hashlib.sha256(texte.encode('utf-8')).hexdigest(), 'status': 'published'}

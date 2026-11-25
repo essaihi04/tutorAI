@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Repères d’espace et de temps — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une voiture sur un axe et son abscisse, un ballon sur un terrain avec le repère du plan, un ballon en l’air avec le repère de l’espace, un chronomètre et les dates des positions"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * Repères d'espace et de temps (diapos mi_m4_axe, mi_m5_plan, mi_m6_espace, mi_m7_temps).
+ *  ?vue=axe    : une voiture sur une route droite ; axe (O, i⃗), 1 m par graduation ; M à x = 3 m, puis M' à x = −2 m.
+ *                Moments : axe 0,5 ; O 2 ; i 3,5 ; mobile 5 ; abscisse 8 ; negatif 10,5 ; fin 12,5.
+ *  ?vue=plan   : un ballon roule sur un terrain vu de dessus ; repère (O, i⃗, j⃗) ; M(4 ; 2) ; OM⃗ = 4·i⃗ + 2·j⃗.
+ *                Moments : plan 0,5 ; axes 2 ; ballon 3,5 ; coord 6 ; om 8 ; ecriture 9,5 ; fin 11.
+ *  ?vue=espace : un ballon en l'air dans une pièce ; repère (O, i⃗, j⃗, k⃗) ; M(3 ; 2 ; 2) ; OM⃗ = x·i⃗ + y·j⃗ + z·k⃗.
+ *                Moments : axes 0,5 ; point 2,5 ; projections 4,5 ; om 7 ; ecriture 8,5 ; fin 10.
+ *  ?vue=temps  : le chronomètre part quand la voiture passe en O (t = 0) ; positions et dates t = 1 s, 2 s, 3 s
+ *                (la voiture parcourt 2 m par seconde). Moments : route 0,5 ; origine 2 ; d1 4 ; d2 6 ; d3 8 ; conclusion 10 ; fin 12.
+ */
+const { P, lueur, panneau, vecteur, texteV, HEX } = window.Mvt;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function axeGradue(c, sc, O, u, y, de, a, pt) {
+  c.fleche(O + de * u - 20, y, O + a * u + 30, y, { couleur: 'blanc', largeur: 2 });
+  for (let k = de; k <= a; k++) { c.ligne(O + k * u, y - 7, O + k * u, y + 7, { couleur: 'blanc', largeur: 1.6, duree: .03 }); if (!pt || k % 2 === 0 || k === -2) c.texte(String(k), O + k * u, y + (pt ? 38 : 30), { couleur: 'faible', taille: pt ? 26 : 17, align: 'center', duree: .03 }); }
+  c.texte('x (m)', O + a * u + 34, y - 12, { couleur: 'cyan', taille: pt ? 26 : 18, align: 'right' });
+}
+
+/* ── vue axe ── */
+const MA = { axe: .5, O: 2, i: 3.5, mobile: 5, abscisse: 8, negatif: 10.5 };
+function dessinerAxe(c, S, sc) {
+  const L = sc.L, pt = sc.petit, u = 72, O = 300, ya = 330, t = S.t <= 0 ? 99 : S.t;
+  c.direct(() => P.sol(c.ctx, 0, 240, L, 56, { route: true }));
+  const xm = S.t <= 0 || S.a('abscisse') ? 3 : S.a('mobile') ? -3 + 6 * clamp((t - MA.mobile) / 2.5, 0, 1) : -3;
+  c.direct(() => P.voiture(c.ctx, O + xm * u - 70, 262, 120));
+  c.repere('voiture', O + xm * u - 70, 210, 120, 52, 'la voiture');
+  axeGradue(c, sc, O, u, ya, -3, 5, pt);
+  c.repere('axe', O - 3 * u - 20, ya - 10, 8 * u + 50, 20, 'l’axe x');
+  if (S.t <= 0 || S.ecrit(c, 'O')) { c.texte('O', O - 8, ya - 14, { couleur: 'jaune', taille: pt ? 30 : 22, gras: true, align: 'right' }); c.repere('O', O - 28, ya - 34, 30, 30, 'l’origine O'); }
+  if (S.t <= 0 || S.ecrit(c, 'i')) { vecteur(c, O, ya, O + u, ya, { couleur: 'cyan', nom: 'i', nx: O + u * .4, ny: ya - 16, taille: pt ? 30 : 22, point: false }); c.repere('i', O, ya - 40, u, 44, 'le vecteur unitaire i'); }
+  // le point M suit le milieu de la voiture
+  c.direct(() => P.point(c.ctx, O + xm * u, ya, 6));
+  c.texte('M', O + xm * u + 8, ya - 52, { couleur: 'jaune', taille: pt ? 30 : 22, gras: true, duree: .03 });
+  c.ligne(O + xm * u, 268, O + xm * u, ya - 6, { couleur: 'tresfaible', largeur: 1, pointille: [4, 4], duree: .03 });
+  c.repere('M', O + xm * u - 10, ya - 10, 20, 20, 'le point M de la voiture');
+  if (S.t <= 0 || S.ecrit(c, 'abscisse')) { vecteur(c, O, ya + 50, O + 3 * u, ya + 50, { couleur: 'rose', nom: 'OM', nx: O + 3 * u + 14, ny: ya + 58, taille: pt ? 28 : 20, point: false }); c.repere('OM', O, ya + 30, 3 * u, 60, 'le vecteur OM'); }
+  if (S.t <= 0 || S.ecrit(c, 'negatif')) { c.direct(() => P.point(c.ctx, O - 2 * u, ya, 6)); c.texte('M’', O - 2 * u - 8, ya - 16, { couleur: 'orange', taille: pt ? 30 : 22, gras: true, align: 'right' }); c.repere('Mprime', O - 2 * u - 12, ya - 12, 24, 24, 'le point M’ à gauche de O'); }
+  panneau(c, S, sc, 40, 50, L - 80, [
+    { m: 'abscisse', t: '^OM = x_M·^i   avec x_M = 3 m', c: 'rose', g: true, taille: 22, r: 'l_om' },
+    { m: 'negatif', t: 'à gauche de O : x_M’ = −2 m', c: 'orange', taille: 21, r: 'l_neg' },
+  ], { dy: 40, px: 30, py: 44, pw: L - 60 });
+  if (!pt && (S.t <= 0 || S.a('axe')) && !S.a('abscisse')) texteV(c, 'repère (O, ^i) : une droite, une origine, un sens', 40, 50, { couleur: 'cyan', taille: 20 });
+}
+
+/* ── vue plan ── */
+const MP = { plan: .5, axes: 2, ballon: 3.5, coord: 6, om: 8, ecriture: 9.5 };
+function dessinerPlan(c, S, sc) {
+  const L = sc.L, pt = sc.petit, u = 66, O = [60, 370], X = k => O[0] + k * u, Y = k => O[1] - k * u, t = S.t <= 0 ? 99 : S.t;
+  c.direct(() => { const g = c.ctx, gr = g.createLinearGradient(0, 30, 0, 400); gr.addColorStop(0, '#3f8f3a'); gr.addColorStop(1, '#2d6a2a'); g.fillStyle = gr; g.fillRect(X(0) - 20, Y(4.8), 6 * u + 30, 4.8 * u + 30); g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = 2; g.strokeRect(X(0) - 10, Y(4.7), 6 * u + 10, 4.7 * u + 10); g.beginPath(); g.arc(X(3), Y(4.7), 50, 0, Math.PI); g.stroke(); });
+  c.repere('terrain', X(0) - 20, Y(4.8), 6 * u + 30, 4.8 * u + 30, 'le terrain vu de dessus');
+  if (S.t <= 0 || S.ecrit(c, 'axes')) {
+    c.fleche(X(0), Y(0), X(6.2), Y(0), { couleur: 'blanc', largeur: 2 }); c.fleche(X(0), Y(0), X(0), Y(4.9), { couleur: 'blanc', largeur: 2 });
+    for (let k = 1; k <= 5; k++) c.ligne(X(k), Y(0) - 6, X(k), Y(0) + 6, { couleur: 'blanc', largeur: 1.5, duree: .02 });
+    for (let k = 1; k <= 4; k++) c.ligne(X(0) - 6, Y(k), X(0) + 6, Y(k), { couleur: 'blanc', largeur: 1.5, duree: .02 });
+    vecteur(c, X(0), Y(0), X(1), Y(0), { couleur: 'cyan', nom: 'i', nx: X(.35), ny: Y(0) + 30, taille: pt ? 28 : 20, point: false });
+    vecteur(c, X(0), Y(0), X(0), Y(1), { couleur: 'cyan', nom: 'j', nx: X(0) + 10, ny: Y(.55), taille: pt ? 28 : 20, point: false });
+    c.texte('O', X(0) - 6, Y(0) + 26, { couleur: 'blanc', taille: pt ? 26 : 20, align: 'right' });
+    c.repere('axes', X(0), Y(4.9), 6.2 * u, 4.9 * u, 'le repère (O, i, j)');
+  }
+  const k = S.t <= 0 || S.a('coord') ? 1 : S.a('ballon') ? clamp((t - MP.ballon) / 2.2, 0, 1) : 0;
+  const bx = X(.5 + 3.5 * k), by = Y(3.5 - 1.5 * k - Math.sin(k * Math.PI) * .6);
+  c.direct(() => P.ballon(c.ctx, bx, by, 18, k * 6));
+  c.repere('ballon', bx - 18, by - 18, 36, 36, 'le ballon (le point M)');
+  if (S.t <= 0 || S.ecrit(c, 'coord')) {
+    c.ligne(X(4), Y(2), X(4), Y(0), { couleur: 'jaune', largeur: 2, pointille: [7, 6] }); c.ligne(X(4), Y(2), X(0), Y(2), { couleur: 'jaune', largeur: 2, pointille: [7, 6] });
+    c.texte('x_M = 4', X(4), Y(0) + (pt ? 34 : 28), { couleur: 'jaune', taille: pt ? 26 : 19, gras: true, align: 'center' });
+    c.texte('y_M = 2', X(0) + 8, Y(2) - 10, { couleur: 'jaune', taille: pt ? 26 : 19, gras: true });
+    c.texte('M', X(4) + 22, Y(2) - 14, { couleur: 'jaune', taille: pt ? 28 : 22, gras: true });
+    c.repere('coord', X(0), Y(2), 4 * u, 2 * u, 'les coordonnées x_M = 4 et y_M = 2');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'om')) { vecteur(c, X(0), Y(0), X(4) - 14, Y(2) + 7, { couleur: 'rose', nom: 'OM', nx: X(2.3), ny: Y(.6), taille: pt ? 28 : 22, point: false }); c.repere('OM', X(0), Y(2), 4 * u, 2 * u, 'le vecteur OM'); }
+  panneau(c, S, sc, L - 300, 80, 285, [
+    { m: 'axes', t: 'repère (O, ^i, ^j)', c: 'cyan', taille: 21 },
+    { m: 'coord', t: 'M (4 ; 2)', c: 'jaune', g: true, taille: 22 },
+    { m: 'ecriture', t: '^OM = 4·^i + 2·^j', c: 'rose', g: true, taille: 24, r: 'ecriture' },
+  ], { dy: 54, px: 440, py: 44, pw: 310 });
+}
+
+/* ── vue espace ── */
+const ME = { axes: .5, point: 2.5, projections: 4.5, om: 7, ecriture: 8.5 };
+function dessinerEspace(c, S, sc) {
+  const L = sc.L, pt = sc.petit, O = [200, 316], ux = [80, 0], uy = [-44, 30], uz = [0, -80];
+  const Q = (x, y, z) => [O[0] + x * ux[0] + y * uy[0] + z * uz[0], O[1] + x * ux[1] + y * uy[1] + z * uz[1]];
+  const ax = (v, n, nom) => { const a = Q(...v.map(t => t * n)); c.fleche(O[0], O[1], a[0], a[1], { couleur: 'blanc', largeur: 2 }); c.texte(nom, a[0] + 8, a[1] + 6, { couleur: 'blanc', taille: pt ? 28 : 20 }); };
+  c.direct(() => { const g = c.ctx; g.fillStyle = 'rgba(148,163,184,.12)'; const a = Q(0, 0, 0), b = Q(4.3, 0, 0), d = Q(4.3, 2.4, 0), e = Q(0, 2.4, 0); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.lineTo(...d); g.lineTo(...e); g.closePath(); g.fill(); });
+  ax([1, 0, 0], 4.6, 'x'); ax([0, 1, 0], 2.6, 'y'); ax([0, 0, 1], 3.5, 'z');
+  c.texte('O', O[0] - 10, O[1] - 8, { couleur: 'blanc', taille: pt ? 26 : 20, align: 'right' });
+  vecteur(c, ...Q(0, 0, 0), ...Q(1, 0, 0), { couleur: 'cyan', nom: 'i', nx: Q(.4, 0, 0)[0], ny: O[1] - 10, taille: pt ? 26 : 20, point: false });
+  vecteur(c, ...Q(0, 0, 0), ...Q(0, 1, 0), { couleur: 'cyan', nom: 'j', nx: Q(0, 1, 0)[0] - 26, ny: Q(0, 1, 0)[1] + 4, taille: pt ? 26 : 20, point: false });
+  vecteur(c, ...Q(0, 0, 0), ...Q(0, 0, 1), { couleur: 'cyan', nom: 'k', nx: O[0] + 10, ny: Q(0, 0, .55)[1], taille: pt ? 26 : 20, point: false });
+  c.repere('repere', O[0] - 120, Q(0, 0, 3.5)[1], 500, 380, 'le repère (O, i, j, k)');
+  const M = Q(3, 2, 2), H = Q(3, 2, 0);
+  if (S.t <= 0 || S.ecrit(c, 'point')) { c.direct(() => P.ballon(c.ctx, M[0], M[1], 16, 1)); c.texte('M', M[0] + 20, M[1] - 12, { couleur: 'jaune', taille: pt ? 28 : 22, gras: true }); c.repere('M', M[0] - 16, M[1] - 16, 32, 32, 'le ballon en M, en l’air'); }
+  if (S.t <= 0 || S.ecrit(c, 'projections')) {
+    const pj = (a, b) => c.ligne(a[0], a[1], b[0], b[1], { couleur: 'jaune', largeur: 1.6, pointille: [6, 5] });
+    pj(M, H); pj(H, Q(3, 0, 0)); pj(H, Q(0, 2, 0));
+    c.texte('3', Q(3, 0, 0)[0], Q(3, 0, 0)[1] + 26, { couleur: 'jaune', taille: pt ? 26 : 19, gras: true, align: 'center' });
+    c.texte('2', Q(0, 2, 0)[0] - 16, Q(0, 2, 0)[1] + 6, { couleur: 'jaune', taille: pt ? 26 : 19, gras: true, align: 'right' });
+    c.texte('z = 2', M[0] + 12, M[1] + 52, { couleur: 'jaune', taille: pt ? 26 : 19, gras: true }); if (0) c.texte('', 0, 0, { couleur: 'jaune', taille: pt ? 26 : 19, gras: true });
+    c.repere('projections', Q(0, 2, 0)[0], M[1], Q(3, 0, 0)[0] - Q(0, 2, 0)[0], H[1] - M[1] + 20, 'les coordonnées x = 3, y = 2, z = 2');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'om')) { vecteur(c, O[0], O[1], M[0] - 10, M[1] + 8, { couleur: 'rose', nom: 'OM', nx: M[0] - 120, ny: M[1] - 26, taille: pt ? 28 : 22, point: false }); c.repere('OM', O[0], M[1], M[0] - O[0], O[1] - M[1], 'le vecteur OM'); }
+  panneau(c, S, sc, L - 310, 80, 295, [
+    { m: 'point', t: 'M (3 ; 2 ; 2)', c: 'jaune', g: true, taille: 22 },
+    { m: 'ecriture', t: '^OM = x·^i + y·^j + z·^k', c: 'rose', g: true, taille: 22, r: 'ecriture' },
+  ], { dy: 56, px: 420, py: 44, pw: 330 });
+}
+
+/* ── vue temps ── */
+const MT = { route: .5, origine: 2, d1: 4, d2: 6, d3: 8, conclusion: 10 };
+function dessinerTemps(c, S, sc) {
+  const L = sc.L, pt = sc.petit, u = 70, O = 120, ya = 300, t = S.t <= 0 ? 99 : S.t;
+  c.direct(() => P.sol(c.ctx, 0, 210, L, 56, { route: true }));
+  // la voiture : passe en O à « origine », puis 2 m par seconde de film (1 s de chronomètre = 2 s de scène)
+  const tc = S.t <= 0 ? 3 : clamp((t - MT.origine) / 2, -.6, 3);
+  const xm = 2 * tc;
+  c.direct(() => P.voiture(c.ctx, O + xm * u - 60, 232, 110));
+  c.fleche(O - 40, ya, O + 7.2 * u, ya, { couleur: 'blanc', largeur: 2 });
+  for (let k = 0; k <= 6; k++) { c.ligne(O + k * u, ya - 7, O + k * u, ya + 7, { couleur: 'blanc', largeur: 1.5, duree: .02 }); c.texte(String(k), O + k * u, ya + (pt ? 36 : 28), { couleur: 'faible', taille: pt ? 26 : 17, align: 'center', duree: .02 }); }
+  c.texte('x (m)', O + 7.2 * u, ya - 12, { couleur: 'cyan', taille: pt ? 26 : 18, align: 'right' }); c.texte('O', O - 8, ya - 12, { couleur: 'jaune', taille: pt ? 26 : 20, align: 'right' });
+  c.repere('axe', O - 40, ya - 10, 7.6 * u, 20, 'l’axe x');
+  const chr = S.t <= 0 ? '3,0 s' : (Math.max(0, tc).toFixed(1).replace('.', ',') + ' s');
+  c.direct(() => P.chrono(c.ctx, L - 90, 110, 56, S.t > 0 && t < MT.origine ? '0,0 s' : chr));
+  c.repere('chrono', L - 150, 40, 120, 130, 'le chronomètre');
+  [['origine', 0], ['d1', 1], ['d2', 2], ['d3', 3]].forEach(([m, s]) => {
+    if (!(S.t <= 0 || S.ecrit(c, m))) return;
+    const x = O + 2 * s * u;
+    c.direct(() => P.point(c.ctx, x, ya, 6));
+    c.texte('t = ' + s + ' s', x, ya + (pt ? 76 : 60), { couleur: m === 'origine' ? 'jaune' : 'vert', taille: pt ? 26 : 19, gras: true, align: 'center' });
+    c.repere(m, x - 30, ya - 10, 60, 80, 'à t = ' + s + ' s : x = ' + 2 * s + ' m');
+  });
+  if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'conclusion'))) { c.texte(pt ? 'position + date' : 'chaque position a sa date : à t = 2 s, x = 4 m', 30, 60, { couleur: 'jaune', taille: pt ? 28 : 21, gras: true, max: L - 200 }); c.repere('conclusion', 24, 34, L - 220, 36, 'chaque position a sa date'); }
+  else if (S.a('origine')) c.texte(pt ? 't = 0 : l’origine' : 'origine des dates : t = 0 quand la voiture passe en O', 30, 60, { couleur: 'cyan', taille: pt ? 28 : 20, max: L - 200 });
+}
+
+window.Mvt.vues('tc_mi_repere', {
+  axe: { titre: 'Le repère d’espace : un axe', moments: MA, fin: 12.5, dessiner: dessinerAxe,
+    motifs: { axe: 'l’axe', O: 'l’origine O', i: 'le vecteur i', mobile: 'la voiture avance', abscisse: 'x_M = 3 m', negatif: 'x = −2 m' },
+    accueil: 'Une voiture sur une route droite.', fini: 'OM = x_M·i ; x_M = 3 m ; à gauche de O, x est négatif.',
+    voir: S => ['Route droite, voiture, axe x gradué en mètres.', S.a('O') && 'Origine O.', S.a('i') && 'Vecteur unitaire i (1 m).', S.a('mobile') && 'La voiture avance ; M suit son milieu.', S.a('abscisse') && 'M à x = 3 m ; flèche rose OM.', S.a('negatif') && 'M’ à x = −2 m.'].filter(Boolean).join(' '),
+    texte: 'Mouvement rectiligne : un axe (O, i) ; OM = x_M·i ; x_M est l’abscisse de M (ici 3 m ; −2 m à gauche de O).' },
+  plan: { titre: 'Le repère du plan', moments: MP, fin: 11, dessiner: dessinerPlan,
+    motifs: { plan: 'le terrain', axes: 'le repère (O, i, j)', ballon: 'le ballon roule', coord: 'x_M = 4, y_M = 2', om: 'le vecteur OM', ecriture: 'OM = 4i + 2j' },
+    accueil: 'Un ballon roule sur un terrain vu de dessus.', fini: 'OM = 4·i + 2·j.',
+    voir: S => ['Terrain vert vu de dessus.', S.a('axes') && 'Repère (O, i, j).', S.a('ballon') && 'Le ballon roule jusqu’en M.', S.a('coord') && 'x_M = 4, y_M = 2.', S.a('om') && 'Flèche rose OM.', S.a('ecriture') && 'OM = 4i + 2j.'].filter(Boolean).join(' '),
+    texte: 'Mouvement plan : repère (O, i, j), OM = x_M·i + y_M·j. Ici M (4 ; 2).' },
+  espace: { titre: 'Le repère de l’espace', moments: ME, fin: 10, dessiner: dessinerEspace,
+    motifs: { axes: 'le repère (O, i, j, k)', point: 'le ballon en M', projections: 'les trois coordonnées', om: 'le vecteur OM', ecriture: 'OM = xi + yj + zk' },
+    accueil: 'Un ballon en l’air.', fini: 'OM = x·i + y·j + z·k.',
+    voir: S => ['Trois axes x, y, z et i, j, k.', S.a('point') && 'Ballon en M, en l’air.', S.a('projections') && 'Pointillés : x = 3, y = 2, z = 2.', S.a('om') && 'Flèche rose OM.', S.a('ecriture') && 'OM = xi + yj + zk.'].filter(Boolean).join(' '),
+    texte: 'Mouvement dans l’espace : repère (O, i, j, k), OM = x·i + y·j + z·k.' },
+  temps: { titre: 'Le repère de temps', moments: MT, fin: 12, dessiner: dessinerTemps,
+    motifs: { route: 'la route', origine: 't = 0', d1: 't = 1 s', d2: 't = 2 s', d3: 't = 3 s', conclusion: 'position et date' },
+    accueil: 'Une voiture et un chronomètre.', fini: 'Chaque position a sa date : t = 0 en O, x = 4 m à t = 2 s.',
+    voir: S => ['Route, axe x, chronomètre.', S.a('origine') && 'La voiture passe en O : t = 0.', S.a('d1') && 't = 1 s : x = 2 m.', S.a('d2') && 't = 2 s : x = 4 m.', S.a('d3') && 't = 3 s : x = 6 m.', S.a('conclusion') && 'Chaque position a sa date.'].filter(Boolean).join(' '),
+    texte: 'Le repère de temps : on choisit l’origine des dates t = 0. Chaque position a sa date.' },
+});
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le montage du chauffage à reflux — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_synthese-tableau/synthese.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le montage du chauffage à reflux construit pièce par pièce : potence, support élévateur, chauffe-ballon, ballon, réfrigérant à boules, entrée et sortie de l’eau ; ce qu’on met dans le ballon ; le rôle de l’éthanol et de la pierre ponce"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
+<script src="/media/simulations/chimie/tc_synthese-tableau/commun.js"></script>
+<script>
+/*
+ * Le montage du chauffage à reflux (synthèse du savon), trois vues :
+ *   ?vue=montage (sy_m1_montage)  moments : potence, elevateur, chauffe, ballon, refrigerant, entree, sortie, eau
+ *   ?vue=contenu (sy_m2_contenu)  moments : securite, huile, ethanol, soude, ponce
+ *   ?vue=roles   (sy_m3_roles)    moments : sans_ethanol, avec_ethanol, sans_ponce, avec_ponce
+ */
+const { P, lueur, lignes, param } = window.Synthese;
+const VUE = ['montage', 'contenu', 'roles'].includes(param('vue')) ? param('vue') : 'montage';
+const M_montage = { potence: .5, elevateur: 2.5, chauffe: 4.5, ballon: 6.5, refrigerant: 8.5, entree: 10.5, sortie: 12.5, eau: 14.5 };
+const M_contenu = { securite: .5, huile: 3.5, ethanol: 6.5, soude: 9.5, ponce: 12.5 };
+const M_roles = { sans_ethanol: .5, avec_ethanol: 3.5, sans_ponce: 6.5, avec_ponce: 9.5 };
+const M = { montage: M_montage, contenu: M_contenu, roles: M_roles }[VUE];
+const FIN = { montage: 17, contenu: 15, roles: 12.5 }[VUE];
+
+/* ── vue « montage » : chaque pièce paraît, s'allume et reçoit son nom ── */
+const PIECES = [
+  ['potence', 'potence', 'blanc'], ['elevateur', 'support élévateur', 'blanc'], ['chauffe', 'chauffe-ballon', 'orange'], ['ballon', 'ballon', 'cyan'],
+  ['refrigerant', 'réfrigérant à boules', 'cyan'], ['entree', 'entrée de l’eau froide', 'bleu'], ['sortie', 'sortie de l’eau', 'bleu'],
+];
+function dessinerMontage(c, S, scene) {
+  const pt = scene.petit, L = scene.L, s = pt ? .98 : .96, cx = pt ? L * .3 : Math.min(300, L * .36), yb = 410;
+  const kk = {}; for (const [id] of PIECES) kk[id === 'entree' || id === 'sortie' ? 'tuyaux' : id] = S.t <= 0 ? 1 : S.k(id, .8);
+  kk.tuyaux = S.t <= 0 ? 1 : S.k('entree', .8); kk.eau = S.t <= 0 ? 1 : S.k('eau', 2);
+  let G;
+  c.direct(() => { G = P.montage(c.ctx, cx, yb, { s, k: kk, phase: S.t, }); });
+  // la pièce en cours s'allume
+  let actif = null; for (const [id] of PIECES) if (S.t > 0 && S.a(id)) actif = id;
+  if (S.t > 0 && S.a('eau')) actif = 'eau';
+  // les légendes : à droite (à gauche pour la potence), un trait de rappel vers la pièce
+  const xl = pt ? L * .56 : Math.max(cx + 150, L * .55);
+  PIECES.forEach(([id, nom, coul], i) => {
+    const b = G.boites[id]; c.repere(id, b[0], b[1], b[2], b[3], nom);
+    if (S.t > 0 && !S.ecrit(c, id)) return;
+    if (pt && S.t > 0 && actif !== id && !(actif === 'eau' && id === 'entree')) return;
+    if (actif === id) lueur(c, b[0] - 4, b[1] - 4, b[2] + 8, b[3] + 8, { vive: true });
+    const [ax, ay] = G.ancres[id];
+    if (pt) {
+      c.texte(nom, xl, 140, { couleur: coul === 'blanc' ? 'jaune' : coul, taille: 32, gras: true, max: L - xl - 10 });
+      c.ligne(xl - 6, 132, ax + 6, ay, { couleur: 'faible', largeur: 1.4 });
+      return;
+    }
+    const yy = { sortie: 74, refrigerant: 128, entree: 182, ballon: 266, chauffe: 320, elevateur: 372 }[id] ?? 60;
+    if (id === 'potence') { c.texte(nom, 16, 44, { couleur: 'jaune', taille: 20, gras: true }); c.ligne(60, 52, ax - 2, ay, { couleur: 'faible', largeur: 1.3 }); return; }
+    c.ligne(ax + 4, ay, xl - 8, yy - 6, { couleur: 'faible', largeur: 1.3 });
+    c.texte(nom, xl, yy, { couleur: coul === 'blanc' ? 'jaune' : coul, taille: 20, gras: true, max: L - xl - 8 });
+  });
+  if (S.t <= 0 || S.ecrit(c, 'eau')) {
+    if (!pt || actif === 'eau') {
+      const x0 = xl, y0 = pt ? 210 : 210;
+      c.texte(pt ? 'l’eau froide circule' : 'l’eau froide monte : entre en bas,', x0, y0, { couleur: 'cyan', taille: pt ? 24 : 16, max: L - x0 - 8 });
+      c.texte(pt ? 'de bas en haut' : 'sort en haut', x0, y0 + (pt ? 36 : 22), { couleur: 'cyan', taille: pt ? 24 : 16, max: L - x0 - 8 });
+    }
+    c.repere('eau', G.boites.refrigerant[0], G.boites.refrigerant[1], G.boites.refrigerant[2], G.boites.refrigerant[3], 'l’eau froide dans le réfrigérant');
+  }
+}
+
+/* ── vue « contenu » : ce qu'on met dans le ballon ── */
+const AJOUTS = [
+  { id: 'huile', nom: 'huile d’olive', q: '10 mL', col: P.LIQ.huile, f: .14 },
+  { id: 'ethanol', nom: 'éthanol', q: '20 mL', col: P.LIQ.ethanol, f: .30 },
+  { id: 'soude', nom: 'solution de soude', q: '20 mL', col: P.LIQ.soude, f: .46 },
+];
+function couchesContenu(S) {
+  // l'huile seule (dorée), puis l'éthanol s'y mêle (jaune pâle), puis la soude : un seul mélange jaune pâle
+  if (S.t > 0 && !S.a('huile')) return [];
+  const kh = S.t <= 0 ? 1 : S.k('huile', 1.6), ke = S.t <= 0 ? 1 : S.k('ethanol', 1.6), ks = S.t <= 0 ? 1 : S.k('soude', 1.6);
+  const f = .14 * kh + .16 * ke + .16 * ks;
+  const melange = ke > 0 ? [P.LIQ.huile[0] + (P.LIQ.melange[0] - P.LIQ.huile[0]) * ke, P.LIQ.huile[1] + (P.LIQ.melange[1] - P.LIQ.huile[1]) * ke, P.LIQ.huile[2] + (P.LIQ.melange[2] - P.LIQ.huile[2]) * ke, .66] : P.LIQ.huile;
+  return f > .01 ? [{ f, col: melange }] : [];
+}
+function dessinerContenu(c, S, scene) {
+  const pt = scene.petit, L = scene.L, cx = pt ? L * .27 : Math.min(250, L * .3), r = pt ? 74 : 70, yBal = 300;
+  let enCours = null; for (const a of AJOUTS) if (S.t > 0 && S.a(a.id) && S.t < M[a.id] + 2.2) enCours = a;
+  c.direct(() => {
+    const g = c.ctx;
+    P.chauffeBallon(g, cx, yBal + r - 18, r * 2.5, 52, 0);
+    P.ballon(g, cx, yBal, r, { couches: couchesContenu(S), ponce: S.t <= 0 || S.a('ponce') });
+    if (enCours) {   // l'éprouvette penchée verse dans le col
+      const k = S.kl(enCours.id, 2.2), xe = cx + 60, ye = yBal - r * 1.75 - 70;
+      g.save(); g.translate(xe, ye); g.rotate(-1.05 - .2 * k); P.eprouvette(g, 0, -60, 26, 120, Math.max(0, .8 - .8 * k), enCours.col); g.restore();
+      if (k > .05 && k < .95) P.filet(g, cx + 4, ye + 4, yBal + r * .3, enCours.col);
+    }
+    if (S.a('ponce') && S.t < M.ponce + 1.2) { const k = S.kl('ponce', 1.2); for (let i = 0; i < 4; i++) P.ponce(g, cx - 6 + i * 4, yBal - r * 1.75 + (r * 2.4) * k + i * 3, 4); }
+  });
+  c.repere('ballon', cx - r - 4, yBal - r * 1.75, 2 * r + 8, r * 2.75, 'le ballon');
+  // la liste, écrite au fur et à mesure (à droite)
+  const xl = pt ? L * .52 : Math.max(cx + r + 90, L * .5);
+  if (S.t <= 0 || S.ecrit(c, 'securite')) {
+    if (!pt || (S.t > 0 && !S.a('huile'))) {
+      c.direct(() => { const g = c.ctx; P.lunettes(g, xl + 34, pt ? 120 : 52, pt ? 56 : 40); P.gant(g, xl + (pt ? 120 : 100), pt ? 128 : 58, pt ? 52 : 38); P.flacon(g, xl + (pt ? 200 : 170), pt ? 70 : 22, pt ? 54 : 46, pt ? 92 : 74, { nom: 'soude', danger: 'corrosif', col: P.LIQ.soude, taille: pt ? 15 : 13 }); });
+      c.texte(pt ? 'lunettes + gants' : 'lunettes + gants', pt ? xl : xl + 210, pt ? 210 : 52, { couleur: 'orange', taille: pt ? 28 : 17, gras: true, max: L - xl - (pt ? 10 : 216) });
+    }
+    c.repere('securite', xl, 14, Math.min(260, L - xl - 8), 74, 'la sécurité : lunettes et gants');
+  }
+  AJOUTS.forEach((a, i) => {
+    const y = 140 + i * 56;
+    c.repere(a.id, xl - 4, y - 26, Math.min(330, L - xl - 6), 40, a.nom);
+    if (S.t > 0 && !S.ecrit(c, a.id)) return;
+    if (pt && enCours !== a) return;
+    if (enCours === a && !pt) lueur(c, xl - 6, y - 28, Math.min(330, L - xl - 4), 42, { vive: true });
+    c.texte(pt ? a.nom : a.nom + ' : ' + a.q, xl, pt ? 120 : y, { couleur: a.id === 'huile' ? 'jaune' : a.id === 'soude' ? 'orange' : 'cyan', taille: pt ? 30 : 20, gras: true, max: L - xl - 10 });
+    if (pt) c.texte(a.q, xl, 166, { couleur: 'blanc', taille: 30 });
+  });
+  if (S.t <= 0 || S.ecrit(c, 'ponce')) {
+    if (!pt || S.a('ponce')) {
+      c.texte('pierre ponce : quelques grains', xl, pt ? 120 : 308, { couleur: 'blanc', taille: pt ? 26 : 20, gras: true, max: L - xl - 10 });
+      if (!pt) lueur(c, xl - 6, 282, Math.min(330, L - xl - 4), 40, { vive: S.t > 0 && S.a('ponce') });
+    }
+    c.repere('ponce', xl - 4, 282, Math.min(330, L - xl - 6), 40, 'la pierre ponce');
+  }
+}
+
+/* ── vue « roles » : pourquoi l'éthanol, pourquoi la pierre ponce ── */
+const CAS = [
+  { id: 'sans_ethanol', titre: 'sans éthanol', res: 'deux couches', res2: 'contact faible', coul: 'rouge' },
+  { id: 'avec_ethanol', titre: 'avec éthanol', res: 'un seul mélange', res2: 'bon contact', coul: 'vert' },
+  { id: 'sans_ponce', titre: 'sans pierre ponce', res: 'grosses bulles', res2: 'projections', coul: 'rouge' },
+  { id: 'avec_ponce', titre: 'avec pierre ponce', res: 'petites bulles', res2: 'ébullition calme', coul: 'vert' },
+];
+function dessinerRoles(c, S, scene) {
+  const pt = scene.petit, L = scene.L;
+  let courant = 0; CAS.forEach((k, i) => { if (S.t > 0 && S.a(k.id)) courant = i; });
+  const visibles = pt ? (S.t <= 0 ? [0, 1] : courant < 2 ? [0, 1] : [2, 3]) : [0, 1, 2, 3];
+  const n = visibles.length, r = pt ? 62 : 64, yB = pt ? 250 : 236;
+  visibles.forEach((idx, j) => {
+    const k = CAS[idx], x = L * (j + .5) / n;
+    c.repere(k.id, x - r - 10, yB - r * 1.75 - 40, 2 * r + 20, r * 2.75 + 110, k.titre);
+    if (S.t > 0 && !S.ecrit(c, k.id)) return;
+    const chaud = idx >= 2, tt = S.t - M[k.id];
+    if (S.t > 0 && courant === idx) lueur(c, x - r - 12, yB - r * 1.75 - 44, 2 * r + 24, r * 2.75 + (chaud ? 138 : 112), { vive: true });
+    c.texte(k.titre, x, yB - r * 1.75 - 18, { couleur: 'jaune', taille: pt ? 24 : 19, gras: true, align: 'center', max: L / n - 8 });
+    c.direct(() => {
+      const g = c.ctx;
+      if (chaud) P.chauffeBallon(g, x, yB + r - 14, r * 2.3, 40, 1);
+      if (idx === 0) P.ballon(g, x, yB, r, { couches: [{ f: .3, col: P.LIQ.soude }, { f: .55, col: P.LIQ.huile }] });
+      else if (idx === 1) P.ballon(g, x, yB, r, { couches: [{ f: .58, col: P.LIQ.melange }] });
+      else P.ballon(g, x, yB, r, { couches: [{ f: .55, col: P.LIQ.melange }], ponce: idx === 3, bulles: idx === 3 ? Math.max(0, tt) : null, agite: .5 });
+      // les entités : huile (dorée) et soude (bleue)
+      const R = window.Synthese.graine(5 + idx);
+      if (idx <= 1) for (let i = 0; i < 26; i++) {
+        const huile = i % 2 === 0;
+        let px, py;
+        if (idx === 0) { px = x - r * .6 + R() * r * 1.2; py = huile ? yB + r - 2 * r * .55 + 6 + R() * (2 * r * .25 - 10) : yB + r - 2 * r * .3 + 4 + R() * (2 * r * .3 - 12); }
+        else { px = x - r * .62 + R() * r * 1.24; py = yB + r - 2 * r * .58 + 8 + R() * (2 * r * .58 - 16); }
+        if (Math.hypot(px - x, py - yB) > r - 7) continue;
+        P.sphere(g, px, py, pt ? 4.6 : 4, huile ? [234, 179, 8] : [59, 130, 246]);
+      }
+      if (idx === 2 && tt > 0) {   // grosse bulle qui éclate et projette
+        const f = (tt * .7) % 1, rb = 6 + 22 * f;
+        g.save(); g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 1.6; g.beginPath(); g.arc(x, yB + r * .4 - f * r * .6, rb, 0, Math.PI * 2); g.stroke(); g.restore();
+        if (f > .5) for (let i = 0; i < 7; i++) P.goutte(g, x - 24 + i * 8, yB - r * 1.75 - 6 - (f - .5) * 120 * (.5 + (i % 3) * .3), 4, [253, 224, 71, 1]);
+      }
+    });
+    if (idx === 0) c.ligne(x - r * .9, yB + r - 2 * r * .3, x + r * .9, yB + r - 2 * r * .3, { couleur: 'rouge', largeur: 2.4, pointille: [5, 4] });
+    if (S.conclusions || S.t <= 0 || tt > 1.2) {
+      c.texte(k.res, x, yB + r + (chaud ? 50 : 34), { couleur: k.coul, taille: pt ? 24 : 18, gras: true, align: 'center', max: L / n - 8 });
+      c.texte(k.res2, x, yB + r + (chaud ? 76 : 60), { couleur: k.coul, taille: pt ? 24 : 18, align: 'center', max: L / n - 8 });
+    }
+  });
+}
+
+const DESSINS = { montage: dessinerMontage, contenu: dessinerContenu, roles: dessinerRoles };
+const S = window.Synthese.sim({
+  id: 'tc_synthese_montage_' + VUE, titre: 'Le chauffage à reflux : ' + VUE, vue: VUE, moments: M, fin: FIN, graine: 23,
+  motifs: { potence: 'la potence', elevateur: 'le support élévateur', chauffe: 'le chauffe-ballon', ballon: 'le ballon', refrigerant: 'le réfrigérant à boules', entree: 'l’entrée de l’eau (en bas)', sortie: 'la sortie de l’eau (en haut)', eau: 'l’eau froide circule',
+    securite: 'la sécurité', huile: 'l’huile', ethanol: 'l’éthanol', soude: 'la soude', ponce: 'la pierre ponce',
+    sans_ethanol: 'sans éthanol', avec_ethanol: 'avec éthanol', sans_ponce: 'sans pierre ponce', avec_ponce: 'avec pierre ponce' },
+  accueil: { montage: 'Le montage se construit pièce par pièce.', contenu: 'Ce qu’on met dans le ballon.', roles: 'Pourquoi l’éthanol ? Pourquoi la pierre ponce ?' }[VUE],
+  debut: 'Regarde…', fini: { montage: 'Le montage du chauffage à reflux est prêt.', contenu: 'Le ballon est prêt.', roles: 'Éthanol : contact ; pierre ponce : ébullition calme.' }[VUE],
+  dessiner: (c, S, sc) => DESSINS[VUE](c, S, sc),
+  ceQuiSeVoit: S => {
+    const a = n => S.t <= 0 || S.a(n);
+    if (VUE === 'montage') return 'Montage du chauffage à reflux, de bas en haut : ' + PIECES.filter(([id]) => a(id)).map(p => p[1]).join(', ') + (a('eau') ? ' ; l’eau froide entre en bas du réfrigérant et sort en haut.' : '.');
+    if (VUE === 'contenu') return 'Le ballon : ' + [a('securite') && 'lunettes et gants (soude corrosive)', a('huile') && 'huile 10 mL', a('ethanol') && 'éthanol 20 mL', a('soude') && 'soude 20 mL', a('ponce') && 'pierre ponce'].filter(Boolean).join(', ') + '.';
+    return CAS.filter(k => a(k.id)).map(k => k.titre + ' : ' + k.res + ', ' + k.res2).join(' ; ') + '.';
+  },
+  texte: 'Montage du chauffage à reflux : potence, support élévateur, chauffe-ballon, ballon, réfrigérant à boules (entrée de l’eau en bas, sortie en haut). Dans le ballon : huile 10 mL, éthanol 20 mL (favorise le contact entre les réactifs), soude 20 mL (corrosive : lunettes et gants), pierre ponce (ébullition régulière).',
+  explication: { montage: PIECES.map(([id, nom]) => ({ repere: id, texte: nom })) },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Espèces chimiques et synthèse — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_synthese-tableau/synthese.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Les notions de départ, dessinées case par case : espèce chimique, espèces naturelles et synthétiques, transformation chimique, nécessité et types de la chimie de synthèse, définition de la synthèse, réactifs et produits du savon"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
+<script src="/media/simulations/chimie/tc_synthese-tableau/commun.js"></script>
+<script>
+/*
+ * Notions du cours, une vue par diapo (cases qui paraissent une à une) :
+ *   ?vue=espece         (sy_o1_espece)          moments : pure, minerale, definition
+ *   ?vue=naturelle      (sy_o2_naturelle)       moments : naturelle, synthetique, identiques
+ *   ?vue=transformation (sy_o3_transformation)  moments : avant, transformation, apres, bilan
+ *   ?vue=pourquoi       (sy_n1_pourquoi)        moments : nature, labo, nouvelle
+ *   ?vue=types          (sy_n2_types)           moments : lourde, specialites, fine
+ *   ?vue=definition     (sy_d1_definition)      moments : reactifs, synthese, produit, bilan
+ *   ?vue=savon          (sy_d2_reactifs_produits) moments : reactifs, produits, bilan
+ */
+const { P, param, graine } = window.Synthese;
+const TAU = Math.PI * 2;
+const VUES = ['espece', 'naturelle', 'transformation', 'pourquoi', 'types', 'definition', 'savon'];
+const VUE = VUES.includes(param('vue')) ? param('vue') : 'espece';
+const M_espece = { pure: .5, minerale: 3.5, definition: 7 };
+const M_naturelle = { naturelle: .5, synthetique: 3.5, identiques: 6.5 };
+const M_transformation = { avant: .5, transformation: 3.5, apres: 6.5, bilan: 9.5 };
+const M_pourquoi = { nature: .5, labo: 3.5, nouvelle: 6.5 };
+const M_types = { lourde: .5, specialites: 3.5, fine: 6.5 };
+const M_definition = { reactifs: .5, synthese: 3.5, produit: 6.5, bilan: 9.5 };
+const M_savon = { reactifs: .5, produits: 3.5, bilan: 6.5 };
+const M = { espece: M_espece, naturelle: M_naturelle, transformation: M_transformation, pourquoi: M_pourquoi, types: M_types, definition: M_definition, savon: M_savon }[VUE];
+
+/* petits dessins */
+const loupe = (g, x, y, r, fn) => {
+  g.save(); g.fillStyle = 'rgba(15,23,42,.55)'; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); g.clip(); fn(); g.restore();
+  g.save(); g.strokeStyle = 'rgba(226,232,240,.85)'; g.lineWidth = 3; g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke(); g.restore();
+};
+const ION = { 'Ca²⁺': [250, 204, 21], 'Mg²⁺': [74, 222, 128], 'Na⁺': [192, 132, 252], 'Cl⁻': [96, 165, 250] };
+function eauPure(g, x, y, k) {
+  P.verre(g, x - k * .28, y + k * .05, k * .3, k * .42);
+  loupe(g, x + k * .15, y, k * .27, () => { const R = graine(4); for (let i = 0; i < 7; i++) P.eau(g, x + k * .15 + (R() - .5) * k * .36, y + (R() - .5) * k * .36, k * .045, R() * 6); });
+  g.strokeStyle = 'rgba(226,232,240,.5)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x - k * .2, y - k * .1); g.lineTo(x - k * .11, y - k * .08); g.stroke();
+}
+function eauMinerale(g, x, y, k) {
+  P.bouteille(g, x - k * .28, y + k * .26, k * .55, [125, 211, 252]);
+  loupe(g, x + k * .15, y, k * .27, () => {
+    const R = graine(8); for (let i = 0; i < 5; i++) P.eau(g, x + k * .15 + (R() - .5) * k * .36, y + (R() - .5) * k * .36, k * .04, R() * 6);
+    Object.entries(ION).forEach(([ch, col], i) => P.ion(g, x + k * .15 + [-.1, .1, -.04, .12][i] * k, y + [-.1, -.04, .12, .1][i] * k, k * .05, col, ch));
+  });
+}
+function billes(g, x, y, k, a, cols, phase = 0, agite = 0) {
+  const R = graine(11);
+  for (let i = 0; i < 12; i++) {
+    const px = x + (R() - .5) * k * .6 + Math.cos(phase * 3 + i) * agite, py = y + (R() - .5) * k * .4 + Math.sin(phase * 3.4 + i) * agite;
+    const col = cols[i % cols.length];
+    P.sphere(g, px - k * .028, py, k * .035, col, a); P.sphere(g, px + k * .028, py, k * .035, col, a);
+  }
+}
+const OR = [234, 179, 8], BLEU = [59, 130, 246], VIOLET = [168, 85, 247], VERT = [34, 197, 94];
+
+const VUE_CASES = {
+  espece: { cases: [
+    { id: 'pure', titre: 'eau pure', l1: 'des entités toutes identiques : H₂O', l2: 'une seule espèce chimique', c2: 'vert', peindre: eauPure },
+    { id: 'minerale', titre: 'eau minérale', l1: 'H₂O + ions Ca²⁺, Mg²⁺, Na⁺, Cl⁻…', l2: 'plusieurs espèces : un mélange', c2: 'orange', peindre: eauMinerale },
+  ], bas: 'espèce chimique : ensemble d’entités identiques', basMoment: 'definition' },
+  naturelle: { cases: [
+    { id: 'naturelle', titre: 'espèce naturelle', l1: 'elle existe dans la nature', l2: 'ex. : le sel, le sucre', peindre: (g, x, y, k) => { for (let i = 0; i < 5; i++) P.feuille(g, x - k * .25 + i * k * .12, y + k * .2 - (i % 2) * k * .1, k * .09, -.5 + i * .3); for (let i = 0; i < 4; i++) P.jasmin(g, x - k * .22 + i * k * .15, y - k * .05 + (i % 2) * k * .12, k * .12); } },
+    { id: 'synthetique', titre: 'espèce synthétique', l1: 'préparée par l’Homme', l2: 'ex. : l’aspirine, le plastique', peindre: (g, x, y, k) => { P.chauffeBallon(g, x, y + k * .18, k * .5, k * .16, 1); P.ballon(g, x, y + k * .03, k * .17, { couches: [{ f: .5, col: P.LIQ.produit }] }); } },
+    { id: 'identiques', titre: 'souvent identiques', l1: 'odeur de jasmin naturelle', l2: '= celle du laboratoire', c2: 'vert', peindre: (g, x, y, k) => { P.parfum(g, x - k * .22, y, k * .28); P.parfum(g, x + k * .22, y, k * .28); P.jasmin(g, x - k * .22, y + k * .27, k * .1); } },
+  ] },
+  transformation: { cases: [
+    { id: 'avant', titre: 'avant : les réactifs', l1: 'deux espèces (or, bleue)', l2: '', peindre: (g, x, y, k, S) => { const cons = S.t <= 0 || S.a('apres'); P.becher(g, x - k * .38, y - k * .32, k * .76, k * .7, .7, P.LIQ.ethanol); billes(g, x, y + k * .1, k * .9, cons ? .3 : 1, [OR, BLEU]); } },
+    { id: 'transformation', titre: 'transformation chimique', l1: 'les entités se réarrangent', peindre: (g, x, y, k, S, tt) => { P.becher(g, x - k * .38, y - k * .32, k * .76, k * .7, .7, P.LIQ.ethanol); const f = Math.max(0, Math.min(1, (tt || 0) / 3)); billes(g, x, y + k * .1, k * .9, 1 - .6 * f, [OR, BLEU], S.t, k * .05); billes(g, x + k * .03, y + k * .12, k * .8, f, [VIOLET, VERT], S.t, k * .03); } },
+    { id: 'apres', titre: 'après : les produits', l1: 'de nouvelles espèces', c1: 'vert', peindre: (g, x, y, k) => { P.becher(g, x - k * .38, y - k * .32, k * .76, k * .7, .7, P.LIQ.ethanol); billes(g, x, y + k * .1, k * .9, 1, [VIOLET, VERT]); } },
+  ], bas: 'des réactifs disparaissent, des produits apparaissent', basMoment: 'bilan' },
+  pourquoi: { cases: [
+    { id: 'nature', titre: 'dans la nature', l1: 'beaucoup de fleurs', l2: '→ très peu de parfum', c2: 'rouge', peindre: (g, x, y, k) => { const R = graine(6); for (let i = 0; i < 16; i++) P.jasmin(g, x - k * .38 + R() * k * .55, y - k * .3 + R() * k * .55, k * .07); P.parfum(g, x + k * .33, y + k * .15, k * .13); } },
+    { id: 'labo', titre: 'par la synthèse', l1: 'de grandes quantités', l2: 'moins chères', c1: 'vert', c2: 'vert', peindre: (g, x, y, k) => { P.chauffeBallon(g, x - k * .18, y + k * .22, k * .42, k * .14, 1); P.ballon(g, x - k * .18, y + k * .08, k * .15, { couches: [{ f: .5, col: P.LIQ.produit }] }); P.parfum(g, x + k * .22, y + k * .02, k * .3); } },
+    { id: 'nouvelle', titre: 'des espèces nouvelles', l1: 'qui n’existent pas', l2: 'dans la nature (plastiques)', peindre: (g, x, y, k) => { P.bouteille(g, x - k * .15, y + k * .3, k * .55, [125, 211, 252]); P.bouteille(g, x + k * .18, y + k * .3, k * .45, [134, 239, 172]); } },
+  ] },
+  types: { cases: [
+    { id: 'lourde', titre: 'chimie lourde', l1: 'produits de base : plastiques', l2: 'très grandes quantités', c2: 'orange', peindre: (g, x, y, k, S) => { P.usine(g, x - k * .05, y + k * .25, k * .55, S.t); for (let i = 0; i < 3; i++) P.bouteille(g, x + k * .26 + i * k * .07, y + k * .33, k * .2, [125, 211, 252]); } },
+    { id: 'specialites', titre: 'chimie des spécialités', l1: 'produits intermédiaires : peintures', l2: 'quantités moyennes', c2: 'orange', peindre: (g, x, y, k) => { P.peinture(g, x - k * .2, y + k * .25, k * .32, [239, 68, 68]); P.peinture(g, x + k * .18, y + k * .25, k * .32, [59, 130, 246]); } },
+    { id: 'fine', titre: 'chimie fine', l1: 'produits complexes : médicaments', l2: 'petites quantités', c2: 'orange', peindre: (g, x, y, k) => P.medicaments(g, x, y + k * .05, k * .7) },
+  ] },
+  definition: { cases: [
+    { id: 'reactifs', titre: 'des espèces de départ', l1: 'les réactifs', c1: 'cyan', peindre: (g, x, y, k, S) => { const a = S.t <= 0 || S.a('produit') ? .45 : 1; g.globalAlpha = a; P.flacon(g, x - k * .2, y - k * .25, k * .3, k * .5, { nom: 'A', col: P.LIQ.ethanol, bouchon: '#b45309' }); P.flacon(g, x + k * .2, y - k * .25, k * .3, k * .5, { nom: 'B', col: P.LIQ.huile }); g.globalAlpha = 1; } },
+    { id: 'synthese', titre: 'une transformation', l1: 'chimique', peindre: (g, x, y, k, S) => { P.chauffeBallon(g, x, y + k * .22, k * .5, k * .16, 1); P.ballon(g, x, y + k * .04, k * .19, { couches: [{ f: .55, col: P.LIQ.melange }], bulles: S.t, agite: .4 }); } },
+    { id: 'produit', titre: 'une nouvelle espèce', l1: 'le produit : espèce synthétisée', c1: 'vert', peindre: (g, x, y, k) => P.flacon(g, x, y - k * .25, k * .34, k * .52, { nom: 'C', col: P.LIQ.produit, bouchon: '#15803d' }) },
+  ], bas: 'synthèse : préparer une espèce à partir d’autres espèces', basMoment: 'bilan' },
+  savon: { cases: [
+    { id: 'reactifs', titre: 'les réactifs', l1: 'l’huile et la soude', l2: '(consommés)', c1: 'cyan', c2: 'faible', peindre: (g, x, y, k, S) => { g.globalAlpha = S.t <= 0 || S.a('produits') ? .45 : 1; P.flacon(g, x - k * .2, y - k * .28, k * .3, k * .52, { nom: 'huile', col: P.LIQ.huile, taille: 13 }); P.flacon(g, x + k * .2, y - k * .28, k * .3, k * .52, { nom: 'soude', col: P.LIQ.soude, danger: 'corrosif', taille: 13 }); g.globalAlpha = 1; } },
+    { id: 'produits', titre: 'les produits', l1: 'le savon et le glycérol', c1: 'vert', peindre: (g, x, y, k) => { P.savon(g, x - k * .18, y, k * .36, k * .2); P.flacon(g, x + k * .25, y - k * .28, k * .26, k * .5, { nom: 'glycérol', col: [240, 240, 240, .4], taille: 12, bouchon: '#64748b' }); } },
+  ], bas: 'huile + soude → savon + glycérol', basMoment: 'bilan', basCoul: 'jaune' },
+};
+const V = VUE_CASES[VUE];
+const FIN = Math.max(...Object.values(M)) + 3;
+const S = window.Synthese.sim({
+  id: 'tc_synthese_notions_' + VUE, titre: 'Notions : ' + VUE, vue: VUE, moments: M, fin: FIN, graine: 19,
+  motifs: Object.fromEntries(V.cases.map(k => [k.id, k.titre]).concat(V.basMoment ? [[V.basMoment, V.bas]] : [])),
+  accueil: 'Regarde les cases paraître une à une.', debut: 'Regarde…', fini: V.bas || V.cases[V.cases.length - 1].titre,
+  dessiner: (c, S, sc) => window.Synthese.cases(c, S, sc, V.cases, { bas: V.bas, basMoment: V.basMoment, basCoul: V.basCoul, M }),
+  ceQuiSeVoit: S => V.cases.filter(k => S.t <= 0 || S.a(k.id)).map(k => k.titre + ' : ' + [k.l1, k.l2].filter(Boolean).join(', ')).join(' ; ') + ((S.t <= 0 || (V.basMoment && S.a(V.basMoment))) && V.bas ? '. ' + V.bas + '.' : '.'),
+  texte: V.cases.map(k => k.titre + ' : ' + [k.l1, k.l2].filter(Boolean).join(', ')).join(' ; ') + (V.bas ? '. ' + V.bas : ''),
+  explication: { [VUE]: V.cases.map(k => ({ repere: k.id, texte: k.titre })) },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

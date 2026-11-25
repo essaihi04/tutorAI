@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’expérience de Rutherford — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_atome-tableau/atome.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="L’expérience de Rutherford vue de dessus : une boîte de plomb envoie des particules alpha sur une feuille d’or très mince ; un écran fluorescent en anneau s’allume là où elles arrivent. La plupart traversent tout droit, quelques-unes sont déviées, de très rares rebondissent"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/chimie/tc_atome-tableau/commun.js"></script>
+<script>
+/*
+ * L’expérience de Rutherford (1908-1911), diapos at_h4, at_h5, at_h6. Vue de dessus : boîte de plomb (source de
+ * particules α, chargées +) → faisceau → feuille d’or très mince (au centre) → écran fluorescent en anneau tout autour :
+ * chaque particule qui le touche fait un petit éclair, qui reste marqué.
+ *  ?vue=montage        : source 1,5 ; faisceau 4 ; feuille 6 ; ecran 8,5 ; eclair 11 ; fin 12.
+ *  ?vue=resultats      : tir 1 ; traversent 6 (la plupart passent tout droit) ; deviees 9 (quelques-unes déviées) ;
+ *                        rebondit 12 (une très rare revient en arrière) ; bilan 14 ; fin 15.
+ *  ?vue=interpretation : zoom sur la feuille : des atomes d’or = un nuage presque vide, un noyau + minuscule au centre ;
+ *                        zoom 2 ; vide 5 (les α passent loin des noyaux : tout droit) ; devie 8 (près d’un noyau : + et +
+ *                        se repoussent) ; rebond 11 (droit sur un noyau : retour) ; conclusion 13 ; fin 14.
+ * set_parameters {conclusions: false} : les mots du résultat (la plupart, quelques-unes, très rares) et la conclusion
+ * restent cachés (question d’observation).
+ */
+const A = window.Atome, { P, lueur } = A;
+const VUE = A.param('vue', 'montage');
+const MOMENTS = {
+  montage: { source: 1.5, faisceau: 4, feuille: 6, ecran: 8.5, eclair: 11 },
+  resultats: { tir: 1, traversent: 6, deviees: 9, rebondit: 12, bilan: 14 },
+  interpretation: { zoom: 2, vide: 5, devie: 8, rebond: 11, conclusion: 13 },
+}[VUE] || {};
+const FIN = { montage: 12, resultats: 15, interpretation: 14 }[VUE] || 12;
+const av = (S, nom, d) => Math.max(0, Math.min(1, (S.t - (MOMENTS[nom] - d)) / d));
+
+function geo(sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L * .6 : L * .52, cy = 220, R = pt ? 150 : 165;
+  return { L, pt, cx, cy, R, sx: cx - R - (pt ? 70 : 110), t: pt ? 28 : 19 };
+}
+function ecran(g, G, alpha = 1) {
+  g.save(); g.globalAlpha *= alpha;
+  g.strokeStyle = 'rgba(74,222,128,.25)'; g.lineWidth = 22; g.beginPath(); g.arc(G.cx, G.cy, G.R, Math.PI * 1.13, Math.PI * .87 + A.TAU); g.stroke();
+  g.strokeStyle = 'rgba(134,239,172,.75)'; g.lineWidth = 3; g.beginPath(); g.arc(G.cx, G.cy, G.R - 11, Math.PI * 1.13, Math.PI * .87 + A.TAU); g.stroke();
+  g.beginPath(); g.arc(G.cx, G.cy, G.R + 11, Math.PI * 1.13, Math.PI * .87 + A.TAU); g.stroke();
+  g.restore();
+}
+function eclair(g, G, ang, a = 1, vif = false) {
+  const x = G.cx + G.R * Math.cos(ang), y = G.cy + G.R * Math.sin(ang);
+  g.save(); g.globalAlpha *= a; g.shadowColor = '#bbf7d0'; g.shadowBlur = vif ? 22 : 10; g.fillStyle = vif ? '#f0fdf4' : '#86efac';
+  g.beginPath(); g.arc(x, y, vif ? 7 : 4.5, 0, A.TAU); g.fill(); g.restore();
+}
+function montageFixe(c, G, S, labels) {
+  c.direct(() => {
+    const g = c.ctx;
+    P.boitePlomb(g, G.sx - 60, G.cy - 32, 70, 64);
+    if (S.t <= 0 || S.a('ecran') || VUE !== 'montage') ecran(g, G, VUE === 'montage' && S.t > 0 ? av(S, 'ecran', 1.2) : 1);
+    if (S.t <= 0 || S.a('feuille') || VUE !== 'montage') P.feuilleOr(g, G.cx - 3, G.cy - 70, 6, 140, VUE === 'montage' && S.t > 0 ? av(S, 'feuille', 1) : 1);
+  });
+  c.repere('source', G.sx - 60, G.cy - 32, 70, 64, 'la boîte de plomb : la source des particules α');
+  c.repere('feuille', G.cx - 14, G.cy - 72, 28, 144, 'la feuille d’or');
+  c.repere('ecran', G.cx - G.R - 12, G.cy - G.R - 12, 2 * G.R + 24, 2 * G.R + 24, 'l’écran fluorescent');
+}
+
+/* trajectoires : angle de sortie (rad, 0 = tout droit), instant de départ */
+function trajets(n, graine) {
+  const r = A.graine(graine), out = [];
+  for (let i = 0; i < n; i++) out.push({ y0: (r() - .5) * 16, depart: i * .11 });
+  return out;
+}
+function particule(g, G, tr, u, sortie) {
+  // u : 0 → 1 de la source à la feuille, 1 → 2 de la feuille à l’écran
+  const xs = G.sx + 10, xf = G.cx;
+  if (u <= 1) return [xs + (xf - xs) * u, G.cy + tr.y0 * (1 - u * .3)];
+  const v = Math.min(1, u - 1), y1 = G.cy + tr.y0 * .7;
+  return [xf + Math.cos(sortie) * (G.R - 4) * v, y1 + Math.sin(sortie) * (G.R - 4) * v];
+}
+
+function dessinerMontage(c, S, sc) {
+  const G = geo(sc), { pt, t } = G;
+  montageFixe(c, G, S);
+  const lab = (nom, txt, x, y, coul, al = 'center') => { if (S.ecrit(c, nom) || S.t <= 0) c.texte(txt, x, y, { couleur: coul, taille: t, align: al, gras: true, max: pt ? 340 : 300 }); };
+  if (pt) {
+    const der = S.t <= 0 ? null : ['eclair', 'ecran', 'feuille', 'faisceau', 'source'].find(n => S.a(n));
+    const txt = { source: 'source de particules α', faisceau: 'particules α (charge +)', feuille: 'feuille d’or très mince', ecran: 'écran fluorescent', eclair: 'un éclair : une α arrive' }[der];
+    if (der) c.texte(txt, G.L / 2, 46, { couleur: 'jaune', taille: 30, align: 'center', gras: true });
+  } else {
+    lab('source', 'boîte de plomb', G.sx - 25, G.cy + 62, 'blanc');
+    lab('source', '(source α)', G.sx - 25, G.cy + 84, 'faible');
+    lab('faisceau', 'particules α : charge +', G.sx + 40, G.cy - 46, 'orange', 'left');
+    lab('feuille', 'feuille d’or très mince', G.cx, G.cy - 84, 'jaune');
+    lab('ecran', 'écran fluorescent', G.cx + G.R * .55, G.cy + G.R + 34, 'vert');
+  }
+  if (S.a('faisceau') || S.t <= 0) {
+    const k = S.t <= 0 ? 1 : av(S, 'faisceau', 2);
+    c.direct(() => {
+      const g = c.ctx; const tr = trajets(6, 3), tps = sc.maintenant();
+      for (const p of tr) { const u = ((tps * .4 + p.depart * 3) % 1) * k; const [x, y] = particule(g, G, p, u * (S.a('feuille') ? 1 : .85), 0); P.alpha(g, x, y, pt ? 7 : 5); }
+    });
+    c.repere('faisceau', G.sx + 10, G.cy - 20, G.cx - G.sx - 10, 40, 'le faisceau de particules α');
+  }
+  if (S.a('eclair') || S.t <= 0) {
+    const k = S.t <= 0 ? 1 : av(S, 'eclair', 2.2);
+    c.direct(() => { const g = c.ctx, tr = { y0: 0 }; const [x, y] = particule(g, G, tr, 1 + k, 0); if (k < 1) P.alpha(g, x, y, pt ? 8 : 6); else eclair(g, G, 0, 1, true); });
+    c.repere('eclair', G.cx + G.R - 20, G.cy - 20, 40, 40, 'l’éclair sur l’écran');
+    if (!pt && k >= 1) c.texte('un éclair', G.cx + G.R - 14, G.cy - 30, { couleur: 'vert', taille: 18, align: 'right' });
+  }
+}
+
+/* les résultats : 40 particules ; 36 tout droit, 3 déviées, 1 revient (illustration : en vrai, les rebonds sont bien plus rares) */
+const TIRS = (() => {
+  const r = A.graine(21), out = [];
+  for (let i = 0; i < 40; i++) {
+    let sortie = (r() - .5) * .06, cas = 'droit';
+    if (i === 14 || i === 23 || i === 31) { sortie = (i === 23 ? -1 : 1) * (.5 + r() * .5); cas = 'deviee'; }
+    if (i === 36) { sortie = Math.PI - .12; cas = 'rebond'; }
+    out.push({ y0: (r() - .5) * 14, sortie, cas });
+  }
+  return out;
+})();
+const T_TIR = i => (i < 14 ? MOMENTS.tir + i * .32 : i < 32 ? 7 + (i - 14) * .1 : i < 36 ? 9.6 + (i - 32) * .2 : 10.5);
+function tirAt(i) {
+  const tr = TIRS[i];
+  if (tr.cas === 'deviee') return [6.5, 7.4, 8.3][[14, 23, 31].indexOf(i)];
+  if (tr.cas === 'rebond') return 10.6;
+  return T_TIR(i);
+}
+function dessinerResultats(c, S, sc) {
+  const G = geo(sc), { pt, t } = G;
+  montageFixe(c, G, S);
+  const vol = 1.1;   // durée d’un vol (source → écran)
+  let n = { droit: 0, deviee: 0, rebond: 0 };
+  c.direct(() => {
+    const g = c.ctx;
+    TIRS.forEach((tr, i) => {
+      const t0 = tirAt(i), u = (S.t - t0) / vol * 2;
+      if (S.t <= 0) { eclair(g, G, tr.sortie, .9); n[tr.cas]++; return; }
+      if (u < 0) return;
+      if (u >= 2) { eclair(g, G, tr.sortie, .9, S.t - t0 - vol < .5); n[tr.cas]++; return; }
+      const [x, y] = particule(g, G, tr, u, tr.sortie); P.alpha(g, x, y, pt ? 7 : 5);
+    });
+  });
+  if (S.a('traversent') || S.t <= 0) c.repere('traversent', G.cx + G.R - 30, G.cy - 40, 60, 80, 'les éclairs tout droit, derrière la feuille');
+  if (S.a('deviees') || S.t <= 0) c.repere('deviees', G.cx + G.R * .3, G.cy - G.R, G.R * .7, 2 * G.R, 'les éclairs de côté : particules déviées');
+  if (S.a('rebondit') || S.t <= 0) c.repere('rebondit', G.cx - G.R - 30, G.cy - 30, 60, 60, 'l’éclair du côté de la source : la particule revient');
+  const ecrire = nom => S.conclusions && (S.t <= 0 || S.ecrit(c, nom));
+  if (pt) {
+    const der = S.t <= 0 ? 'bilan' : ['bilan', 'rebondit', 'deviees', 'traversent'].find(m => S.a(m));
+    const txt = { traversent: 'la plupart : tout droit', deviees: 'quelques-unes : déviées', rebondit: 'très rares : reviennent', bilan: 'la plupart traversent' }[der];
+    if (der && S.conclusions) c.texte(txt, G.L / 2, 46, { couleur: 'jaune', taille: 30, align: 'center', gras: true });
+    return;
+  }
+  const x = G.cx + G.R + 40;
+  if (ecrire('traversent')) c.texte('la plupart : tout droit', Math.min(G.L - 10, x + 170), 120, { couleur: 'vert', taille: t, align: 'right', gras: true });
+  if (ecrire('deviees')) c.texte('quelques-unes : déviées', Math.min(G.L - 10, x + 170), 160, { couleur: 'orange', taille: t, align: 'right', gras: true });
+  if (ecrire('rebondit')) c.texte('très rares : reviennent', Math.min(G.L - 10, x + 170), 200, { couleur: 'rose', taille: t, align: 'right', gras: true });
+  if (ecrire('bilan')) { c.texte('(exemple de 40 tirs)', Math.min(G.L - 10, x + 170), 236, { couleur: 'faible', taille: 16, align: 'right' }); c.repere('bilan', G.L - 260, 96, 250, 150, 'les résultats'); }
+}
+
+/* l’interprétation : zoom dans la feuille d’or */
+function dessinerInterpretation(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = pt ? 28 : 19, cy = 215;
+  const atomes = [], R = pt ? 70 : 62, cols = pt ? 3 : 4, x0 = L / 2 - (cols - 1) * R * 1.05;
+  for (let j = -1; j <= 1; j++) for (let i = 0; i < cols; i++) atomes.push([x0 + i * R * 2.1 + (j ? R * .3 : 0), cy + j * R * 1.7]);
+  const k = S.t <= 0 ? 1 : av(S, 'zoom', 1.6);
+  c.direct(() => { const g = c.ctx; atomes.forEach(([x, y], i) => { P.nuage(g, x, y, R, { alpha: k, points: 70, graine: i + 3 }); P.noyau(g, x, y, 1, 0, { r: pt ? 6 : 5, alpha: k }); }); });
+  c.repere('zoom', atomes[0][0] - R, cy - 2.7 * R, atomes[atomes.length - 1][0] - atomes[0][0] + 2 * R, 5.4 * R, 'les atomes d’or');
+  if (!pt && (S.t <= 0 || S.ecrit(c, 'zoom'))) c.texte('la feuille d’or vue de très près : des atomes', L / 2, 34, { couleur: 'jaune', taille: 19, align: 'center' });
+  // trois trajets : loin des noyaux (tout droit), près d’un noyau (dévié), droit sur un noyau (retour)
+  const xa = 20, xb = L - 20, cible = atomes[cols + 1], pres = atomes[1];
+  const traj = (nom, d, f) => {
+    if (!(S.t <= 0 || S.a(nom))) return;
+    const u = S.t <= 0 ? 1 : av(S, nom, d);
+    c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = 'rgba(251,146,60,.8)'; g.lineWidth = 2.4; g.setLineDash([7, 5]); g.beginPath();
+      let last = null; for (let s = 0; s <= 1.0001; s += .02) { if (s > u) break; const p = f(s); s ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); last = p; } g.stroke(); g.restore();
+      if (last) P.alpha(g, last[0], last[1], pt ? 8 : 6); });
+  };
+  traj('vide', 2.5, s => [xa + (xb - xa) * s, cy + R * .85]);
+  traj('devie', 2.5, s => { const xn = pres[0], yn = pres[1]; const x = xa + (xb - xa) * s; const dy = x < xn ? 0 : -(x - xn) * .55; return [x, yn - R * .28 + dy * Math.min(1, (x - xn) / 60 + .2)]; });
+  traj('rebond', 2.5, s => { const xn = cible[0] - 16, yn = cible[1] - 2; return s < .5 ? [xa + (xn - xa) * s * 2, yn] : [xn - (xn - xa) * (s - .5) * 2, yn + (s - .5) * 70]; });
+  const lab = (nom, txt, y, coul) => { if (S.conclusions && (S.t <= 0 || S.ecrit(c, nom)) && !pt) c.texte(txt, 20, y, { couleur: coul, taille: t, gras: true }); };
+  if (S.t <= 0 || S.a('vide')) c.repere('vide', xa, cy + R * .6, xb - xa, R * .5, 'le trajet loin des noyaux');
+  if (S.t <= 0 || S.a('devie')) c.repere('devie', pres[0] - 20, pres[1] - R, R * 2, R, 'le trajet près d’un noyau');
+  if (S.t <= 0 || S.a('rebond')) c.repere('rebond', cible[0] - R, cible[1] - 20, R, 40, 'le trajet droit sur un noyau');
+  lab('vide', 'loin des noyaux : du vide → tout droit', 400, 'vert');
+  if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'devie')) && !pt) c.texte('près du noyau : + et + se repoussent', L - 20, 66, { couleur: 'orange', taille: t, gras: true, align: 'right' });
+  if (pt && S.conclusions) {
+    const der = S.t <= 0 ? 'conclusion' : ['conclusion', 'rebond', 'devie', 'vide'].find(m => S.a(m));
+    const txt = { vide: 'du vide : tout droit', devie: '+ et + se repoussent', rebond: 'droit sur le noyau : retour', conclusion: 'surtout du vide + noyau +' }[der];
+    if (der) c.texte(txt, L / 2, 46, { couleur: 'jaune', taille: 30, align: 'center', gras: true });
+  }
+  if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'conclusion')) && !pt) {
+    c.rect(L / 2 - 250, 300, 500, 70, { couleur: 'jaune', fond: 'jaune', fondAlpha: .1, largeur: 1.6 });
+    c.texte('l’atome est surtout du vide', L / 2, 328, { couleur: 'jaune', taille: 21, align: 'center', gras: true });
+    c.texte('au centre : un noyau très petit, chargé +', L / 2, 356, { couleur: 'rose', taille: 21, align: 'center', gras: true });
+    c.repere('conclusion', L / 2 - 250, 300, 500, 70, 'la conclusion');
+  }
+}
+
+const DESSINS = { montage: dessinerMontage, resultats: dessinerResultats, interpretation: dessinerInterpretation };
+function voir(S) {
+  const a = n => S.a(n) || S.t <= 0;
+  switch (VUE) {
+    case 'montage': return ['Vue de dessus : une boîte de plomb (source de particules α, chargées +).', a('faisceau') ? 'Un faisceau de particules α part vers la droite.' : '', a('feuille') ? 'Une feuille d’or très mince au centre.' : '', a('ecran') ? 'Un écran fluorescent en anneau tout autour.' : '', a('eclair') ? 'Une particule touche l’écran derrière la feuille : un éclair.' : ''].join(' ');
+    case 'resultats': return ['On tire des particules α sur la feuille d’or ; chaque arrivée fait un éclair sur l’écran.', a('traversent') ? 'Presque tous les éclairs sont derrière la feuille, tout droit.' : '', a('deviees') ? 'Quelques éclairs de côté : des particules déviées.' : '', a('rebondit') ? 'Un éclair très rare du côté de la source : une particule revient.' : '', S.conclusions && a('bilan') ? 'Écrit : la plupart tout droit, quelques-unes déviées, très rares reviennent.' : ''].join(' ');
+    case 'interpretation': return ['Zoom sur la feuille d’or : des atomes, chacun un grand nuage presque vide avec un noyau minuscule au centre.', a('vide') ? 'Une α passe loin des noyaux : tout droit.' : '', a('devie') ? 'Une α passe près d’un noyau : elle est déviée (+ et + se repoussent).' : '', a('rebond') ? 'Une α arrive droit sur un noyau : elle revient.' : '', S.conclusions && a('conclusion') ? 'Écrit : l’atome est surtout du vide ; au centre, un noyau très petit chargé +.' : ''].join(' ');
+  }
+  return '';
+}
+const S = A.sim({
+  id: 'tc_atome_rutherford_' + VUE, titre: 'L’expérience de Rutherford', vue: VUE, moments: MOMENTS, fin: FIN, graine: 17,
+  motifs: { source: 'la source α', faisceau: 'le faisceau', feuille: 'la feuille d’or', ecran: 'l’écran', eclair: 'un éclair', tir: 'on tire', traversent: 'la plupart traversent', deviees: 'quelques-unes déviées', rebondit: 'une très rare revient', bilan: 'le bilan', zoom: 'les atomes d’or', vide: 'loin des noyaux', devie: 'près d’un noyau', rebond: 'droit sur un noyau', conclusion: 'la conclusion' },
+  dessiner: (c, S, sc) => (DESSINS[VUE] || dessinerMontage)(c, S, sc),
+  ceQuiSeVoit: voir,
+  texte: 'Expérience de Rutherford : des particules α (chargées +) bombardent une feuille d’or très mince ; la plupart traversent sans être déviées, quelques-unes sont déviées, de très rares reviennent : l’atome est surtout du vide, avec au centre un noyau très petit chargé positivement.',
+});
+setInterval(() => { S.scene.sale = true; }, 50);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

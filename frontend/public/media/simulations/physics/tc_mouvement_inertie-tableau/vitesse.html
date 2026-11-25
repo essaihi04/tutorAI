@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La vitesse moyenne — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une voiture parcourt une distance d pendant une durée Δt mesurée au chronomètre ; v_m = d/Δt ; la conversion 1 m/s = 3,6 km/h"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * La vitesse moyenne (diapos mi_v1_moyenne, mi_v2_unites, mi_v3_eleve).
+ *  ?vue=moyenne    : une voiture parcourt d = 300 m en Δt = 60 s ; v_m = d/Δt = 300/60 = 5 m/s.
+ *                    Moments : depart 0,5 ; trajet 1,5 ; d 8 ; dt 9,5 ; relation 11 ; calcul 12,5 ; fin 14.
+ *  ?vue=conversion : 1 m en 1 s → 3 600 m en 1 h = 3,6 km : 1 m/s = 3,6 km/h ; × 3,6 et ÷ 3,6 ; 5 m/s = 18 km/h.
+ *                    Moments : seconde 0,5 ; heure 3 ; km 5 ; egal 7 ; fleches 9 ; exemple 11 ; fin 13.
+ *  ?vue=voiture    : (exercice de l'élève) 1 200 m en 60 s : v_m = 20 m/s = 72 km/h. Moments : trajet 0,5 ; d 7 ;
+ *                    dt 8 ; relation 9 ; calcul 10,5 ; conversion 12 ; fin 13,5.
+ *                    set_parameters {conclusions: false} : les résultats restent cachés tant que la question est ouverte.
+ */
+const { P, lueur, panneau, HEX } = window.Mvt;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+function trajet(c, S, sc, o) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, yb = 250, xa = 40, xb = pt ? L - 60 : L - 390;
+  const u = clamp((t - o.t0) / o.duree, 0, 1);
+  c.direct(() => P.sol(c.ctx, 0, yb, pt ? L : xb + 30, 60, { route: true }));
+  c.ligne(xa, yb - 70, xa, yb + 64, { couleur: 'faible', largeur: 1.6, duree: .05 }); c.ligne(xb, yb - 70, xb, yb + 64, { couleur: 'faible', largeur: 1.6, duree: .05 });
+  c.texte('départ', xa + 6, yb - 76, { couleur: 'faible', taille: pt ? 24 : 17 }); c.texte('arrivée', xb - 6, yb - 76, { couleur: 'faible', taille: pt ? 24 : 17, align: 'right' });
+  c.direct(() => P.voiture(c.ctx, xa + u * (xb - xa) - 100, yb + 24, 100));
+  c.repere('voiture', xa + u * (xb - xa) - 100, yb - 20, 100, 44, 'la voiture');
+  const chr = Math.round(u * o.dt) + ' s';
+  c.direct(() => P.chrono(c.ctx, pt ? L - 90 : L - 180, pt ? 64 : 100, pt ? 46 : 52, chr));
+  c.repere('chrono', (pt ? L - 90 : L - 180) - 56, pt ? 10 : 40, 112, 120, 'le chronomètre');
+  if (S.t <= 0 || S.a('d')) { c.cote(xa, yb + 96, xb, yb + 96, '', { couleur: 'jaune' }); c.texte('d = ' + o.d + ' m', (xa + xb) / 2, yb + 132, { couleur: 'jaune', taille: pt ? 30 : 22, gras: true, align: 'center' }); c.repere('d', xa, yb + 80, xb - xa, 60, 'la distance parcourue d = ' + o.d + ' m'); if (S.t > 0 && !S.a('dt')) lueur(c, xa, yb + 78, xb - xa, 64, { vive: true }); }
+  if ((S.t <= 0 || S.a('dt')) && S.t > 0 && !S.a('relation')) lueur(c, (pt ? L - 90 : L - 180) - 56, pt ? 14 : 44, 112, 116, { vive: true });
+  if (S.t <= 0 || S.a('dt')) c.repere('dt', (pt ? L - 90 : L - 180) - 56, pt ? 14 : 44, 112, 116, 'la durée Δt = ' + o.dt + ' s');
+}
+const MM = { depart: .5, trajet: 1.5, d: 8, dt: 9.5, relation: 11, calcul: 12.5 };
+function dessinerMoyenne(c, S, sc) {
+  trajet(c, S, sc, { t0: MM.trajet, duree: 6, dt: 60, d: 300 });
+  const L = sc.L;
+  panneau(c, S, sc, L - 320, 200, 310, [
+    { m: 'd', t: 'd = 300 m', c: 'jaune' }, { m: 'dt', t: 'Δt = 60 s', c: 'jaune' },
+    { m: 'relation', t: 'v_m = ⟦d|Δt⟧', c: 'blanc', g: true, taille: 22, r: 'relation' },
+    { m: 'calcul', t: 'v_m = ⟦300|60⟧ = 5 m/s', c: 'vert', g: true, taille: 22, r: 'calcul' },
+  ], { dy: 40, px: 30, py: 46, pw: L - 200, petit: 1 });
+}
+const MV = { trajet: .5, d: 7, dt: 8, relation: 9, calcul: 10.5, conversion: 12 };
+function dessinerVoiture(c, S, sc) {
+  trajet(c, S, sc, { t0: MV.trajet, duree: 6, dt: 60, d: 1200 });
+  const L = sc.L;
+  panneau(c, S, sc, L - 320, 200, 310, [
+    { m: 'd', t: 'd = 1200 m', c: 'jaune' }, { m: 'dt', t: 'Δt = 60 s', c: 'jaune' },
+    { m: 'relation', t: 'v_m = ⟦d|Δt⟧', c: 'blanc', g: true, taille: 22, r: 'relation' },
+    { m: 'calcul', t: 'v_m = ⟦1200|60⟧ = 20 m/s', c: 'vert', g: true, taille: 22, r: 'calcul', conclusion: true },
+    { m: 'conversion', t: '20 × 3,6 = 72 km/h', c: 'vert', g: true, taille: 22, r: 'conversion', conclusion: true },
+  ], { dy: 38, px: 30, py: 46, pw: L - 200 });
+}
+
+/* ── vue conversion ── */
+const MC = { seconde: .5, heure: 3, km: 5, egal: 7, fleches: 9, exemple: 11 };
+function dessinerConversion(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t;
+  // en haut : une petite voiture parcourt 1 m (une règle) en 1 s
+  const x0 = 60, u = pt ? 420 : 300, uu = clamp((t - MC.seconde) / 1.5, 0, 1);
+  c.direct(() => P.regle(c.ctx, x0, 132, 1, u, { h: 30 }));
+  c.direct(() => P.voiture(c.ctx, x0 + uu * u - 70, 124, 70));
+  c.texte('1 m en 1 s', x0 + u / 2, 186, { couleur: 'cyan', taille: pt ? 30 : 22, gras: true, align: 'center' });
+  c.repere('regle', x0, 90, u, 80, '1 mètre parcouru en 1 seconde');
+  if (pt) { panneau(c, S, sc, 0, 0, 0, [
+      { m: 'heure', t: '1 h = 3600 s → 3600 m', c: 'blanc' }, { m: 'km', t: '3600 m = 3,6 km', c: 'blanc' },
+      { m: 'egal', t: '1 m/s = 3,6 km/h', c: 'jaune', g: true }, { m: 'fleches', t: 'm/s × 3,6 → km/h ; km/h ÷ 3,6 → m/s', c: 'cyan' },
+      { m: 'exemple', t: '5 m/s × 3,6 = 18 km/h', c: 'vert', g: true }], { px: 30, py: 250, pw: L - 60, petit: 2, taillePetit: 30 }); return; }
+  panneau(c, S, sc, 420, 70, L - 440, [
+    { m: 'heure', t: 'en 1 h = 3600 s : 3600 m', c: 'blanc' },
+    { m: 'km', t: '3600 m = 3,6 km', c: 'blanc' },
+    { m: 'egal', t: '1 m/s = 3,6 km/h', c: 'jaune', g: true, taille: 26, r: 'egal' },
+  ], { dy: 46 });
+  // les deux cases et les deux flèches
+  if (S.t <= 0 || S.ecrit(c, 'fleches')) {
+    const y = 300, a = [90, y], b = [L - 300, y];
+    c.rect(a[0] - 60, y - 34, 120, 56, { couleur: 'cyan', largeur: 2 }); c.texte('m/s', a[0], y + 4, { couleur: 'cyan', taille: 26, gras: true, align: 'center' });
+    c.rect(b[0] - 70, y - 34, 140, 56, { couleur: 'orange', largeur: 2 }); c.texte('km/h', b[0], y + 4, { couleur: 'orange', taille: 26, gras: true, align: 'center' });
+    c.fleche(a[0] + 70, y - 22, b[0] - 80, y - 22, { couleur: 'jaune', largeur: 2.6 }); c.texte('× 3,6', (a[0] + b[0]) / 2, y - 32, { couleur: 'jaune', taille: 24, gras: true, align: 'center' });
+    c.fleche(b[0] - 80, y + 14, a[0] + 70, y + 14, { couleur: 'jaune', largeur: 2.6 }); c.texte('÷ 3,6', (a[0] + b[0]) / 2, y + 44, { couleur: 'jaune', taille: 24, gras: true, align: 'center' });
+    c.repere('fleches', a[0] - 60, y - 60, b[0] - a[0] + 130, 110, '× 3,6 vers les km/h, ÷ 3,6 vers les m/s');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'exemple')) { c.texte('Exemple : 5 m/s × 3,6 = 18 km/h', L / 2 - 120, 400, { couleur: 'vert', taille: 24, gras: true, align: 'center' }); c.repere('exemple', 60, 376, L - 360, 32, '5 m/s = 18 km/h'); }
+}
+
+window.Mvt.vues('tc_mi_vitesse', {
+  moyenne: { titre: 'La vitesse moyenne', moments: MM, fin: 14, dessiner: dessinerMoyenne,
+    motifs: { depart: 'le départ', trajet: 'la voiture roule', d: 'la distance d', dt: 'la durée Δt', relation: 'v_m = d/Δt', calcul: 'le calcul' },
+    accueil: 'Une voiture et un chronomètre.', fini: 'v_m = 300/60 = 5 m/s.',
+    voir: S => ['Une route avec départ et arrivée, une voiture, un chronomètre.', S.a('trajet') && 'La voiture roule du départ à l’arrivée ; le chronomètre va de 0 à 60 s.', S.a('d') && 'd = 300 m allumé.', S.a('dt') && 'Δt = 60 s allumé.', S.a('relation') && 'v_m = d/Δt.', S.a('calcul') && 'v_m = 300/60 = 5 m/s.'].filter(Boolean).join(' '),
+    texte: 'La vitesse moyenne v_m = d/Δt, d en m, Δt en s, v_m en m/s. Ici 300 m en 60 s : 5 m/s.' },
+  conversion: { titre: 'Convertir m/s et km/h', moments: MC, fin: 13, dessiner: dessinerConversion,
+    motifs: { seconde: '1 m en 1 s', heure: 'en une heure', km: '3,6 km', egal: '1 m/s = 3,6 km/h', fleches: '× 3,6 et ÷ 3,6', exemple: 'l’exemple' },
+    accueil: '1 m/s, combien de km/h ?', fini: '1 m/s = 3,6 km/h : × 3,6 ou ÷ 3,6.',
+    voir: S => ['Une petite voiture parcourt une règle de 1 m en 1 s.', S.a('heure') && 'En 1 h = 3600 s : 3600 m.', S.a('km') && '3600 m = 3,6 km.', S.a('egal') && '1 m/s = 3,6 km/h.', S.a('fleches') && 'Flèches : × 3,6 des m/s vers les km/h, ÷ 3,6 des km/h vers les m/s.', S.a('exemple') && '5 m/s = 18 km/h.'].filter(Boolean).join(' '),
+    texte: '1 m/s = 3,6 km/h : pour passer des m/s aux km/h on multiplie par 3,6 ; des km/h aux m/s on divise par 3,6.' },
+  voiture: { titre: 'À toi : la vitesse moyenne', moments: MV, fin: 13.5, dessiner: dessinerVoiture,
+    motifs: { trajet: 'la voiture roule', d: 'd = 1200 m', dt: 'Δt = 60 s', relation: 'la relation', calcul: 'le calcul', conversion: 'la conversion' },
+    accueil: 'Une voiture : 1200 m en 60 s.', fini: 'v_m = 20 m/s = 72 km/h.',
+    voir: S => ['Une voiture roule 1200 m en 60 s.', S.a('d') && 'd = 1200 m.', S.a('dt') && 'Δt = 60 s.', S.a('relation') && 'v_m = d/Δt.', S.a('calcul') && S.conclusions && 'v_m = 20 m/s.', S.a('conversion') && S.conclusions && '72 km/h.'].filter(Boolean).join(' '),
+    texte: 'Une voiture parcourt 1200 m en 60 s : v_m = 1200/60 = 20 m/s = 72 km/h.' },
+});
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

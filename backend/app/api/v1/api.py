@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, content, sessions, coaching, libre, exam, admin, exam_extraction, registration, mock_exam, concours, tts, course_player, kaggle_tts, public_cours, public_tronc_commun, public_2bacpcf, public_classe, public_relais, memoire, exercices
+from app.api.v1.endpoints import auth, content, sessions, coaching, libre, exam, admin, exam_extraction, registration, mock_exam, concours, tts, course_player, kaggle_tts, public_cours, public_tronc_commun, public_2bacpcf, public_tcf, public_classe, public_relais, memoire, exercices
 from app.api import resources
 
 api_router = APIRouter(prefix="/api/v1")
@@ -24,6 +24,7 @@ api_router.include_router(exercices.router)   # résultats des exercices, progre
 api_router.include_router(public_cours.router)   # page publique du cours des ondes (sans compte, plafonnée)
 api_router.include_router(public_tronc_commun.router)   # lien libre du Tronc Commun : fiche de l'élève et suivi
 api_router.include_router(public_2bacpcf.router)   # lien libre /2bacpcf : fiche de l'élève et suivi (23/11/2026)
+api_router.include_router(public_tcf.router)   # lien libre /TCF : Tronc Commun physique-chimie, fiche et suivi (25/11/2026)
 api_router.include_router(public_classe.router)   # mode classe : évaluation projetée, réponses photographiées, en mémoire seulement (24/11/2026)
 api_router.include_router(public_relais.router)   # relais photo : le téléphone de l'élève photographie sa feuille pour son PC (24/11/2026)
 

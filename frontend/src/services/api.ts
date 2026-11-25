@@ -620,6 +620,8 @@ export interface Eleve2BacPCF {
   lacunes: string[];
 }
 export const list2BacPCF = () => adminApi.get<{ eleves: Eleve2BacPCF[] }>('/2bacpcf');
+/** Tronc Commun physique-chimie : les élèves du lien libre /TCF (25 novembre 2026), même forme que /2bacpcf */
+export const listTCF = () => adminApi.get<{ eleves: Eleve2BacPCF[] }>('/tcf');
 
 /** Mémoire longue (11 novembre 2026) : rétention aux rappels espacés, par cours, compétence et élève. */
 export interface TauxRetention { n: number; reussis: number; taux: number | null }

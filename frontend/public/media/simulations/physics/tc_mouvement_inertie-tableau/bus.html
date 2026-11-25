@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le bus : le mouvement est relatif — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un bus roule sur une route : A est assis à l’avant, B marche vers l’arrière, C est au bord de la route ; le tableau au repos ou en mouvement ; le référentiel terrestre et le référentiel lié au bus ; une boule suspendue dans le bus qui roule puis freine"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * Le bus (diapos mi_m1_bus, mi_m2_tableau, mi_m3_referentiel, mi_i9_galileen), d'après l'activité 1 du chapitre 3.
+ *  ?vue=bus         : le bus roule vers la droite ; A est assis à l'avant ; B marche vers l'arrière ; C est au bord de la
+ *                     route. Moments : scene 0,5 ; roule 2 ; marche 3,5 ; A 7 ; B 8,5 ; C 10 ; fin 12.
+ *  ?vue=tableau     : le tableau « au repos / en mouvement » se remplit case par case ; la personne de la case s'allume
+ *                     sur le petit bus. Moments : grille 0,5 ; rA 2 ; rbus 5 ; rroute 8,5 ; conclusion 12 ; fin 14.
+ *  ?vue=referentiel : le référentiel terrestre (sol, arbre, maison) puis le référentiel lié au bus.
+ *                     Moments : scene 0,5 ; terrestre 2,5 ; bus 5,5 ; conducteur 8 ; fin 10,5.
+ *  ?vue=galileen    : une boule suspendue au plafond du bus : bus en mouvement rectiligne uniforme, le fil reste
+ *                     vertical ; le bus freine, la boule part vers l'avant. Moments : mru 0,5 ; freine 5,5 ;
+ *                     conclusion 8,5 ; fin 10,5.
+ */
+const { P, lueur, panneau, HEX } = window.Mvt;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/** Le bus avec ses passagers : renvoie les positions (têtes) de A, B et du conducteur. */
+function busAvecGens(c, x, yb, w, h, o = {}) {
+  const r = { A: null, B: null, chauffeur: null };
+  c.direct(() => {
+    const g = c.ctx; P.bus(g, x, yb, w, h, { roue: o.roue });
+    const win = { x: x + w * .03, y: yb - h * .9, w: w * .9, h: h * .5 };
+    g.save(); g.beginPath(); g.rect(win.x, win.y, win.w + w * .07, win.h); g.clip();
+    const sol = yb - h * .12, hp = h * .78;
+    // le conducteur, tout à l'avant
+    P.personne(g, x + w * .9, sol, hp, { assis: true, couleur: '#0f766e' }); r.chauffeur = [x + w * .9, sol - hp * .95];
+    if (o.A !== false) { P.personne(g, x + w * .72, sol, hp, { assis: true, couleur: '#dc2626' }); r.A = [x + w * .72, sol - hp * .95]; }
+    if (o.B != null) { P.personne(g, x + w * o.B, sol, hp, { sens: -1, marche: o.marcheB, couleur: '#16a34a' }); r.B = [x + w * o.B, sol - hp * .95]; }
+    if (o.pendule != null) {
+      const ax = x + w * .45, ay = win.y + 2, l = h * .3, th = o.pendule;
+      const bx = ax + Math.sin(th) * l, by = ay + Math.cos(th) * l;
+      g.strokeStyle = '#1f2937'; g.lineWidth = 2.2; g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+      P.boule(g, bx, by, h * .06, '#fecaca', '#ef4444', '#7f1d1d'); r.boule = [bx, by];
+    }
+    g.restore();
+  });
+  return r;
+}
+function route(c, L, y, h) { c.direct(() => { P.sol(c.ctx, 0, y, L, h, { route: true }); const g = c.ctx; g.fillStyle = '#9ca3af'; g.fillRect(0, y + h, L, 420 - y - h); }); }
+
+/* ── vue bus ── */
+const MB = { scene: .5, roule: 2, marche: 3.5, A: 7, B: 8.5, C: 10 };
+const xBus = t => 20 + 30 * clamp(t - MB.roule, 0, 8);
+function dessinerBus(c, S, sc) {
+  const L = sc.L, pt = sc.petit, yb = 330, w = 420, h = 175, t = S.t <= 0 ? 12 : S.t, x = xBus(t);
+  route(c, L, yb, 40);
+  const fB = .62 - .5 * clamp((t - MB.marche) / 4.5, 0, 1), marche = t > MB.marche && t < MB.marche + 4.5;
+  const gens = busAvecGens(c, x, yb, w, h, { B: fB, marcheB: marche && Math.floor(t * 3) % 2 === 0, roue: t * 2 });
+  const xC = L - 110;
+  c.direct(() => P.personne(c.ctx, xC, 412, 160, { sens: -1, couleur: '#7c3aed' }));
+  const ts = pt ? 30 : 24;
+  c.texte('A', gens.A[0] + 4, gens.A[1] - 22, { couleur: 'jaune', taille: ts, gras: true, align: 'center', duree: .05 });
+  c.texte('B', gens.B[0], gens.B[1] - 22, { couleur: 'jaune', taille: ts, gras: true, align: 'center', duree: .05 });
+  c.texte('C', xC + 30, 270, { couleur: 'jaune', taille: ts, gras: true, duree: .05 });
+  c.repere('A', gens.A[0] - 20, gens.A[1] - 20, 44, 70, 'A, assis à l’avant du bus');
+  c.repere('B', gens.B[0] - 22, gens.B[1] - 20, 44, 80, 'B, qui marche vers l’arrière');
+  c.repere('C', xC - 30, 252, 70, 160, 'C, au bord de la route');
+  c.repere('bus', x, yb - h, w, h, 'le bus');
+  if (S.a('roule') && S.t < MB.A) c.fleche(x + w + 8, yb - h * .55, x + w + 60, yb - h * .55, { couleur: 'blanc', largeur: 2.4, duree: .1 });
+  if (S.a('marche') && S.t < MB.A) c.fleche(gens.B[0] - 10, gens.B[1] - 40, gens.B[0] - 60, gens.B[1] - 40, { couleur: 'vert', largeur: 2.4, duree: .1 });
+  const actif = S.t <= 0 ? null : S.a('C') ? 'C' : S.a('B') ? 'B' : S.a('A') ? 'A' : null;
+  if (actif === 'A') lueur(c, gens.A[0] - 24, gens.A[1] - 46, 52, 110, { vive: true });
+  if (actif === 'B') lueur(c, gens.B[0] - 26, gens.B[1] - 46, 52, 120, { vive: true });
+  if (actif === 'C') lueur(c, xC - 34, 240, 76, 176, { vive: true });
+}
+
+/* ── vue tableau ── */
+const MT = { grille: .5, rA: 2, rbus: 5, rroute: 8.5, conclusion: 12 };
+const LIGNES = [
+  { id: 'rA', nom: 'par rapport à A', court: '/ A', cases: [null, 'm', 'm'] },
+  { id: 'rbus', nom: 'par rapport au bus', court: '/ bus', cases: ['r', 'm', 'm'] },
+  { id: 'rroute', nom: 'par rapport à la route', court: '/ route', cases: ['m', 'm', 'r'] },
+];
+const tCase = (i, j) => MT[LIGNES[i].id] + .5 + j * .8;
+function dessinerTableau(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t;
+  // à gauche (grand cadre) : le petit bus, figé, dont la personne de la case en cours s'allume
+  let gens = null, xC = 0;
+  if (!pt) {
+    const x = 8, yb = 300, w = 250, h = 112;
+    route(c, 290, yb, 26);
+    gens = busAvecGens(c, x, yb, w, h, { B: .2 });
+    xC = 270; c.direct(() => P.personne(c.ctx, xC, 400, 110, { sens: -1, couleur: '#7c3aed' }));
+    c.texte('A', gens.A[0], gens.A[1] - 16, { couleur: 'jaune', taille: 20, gras: true, align: 'center', duree: .05 });
+    c.texte('B', gens.B[0], gens.B[1] - 16, { couleur: 'jaune', taille: 20, gras: true, align: 'center', duree: .05 });
+    c.texte('C', xC + 22, 300, { couleur: 'jaune', taille: 20, gras: true, duree: .05 });
+  }
+  const x0 = pt ? 14 : L - 480, colL = pt ? 190 : 200, colW = pt ? (L - x0 - colL - 14) / 3 : 92, rh = pt ? 66 : 62, y0 = pt ? 30 : 46;
+  const ts = pt ? 30 : 20;
+  // en-têtes
+  ['A', 'B', 'C'].forEach((n, j) => c.texte(n, x0 + colL + (j + .5) * colW, y0 + rh * .62, { couleur: 'jaune', taille: ts + 2, gras: true, align: 'center', duree: .05 }));
+  for (let i = 0; i <= 3; i++) c.ligne(x0, y0 + (i + 1) * rh, x0 + colL + 3 * colW, y0 + (i + 1) * rh, { couleur: 'tresfaible', largeur: 1.2, duree: .05 });
+  for (let j = 0; j <= 3; j++) c.ligne(x0 + colL + j * colW, y0 + rh * .1, x0 + colL + j * colW, y0 + 4 * rh, { couleur: 'tresfaible', largeur: 1.2, duree: .05 });
+  c.repere('tableau', x0, y0, colL + 3 * colW, 4 * rh, 'le tableau : au repos ou en mouvement');
+  LIGNES.forEach((ln, i) => {
+    const y = y0 + (i + 1) * rh;
+    if (t >= MT[ln.id]) {
+      c.texte(pt ? ln.court : ln.nom, x0 + 4, y + rh * .62, { couleur: 'cyan', taille: pt ? ts : 18, max: colL - 8 });
+      c.repere(ln.id, x0, y, colL + 3 * colW, rh, 'la ligne ' + ln.nom);
+    }
+    ln.cases.forEach((k, j) => {
+      const cx = x0 + colL + j * colW, tc = tCase(i, j);
+      if (t < tc) return;
+      const vive = S.t > 0 && t < tc + .8 && t < MT.conclusion;
+      if (vive) lueur(c, cx + 3, y + 3, colW - 6, rh - 6, { vive: true });
+      const mot = k == null ? '—' : k === 'r' ? (pt ? 'repos' : 'repos') : (pt ? 'mouv.' : 'mouvement');
+      c.texte(mot, cx + colW / 2, y + rh * .62, { couleur: k === 'r' ? 'vert' : k === 'm' ? 'orange' : 'faible', taille: pt ? ts : 17, gras: true, align: 'center', max: colW - 8 });
+      c.repere('c_' + ln.id + '_' + 'ABC'[j], cx, y, colW, rh, ln.nom + ', ' + 'ABC'[j] + ' : ' + mot);
+      // la personne de la case s'allume sur le petit bus
+      if (vive && gens) { const q = 'ABC'[j]; const p = q === 'C' ? [xC, 330] : gens[q]; if (p) lueur(c, p[0] - 20, p[1] - 26, 40, 70, { vive: true, couleur: '74, 222, 128' }); }
+    });
+  });
+  if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'conclusion'))) {
+    c.texte('Le mouvement est relatif :', pt ? x0 : x0, y0 + 4 * rh + (pt ? 44 : 44), { couleur: 'jaune', taille: pt ? 28 : 21, gras: true, max: L - x0 - 10 });
+    if (!pt) c.texte('il dépend du corps de référence.', x0, y0 + 4 * rh + 74, { couleur: 'jaune', taille: 21, max: L - x0 - 10 });
+    c.repere('conclusion', x0, y0 + 4 * rh + 16, L - x0 - 10, pt ? 40 : 70, 'le mouvement est relatif');
+  }
+}
+
+/* ── vue référentiel ── */
+const MR = { scene: .5, terrestre: 2.5, bus: 5.5, conducteur: 8 };
+function dessinerReferentiel(c, S, sc) {
+  const L = sc.L, pt = sc.petit, yb = 318, w = 360, h = 150, x = L * .5 - 120;
+  c.direct(() => {
+    const g = c.ctx;
+    // la maison et l'arbre, fixés au sol
+    g.fillStyle = '#e7d3b5'; g.fillRect(40, yb - 150, 120, 150); g.fillStyle = '#9a3412'; g.beginPath(); g.moveTo(28, yb - 150); g.lineTo(100, yb - 205); g.lineTo(172, yb - 150); g.fill();
+    g.fillStyle = '#7dd3fc'; g.fillRect(62, yb - 120, 30, 30); g.fillStyle = '#78350f'; g.fillRect(110, yb - 70, 28, 70);
+    g.fillStyle = '#6b4423'; g.fillRect(205, yb - 90, 14, 90); P.boule(g, 212, yb - 120, 42, '#bef264', '#4d7c0f', '#1a2e05');
+  });
+  route(c, L, yb, 40);
+  const gens = busAvecGens(c, x, yb, w, h, { A: true });
+  c.repere('sol', 0, yb, L, 40, 'le sol (la route)');
+  c.repere('maison', 28, yb - 205, 200, 205, 'la maison et l’arbre, fixés au sol');
+  c.repere('bus', x, yb - h, w, h, 'le bus');
+  c.repere('conducteur', gens.chauffeur[0] - 22, gens.chauffeur[1] - 16, 46, 70, 'le conducteur');
+  const ts = pt ? 30 : 21;
+  if (S.t <= 0 || S.ecrit(c, 'terrestre')) {
+    if (S.t > 0 && !S.a('bus')) { lueur(c, 20, yb - 210, 215, 215, { vive: true, couleur: '74, 222, 128' }); lueur(c, 4, yb - 2, L - 8, 44, { couleur: '74, 222, 128' }); }
+    c.texte(pt ? 'terrestre' : 'référentiel terrestre', 20, 40, { couleur: 'vert', taille: ts, gras: true });
+    c.repere('l_terrestre', 14, 14, 300, 36, 'le référentiel terrestre');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'bus')) {
+    if (S.t > 0 && !S.a('conducteur')) lueur(c, x - 4, yb - h - 4, w + 8, h + 8, { vive: true, couleur: '251, 146, 60' });
+    c.texte(pt ? 'lié au bus' : 'référentiel lié au bus', L - 20, 40, { couleur: 'orange', taille: ts, gras: true, align: 'right' });
+    c.repere('l_bus', L - 330, 14, 316, 36, 'le référentiel lié au bus');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'conducteur')) {
+    lueur(c, gens.chauffeur[0] - 24, gens.chauffeur[1] - 22, 50, 80, { vive: true });
+    if (S.conclusions) {
+      c.texte('conducteur : au repos / bus', L - 20, pt ? 84 : 80, { couleur: 'orange', taille: pt ? 26 : 19, align: 'right' });
+      c.texte('en mouvement / sol', L - 20, pt ? 120 : 110, { couleur: 'vert', taille: pt ? 26 : 19, align: 'right' });
+    }
+  }
+}
+
+/* ── vue galiléen ── */
+const MG = { mru: .5, freine: 5.5, conclusion: 8.5 };
+// vitesse du bus : constante jusqu'à « freine », puis s'annule en 2 s ; la boule garde sa vitesse (aucune force horizontale)
+const vb = 40;
+function xBusG(t) { const t1 = MG.freine; if (t <= t1) return 10 + vb * Math.max(0, t - MG.mru) * .6; const d = Math.min(t - t1, 2); return 10 + vb * (t1 - MG.mru) * .6 + vb * .6 * (d - d * d / 4); }
+function dessinerGalileen(c, S, sc) {
+  const L = sc.L, pt = sc.petit, yb = 330, w = 380, h = 170, t = S.t <= 0 ? 4 : S.t, x = xBusG(t);
+  route(c, L, yb, 40);
+  // angle de la boule : 0 tant que le bus roule à vitesse constante ; vers l'avant quand il freine
+  const th = t <= MG.freine ? 0 : .55 * Math.sin(Math.min(1, (t - MG.freine) / 1.2) * Math.PI / 2);
+  const gens = busAvecGens(c, x, yb, w, h, { A: true, pendule: th, roue: t * 2 });
+  c.repere('boule', gens.boule[0] - 12, gens.boule[1] - 12, 24, 24, 'la boule suspendue au plafond');
+  c.repere('bus', x, yb - h, w, h, 'le bus');
+  const ts = pt ? 28 : 20;
+  if (S.t <= 0 || (S.a('mru') && !S.a('freine'))) {
+    c.fleche(x + w + 8, yb - h * .55, x + w + 56, yb - h * .55, { couleur: 'blanc', largeur: 2.4, duree: .1 });
+    c.texte(pt ? 'MRU : fil vertical' : 'bus en mouvement rectiligne uniforme : le fil reste vertical', 16, 40, { couleur: 'vert', taille: ts, max: L - 30 });
+    c.repere('l_mru', 10, 16, L - 20, 32, 'le bus en mouvement rectiligne uniforme');
+  }
+  if (S.a('freine') && S.t > 0) {
+    c.texte(pt ? 'il freine : la boule part' : 'le bus freine : la boule part vers l’avant, sans force qui la pousse', 16, 40, { couleur: 'orange', taille: ts, max: L - 30 });
+    c.repere('l_freine', 10, 16, L - 20, 32, 'le bus qui freine');
+  }
+  if (S.conclusions && (S.t <= 0 ? false : S.ecrit(c, 'conclusion'))) {
+    c.texte(pt ? 'galiléen : sol, bus en MRU' : 'galiléens : le sol, le bus en MRU · pas galiléen : le bus qui freine', 16, 80, { couleur: 'jaune', taille: pt ? 26 : 19, gras: true, max: L - 30 });
+    c.repere('conclusion', 10, 58, L - 20, 32, 'référentiels galiléens');
+  }
+}
+
+window.Mvt.vues('tc_mi_bus', {
+  bus: { titre: 'Le mouvement est relatif : le bus', moments: MB, fin: 12, dessiner: dessinerBus,
+    motifs: { scene: 'le bus, A, B et C', roule: 'le bus roule', marche: 'B marche vers l’arrière', A: 'A reste à sa place dans le bus', B: 'B change de place', C: 'C reste au bord de la route' },
+    accueil: 'Un bus, trois personnes : A, B et C.', fini: 'A reste à sa place dans le bus ; C reste à sa place au bord de la route ; B bouge par rapport aux deux.',
+    voir: S => ['Un bus jaune sur la route ; A assis à l’avant, B debout, C au bord de la route.', S.a('roule') && 'Le bus roule vers la droite.', S.a('marche') && 'B marche vers l’arrière du bus.', S.a('A') && 'A allumé : il reste à la même place dans le bus.', S.a('B') && 'B allumé.', S.a('C') && 'C allumé : il reste à la même place au bord de la route.'].filter(Boolean).join(' '),
+    texte: 'Un bus roule. A est assis à l’avant, B marche vers l’arrière, C est au bord de la route.' },
+  tableau: { titre: 'Au repos ou en mouvement ?', moments: MT, fin: 14, dessiner: dessinerTableau,
+    motifs: { grille: 'le tableau', rA: 'par rapport à A', rbus: 'par rapport au bus', rroute: 'par rapport à la route', conclusion: 'le mouvement est relatif' },
+    accueil: 'Le tableau : au repos ou en mouvement ?', fini: 'Le mouvement est relatif : il dépend du corps de référence.',
+    voir: S => ['Tableau colonnes A, B, C.', S.a('rA') && 'Par rapport à A : B en mouvement, C en mouvement.', S.a('rbus') && 'Par rapport au bus : A au repos, B en mouvement, C en mouvement.', S.a('rroute') && 'Par rapport à la route : A en mouvement, B en mouvement, C au repos.', S.a('conclusion') && S.conclusions && 'Le mouvement est relatif.'].filter(Boolean).join(' '),
+    texte: 'Par rapport à A : B et C en mouvement. Par rapport au bus : A au repos, B et C en mouvement. Par rapport à la route : A et B en mouvement, C au repos. Le mouvement est relatif.' },
+  referentiel: { titre: 'Le référentiel', moments: MR, fin: 10.5, dessiner: dessinerReferentiel,
+    motifs: { scene: 'la rue', terrestre: 'le référentiel terrestre', bus: 'le référentiel lié au bus', conducteur: 'le conducteur' },
+    accueil: 'Une rue, une maison, un arbre et un bus.', fini: 'Référentiel terrestre : le sol ; référentiel lié au bus : le bus.',
+    voir: S => ['Une maison, un arbre, la route et un bus.', S.a('terrestre') && 'Sol, maison et arbre allumés en vert : le référentiel terrestre.', S.a('bus') && 'Bus allumé en orange : le référentiel lié au bus.', S.a('conducteur') && 'Conducteur allumé : au repos par rapport au bus, en mouvement par rapport au sol.'].filter(Boolean).join(' '),
+    texte: 'Un référentiel est un corps de référence par rapport auquel on étudie le mouvement. Le référentiel terrestre : le sol et tout ce qui y est fixé. Le référentiel lié au bus.' },
+  galileen: { titre: 'Le référentiel galiléen', moments: MG, fin: 10.5, dessiner: dessinerGalileen,
+    motifs: { mru: 'le bus en mouvement rectiligne uniforme', freine: 'le bus freine', conclusion: 'les référentiels galiléens' },
+    accueil: 'Une boule suspendue au plafond du bus.', fini: 'Le sol et le bus en MRU sont galiléens ; le bus qui freine ne l’est pas.',
+    voir: S => ['Un bus avec une boule suspendue à un fil.', S.a('mru') && !S.a('freine') && 'Le bus roule à vitesse constante en ligne droite : le fil reste vertical, la boule au repos dans le bus.', S.a('freine') && 'Le bus freine : la boule part vers l’avant, le fil penche.', S.a('conclusion') && 'Galiléens : le sol, le bus en MRU ; pas galiléen : le bus qui freine.'].filter(Boolean).join(' '),
+    texte: 'Un référentiel est galiléen si le principe d’inertie y est vérifié : le sol (référentiel terrestre), un bus en mouvement rectiligne uniforme par rapport au sol. Un bus qui freine n’est pas galiléen.' },
+});
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

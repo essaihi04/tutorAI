@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le chauffage à reflux — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_synthese-tableau/synthese.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le rôle du chauffage (la transformation va plus vite) et du réfrigérant (les vapeurs se condensent et retombent : pas de perte de matière)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
+<script src="/media/simulations/chimie/tc_synthese-tableau/commun.js"></script>
+<script>
+/*
+ * Le chauffage à reflux, trois vues :
+ *   ?vue=chauffage (sy_r1_chauffage)  moments : froid, chaud, temps, compare
+ *   ?vue=reflux    (sy_r2_reflux)     moments : chauffe, vapeurs, condensation, gouttes, cycle
+ *                                     set_parameters {conclusions: false} cache les légendes « condensation » et
+ *                                     « retombent » (question d'observation)
+ *   ?vue=bilan     (sy_r3_bilan)      moments : froid, ouvert, perte, reflux, bilan
+ */
+const { P, lueur, param } = window.Synthese;
+const VUE = ['chauffage', 'reflux', 'bilan'].includes(param('vue')) ? param('vue') : 'reflux';
+const M_chauffage = { froid: .5, chaud: 3, temps: 5.5, compare: 11.5 };
+const M_reflux = { chauffe: .5, vapeurs: 3, condensation: 6, gouttes: 8.5, cycle: 11 };
+const M_bilan = { froid: .5, ouvert: 3, perte: 5.5, reflux: 8.5, bilan: 11.5 };
+const M = { chauffage: M_chauffage, reflux: M_reflux, bilan: M_bilan }[VUE];
+const FIN = { chauffage: 14, reflux: 14, bilan: 14.5 }[VUE];
+
+/* ── vue « chauffage » : la même transformation, à froid et chauffée ── */
+function dessinerChauffage(c, S, scene) {
+  const pt = scene.petit, L = scene.L, r = pt ? 64 : 62, yB = 226;
+  const avance = S.t <= 0 ? 1 : S.kl('temps', 6);              // 0 → 20 min
+  const cas = [{ id: 'froid', titre: 'sans chauffage', x: L * .27, chaud: 0, prod: .2 * avance, mot: 'lente' },
+               { id: 'chaud', titre: 'avec chauffage', x: L * .73, chaud: 1, prod: avance, mot: 'rapide' }];
+  cas.forEach((k, i) => {
+    c.repere(k.id, k.x - r - 16, yB - r * 1.75 - 46, 2 * r + 32, r * 2.75 + 140, k.titre);
+    if (S.t > 0 && !S.ecrit(c, k.id)) return;
+    const actif = S.t > 0 && S.a(k.id) && !S.a('temps') && (i === 1 || !S.a('chaud'));
+    if (actif) lueur(c, k.x - r - 16, yB - r * 1.75 - 46, 2 * r + 32, r * 2.75 + 136, { vive: true });
+    c.texte(k.titre, k.x, yB - r * 1.75 - 20, { couleur: 'jaune', taille: pt ? 28 : 21, gras: true, align: 'center' });
+    c.direct(() => {
+      const g = c.ctx;
+      P.chauffeBallon(g, k.x, yB + r - 18, r * 2.5, 50, k.chaud);
+      P.ballon(g, k.x, yB, r, { couches: [{ f: .56, col: P.LIQ.melange }], bulles: k.chaud ? S.t : null, agite: .35, flocons: k.prod > .02 ? Math.min(1, k.prod * 1.2) : 0 });
+      // les entités bougent : vite quand c'est chaud
+      const R = window.Synthese.graine(3 + i);
+      for (let j = 0; j < 14; j++) {
+        const a = R() * 6.28, v = k.chaud ? 3.2 : .8, px = k.x + (R() - .5) * r * 1.1 + Math.cos(S.t * v + a) * (k.chaud ? 7 : 2), py = yB + r * .25 + (R() - .5) * r * .8 + Math.sin(S.t * v * 1.3 + a) * (k.chaud ? 6 : 2);
+        if (Math.hypot(px - k.x, py - yB) < r - 8) P.sphere(g, px, py, 3.4, j % 2 ? [234, 179, 8] : [59, 130, 246]);
+      }
+      P.thermometre(g, k.x - r - 24, yB - r * 1.2, r * 1.5, k.chaud ? .8 : .2);
+    });
+    c.texte(k.chaud ? '80 °C' : '20 °C', k.x - r - 24, yB - r * 1.2 - 10, { couleur: k.chaud ? 'orange' : 'cyan', taille: pt ? 22 : 16, align: 'center' });
+    // la barre « savon formé », produite par l'animation
+    if (S.t <= 0 || S.a('temps')) {
+      const bx = k.x - r, by = yB + r + 56, bw = 2 * r;
+      c.direct(() => { const g = c.ctx; g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(bx, by, bw, 14); g.fillStyle = '#fef3c7'; g.fillRect(bx, by, bw * Math.min(1, k.prod), 14); });
+      c.rect(bx, by, bw, 14, { couleur: 'faible', largeur: 1.2, arrondi: 3, duree: .1 });
+      if (!pt) c.texte('savon formé', k.x, by + 36, { couleur: 'blanc', taille: 16, align: 'center' });
+    }
+    if ((S.t <= 0 || S.a('compare')) && S.conclusions) c.texte(k.mot, k.x, yB + r + (pt ? 100 : 104), { couleur: k.chaud ? 'vert' : 'rouge', taille: pt ? 30 : 24, gras: true, align: 'center' });
+  });
+  if (S.t <= 0 || S.ecrit(c, 'temps')) {
+    const min = Math.round(20 * avance);
+    c.texte(`${min} min`, L / 2, 70, { couleur: 'blanc', taille: pt ? 30 : 26, gras: true, align: 'center', duree: .05 });
+    c.repere('temps', L / 2 - 50, 40, 100, 40, 'le temps : 20 minutes');
+  }
+  if ((S.t <= 0 || S.ecrit(c, 'compare')) && S.conclusions && !pt) {
+    c.texte('le chauffage rend la transformation plus rapide', L / 2, 408, { couleur: 'vert', taille: 19, gras: true, align: 'center', max: L - 20 });
+    c.repere('compare', L / 2 - 230, 388, 460, 28, 'conclusion : le chauffage accélère');
+  }
+}
+
+/* ── vue « reflux » : vapeurs, condensation, gouttes qui retombent ── */
+const ETAPES = [
+  ['chauffe', 'le mélange bout', 'orange'], ['vapeurs', 'les vapeurs montent', 'blanc'],
+  ['condensation', 'l’eau froide les refroidit : elles redeviennent liquides', 'cyan'], ['gouttes', 'les gouttes retombent dans le ballon', 'cyan'],
+  ['cycle', 'rien ne se perd : c’est le reflux', 'vert'],
+];
+function dessinerReflux(c, S, scene) {
+  const pt = scene.petit, L = scene.L, cx = pt ? L * .28 : Math.min(260, L * .32), yb = 410;
+  const tous = S.t <= 0;
+  const vap = { t: S.t, k: tous ? 1 : S.k('vapeurs', 1.5), condense: tous ? 1 : S.k('condensation', 1.2), gouttes: tous ? 1 : S.k('gouttes', .8) };
+  let G;
+  c.direct(() => { G = P.montage(c.ctx, cx, yb, { s: .96, phase: S.t, couches: [{ f: .45, col: P.LIQ.melange }], ponce: true, bulles: S.t, agite: .55, chaud: 1, vapeur: vap }); });
+  const R = G.R, b = G.boites;
+  c.repere('ballon', b.ballon[0], b.ballon[1], b.ballon[2], b.ballon[3], 'le ballon : le mélange bout');
+  c.repere('refrigerant', b.refrigerant[0], b.refrigerant[1], b.refrigerant[2], b.refrigerant[3], 'le réfrigérant à boules');
+  if (tous || S.a('vapeurs')) { c.fleche(cx - 36, G.haut + 20, cx - 36, G.yRh + 90, { couleur: 'blanc', largeur: 2.2 }); c.repere('vapeurs', cx - 20, G.yRh + 60, 40, G.haut - G.yRh, 'les vapeurs qui montent'); }
+  if ((tous || S.a('condensation')) && S.conclusions) c.repere('condensation', cx - 22, G.yRh + 30, 44, G.yRb - G.yRh - 30, 'la condensation sur les boules froides');
+  if ((tous || S.a('gouttes')) && S.conclusions) { c.fleche(cx + 30, G.yRh + 110, cx + 30, G.haut + 30, { couleur: 'cyan', largeur: 2.2 }); c.repere('gouttes', cx - 12, G.yRh + 90, 24, G.yBal - G.yRh - 90, 'les gouttes qui retombent'); }
+  // les légendes, à droite, une par étape
+  const xl = pt ? L * .54 : Math.max(cx + 170, L * .48);
+  let actif = null; for (const [id] of ETAPES) if (!tous && S.a(id)) actif = id;
+  ETAPES.forEach(([id, txt, coul], i) => {
+    if (!tous && !S.ecrit(c, id)) return;
+    if (!S.conclusions && (id === 'condensation' || id === 'gouttes' || id === 'cycle')) return;
+    if (pt && !tous && actif !== id) return;
+    if (pt && tous && id !== 'cycle') return;
+    const y = pt ? 130 : 70 + i * 70;
+    if (actif === id && !pt) lueur(c, xl - 8, y - 30, Math.min(420, L - xl), 46, { vive: true });
+    const morceaux = window.Synthese.lignes(c, txt, pt ? L - xl - 10 : Math.min(410, L - xl - 10), pt ? 28 : 19);
+    morceaux.forEach((m, j) => c.texte(m, xl, y + j * (pt ? 34 : 24), { couleur: coul, taille: pt ? 28 : 19, gras: j === 0 }));
+  });
+}
+
+/* ── vue « bilan » : à froid / chauffage sans réfrigérant / chauffage à reflux ── */
+const TROIS = [
+  { id: 'froid', titre: 'à froid', res: 'lente', coul: 'rouge' },
+  { id: 'ouvert', titre: 'chauffage sans réfrigérant', res: 'perte de matière', coul: 'rouge' },
+  { id: 'reflux', titre: 'chauffage à reflux', res: 'rapide, sans perte', coul: 'vert' },
+];
+function dessinerBilan(c, S, scene) {
+  const pt = scene.petit, L = scene.L, tous = S.t <= 0;
+  let courant = 0; TROIS.forEach((k, i) => { if (!tous && S.a(k.id)) courant = i; });
+  const vis = pt && !tous ? [courant] : pt ? [2] : [0, 1, 2];
+  const s = pt ? .78 : .7, yb = pt ? 370 : 318;
+  vis.forEach((idx, j) => {
+    const k = TROIS[idx], cx = pt ? L * .42 : L * (j + .5) / 3 + 24;
+    c.repere(k.id, cx - 120 * s, yb - 380 * s, 240 * s, 380 * s + 70, k.titre);
+    if (!tous && !S.ecrit(c, k.id)) return;
+    if (!tous && courant === idx && !S.a('bilan')) lueur(c, cx - 130 * s, yb - 390 * s, 260 * s, 390 * s + 76, { vive: true });
+    const tt = Math.max(0, S.t - M[k.id]);
+    const perte = idx === 1 ? (tous ? 1 : S.kl('perte', 4)) : 0;
+    c.direct(() => {
+      const o = { s, couches: [{ f: .48 - .22 * perte, col: P.LIQ.melange }], ponce: true, chaud: idx ? 1 : 0, phase: S.t };
+      if (idx === 0) { o.ouvert = true; }
+      if (idx === 1) { o.ouvert = true; o.bulles = S.t; o.agite = .55; o.vapeur = { t: S.t, k: 1 }; }
+      if (idx === 2) { o.bulles = S.t; o.agite = .55; o.vapeur = { t: S.t, k: 1, condense: 1, gouttes: 1 }; }
+      P.montage(c.ctx, cx, yb, o);
+    });
+    c.texte(k.titre, cx - 30 * s, yb + 30, { couleur: 'jaune', taille: pt ? 26 : 17, gras: true, align: 'center', max: pt ? L * .8 : L / 3 - 8 });
+    if (S.conclusions && (tous || tt > 1.5 || (idx === 1 && S.a('perte')))) {
+      if (idx !== 1 || tous || S.a('perte')) c.texte(k.res, cx - 30 * s, yb + (pt ? 62 : 56), { couleur: k.coul, taille: pt ? 28 : 19, gras: true, align: 'center', max: pt ? L * .8 : L / 3 - 8 });
+    }
+    if (idx === 1 && (tous || S.a('perte'))) c.repere('perte', cx - 40 * s, yb - 380 * s, 80 * s, 160 * s, 'les vapeurs s’échappent : perte de matière');
+  });
+  if ((tous || S.ecrit(c, 'bilan')) && !pt && S.conclusions) {
+    c.texte('chauffage : plus rapide  ·  réfrigérant : pas de perte', L / 2, 412, { couleur: 'vert', taille: 20, gras: true, align: 'center', max: L - 20 });
+    c.repere('bilan', L / 2 - 260, 386, 520, 30, 'le chauffage à reflux');
+  }
+}
+
+const DESSINS = { chauffage: dessinerChauffage, reflux: dessinerReflux, bilan: dessinerBilan };
+const S = window.Synthese.sim({
+  id: 'tc_synthese_reflux_' + VUE, titre: 'Le chauffage à reflux : ' + VUE, vue: VUE, moments: M, fin: FIN, graine: 29,
+  motifs: { froid: VUE === 'bilan' ? 'à froid' : 'sans chauffage', chaud: 'avec chauffage', temps: '20 minutes passent', compare: 'la comparaison',
+    chauffe: 'le mélange bout', vapeurs: 'les vapeurs montent', condensation: 'la condensation dans le réfrigérant', gouttes: 'les gouttes retombent', cycle: 'le reflux',
+    ouvert: 'chauffage sans réfrigérant', perte: 'les vapeurs s’échappent', reflux: 'chauffage à reflux', bilan: 'le bilan' },
+  accueil: { chauffage: 'À froid ou chauffé : laquelle va plus vite ?', reflux: 'On chauffe le montage : regarde les vapeurs.', bilan: 'Trois façons de faire la synthèse.' }[VUE],
+  debut: 'Regarde…', fini: { chauffage: 'Le chauffage rend la transformation plus rapide.', reflux: 'Les vapeurs retombent : rien ne se perd.', bilan: 'Chauffage à reflux : rapide et sans perte.' }[VUE],
+  dessiner: (c, S, sc) => DESSINS[VUE](c, S, sc),
+  ceQuiSeVoit: S => {
+    const a = n => S.t <= 0 || S.a(n);
+    if (VUE === 'chauffage') return 'Deux ballons du même mélange : à gauche sans chauffage (20 °C), à droite chauffé (80 °C).' + (a('temps') ? ` Le temps passe (${Math.round(20 * (S.t <= 0 ? 1 : S.kl('temps', 6)))} min) : le savon se forme beaucoup plus vite dans le ballon chauffé.` : '') + (a('compare') && S.conclusions ? ' Conclusion : le chauffage accélère la transformation.' : '');
+    if (VUE === 'reflux') return 'Le montage du chauffage à reflux chauffe : ' + ETAPES.filter(([id]) => a(id) && (S.conclusions || ['chauffe', 'vapeurs'].includes(id))).map(e => e[1]).join(' ; ') + '.' + (!S.conclusions ? ' (Les vapeurs arrivent dans le réfrigérant à boules.)' : '');
+    return TROIS.filter(k => a(k.id)).map(k => k.titre + (S.conclusions ? ' : ' + k.res : '')).join(' ; ') + '.';
+  },
+  texte: 'Chauffage à reflux : le chauffage augmente la vitesse de la transformation ; le réfrigérant à boules condense les vapeurs, qui retombent dans le ballon : pas de perte de réactifs ni de produits.',
+  explication: { reflux: [{ repere: 'vapeurs', texte: 'Les vapeurs montent.' }, { repere: 'condensation', texte: 'Elles se refroidissent dans le réfrigérant.' }, { repere: 'gouttes', texte: 'Les gouttes retombent dans le ballon.' }] },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

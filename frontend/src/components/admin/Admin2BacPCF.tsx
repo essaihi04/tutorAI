@@ -3,15 +3,17 @@
  * lu comme l'onglet « Tronc Commun ». Fiche remplie une fois (nom, prénom, classe 2BACPCF + numéro, père, téléphone) ;
  * deux examens de 30 min (physique, chimie), six séances au tableau (deux révisions, quatre cours complets).
  * Le choix de l'examen en haut règle les chiffres clés, la réussite par question, les erreurs et les notes.
+ * 25/11/2026 : le même onglet sert au lien du Tronc Commun physique-chimie (/TCF, `LIEN_TCF`) : `<Admin2BacPCF lien={LIEN_TCF} />`.
  */
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, ChevronDown, ChevronRight, Download } from 'lucide-react';
-import { list2BacPCF, type Eleve2BacPCF } from '../../services/api';
+import { list2BacPCF, listTCF, type Eleve2BacPCF } from '../../services/api';
 import { SUJET_CHIMIE, SUJET_PHYSIQUE } from '../../publication/bac2pcf/sujets';
+import { SUJET_TCF } from '../../publication/tcf/sujet';
 import { Barre, Carte, Etiquette, Tuile } from './AdminTroncCommun';
 
 /** une couleur par matière (palette catégorielle validée) ; les cours complets en teinte claire de leur matière */
-const SEANCES: { id: string; nom: string; c: string }[] = [
+const SEANCES_2BAC: { id: string; nom: string; c: string }[] = [
   { id: 'rev_phys_ondes_radioactivite', nom: 'Révision physique', c: '#2a78d6' },
   { id: 'phys_ch3_ondes_lumineuses', nom: 'Ondes lumineuses', c: '#86b6ef' },
   { id: 'phys_ch4_radioactivite', nom: 'Radioactivité', c: '#86b6ef' },
@@ -21,10 +23,22 @@ const SEANCES: { id: string; nom: string; c: string }[] = [
 ];
 type Sujet = { parties: { titre: string; questions: { id: string; texte: string; points: number }[] }[] };
 const court = (t: string) => (t.length > 60 ? `${t.slice(0, 58)}…` : t);
-const EXAMENS = [
+const avecQuestions = (xs: { cle: string; nom: string; sujet: Sujet }[]) =>
+  xs.map(x => ({ ...x, questions: x.sujet.parties.flatMap(p => p.questions.map(q => ({ id: q.id, texte: court(q.texte), partie: p.titre }))) }));
+/** un lien libre suivi par cet onglet : ses séances, ses examens, sa route admin */
+export interface LienSuivi { titre: string; fichier: string; lire: typeof list2BacPCF; seances: typeof SEANCES_2BAC; examens: ReturnType<typeof avecQuestions> }
+const LIEN_2BAC: LienSuivi = { titre: '2ᵉ Bac PC', fichier: '2bacpcf', lire: list2BacPCF, seances: SEANCES_2BAC, examens: avecQuestions([
   { cle: 'examen_physique', nom: 'Physique', sujet: SUJET_PHYSIQUE as unknown as Sujet },
   { cle: 'examen_chimie', nom: 'Chimie', sujet: SUJET_CHIMIE as unknown as Sujet },
-].map(x => ({ ...x, questions: x.sujet.parties.flatMap(p => p.questions.map(q => ({ id: q.id, texte: court(q.texte), partie: p.titre }))) }));
+]) };
+/** le Tronc Commun physique-chimie (/TCF, 25/11/2026) : trois cours, une évaluation des trois chapitres */
+export const LIEN_TCF: LienSuivi = { titre: 'Tronc Commun PC', fichier: 'tcf', lire: listTCF, seances: [
+  { id: 'tc_chim_synthese', nom: 'Synthèse', c: '#eb6834' },
+  { id: 'tc_chim_atome', nom: 'Atome', c: '#f4a988' },
+  { id: 'tc_phys_mouvement_inertie', nom: 'Mouvement et inertie', c: '#2a78d6' },
+], examens: avecQuestions([{ cle: 'examen_tcf', nom: 'Évaluation', sujet: SUJET_TCF as unknown as Sujet }]) };
+/** l'onglet affiché (un seul à la fois dans le tableau de bord) : réglé par la prop `lien` à chaque rendu */
+let SEANCES = LIEN_2BAC.seances, EXAMENS = LIEN_2BAC.examens;
 const BLEU = '#2a78d6', CRITIQUE = '#d03b3b';
 const NIVEAUX: { nom: string; min: number; c: string }[] = [
   { nom: 'à soutenir (< 8)', min: 0, c: '#cde2fb' }, { nom: 'fragile (8 à 10)', min: 8, c: '#86b6ef' },
@@ -43,7 +57,8 @@ function noteSur20(e: Eleve2BacPCF, cle: string) {
   return { n: x.fini ? x.note : x.sur_fait ? (20 * x.note) / x.sur_fait : 0, fini: x.fini, faites: x.faites };
 }
 
-export default function Admin2BacPCF() {
+export default function Admin2BacPCF({ lien = LIEN_2BAC }: { lien?: LienSuivi }) {
+  SEANCES = lien.seances; EXAMENS = lien.examens;
   const [eleves, setEleves] = useState<Eleve2BacPCF[]>([]);
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState('');
@@ -56,10 +71,10 @@ export default function Admin2BacPCF() {
 
   const charger = useCallback(async () => {
     setChargement(true); setErreur('');
-    try { setEleves((await list2BacPCF()).data.eleves || []); }
+    try { setEleves((await lien.lire()).data.eleves || []); }
     catch (e: any) { setErreur(e?.response?.data?.detail || 'Lecture du suivi impossible'); }
     finally { setChargement(false); }
-  }, []);
+  }, [lien]);
   useEffect(() => { void charger(); }, [charger]);
 
   const cherche = (e: Eleve2BacPCF) => !recherche || `${e.nom} ${e.pere} ${e.telephone}`.toLowerCase().includes(recherche.toLowerCase());
@@ -121,14 +136,14 @@ export default function Admin2BacPCF() {
     const csv = '﻿' + lignes.map(l => l.map(x => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `2bacpcf${classe ? `-${classe.replace(/\s/g, '')}` : ''}.csv`;
+    a.download = `${lien.fichier}${classe ? `-${classe.replace(/\s/g, '')}` : ''}.csv`;
     a.click();
   };
 
   return (
     <div className="space-y-5 text-gray-900">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto text-lg font-semibold">2ᵉ Bac PC — suivi des élèves</h2>
+        <h2 className="mr-auto text-lg font-semibold">{lien.titre} — suivi des élèves</h2>
         <span className="flex overflow-hidden rounded-lg border text-sm">{EXAMENS.map(x => (
           <button key={x.cle} onClick={() => setCleEx(x.cle)} className={`px-3 py-1.5 ${cleEx === x.cle ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}>Examen {x.nom.toLowerCase()}</button>))}</span>
         <select value={classe} onChange={e => setClasse(e.target.value)} className="rounded-lg border px-2 py-1.5 text-sm">

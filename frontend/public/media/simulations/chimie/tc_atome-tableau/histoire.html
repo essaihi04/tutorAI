@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Histoire du modèle de l’atome — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_atome-tableau/atome.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="L’histoire du modèle de l’atome : les quatre éléments (le bois qui brûle), les sphères de Dalton, l’électron et le pain aux raisins de Thomson, les orbites de Bohr, le nuage électronique"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/chimie/tc_atome-tableau/commun.js"></script>
+<script>
+/*
+ * L’histoire du modèle de l’atome (diapos at_h1, at_h2, at_h3, at_h7, at_h8). Vues (?vue=) :
+ *  elements : un morceau de bois brûle : le feu, la fumée (l’air), la vapeur d’eau (l’eau), la cendre (la terre) ;
+ *             les quatre éléments des Grecs. Moments : buche 1 ; feu 3 ; fumee 5,5 ; vapeur 8 ; cendre 10,5 ; quatre 12,5 ; fin 14.
+ *  dalton   : de petites sphères pleines, indivisibles ; plusieurs sortes (couleurs) ; elles s’assemblent.
+ *             Moments : spheres 2 ; sortes 4,5 ; assemble 7,5 ; fin 9.
+ *  thomson  : un tube : des particules partent de la plaque − et sont attirées par la plaque + : elles sont négatives,
+ *             ce sont les électrons ; puis le « pain aux raisins » : une boule de matière positive, les électrons dedans.
+ *             Moments : tube 2 ; devie 5 ; electron 6,5 ; pain 9 ; raisins 11,5 ; fin 13.
+ *  bohr     : le noyau ; des orbites ; les électrons tournent comme les planètes autour du Soleil.
+ *             Moments : noyau 1,5 ; orbites 3,5 ; tournent 6 ; planetes 8,5 ; fin 10.
+ *  nuage    : les orbites s’effacent : on ne sait pas où est l’électron ; le nuage électronique ; puis la frise des
+ *             modèles, allumés un à un. Moments : flou 2,5 ; nuage 5 ; frise 7 ; frise_fin 12 ; fin 13.
+ */
+const A = window.Atome, { P, lueur } = A;
+const VUE = A.param('vue', 'elements');
+const MOMENTS = {
+  elements: { buche: 1, feu: 3, fumee: 5.5, vapeur: 8, cendre: 10.5, quatre: 12.5 },
+  dalton: { spheres: 2, sortes: 4.5, assemble: 7.5 },
+  thomson: { tube: 2, devie: 5, electron: 6.5, pain: 9, raisins: 11.5 },
+  bohr: { noyau: 1.5, orbites: 3.5, tournent: 6, planetes: 8.5 },
+  nuage: { flou: 2.5, nuage: 5, frise: 7, frise_fin: 12 },
+}[VUE] || {};
+const FIN = { elements: 14, dalton: 9, thomson: 13, bohr: 10, nuage: 13 }[VUE] || 10;
+const av = (S, nom, d) => Math.max(0, Math.min(1, (S.t - (MOMENTS[nom] - d)) / d));
+
+/* ── les quatre éléments : le bois qui brûle ── */
+function dessinerElements(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L * .5 : L * .38, sol = 330, t = pt ? 30 : 20, tps = sc.maintenant();
+  const brule = S.a('feu') ? Math.min(1, (S.t - MOMENTS.feu) / 9) : 0;
+  c.direct(() => {
+    const g = c.ctx;
+    g.fillStyle = 'rgba(120,90,60,.35)'; g.beginPath(); g.ellipse(cx, sol + 8, 150, 14, 0, 0, A.TAU); g.fill();
+    if (!S.a('cendre') || pt) { P.buche(g, cx - 40, sol - 18, 170, 34, { a: -.25, brule }); P.buche(g, cx + 40, sol - 18, 170, 34, { a: .25, brule }); }
+    if (S.a('cendre')) P.cendre(g, cx, sol + 4, 150 * av(S, 'cendre', 1) + 20, 26 * av(S, 'cendre', 1) + 6);
+    if (S.a('feu') && !S.a('cendre')) P.flamme(g, cx, sol - 26, 130, tps);
+    if (S.a('fumee') && !S.a('quatre')) P.fumee(g, cx - 30, sol - 140, 140, tps);
+    if (S.a('vapeur') && !S.a('quatre')) P.vapeur(g, cx + 40, sol - 130, 110, tps);
+  });
+  c.repere('bois', cx - 120, sol - 60, 240, 70, 'le morceau de bois');
+  if (S.a('feu') && !S.a('quatre')) sc.sale = true;   // la flamme danse
+  const lab = (nom, txt, x, y, coul) => { if (S.ecrit(c, nom) && (!pt || !S.a('quatre'))) { c.texte(txt, x, y, { couleur: coul, taille: t, align: 'center', gras: true }); c.repere(nom, x - 90, y - 26, 180, 34, txt); } };
+  if (!pt) {
+    lab('feu', 'le feu', cx + 150, sol - 60, 'orange');
+    lab('fumee', 'fumée → l’air', cx - 170, sol - 230, 'blanc');
+    lab('vapeur', 'vapeur → l’eau', cx + 175, sol - 200, 'cyan');
+    lab('cendre', 'cendre → la terre', cx + 170, sol + 40, 'faible');
+  } else if (!S.a('quatre')) {
+    const der = ['cendre', 'vapeur', 'fumee', 'feu'].find(n => S.a(n));
+    const txt = { feu: 'le feu', fumee: 'fumée → l’air', vapeur: 'vapeur → l’eau', cendre: 'cendre → la terre' }[der];
+    if (der) { c.texte(txt, L / 2, 60, { couleur: 'jaune', taille: 34, align: 'center', gras: true }); c.repere(der, L / 2 - 150, 30, 300, 40, txt); }
+  }
+  if (S.ecrit(c, 'quatre')) {
+    const xs = pt ? [L * .14, L * .38, L * .62, L * .86] : [L * .8, L * .8, L * .8, L * .8], noms = [['la terre', '#a16207'], ['l’eau', '#38bdf8'], ['l’air', '#cbd5e1'], ['le feu', '#f97316']];
+    noms.forEach(([n, col], i) => {
+      const x = xs[i], y = pt ? 160 : 90 + i * 64;
+      c.direct(() => { const g = c.ctx; g.save(); g.fillStyle = col; g.globalAlpha = .9; g.beginPath(); g.arc(x - (pt ? 0 : 70), y - 7, pt ? 26 : 16, 0, A.TAU); g.fill(); g.restore(); });
+      c.texte(n, pt ? x : x - 44, pt ? y + 60 : y, { couleur: 'blanc', taille: pt ? 28 : 21, align: pt ? 'center' : 'left' });
+    });
+    c.texte('les 4 éléments des Grecs', pt ? L / 2 : L * .8, pt ? 60 : 50, { couleur: 'jaune', taille: pt ? 30 : 20, align: 'center', gras: true });
+    c.repere('quatre', pt ? 20 : L * .8 - 110, 30, pt ? L - 40 : 240, pt ? 250 : 300, 'les quatre éléments');
+  }
+}
+
+/* ── Dalton : des sphères pleines ── */
+const SORTES = [A.COUL.carbone, A.COUL.oxygene, A.COUL.hydrogene];
+function dessinerDalton(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = pt ? 30 : 21, cy = 215;
+  const k = av(S, 'spheres', 1.6), ks = S.a('sortes') ? 1 : 0, ka = av(S, 'assemble', 2.4);
+  const r = pt ? 30 : 26;
+  // 9 sphères : 3 de chaque sorte ; au début toutes grises (une sphère pleine), puis colorées par sorte, puis en groupes
+  const libres = [], groupes = [];
+  for (let i = 0; i < 9; i++) libres.push([L * .2 + (i % 3) * (L * .3) + ((i / 3 | 0) - 1) * 70, cy + ((i / 3 | 0) - 1) * 80]);
+  // groupes : eau (O + 2 H) ×1, gaz carbonique (C + 2 O)… : trois groupes « une jaune, une rouge, une blanche »
+  for (let j = 0; j < 3; j++) { const gx = L * (.2 + j * .3), gy = cy; groupes.push([gx - r * 1.6, gy], [gx, gy], [gx + r * 1.6, gy]); }
+  const ordre = [0, 3, 6, 1, 4, 7, 2, 5, 8];   // dans chaque groupe : une sphère de chaque sorte
+  c.direct(() => {
+    for (let i = 0; i < 9; i++) {
+      if (k * 9 < i) continue;
+      const sorte = Math.floor(i / 3), [x0, y0] = libres[i], [x1, y1] = groupes[ordre.indexOf(i)], u = A.doux(ka);
+      const col = ks ? SORTES[sorte] : [190, 190, 200];
+      P.sphere(c.ctx, x0 + (x1 - x0) * u, y0 + (y1 - y0) * u, r, col);
+    }
+  });
+  c.repere('spheres', L * .1, cy - 110, L * .8, 220, 'les sphères de Dalton');
+  if (S.ecrit(c, 'spheres')) c.texte(pt ? 'sphères pleines' : 'des sphères pleines, qu’on ne peut pas couper', L / 2, 54, { couleur: 'blanc', taille: t, align: 'center' });
+  if (S.ecrit(c, 'sortes') && !pt) c.texte('plusieurs sortes d’atomes', L / 2, 360, { couleur: 'jaune', taille: t, align: 'center', gras: true });
+  if (S.ecrit(c, 'sortes') && pt && !S.a('assemble')) c.texte('plusieurs sortes', L / 2, 380, { couleur: 'jaune', taille: 32, align: 'center', gras: true });
+  if (S.ecrit(c, 'assemble')) { c.texte(pt ? 'elles s’assemblent' : 'elles s’assemblent : la matière', L / 2, pt ? 380 : 396, { couleur: 'cyan', taille: t, align: 'center', gras: true }); c.repere('assemble', L / 2 - 200, 370, 400, 34, 'les atomes assemblés'); }
+}
+
+/* ── Thomson : l’électron, puis le pain aux raisins ── */
+function dessinerThomson(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = pt ? 30 : 20, tps = sc.maintenant();
+  const enPain = S.a('pain');
+  if (!enPain || !pt) {
+    // le tube de verre, la plaque − à gauche, deux plaques au milieu (+ en haut, − en bas), le faisceau dévié vers le +
+    const x0 = 30, x1 = pt ? L - 30 : L * .55, cy = 210, h = 90;
+    c.direct(() => {
+      const g = c.ctx; g.save();
+      const gv = g.createLinearGradient(0, cy - h / 2, 0, cy + h / 2); gv.addColorStop(0, 'rgba(226,240,250,.22)'); gv.addColorStop(.5, 'rgba(226,240,250,.06)'); gv.addColorStop(1, 'rgba(226,240,250,.2)');
+      g.fillStyle = gv; g.beginPath(); g.roundRect(x0, cy - h / 2, x1 - x0, h, 40); g.fill(); g.strokeStyle = 'rgba(226,240,250,.7)'; g.lineWidth = 2; g.stroke();
+      g.fillStyle = '#9ca3af'; g.fillRect(x0 + 24, cy - 28, 8, 56);
+      const xm = (x0 + x1) / 2; g.fillStyle = '#f9a8d4'; g.fillRect(xm - 50, cy - 40, 100, 6); g.fillStyle = '#7dd3fc'; g.fillRect(xm - 50, cy + 34, 100, 6);
+      g.restore();
+      if (S.a('tube') || S.t > 0) {
+        const kd = av(S, 'devie', 2.5);
+        for (let i = 0; i < 9; i++) {
+          const u = ((tps * .45 + i / 9) % 1), x = x0 + 40 + u * (x1 - x0 - 70), xr = (x - (xm - 50)) / (x1 - xm + 20);
+          const dy = x > xm - 50 ? -kd * 34 * Math.pow(Math.max(0, xr), 1.4) : 0;
+          if (S.t >= MOMENTS.tube - 1.5) P.electron(g, x, cy + dy, pt ? 9 : 7, { texte: false });
+        }
+      }
+    });
+    const xm = (x0 + x1) / 2;
+    if (S.running || S.pause) sc.sale = true;
+    if (S.t <= 0 || S.ecrit(c, 'tube')) {
+      c.texte('−', x0 + 28, cy - 40, { couleur: 'cyan', taille: pt ? 32 : 24, align: 'center', gras: true });
+      c.texte('+', xm, cy - 54, { couleur: 'rose', taille: pt ? 32 : 26, align: 'center', gras: true });
+      if (!pt) c.texte('un tube de verre', (x0 + x1) / 2, cy + h / 2 + 34, { couleur: 'faible', taille: 17, align: 'center' });
+      c.repere('tube', x0, cy - h / 2, x1 - x0, h, 'le tube');
+    }
+    if (S.ecrit(c, 'devie')) { c.texte('attirées par le +', xm + 60, cy - 70, { couleur: 'vert', taille: t, gras: true }); c.repere('devie', xm - 50, cy - 50, x1 - xm + 50, 60, 'les particules attirées par la plaque +'); }
+    if (S.ecrit(c, 'electron') && (!pt || !enPain)) { c.texte('négatives : les électrons (1897)', pt ? L / 2 : (x0 + x1) / 2, pt ? 345 : 340, { couleur: 'cyan', taille: pt ? 28 : 21, align: 'center', gras: true }); c.repere('electron', (x0 + x1) / 2 - 180, 314, 360, 34, 'les électrons'); }
+  }
+  if (enPain) {
+    const cx = pt ? L / 2 : L * .8, cy = 205, R = pt ? 110 : 100, k = av(S, 'raisins', 2);
+    c.direct(() => {
+      P.pain(c.ctx, cx, cy, R);
+      const pos = [[-.45, -.4], [.3, -.55], [.55, .05], [-.6, .2], [.05, .1], [-.2, .55], [.4, .55], [.15, -.25]];
+      pos.forEach(([u, v], i) => { if (S.t <= 0 || i < k * pos.length) P.electron(c.ctx, cx + u * R, cy + v * R, pt ? 11 : 9); });
+    });
+    c.repere('pain', cx - R, cy - R, 2 * R, 2 * R, 'le pain aux raisins de Thomson');
+    if (S.ecrit(c, 'pain')) c.texte(pt ? 'matière positive' : 'une boule de matière positive', cx, cy - R - 16, { couleur: 'rose', taille: t, align: 'center', gras: true });
+    if (S.ecrit(c, 'raisins')) { c.texte(pt ? 'électrons = raisins' : 'les électrons = les « raisins »', cx, cy + R + 34, { couleur: 'cyan', taille: t, align: 'center', gras: true }); c.repere('raisins', cx - R, cy - R, 2 * R, 2 * R, 'les électrons dans la boule'); }
+  }
+}
+
+/* ── Bohr : des orbites ── */
+function dessinerBohr(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L / 2 : L * .36, cy = 215, t = pt ? 30 : 20, tps = sc.maintenant();
+  const R1 = pt ? 80 : 75, R2 = pt ? 140 : 130;
+  if (S.running || S.pause || S.a('tournent')) sc.sale = true;
+  c.direct(() => {
+    const g = c.ctx;
+    if (S.a('orbites') || S.t <= 0) for (const R of [R1, R2]) P.couche(g, cx, cy, R, { alpha: S.t <= 0 ? 1 : av(S, 'orbites', 1.5) });
+    if (S.a('noyau') || S.t <= 0) P.noyau(g, cx, cy, 3, 4, { r: pt ? 10 : 9 });
+    const tourne = S.a('tournent') ? tps : 0;
+    if (S.a('orbites') || S.t <= 0) {
+      for (let i = 0; i < 2; i++) { const a = tourne * 1.3 + i * Math.PI; P.electron(g, cx + R1 * Math.cos(a), cy + R1 * Math.sin(a), pt ? 11 : 9); }
+      const a = -tourne * .8 + 1; P.electron(g, cx + R2 * Math.cos(a), cy + R2 * Math.sin(a), pt ? 11 : 9);
+    }
+  });
+  c.repere('noyau', cx - 30, cy - 30, 60, 60, 'le noyau');
+  if (S.ecrit(c, 'noyau') && !pt) c.texte('noyau', cx - 34, cy + 52, { couleur: 'rose', taille: 18, align: 'right' });
+  if (S.ecrit(c, 'orbites')) { if (!pt) c.texte('orbites', cx + R2 + 14, cy - R2 * .5, { couleur: 'cyan', taille: t }); c.repere('orbites', cx - R2, cy - R2, 2 * R2, 2 * R2, 'les orbites'); }
+  if (S.ecrit(c, 'tournent')) c.texte(pt ? 'Bohr (1913)' : 'Bohr (1913) : les électrons tournent sur des orbites', pt ? L / 2 : L / 2, pt ? 52 : 40, { couleur: 'jaune', taille: t, align: 'center', gras: true, max: L - 20 });
+  if (S.ecrit(c, 'planetes') && !pt) {
+    const sx = L * .8, sy = 220;
+    c.direct(() => { const g = c.ctx; const gs = g.createRadialGradient(sx, sy, 2, sx, sy, 26); gs.addColorStop(0, '#fffbe0'); gs.addColorStop(.6, '#fde047'); gs.addColorStop(1, '#f59e0b'); g.fillStyle = gs; g.beginPath(); g.arc(sx, sy, 22, 0, A.TAU); g.fill();
+      P.couche(g, sx, sy, 70, {}); const a = tps * .6; A.boule(g, sx + 70 * Math.cos(a), sy + 70 * Math.sin(a), 9, [59, 130, 246]); });
+    c.texte('comme les planètes', sx, sy + 110, { couleur: 'blanc', taille: 19, align: 'center' });
+    c.texte('autour du Soleil', sx, sy + 134, { couleur: 'blanc', taille: 19, align: 'center' });
+    c.repere('planetes', sx - 80, sy - 80, 160, 160, 'les planètes autour du Soleil');
+  }
+  if (S.ecrit(c, 'planetes') && pt) c.texte('comme les planètes', L / 2, 396, { couleur: 'blanc', taille: 28, align: 'center' });
+}
+
+/* ── le nuage électronique, puis la frise des modèles ── */
+const FRISE = [['4 éléments', 'Grecs'], ['sphères pleines', 'Dalton'], ['pain aux raisins', 'Thomson'], ['noyau + vide', 'Rutherford'], ['orbites', 'Bohr'], ['nuage', 'aujourd’hui']];
+function dessinerNuage(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = pt ? 30 : 20, tps = sc.maintenant();
+  if (!S.a('frise')) {
+    const cx = L / 2, cy = 215, R = pt ? 150 : 140, fl = av(S, 'flou', 2), nu = av(S, 'nuage', 2);
+    if (S.running || S.pause) sc.sale = true;
+    c.direct(() => {
+      const g = c.ctx;
+      if (nu > 0) P.nuage(g, cx, cy, R, { alpha: nu, points: 320 });
+      for (const Rr of [R * .45, R * .8]) P.couche(g, cx, cy, Rr, { alpha: 1 - fl });
+      P.noyau(g, cx, cy, 3, 4, { r: 9 });
+      // l’électron : net sur son orbite, puis flou (traînées : on ne sait plus où il est)
+      for (let k = 0; k < (fl > 0 ? 6 : 1); k++) { const a = tps * 1.2 + k * 1.1, Rr = R * .45 * (1 + fl * (k % 3 - 1) * .4); P.electron(g, cx + Rr * Math.cos(a), cy + Rr * Math.sin(a), pt ? 11 : 9, { alpha: fl > 0 ? .25 + .35 * (1 - fl) : 1, texte: fl === 0 }); }
+    });
+    c.repere('atome', cx - R, cy - R, 2 * R, 2 * R, 'l’atome');
+    if (S.ecrit(c, 'flou')) c.texte(pt ? 'position inconnue' : 'on ne peut pas savoir où est l’électron', L / 2, 40, { couleur: 'orange', taille: t, align: 'center', gras: true });
+    if (S.ecrit(c, 'nuage')) { c.texte('le nuage électronique', L / 2, pt ? 400 : 396, { couleur: 'cyan', taille: pt ? 32 : 24, align: 'center', gras: true }); c.repere('nuage', cx - R, cy - R, 2 * R, 2 * R, 'le nuage électronique'); }
+    return;
+  }
+  // la frise : six modèles, allumés un à un
+  const n = FRISE.length, k = S.t <= 0 ? n : Math.min(n, Math.floor(av(S, 'frise_fin', 5) * n + .001) + (S.a('frise') ? 1 : 0));
+  const cols = pt ? 3 : 6, w = (L - 40) / cols, h = pt ? 160 : 230;
+  c.fleche(20, pt ? 60 : 110, L - 20, pt ? 60 : 110, { couleur: 'faible', largeur: 2 });
+  FRISE.forEach(([mod, qui], i) => {
+    if (i >= k) return;
+    const col = i % cols, lig = pt ? (i / cols | 0) : 0, x = 20 + col * w + w / 2, y = pt ? 110 + lig * h : 170;
+    c.direct(() => {
+      const g = c.ctx, r = pt ? 30 : 34;
+      if (i === 0) { P.flamme(g, x, y + r * .8, r * 1.8, 0); }
+      else if (i === 1) P.sphere(g, x, y, r, [190, 190, 200]);
+      else if (i === 2) { P.pain(g, x, y, r); [[-.4, -.3], [.35, -.2], [0, .4]].forEach(([u, v]) => P.electron(g, x + u * r, y + v * r, 6, { texte: false })); }
+      else if (i === 3) { P.nuage(g, x, y, r * 1.15, { points: 40, alpha: .7 }); P.noyau(g, x, y, 1, 0, { r: 7 }); }
+      else if (i === 4) { P.couche(g, x, y, r * .6, {}); P.couche(g, x, y, r, {}); P.noyau(g, x, y, 1, 1, { r: 5 }); P.electron(g, x + r, y, 6, { texte: false }); }
+      else { P.nuage(g, x, y, r * 1.2, { points: 90 }); P.noyau(g, x, y, 1, 1, { r: 5 }); }
+    });
+    if (i === k - 1 && S.t > 0) lueur(c, x - w / 2 + 6, y - 50, w - 12, pt ? 140 : 140, { vive: true });
+    c.texte(qui, x, y + (pt ? 62 : 64), { couleur: 'jaune', taille: pt ? 26 : 18, align: 'center', gras: true, max: w - 8 });
+    if (!pt) c.texte(mod, x, y + 88, { couleur: 'blanc', taille: 16, align: 'center', max: w - 8 });
+    c.repere('modele_' + (i + 1), x - w / 2 + 6, y - 50, w - 12, 140, qui + ' : ' + mod);
+  });
+  if (!pt) c.texte('le modèle change à chaque nouvelle expérience', L / 2, 380, { couleur: 'cyan', taille: 20, align: 'center' });
+  c.repere('frise', 20, 90, L - 40, 230, 'la frise des modèles');
+}
+
+const DESSINS = { elements: dessinerElements, dalton: dessinerDalton, thomson: dessinerThomson, bohr: dessinerBohr, nuage: dessinerNuage };
+function voir(S) {
+  const a = n => S.a(n);
+  switch (VUE) {
+    case 'elements': return ['Un morceau de bois.', a('feu') ? 'Il brûle : le feu.' : '', a('fumee') ? 'La fumée monte : l’air.' : '', a('vapeur') ? 'Des gouttelettes de vapeur : l’eau.' : '', a('cendre') ? 'Il reste la cendre : la terre.' : '', a('quatre') ? 'Écrit : les quatre éléments des Grecs (terre, eau, air, feu).' : ''].join(' ');
+    case 'dalton': return ['Neuf petites sphères pleines (Dalton).', a('sortes') ? 'Trois sortes, trois couleurs.' : '', a('assemble') ? 'Elles s’assemblent par groupes : la matière.' : ''].join(' ');
+    case 'thomson': return ['Un tube de verre : des particules partent de la plaque −.', a('devie') ? 'Elles sont attirées par la plaque + : elles sont négatives.' : '', a('electron') ? 'Ce sont les électrons (Thomson, 1897).' : '', a('pain') ? 'Le modèle de Thomson : une boule de matière positive…' : '', a('raisins') ? '… avec les électrons dedans, comme des raisins dans un pain.' : ''].join(' ');
+    case 'bohr': return ['Un noyau au centre.', a('orbites') ? 'Deux orbites (cercles) autour.' : '', a('tournent') ? 'Les électrons tournent sur les orbites (Bohr, 1913).' : '', a('planetes') ? 'Comme les planètes autour du Soleil.' : ''].join(' ');
+    case 'nuage': return ['L’atome de Bohr.', a('flou') ? 'Les orbites s’effacent : on ne peut pas savoir où est l’électron.' : '', a('nuage') ? 'Le nuage électronique, bleu, autour du noyau.' : '', a('frise') ? 'La frise des modèles : Grecs, Dalton, Thomson, Rutherford, Bohr, aujourd’hui (nuage).' : ''].join(' ');
+  }
+  return '';
+}
+const S = A.sim({
+  id: 'tc_atome_histoire_' + VUE, titre: 'Histoire du modèle : ' + VUE, vue: VUE, moments: MOMENTS, fin: FIN, graine: 13,
+  motifs: { buche: 'le bois', feu: 'le feu', fumee: 'la fumée : l’air', vapeur: 'la vapeur : l’eau', cendre: 'la cendre : la terre', quatre: 'les quatre éléments',
+    spheres: 'des sphères pleines', sortes: 'plusieurs sortes', assemble: 'elles s’assemblent', tube: 'le tube', devie: 'attirées par le +', electron: 'les électrons', pain: 'la matière positive', raisins: 'les électrons dedans',
+    noyau: 'le noyau', orbites: 'les orbites', tournent: 'les électrons tournent', planetes: 'comme les planètes', flou: 'position inconnue', nuage: 'le nuage électronique', frise: 'la frise', frise_fin: 'tous les modèles' },
+  dessiner: (c, S, sc) => (DESSINS[VUE] || dessinerElements)(c, S, sc),
+  ceQuiSeVoit: voir,
+  texte: 'Aperçu historique : les quatre éléments, Dalton, Thomson et l’électron, Bohr et les orbites, le nuage électronique.',
+});
+// ce qui bouge (flamme, fumée, électrons qui tournent) : redessiné ~20 fois par seconde
+if (VUE !== 'dalton') setInterval(() => { S.scene.sale = true; }, 50);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

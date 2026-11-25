@@ -665,6 +665,14 @@ async def get_2bacpcf(admin: bool = Depends(_verify_admin_token)):
     return {"eleves": bilan()}
 
 
+@router.get("/tcf")
+async def get_tcf(admin: bool = Depends(_verify_admin_token)):
+    """Les élèves du lien du Tronc Commun physique-chimie (/TCF, 25/11/2026) : fiche, temps et progression par cours,
+    réponses dans les cours, les évaluations (chimie, physique) et les lacunes."""
+    from app.api.v1.endpoints.public_tcf import bilan
+    return {"eleves": bilan()}
+
+
 @router.get("/classes")
 async def get_classes(admin: bool = Depends(_verify_admin_token)):
     """Les séances du mode classe (24/11/2026), gardées pour toujours : élèves, réponses corrigées, photos des feuilles."""

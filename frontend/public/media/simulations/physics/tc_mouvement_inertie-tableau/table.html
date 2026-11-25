@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La table à coussin d’air — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La table à coussin d’air et l’autoporteur ; l’éclateur marque un point toutes les τ ; la lecture de l’enregistrement avec une règle ; la vitesse instantanée v_i = M_{i−1}M_{i+1}/(2τ)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * La table à coussin d'air et l'enregistrement (diapos mi_e1_materiel … mi_e6_eleve).
+ * Enregistrement du cours : τ = 20 ms ; deux points voisins à 2 cm (élève : 3 cm). Au tableau, 1 cm = 30 unités.
+ *  ?vue=materiel      : table, autoporteur, soufflerie (coussin d'air), éclateur, générateur d'impulsions, feuille.
+ *                       Moments : table 0,5 ; autoporteur 2 ; soufflerie 3,5 ; eclateur 5,5 ; generateur 7 ; feuille 8,5 ; fin 10,5.
+ *  ?vue=enregistrement: l'autoporteur lancé glisse ; une étincelle toutes les τ marque un point.
+ *                       Moments : lance 0,5 ; points 1 (un point toutes les 0,6 s : M0…M7) ; nommer 6 ; tau 8 ; fin 10.
+ *  ?vue=lire          : la règle ; les 7 intervalles s'allument (2 cm chacun) ; de M1 à M6 on compte 5 intervalles : 5τ.
+ *                       Moments : enreg 0,5 ; regle 2 ; intervalles 3,5 ; egaux 8,2 ; duree 9,5 ; total 13 ; fin 14,5.
+ *  ?vue=instant       : v₃ = M₂M₄/(2τ) = 0,04/0,04 = 1 m/s. Moments : enreg 0,5 ; choisir 2 ; voisins 3,5 ; mesure 5 ;
+ *                       duree 7 ; relation 8,5 ; calcul 10 ; fin 12.
+ *  ?vue=comparer      : v₅ = 1 m/s ; v_m (M1 → M6) = 0,1/0,1 = 1 m/s ; la vitesse est constante.
+ *                       Moments : enreg 0,5 ; v5 2 ; calcul5 4 ; vm 6 ; calculm 8 ; conclusion 10 ; fin 12.
+ *  ?vue=eleve         : (exercice) points à 3 cm, τ = 20 ms ; v₄ = M₃M₅/(2τ) = 0,06/0,04 = 1,5 m/s.
+ *                       Moments : enreg 0,5 ; choisir 2,5 ; mesure 4 ; duree 5,5 ; calcul 7 ; fin 9.
+ */
+const { P, lueur, panneau, vecteur, HEX } = window.Mvt;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const CM = 30;
+
+/** L'enregistrement au tableau : n points espacés de `pas` cm à partir de x0 ; renvoie X(i). */
+function enreg(c, sc, x0, y, n, pas, o = {}) {
+  const X = i => x0 + i * pas * CM, pt = sc.petit;
+  c.ligne(X(0) - 20, y, X(n - 1) + 30, y, { couleur: 'tresfaible', largeur: 1, duree: .05 });
+  for (let i = 0; i < n; i++) {
+    c.direct(() => P.point(c.ctx, X(i), y, 5.5));
+    if (!(pt && o.peu && i % 2)) c.texte('M_' + i, X(i), y - (pt ? 22 : 18), { couleur: 'blanc', taille: pt ? 26 : 18, align: 'center', duree: .04 });
+    c.repere('M' + i, X(i) - 12, y - 12, 24, 24, 'le point M' + i);
+  }
+  c.repere('enregistrement', X(0) - 14, y - 40, X(n - 1) - X(0) + 28, 56, 'l’enregistrement');
+  return X;
+}
+function intervalle(c, X, i, y, vive, num, pt) { lueur(c, X(i) + 7, y - 9, X(i + 1) - X(i) - 14, 18, { vive, numero: num, nx: (X(i) + X(i + 1)) / 2, ny: y + (pt ? 38 : 32), align: 'center', taille: pt ? 28 : 19 }); }
+
+/* ── vue matériel ── */
+const MMa = { table: .5, autoporteur: 2, soufflerie: 3.5, eclateur: 5.5, generateur: 7, feuille: 8.5 };
+function dessinerMateriel(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, tx = 30, ty = 60, tw = 420, th = 260;
+  c.direct(() => P.table(c.ctx, tx, ty, tw, th, { feuille: S.t <= 0 || S.a('feuille') }));
+  c.repere('table', tx, ty, tw, th, 'la table à coussin d’air, horizontale');
+  const A = [tx + 150, ty + 140];
+  if (S.t <= 0 || S.a('autoporteur')) { c.direct(() => P.autoporteur(c.ctx, A[0], A[1], 38)); c.repere('autoporteur', A[0] - 38, A[1] - 38, 76, 76, 'l’autoporteur'); }
+  const ts = pt ? 28 : 20, lab = (m, txt, x, y, ax, ay, coul) => { if (S.t <= 0 || S.ecrit(c, m)) { c.texte(txt, x, y, { couleur: coul, taille: ts, gras: true }); if (ax != null) c.fleche(x - 6, y - 8, ax, ay, { couleur: coul, largeur: 1.8 }); } };
+  // la soufflerie : un boîtier relié par un tuyau ; l'air passe sous l'autoporteur (encart de côté)
+  const bx = L - 250, by = 70;
+  if (S.t <= 0 || S.a('soufflerie')) {
+    c.direct(() => { const g = c.ctx; P.ombre(g, () => { const gr = g.createLinearGradient(bx, by, bx, by + 70); gr.addColorStop(0, '#64748b'); gr.addColorStop(1, '#1e293b'); g.fillStyle = gr; g.beginPath(); g.roundRect(bx, by, 110, 70, 8); g.fill(); }); g.fillStyle = '#0f172a'; for (let k = 0; k < 5; k++) g.fillRect(bx + 12 + k * 18, by + 18, 10, 34); g.strokeStyle = '#94a3b8'; g.lineWidth = 6; g.beginPath(); g.moveTo(bx, by + 40); g.quadraticCurveTo(bx - 80, by + 60, A[0] + 30, A[1] - 30); g.stroke(); });
+    c.texte('soufflerie', bx + 55, by + 98, { couleur: 'cyan', taille: ts, gras: true, align: 'center' });
+    c.repere('soufflerie', bx, by, 110, 100, 'la soufflerie : elle envoie l’air');
+    // encart : l'autoporteur de côté sur son coussin d'air
+    const ix = L - 250, iy = 290; c.direct(() => { P.sol(c.ctx, ix - 40, iy, 200, 10, {}); P.autoporteurCote(c.ctx, ix + 60, iy, 90, 70); });
+    const k = (t * 3) % 1; for (let j = 0; j < 4; j++) c.direct(() => { const g = c.ctx; g.strokeStyle = 'rgba(125,211,252,.8)'; g.lineWidth = 1.5; const xx = ix + 20 + j * 26 + k * 8; g.beginPath(); g.moveTo(xx, iy - 3); g.lineTo(xx + 10, iy - 3); g.stroke(); });
+    c.texte('coussin d’air', ix + 60, iy + 36, { couleur: 'cyan', taille: pt ? 26 : 18, align: 'center' });
+    c.repere('coussin', ix - 10, iy - 90, 150, 130, 'le coussin d’air sous l’autoporteur : pas de frottement');
+  }
+  lab('eclateur', 'éclateur', A[0] - 140, A[1] + 70, A[0] - 6, A[1] + 6, 'rouge');
+  if (S.t <= 0 || S.a('eclateur')) c.repere('eclateur', A[0] - 10, A[1] - 10, 20, 20, 'l’éclateur central, au centre de l’autoporteur');
+  if (S.t <= 0 || S.a('generateur')) {
+    const gx = tx + 10, gy = ty + th + 20;
+    c.direct(() => { const g = c.ctx; P.ombre(g, () => { g.fillStyle = '#334155'; g.beginPath(); g.roundRect(gx, gy, 120, 56, 6); g.fill(); }); g.fillStyle = '#0b1220'; g.fillRect(gx + 10, gy + 12, 54, 24); g.fillStyle = '#7dfc8a'; g.font = '700 14px monospace'; g.fillText('20 ms', gx + 14, gy + 29); P.boule(g, gx + 92, gy + 24, 10, '#e2e8f0', '#64748b', '#1e293b'); g.strokeStyle = '#ef4444'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(gx + 120, gy + 28); g.quadraticCurveTo(A[0] + 60, gy - 10, A[0] + 8, A[1] - 40); g.stroke(); });
+    c.texte(pt ? 'générateur' : 'générateur d’impulsions : τ = 20 ms', gx + 134, gy + 36, { couleur: 'orange', taille: ts, gras: true });
+    c.repere('generateur', gx, gy, 120, 56, 'le générateur d’impulsions : une étincelle toutes les τ');
+  }
+  if (S.ecrit(c, 'feuille') || S.t <= 0) { c.texte('feuille', tx + tw - 90, ty + 40, { couleur: 'jaune', taille: ts, gras: true }); c.repere('feuille', tx + 30, ty + 30, tw - 60, th - 60, 'la feuille d’enregistrement'); }
+}
+
+/* ── vue enregistrement ── */
+const ME = { lance: .5, points: 1, nommer: 6, tau: 8 };
+function dessinerEnreg(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, tx = 10, ty = 40, tw = L - 20, th = 330, y = ty + th / 2, x0 = 70, dx = 2 * CM * 1.45;
+  c.direct(() => P.table(c.ctx, tx, ty, tw, th, { feuille: true }));
+  c.repere('table', tx, ty, tw, th, 'la table et sa feuille');
+  const k = (t - ME.points) / .6;   // nombre d'intervalles parcourus
+  const xa = x0 + clamp(k, -.4, 7.3) * dx;
+  const n = Math.max(0, Math.min(7, Math.floor(k + 1e-6)));
+  for (let i = 0; i <= n && k >= 0; i++) { const xi = x0 + i * dx; c.direct(() => P.point(c.ctx, xi, y, 5.5)); }
+  if (k >= 0 && k <= 7.3) { const f = k - Math.floor(k); if (f < .25) c.direct(() => P.etincelle(c.ctx, x0 + Math.floor(k) * dx, y, 18, 1 - f * 4)); }
+  c.direct(() => P.autoporteur(c.ctx, xa, y, 44, { alpha: k > 7.3 ? .35 : 1 }));
+  c.repere('autoporteur', xa - 44, y - 44, 88, 88, 'l’autoporteur');
+  if (S.t <= 0 || S.a('nommer')) for (let i = 0; i <= 7; i++) { if (S.t > 0 && t < ME.nommer + i * .2) break; c.texte('M_' + i, x0 + i * dx, y - 26, { couleur: '#1f2937', taille: pt ? 26 : 19, gras: true, align: 'center', duree: .04 }); c.repere('M' + i, x0 + i * dx - 12, y - 12, 24, 24, 'le point M' + i); }
+  if (S.t <= 0 || S.ecrit(c, 'tau')) {
+    const a = x0 + 3 * dx, b = x0 + 4 * dx;
+    c.direct(() => { const g = c.ctx; g.strokeStyle = '#b91c1c'; g.lineWidth = 2.4; g.beginPath(); g.moveTo(a, y + 26); g.lineTo(b, y + 26); g.stroke(); g.fillStyle = '#b91c1c'; g.font = `700 ${pt ? 28 : 22}px 'Patrick Hand', cursive`; g.textAlign = 'center'; g.fillText('τ = 20 ms', (a + b) / 2, y + 56); });
+    c.repere('tau', a, y + 14, b - a, 50, 'τ : la durée entre deux points voisins');
+  }
+}
+
+/* ── vue lire ── */
+const ML = { enreg: .5, regle: 2, intervalles: 3.5, egaux: 8.2, duree: 9.5, total: 13 };
+function dessinerLire(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, y = pt ? 160 : 150, x0 = 40;
+  const X = enreg(c, sc, x0, y, 8, 2);
+  if (S.t <= 0 || S.a('regle')) c.direct(() => P.regle(c.ctx, x0, y + 50, 14, CM, { h: 30 }));
+  if (S.t <= 0 || S.a('regle')) c.repere('regle', x0, y + 50, 14 * CM, 30, 'la règle graduée en cm');
+  if (S.a('intervalles') && S.t > 0 && !S.a('duree')) for (let i = 0; i < 7; i++) if (t >= ML.intervalles + i * .6) intervalle(c, X, i, y, t < ML.intervalles + (i + 1) * .6, i + 1, pt);
+  if (S.t <= 0 || S.ecrit(c, 'egaux')) c.repere('egaux', X(0), y - 20, X(7) - X(0), 40, 'des distances égales : 2 cm');
+  if (S.a('duree') && S.t > 0) for (let i = 1; i < 6; i++) if (t >= ML.duree + (i - 1) * .6) intervalle(c, X, i, y, t < ML.duree + i * .6, i, pt);
+  if (S.t <= 0 || S.a('duree')) c.repere('duree', X(1), y - 20, X(6) - X(1), 40, 'de M1 à M6 : cinq intervalles');
+  panneau(c, S, sc, 500, 250, L - 510, [
+    { m: 'egaux', t: 'M_iM_{i+1} = 2 cm (égales)', c: 'jaune' },
+    { m: 'duree', t: 'de M_1 à M_6 : 5 intervalles', c: 'blanc' },
+    { m: 'total', t: 'Δt = 5τ = 5 × 20 = 100 ms', c: 'vert', g: true, r: 'total' },
+  ], { dy: 44, px: 30, py: 300, pw: L - 60, taille: 20 });
+  if (!pt) c.texte('τ = 20 ms', L - 20, 50, { couleur: 'orange', taille: 22, gras: true, align: 'right' });
+}
+
+/* ── vues instant, comparer, élève : la méthode v_i = M_{i−1}M_{i+1}/(2τ) ── */
+function methode(c, S, sc, o) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, y = 120, x0 = 40;
+  const X = enreg(c, sc, x0, y, o.n, o.pas, { peu: o.pas < 3 });
+  if (!pt) c.texte(o.donnees, L - 20, 50, { couleur: 'orange', taille: 20, gras: true, align: 'right' });
+  else c.texte(o.donneesCourt, L - 20, 46, { couleur: 'orange', taille: 26, gras: true, align: 'right' });
+  const i = o.i;
+  if (S.t <= 0 || S.a(o.m.choisir)) { lueur(c, X(i) - 14, y - 14, 28, 28, { vive: true }); }
+  if (S.t <= 0 || S.a(o.m.voisins || o.m.mesure)) { lueur(c, X(i - 1) - 12, y - 12, 24, 24, { couleur: '74, 222, 128' }); lueur(c, X(i + 1) - 12, y - 12, 24, 24, { couleur: '74, 222, 128' }); }
+  if ((S.t <= 0 || S.a(o.m.mesure)) && S.conclusions) {
+    c.direct(() => P.regle(c.ctx, X(i - 1), y + 42, 2 * o.pas, CM, { h: 28 }));
+    c.cote(X(i - 1), y + 26, X(i + 1), y + 26, '', { couleur: 'jaune' });
+    c.texte(o.mesureTxt, (X(i - 1) + X(i + 1)) / 2, y + 102, { couleur: 'jaune', taille: pt ? 28 : 21, gras: true, align: 'center' });
+    c.repere('mesure', X(i - 1), y + 20, X(i + 1) - X(i - 1), 90, o.mesureTxt);
+  }
+  if ((S.t <= 0 || S.a(o.m.duree)) && S.t > 0 && !S.a(o.m.relation)) for (let k = 0; k < 2; k++) if (t >= (S.vu && 0, 0) + 0 && t >= o.tDuree + k * .6) intervalle(c, X, i - 1 + k, y, t < o.tDuree + (k + 1) * .6, k + 1, pt);
+  if (S.t <= 0 || S.a(o.m.duree)) c.repere('duree', X(i - 1), y - 16, X(i + 1) - X(i - 1), 32, 'deux intervalles : 2τ = 40 ms');
+}
+const MI = { enreg: .5, choisir: 2, voisins: 3.5, mesure: 5, duree: 7, relation: 8.5, calcul: 10 };
+function dessinerInstant(c, S, sc) {
+  methode(c, S, sc, { n: 8, pas: 2, i: 3, m: MI_m, tDuree: MI.duree, mesureTxt: 'M₂M₄ = 4 cm = 0,04 m', donnees: 'τ = 20 ms', donneesCourt: 'τ = 20 ms' });
+  panneau(c, S, sc, 420, 270, sc.L - 430, [
+    { m: 'duree', t: '2τ = 40 ms = 0,04 s', c: 'blanc' },
+    { m: 'relation', t: 'v_i = ⟦M_{i−1}M_{i+1}|2τ⟧', c: 'blanc', g: true, r: 'relation' },
+    { m: 'calcul', t: 'v_3 = ⟦0,04|0,04⟧ = 1 m/s', c: 'vert', g: true, r: 'calcul' },
+  ], { dy: 46, px: 30, py: 300, pw: sc.L - 60, taille: 21 });
+  if (!sc.petit) panneau(c, S, sc, 40, 270, 360, [{ m: 'choisir', t: '1) le point M_3', c: 'jaune' }, { m: 'voisins', t: '2) ses voisins M_2 et M_4', c: 'vert' }], { dy: 40, taille: 19 });
+}
+const MI_m = { choisir: 'choisir', voisins: 'voisins', mesure: 'mesure', duree: 'duree', relation: 'relation' };
+const MCo = { enreg: .5, v5: 2, calcul5: 4, vm: 6, calculm: 8, conclusion: 10 };
+function dessinerComparer(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, y = 120, x0 = 40;
+  const X = enreg(c, sc, x0, y, 8, 2, { peu: true });
+  if (!pt) c.texte('τ = 20 ms', L - 20, 50, { couleur: 'orange', taille: 20, gras: true, align: 'right' });
+  if ((S.t <= 0 || S.a('v5')) && !S.a('vm')) { lueur(c, X(5) - 14, y - 14, 28, 28, { vive: true }); c.cote(X(4), y + 26, X(6), y + 26, '', { couleur: 'jaune' }); c.repere('v5', X(4), y - 14, X(6) - X(4), 60, 'M4M6 = 4 cm'); }
+  if (S.a('vm') && S.t > 0) { lueur(c, X(1) - 12, y - 12, 24, 24, { vive: true }); lueur(c, X(6) - 12, y - 12, 24, 24, { vive: true }); c.cote(X(1), y + 30, X(6), y + 30, '', { couleur: 'cyan' }); c.repere('vm', X(1), y - 14, X(6) - X(1), 60, 'de M1 à M6 : 10 cm en 5τ'); }
+  if (S.t <= 0) c.repere('vm', X(1), y - 14, X(6) - X(1), 60, 'de M1 à M6 : 10 cm en 5τ');
+  panneau(c, S, sc, 40, 210, L - 60, [
+    { m: 'v5', t: 'v_5 = ⟦M_4M_6|2τ⟧', c: 'blanc' },
+    { m: 'calcul5', t: 'v_5 = ⟦0,04|0,04⟧ = 1 m/s', c: 'vert', g: true },
+    { m: 'vm', t: 'v_m = ⟦M_1M_6|5τ⟧ = ⟦0,10|0,10⟧ = 1 m/s', c: 'cyan', g: true },
+    { m: 'conclusion', t: 'v_3 = v_5 = v_m : la vitesse est constante', c: 'jaune', g: true, r: 'conclusion', conclusion: true },
+  ], { dy: 48, px: 30, py: 280, pw: L - 60, taille: 21 });
+}
+const MEl = { enreg: .5, choisir: 2.5, mesure: 4, duree: 5.5, calcul: 7 };
+function dessinerEleve(c, S, sc) {
+  methode(c, S, sc, { n: 6, pas: 3, i: 4, m: { choisir: 'choisir', mesure: 'mesure', duree: 'duree', relation: 'calcul' }, tDuree: MEl.duree, mesureTxt: 'M₃M₅ = 6 cm = 0,06 m', donnees: 'τ = 20 ms · M_iM_{i+1} = 3 cm', donneesCourt: '3 cm · 20 ms' });
+  panneau(c, S, sc, 420, 290, sc.L - 430, [
+    { m: 'duree', t: '2τ = 0,04 s', c: 'blanc', conclusion: true },
+    { m: 'calcul', t: 'v_4 = ⟦0,06|0,04⟧ = 1,5 m/s', c: 'vert', g: true, r: 'calcul', conclusion: true },
+  ], { dy: 50, px: 30, py: 300, pw: sc.L - 60, taille: 22 });
+}
+
+window.Mvt.vues('tc_mi_table', {
+  materiel: { titre: 'La table à coussin d’air', moments: MMa, fin: 10.5, dessiner: dessinerMateriel,
+    motifs: { table: 'la table', autoporteur: 'l’autoporteur', soufflerie: 'la soufflerie et le coussin d’air', eclateur: 'l’éclateur', generateur: 'le générateur d’impulsions', feuille: 'la feuille' },
+    accueil: 'Le matériel de l’enregistrement.', fini: 'Table horizontale, autoporteur sur coussin d’air, éclateur, générateur (τ), feuille.',
+    voir: S => ['Une table à coussin d’air vue de dessus.', S.a('autoporteur') && 'Un autoporteur (disque métallique) sur la table.', S.a('soufflerie') && 'La soufflerie envoie l’air ; encart : l’air passe sous l’autoporteur (coussin d’air).', S.a('eclateur') && 'L’éclateur central au centre de l’autoporteur.', S.a('generateur') && 'Générateur d’impulsions réglé sur 20 ms.', S.a('feuille') && 'La feuille d’enregistrement sur la table.'].filter(Boolean).join(' '),
+    texte: 'Matériel : table horizontale, autoporteur sur coussin d’air (pas de frottement), éclateur central, générateur d’impulsions (une étincelle toutes les τ = 20 ms), feuille d’enregistrement.' },
+  enregistrement: { titre: 'L’enregistrement', moments: ME, fin: 10, dessiner: dessinerEnreg,
+    motifs: { lance: 'on lance l’autoporteur', points: 'une étincelle toutes les τ', nommer: 'M0 à M7', tau: 'τ = 20 ms' },
+    accueil: 'On lance l’autoporteur.', fini: 'Un point toutes les τ = 20 ms : M0 … M7.',
+    voir: S => ['La table et sa feuille.', S.a('points') && 'L’autoporteur glisse vers la droite ; une étincelle marque un point toutes les τ.', S.a('nommer') && 'Points nommés M0 à M7.', S.a('tau') && 'Entre M3 et M4 : τ = 20 ms.'].filter(Boolean).join(' '),
+    texte: 'L’éclateur marque un point toutes les τ = 20 ms : l’enregistrement M0, M1 … M7.' },
+  lire: { titre: 'Lire un enregistrement', moments: ML, fin: 14.5, dessiner: dessinerLire,
+    motifs: { enreg: 'l’enregistrement', regle: 'la règle', intervalles: 'les intervalles', egaux: '2 cm chacun', duree: 'de M1 à M6', total: 'Δt = 5τ' },
+    accueil: 'L’enregistrement et une règle.', fini: 'Distances égales de 2 cm ; de M1 à M6 : 5τ = 100 ms.',
+    voir: S => ['Points M0 à M7 au tableau.', S.a('regle') && 'Une règle graduée en cm sous les points.', S.a('intervalles') && 'Les sept intervalles s’allument un à un : 2 cm chacun.', S.a('duree') && 'De M1 à M6 : cinq intervalles allumés.', S.a('total') && 'Δt = 5τ = 100 ms.'].filter(Boolean).join(' '),
+    texte: 'Deux points voisins : τ = 20 ms ; ici 2 cm entre deux points. De M1 à M6 : 5 intervalles, Δt = 5τ = 100 ms.' },
+  instant: { titre: 'La vitesse instantanée', moments: MI, fin: 12, dessiner: dessinerInstant,
+    motifs: { enreg: 'l’enregistrement', choisir: 'le point M3', voisins: 'M2 et M4', mesure: 'M2M4 = 4 cm', duree: '2τ', relation: 'la relation', calcul: 'v3 = 1 m/s' },
+    accueil: 'Quelle est la vitesse en M3 ?', fini: 'v3 = M2M4/(2τ) = 0,04/0,04 = 1 m/s.',
+    voir: S => ['Enregistrement M0 à M7, τ = 20 ms.', S.a('choisir') && 'M3 allumé.', S.a('voisins') && 'M2 et M4 allumés en vert.', S.a('mesure') && 'Règle : M2M4 = 4 cm.', S.a('duree') && 'Deux intervalles comptés : 2τ = 40 ms.', S.a('relation') && 'v_i = M_{i−1}M_{i+1}/(2τ).', S.a('calcul') && 'v3 = 0,04/0,04 = 1 m/s.'].filter(Boolean).join(' '),
+    texte: 'v_i = M_{i−1}M_{i+1}/(2τ). En M3 : M2M4 = 4 cm, 2τ = 40 ms : v3 = 1 m/s.' },
+  comparer: { titre: 'Comparer les vitesses', moments: MCo, fin: 12, dessiner: dessinerComparer,
+    motifs: { enreg: 'l’enregistrement', v5: 'v5', calcul5: 'v5 = 1 m/s', vm: 'la vitesse moyenne', calculm: 'v_m = 1 m/s', conclusion: 'la vitesse est constante' },
+    accueil: 'v5 et la vitesse moyenne.', fini: 'v3 = v5 = v_m = 1 m/s : vitesse constante.',
+    voir: S => ['Enregistrement M0 à M7.', S.a('v5') && 'M5 allumé, M4M6 = 4 cm.', S.a('calcul5') && 'v5 = 1 m/s.', S.a('vm') && 'De M1 à M6 : 10 cm en 5τ.', S.a('calculm') && 'v_m = 1 m/s.', S.a('conclusion') && 'La vitesse est constante.'].filter(Boolean).join(' '),
+    texte: 'v5 = M4M6/(2τ) = 1 m/s ; v_m (M1 → M6) = 0,10/0,10 = 1 m/s : la vitesse est constante.' },
+  eleve: { titre: 'À toi : une vitesse instantanée', moments: MEl, fin: 9, dessiner: dessinerEleve,
+    motifs: { enreg: 'l’enregistrement', choisir: 'le point M4', mesure: 'M3M5', duree: '2τ', calcul: 'v4' },
+    accueil: 'Points à 3 cm, τ = 20 ms : v4 ?', fini: 'v4 = 0,06/0,04 = 1,5 m/s.',
+    voir: S => ['Enregistrement M0 à M5, points à 3 cm, τ = 20 ms.', S.a('choisir') && 'M4 allumé.', S.a('mesure') && S.conclusions && 'M3M5 = 6 cm.', S.a('duree') && '2τ = 40 ms.', S.a('calcul') && S.conclusions && 'v4 = 1,5 m/s.'].filter(Boolean).join(' '),
+    texte: 'Enregistrement : points à 3 cm, τ = 20 ms. v4 = M3M5/(2τ) = 0,06/0,04 = 1,5 m/s.' },
+});
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
