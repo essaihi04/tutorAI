@@ -570,16 +570,27 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     rejeux.length > 0 && commandeReservee(commande, parametres, momentsReserves(slide, rejeuxFaits.current)), [rejeux, slide]);
 
   /** L'instant d'un mot : sa place dans le texte parlé, rapportée à la durée de la piste. */
+  // (25/11/2026, « il explique quelque chose alors que la diapo l'a déjà montré ») Avec les repères de la piste
+  // (`audio.mixed.reperes`, où la voix dit vraiment chaque phrase), l'instant d'un mot est interpolé entre les deux
+  // repères qui l'entourent, et la diapo ne prend plus que 0,15 s (0,4 s pour une commande) d'avance. Sans repères :
+  // la règle de trois d'avant (place dans le texte × durée), qui avançait de 1,5 à 2 s sur la darija mêlée de français.
+  const reperes = !lectureMuette && pisteEnregistree?.reperes && pisteEnregistree.reperes.length >= 2 ? pisteEnregistree.reperes : null;
   const instant = useCallback((mot: string) => {
     const i = parole.indexOf(mot);
     if (i < 0 || !duree) return 0;
+    if (reperes) {
+      const k = Math.max(0, reperes.findIndex((_, j) => j === reperes.length - 1 || reperes[j + 1][0] > i));
+      const [c0, s0] = reperes[k], [c1, s1] = reperes[Math.min(k + 1, reperes.length - 1)];
+      const s = c1 > c0 ? s0 + ((i - c0) / (c1 - c0)) * (s1 - s0) : s0;
+      return Math.max(0, Math.min(s, duree) - 0.15);
+    }
     return Math.max(0, (i / Math.max(1, parole.length)) * duree - 0.3);
-  }, [parole, duree]);
+  }, [parole, duree, reperes]);
 
   const pointage = useMemo(
     // Une commande part un peu avant le mot : le temps que la main du tuteur atteigne le bouton.
-    () => (conc.pointage || []).map(p => ({ ...p, t: Math.max(0, instant(p.mot) - (p.commande ? AVANCE_COMMANDE : 0)) })),
-    [conc.pointage, instant],
+    () => (conc.pointage || []).map(p => ({ ...p, t: Math.max(0, instant(p.mot) - (p.commande ? (reperes ? 0.25 : AVANCE_COMMANDE) : 0)) })),
+    [conc.pointage, instant, reperes],
   );
   const centre = useMemo(
     () => (conc.centre || []).map(c => ({ ...c, t: instant(c.mot) })),

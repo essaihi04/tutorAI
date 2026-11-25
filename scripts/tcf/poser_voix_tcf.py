@@ -91,6 +91,9 @@ def main():
         subprocess.run([sys.executable, '-X', 'utf8', os.path.join(R, 'scripts', 'brancher_voix_edaph.py'), PUBLIC,
                         '--cours', os.path.join(COURS, deck + '.json'), '--voix', os.path.join(COURS, deck + '_voix.json')],
                        check=True)
+        # repères de synchronisation voix ↔ diapo d'après les pauses des pistes (25/11/2026)
+        subprocess.run([sys.executable, '-X', 'utf8', os.path.join(R, 'scripts', 'reperes_voix.py'), PUBLIC,
+                        os.path.join(COURS, deck + '.json')], check=True)
 
 
 if __name__ == '__main__':

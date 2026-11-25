@@ -263,6 +263,9 @@ export interface PublishedSlideAudio {
   version?: number;
   speech_hash?: string;
   status?: string;
+  /** (25/11/2026) [caractère du texte parlé, seconde de la piste] : où la voix dit vraiment chaque phrase
+   *  (`scripts/reperes_voix.py`, d'après les pauses de la piste). Le lecteur interpole entre deux repères. */
+  reperes?: [number, number][];
 }
 
 export interface CourseSlide {
