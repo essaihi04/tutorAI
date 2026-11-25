@@ -26,7 +26,7 @@ ACTIVITES = [
      'mixed': 'علاش G كيبقى ف mouvement rectiligne uniforme؟ ندرسو les forces. le système: l’autoporteur. عليه le poids P، ف G، نحو التحت. و la réaction R ديال la table، نحو الفوق، عمودية حيت ما كاينش le frottement. P و R عندهم نفس la droite، sens متعاكسين، ونفس l’intensité: se compensent. vecteur P plus vecteur R égale vecteur nul. كنقولو بلي l’autoporteur pseudo-isolé.',
      'pointage': [('le système: l’autoporteur', 'm:systeme'), ('عليه le poids P', 'm:P'), ('و la réaction R', 'm:R'), ('se compensent. vecteur P', 'm:compense'), ('l’autoporteur pseudo-isolé', 'm:pseudo')],
      'centre': [('P⃗ + R⃗ = 0⃗', 'vecteur P plus vecteur R'), ('Système pseudo-isolé', 'l’autoporteur pseudo-isolé')],
-     'cahier': 'Sur la table horizontale : P⃗ + R⃗ = 0⃗, l’autoporteur est pseudo-isolé.'},
+     'cahier': 'Sur la table horizontale : P⃗ + R⃗ = 0⃗.\nDonc l’autoporteur est pseudo-isolé.'},
 
     {'id': 'mi_i7_isole', 'titre': 'Isolé ou pseudo-isolé', 'lead': 'Aucune force, ou des forces qui se compensent.',
      'vue': 'inertie.html?vue=isole', 'demarrer': 'reset', 'comp': ['C8'],
@@ -34,7 +34,7 @@ ACTIVITES = [
      'mixed': 'كاين deux cas. système isolé: ما عليه حتى شي force، بحال واحد la sonde بعيدة بزاف على كلشي. هادا ما كاينش فالواقع. système pseudo-isolé: عليه des forces، ولكن se compensent: la somme des forces égale vecteur nul، بحال l’autoporteur.',
      'pointage': [('بحال واحد la sonde', 'm:sonde'), ('هادا ما كاينش', 'm:isole'), ('système pseudo-isolé', 'm:autoporteur'), ('la somme des forces', 'm:pseudo')],
      'centre': [('Isolé : aucune force', 'système isolé'), ('Pseudo-isolé : ΣF⃗ = 0⃗', 'la somme des forces')],
-     'cahier': 'Définition : isolé : aucune force ; pseudo-isolé : ΣF⃗ = 0⃗ (les forces se compensent).'},
+     'cahier': 'Définition : isolé : soumis à aucune force.\nDéfinition : pseudo-isolé : ΣF⃗ = 0⃗ (les forces se compensent).'},
 
     {'id': 'mi_i8_enonce', 'titre': 'Le principe d’inertie', 'lead': 'Au repos ou en MRU : v⃗_G constant.',
      'vue': 'inertie.html?vue=enonce', 'demarrer': 'reset', 'comp': ['C8'],
@@ -57,7 +57,7 @@ ACTIVITES = [
      'mixed': 'le référentiel galiléen هو le référentiel اللي فيه le principe d’inertie صحيح. le référentiel terrestre galiléen. شوف هاد la boule معلقة ف le bus. ملي le bus كيمشي ف mouvement rectiligne uniforme، الخيط كيبقى عمودي: la boule au repos ف le bus. إذن le bus حتى هو galiléen. ولكن ملي le bus كيحبس بالزربة، la boule كتمشي للقدام، بلا ما يدفعها حتى واحد. le bus اللي كيحبس ماشي galiléen.',
      'pointage': [('ف mouvement rectiligne uniforme، الخيط', 'm:mru'), ('كيحبس بالزربة', 'm:freine'), ('ماشي galiléen', 'm:conclusion')],
      'centre': [('Galiléen : terrestre, et tout référentiel en MRU par rapport à lui', 'le bus حتى هو galiléen')],
-     'cahier': 'Référentiel galiléen : le principe d’inertie y est vérifié (terrestre ; tout référentiel en MRU par rapport à lui).'},
+     'cahier': 'Définition : un référentiel galiléen est un référentiel où le principe d’inertie est vérifié.\nExemple : le référentiel terrestre, et tout référentiel en MRU par rapport à lui.'},
 
     {'id': 'mi_i10_grue', 'titre': 'Méthode : appliquer le principe d’inertie', 'lead': 'La grue monte un bloc de 1 500 kg à vitesse constante.',
      'vue': 'grue.html?vue=methode', 'demarrer': 'reset', 'comp': ['C8'],
@@ -95,7 +95,7 @@ ACTIVITES = [
      'mixed': 'دابا le centre de masse. هادا un haltère: deux masses متساويين ف A un و A deux. le centre de masse C هو النقطة اللي: m un fois vecteur CA un، plus m deux fois vecteur CA deux، égale vecteur nul. حيت les masses متساويين: vecteur CA un plus vecteur CA deux égale vecteur nul، إذن C فالوسط ديال A un A deux. يلا حطيتي l’haltère على الصبع ديالك ف C، كيبقى متوازن. ف un solide homogène، le centre de masse و le centre d’inertie G هوما نفس النقطة.',
      'pointage': [('هادا un haltère', 'm:haltere'), ('deux masses متساويين ف A un', 'm:masses'), ('le centre de masse C', 'm:C'), ('vecteur CA un plus vecteur CA deux', 'm:vecteurs'), ('على الصبع ديالك', 'm:equilibre')],
      'centre': [('m₁·CA⃗₁ + m₂·CA⃗₂ = 0⃗', 'm un fois vecteur CA un'), ('m₁ = m₂ : C au milieu', 'إذن C فالوسط')],
-     'cahier': 'Centre de masse : Σ m_i·CA⃗_i = 0⃗ ; deux masses égales : C au milieu ; homogène : C et G confondus.'},
+     'cahier': 'Définition : le centre de masse C vérifie Σ m_i·CA⃗_i = 0⃗.\nExemple : deux masses égales : C est au milieu.\nRemarque : solide homogène : C et G sont confondus.'},
 
     {'id': 'mi_g2_relation', 'titre': 'La relation barycentrique', 'lead': 'OG⃗ = (m₁·OG⃗₁ + m₂·OG⃗₂)/(m₁ + m₂).',
      'vue': 'masse.html?vue=relation', 'demarrer': 'reset', 'comp': ['C9'],
@@ -165,6 +165,6 @@ ACTIVITES = [
      'mixed': 'وصلنا للخر ديال الدرس: le mouvement et le principe d’inertie. شنو خاصك تحفظ؟ ثلاثة ديال الأفكار. اللولة: le mouvement est relatif، و اللول كنختارو le référentiel. الثانية: ف le mouvement rectiligne uniforme، x de t égale v x fois t plus x zéro. الثالثة: le principe d’inertie: solide pseudo-isolé، le centre d’inertie ديالو au repos ولا ف mouvement rectiligne uniforme. دابا، كيفاش تراجع؟ عاود قرا الدفتر ديالك، وعاود دير الحسابات بوحدك. ف أي حساب، كتب la relation، من بعد l’application numérique، من بعد le résultat مع l’unité، حيت كل وحدة عندها النقطة ديالها. ونهار الفرض، قسم الوقت ديالك، وبدا بالسؤال اللي ساهل عليك. وقبل الفرض، ترتاح مزيان فالليل. كتب هادشي ف الدفتر ديالك. راك خدمتي مزيان، الله يعاونك!',
      'centre': [('Retenir : référentiel · x(t) = v_x·t + x₀ · principe d’inertie', 'ثلاثة ديال الأفكار'), ('Réviser : relire le cahier, refaire les calculs seul', 'عاود قرا'),
                 ('Rédiger : relation → A.N. → résultat avec l’unité', 'ف أي حساب'), ('Jour J : gérer son temps · bien dormir la veille', 'نهار الفرض')],
-     'cahier': 'Pour réviser : relire le cahier ; refaire seul les calculs ; rédiger : relation → application numérique → résultat avec son unité ; le jour du contrôle, partager son temps.'},
+     'cahier': 'Méthode : 1) relire le cahier 2) refaire seul les calculs 3) rédiger : relation → application numérique → résultat avec son unité 4) le jour du contrôle, partager son temps'},
   ]},
 ]

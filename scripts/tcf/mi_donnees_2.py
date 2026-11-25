@@ -12,7 +12,7 @@ ACTIVITES = [
      'pointage': [('هاد la voiture كتمشي', 'm:depart'), ('شوف: قطعت', 'm:trajet'), ('une distance d égale', 'm:d'), ('une durée delta t', 'm:dt'),
                   ('v m égale d sur delta t', 'm:relation'), ('يعني trois cents sur soixante', 'm:calcul')],
      'centre': [('v_m = d/Δt   (m/s)', 'v m égale d sur delta t'), ('v_m = 300/60 = 5 m/s', 'يعني trois cents sur soixante')],
-     'cahier': 'Formule : v_m = d/Δt (d en m, Δt en s, v_m en m/s) ; trajectoire courbe : d = longueur de l’arc.'},
+     'cahier': 'Formule : v_m = d/Δt (d en m, Δt en s, v_m en m/s)\nRemarque : trajectoire courbe : d est la longueur de l’arc.'},
 
     {'id': 'mi_v2_unites', 'titre': 'Convertir m/s et km/h', 'lead': '1 m/s = 3,6 km/h.',
      'vue': 'vitesse.html?vue=conversion', 'demarrer': 'reset', 'comp': ['C5'],
@@ -21,7 +21,7 @@ ACTIVITES = [
      'pointage': [('ف une seconde', 'm:seconde'), ('ف une heure', 'm:heure'), ('يعني trois virgule six kilomètres', 'm:km'), ('un mètre par seconde égale trois virgule six', 'm:egal'),
                   ('la méthode', 'm:fleches'), ('مثلا cinq mètres par seconde', 'm:exemple')],
      'centre': [('1 m/s = 3,6 km/h', 'un mètre par seconde égale trois virgule six'), ('m/s → km/h : × 3,6 · km/h → m/s : ÷ 3,6', 'la méthode')],
-     'cahier': 'Méthode : 1 m/s = 3,6 km/h ; m/s → km/h : × 3,6 ; km/h → m/s : ÷ 3,6.'},
+     'cahier': 'Formule : 1 m/s = 3,6 km/h\nMéthode : 1) m/s → km/h : × 3,6 2) km/h → m/s : ÷ 3,6'},
 
     {'id': 'mi_v3_eleve', 'titre': 'À toi : la vitesse moyenne', 'lead': '1 200 m en 60 s : v_m en m/s, puis en km/h.',
      'vue': 'vitesse.html?vue=voiture', 'demarrer': 'reset', 'comp': ['C5'],
@@ -69,7 +69,7 @@ ACTIVITES = [
      'pointage': [('هاد l’enregistrement', 'm:enreg'), ('كنحطو la règle', 'm:regle'), ('بين deux points متتابعين', 'm:intervalles'), ('les distances égales', 'm:egaux'),
                   ('بين M un و M six', 'm:duree'), ('delta t égale cinq tau', 'm:total')],
      'centre': [('Δt = n·τ (n : nombre d’intervalles)', 'delta t égale cinq tau')],
-     'cahier': 'Méthode : durée entre deux points = (nombre d’intervalles) × τ ; distance mesurée à la règle.',
+     'cahier': 'Méthode : 1) durée entre deux points = (nombre d’intervalles) × τ 2) distance mesurée à la règle',
      'question': {'type': 'qcm', 'prompt': 'Sur le même enregistrement (τ = 20 ms), la durée entre M₂ et M₇ est…',
                   'options': ['100 ms', '140 ms', '120 ms'], 'correct': 0,
                   'dit': 'شوف هاد السؤال: ف نفس l’enregistrement، tau égale vingt millisecondes. شحال هي la durée بين M deux و M sept؟',
@@ -101,7 +101,7 @@ ACTIVITES = [
      'mixed': 'نعاودو ف M cinq: M quatre M six حتى هي quatre centimètres، إذن v cinq égale un mètre par seconde. ودابا la vitesse moyenne من M un ل M six: dix centimètres ف cinq tau، يعني zéro virgule dix sur zéro virgule dix: un mètre par seconde. v trois، v cinq و v m متساويين: la vitesse est constante.',
      'pointage': [('نعاودو ف M cinq', 'm:v5'), ('إذن v cinq égale', 'm:calcul5'), ('la vitesse moyenne من M un', 'm:vm'), ('zéro virgule dix sur', 'm:calculm'), ('la vitesse est constante', 'm:conclusion')],
      'centre': [('v₃ = v₅ = v_m = 1 m/s', 'la vitesse est constante')],
-     'cahier': 'Ici v₃ = v₅ = v_m : la vitesse est constante.'},
+     'cahier': 'Donc ici v₃ = v₅ = v_m : la vitesse est constante.'},
 
     {'id': 'mi_e6_eleve', 'titre': 'À toi : une vitesse instantanée', 'lead': 'Points à 3 cm, τ = 20 ms : calcule v₄.',
      'vue': 'table.html?vue=eleve', 'demarrer': 'reset', 'comp': ['C5'],
