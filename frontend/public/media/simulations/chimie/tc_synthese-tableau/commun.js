@@ -15,6 +15,17 @@
  *                      plastique, peinture, médicaments, verre d'eau, molécule d'eau (O rouge, H blancs), ions, tube.
  *                      Couleurs des liquides : P.LIQ (huile dorée, éthanol et soude incolores, mélange jaune pâle…).
  *  - Synthese.lueur  : allumer en comptant (halo jaune doux, numéro écrit proprement à côté).
+ *
+ * LE CODE DE LA CRAIE (finitions du 25 novembre 2026, le même que les cours de 2ᵉ Bac physics/ondes-tableau et
+ * chimie/*-tableau ; résultats en vert comme là-bas) :
+ *   jaune  titres, mots-clés, « À toi : … », relation générale (Rf = h/H, ρ = m/V)
+ *   blanc  légendes, étapes, valeurs données ou mesurées (V = 10 mL, 78 °C, H = 10 cm), calcul intermédiaire
+ *   vert   résultats calculés et conclusions (ρ = 0,8 g/mL, « rien ne se perd : c'est le reflux »)
+ *   rose   erreurs, pièges, contre-exemples (« deux couches », « perte de matière », soude corrosive)
+ *   couleur de l'objet  flèches, cotes et repères (eau froide cyan ; cote h cyan, H jaune ; hauteurs de A cyan, de B orange)
+ *   faible  traits de rappel des légendes. Jamais de bleu foncé, de noir ni de gris foncé sur le tableau vert.
+ * Les objets de labo sont dessinés par le lexique commun (shared/lexique/lexique-chimie.js) : P.ballon, P.montage… n'en
+ * sont que des renvois.
  */
 (function () {
   'use strict';
@@ -125,6 +136,8 @@
     S.a = nom => { const m = M(); return nom in m && S.t >= m[nom] - 1e-6; };
     /** Progression 0..1 sur `d` secondes de scène après le moment `nom` (adoucie). */
     S.k = (nom, d = 1) => { const m = M(); return nom in m ? doux((S.t - m[nom]) / d) : 0; };
+    /** L'instant du moment `nom` (s), ou null. */
+    S.instant = nom => { const m = M(); return nom in m ? m[nom] : null; };
     S.kl = (nom, d = 1) => { const m = M(); return nom in m ? Math.max(0, Math.min(1, (S.t - m[nom]) / d)) : 0; };
     scene = Scene(canvas, (c) => { scene.cadre(o.graine || 7); o.dessiner(c, S, scene); return c.fin(); }, { large: o.large !== false });
     S.scene = scene;
@@ -387,11 +400,27 @@
   function cases(c, S, scene, CASES, o = {}) {
     const pt = scene.petit, L = scene.L, tous = S.t <= 0, n = CASES.length, rangs = o.rangs || 1, parRang = Math.ceil(n / rangs);
     let courant = -1; CASES.forEach((k, i) => { if (!tous && S.a(k.id)) courant = i; });
-    const hBas = o.bas && !pt ? 40 : 0, H = 420 - 8 - hBas, hr = H / rangs;
+    const hBas = o.bas && !pt ? 40 : 0, H = 420 - 8 - hBas;
+    /* Le cadre se remplit (finitions du 25 novembre 2026) : les cases DÉJÀ PARUES se partagent toute la place, au lieu
+     * d'attendre à leur place finale avec le reste du tableau vide ; quand une case arrive, les autres glissent et se
+     * resserrent en douceur (0,6 s). place(i, m) : la case i quand m cases sont montrées. */
+    const place = (i, m) => {
+      const nr = Math.min(rangs, Math.ceil(m / parRang)), rg = Math.floor(i / parRang), col = i % parRang, nn = Math.min(parRang, m - rg * parRang);
+      const w = (L - 16) / Math.max(1, nn), hr = H / Math.max(1, nr);
+      return [8 + col * w, 4 + rg * hr, w, hr - 6];
+    };
+    // la place se fait AVANT l'arrivée de la case (0,6 s) : un arrêt sur son moment montre la scène déjà en place
+    let prochain = courant; CASES.forEach((k, i) => { const ti = S.instant(k.id); if (!tous && ti != null && S.t >= ti - .6) prochain = Math.max(prochain, i); });
+    const m = tous ? n : Math.max(1, prochain + 1), kt = tous || prochain < 1 ? 1 : doux((S.t - (S.instant(CASES[prochain].id) - .6)) / .6);
+    const geo = i => {
+      if (i >= m && !tous) return place(i, i + 1);
+      const A = place(i, Math.max(i + 1, m - 1)), B = place(i, m);
+      return i === m - 1 ? B : A.map((v, j) => v + (B[j] - v) * kt);
+    };
     CASES.forEach((k, i) => {
       let x, y, w, h;
-      if (pt) { if (!tous && i !== courant) return; if (tous && i !== n - 1) return; x = 10; y = 6; w = L - 20; h = 404; }
-      else { const rg = Math.floor(i / parRang), col = i % parRang, nn = Math.min(parRang, n - rg * parRang); w = (L - 16) / parRang; x = 8 + col * w + (parRang - nn) * w / 2; y = 4 + rg * hr; h = hr - 6; }
+      if (pt) { if (!tous && i !== courant) { const g = place(i, i + 1); c.repere(k.id, g[0], g[1], g[2], g[3], k.titre); return; } if (tous && i !== n - 1) return; x = 10; y = 6; w = L - 20; h = 404; }
+      else [x, y, w, h] = geo(i);
       c.repere(k.id, x, y, w, h, k.titre);
       if (!tous && !S.ecrit(c, k.id)) return;
       if (!tous && i === courant && !pt && !(o.basMoment && S.a(o.basMoment))) lueur(c, x + 2, y + 2, w - 4, h - 4, { vive: true });
@@ -410,5 +439,17 @@
     }
   }
 
-  window.Synthese = { Scene, VW, VH, TAU, lueur, lignes, sim, param, doux, graine, P, boule, cases };
+  /** Les objets déjà parus se partagent la largeur L (finitions du 25 novembre 2026, « le cadre se remplit ») : ids =
+   *  les moments d'apparition, dans l'ordre. Renvoie { n, courant, x(j), taille(f) } : x(j) = centre de l'objet j,
+   *  taille(f) interpole f(n) (f(nombre montré) → une échelle) ; à l'arrivée d'un objet, les autres glissent en 0,6 s. */
+  function etale(S, ids, L) {
+    // la place se fait AVANT l'arrivée (0,6 s), pour qu'un arrêt sur le moment (play_until) montre une scène en place
+    const tous = S.t <= 0, AV = .6; let c = -1; ids.forEach((id, i) => { const ti = S.instant(id); if (!tous && ti != null && S.t >= ti - AV) c = i; });
+    const n = tous ? ids.length : Math.max(1, c + 1), kt = tous || c < 1 ? 1 : doux((S.t - (S.instant(ids[c]) - AV)) / AV);
+    const x = j => { const B = L * (j + .5) / n; if (j >= n - 1 || kt >= 1) return B; const A = L * (j + .5) / (n - 1); return A + (B - A) * kt; };
+    const taille = f => (n < 2 || kt >= 1 ? f(n) : f(n - 1) + (f(n) - f(n - 1)) * kt);
+    return { n, x, taille };
+  }
+
+  window.Synthese = { Scene, VW, VH, TAU, lueur, lignes, sim, param, doux, graine, P, boule, cases, etale };
 })();

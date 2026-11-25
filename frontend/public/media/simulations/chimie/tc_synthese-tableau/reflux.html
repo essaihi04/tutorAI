@@ -32,10 +32,10 @@ const FIN = { chauffage: 14, reflux: 14, bilan: 14.5 }[VUE];
 
 /* ── vue « chauffage » : la même transformation, à froid et chauffée ── */
 function dessinerChauffage(c, S, scene) {
-  const pt = scene.petit, L = scene.L, r = pt ? 64 : 62, yB = 226;
+  const pt = scene.petit, L = scene.L, E = window.Synthese.etale(S, ['froid', 'chaud'], L), r = pt ? 64 : E.taille(n => (n === 1 ? 76 : 62)), yB = pt ? 226 : 214;
   const avance = S.t <= 0 ? 1 : S.kl('temps', 6);              // 0 → 20 min
-  const cas = [{ id: 'froid', titre: 'sans chauffage', x: L * .27, chaud: 0, prod: .2 * avance, mot: 'lente' },
-               { id: 'chaud', titre: 'avec chauffage', x: L * .73, chaud: 1, prod: avance, mot: 'rapide' }];
+  const cas = [{ id: 'froid', titre: 'sans chauffage', x: pt ? L * .27 : E.x(0), chaud: 0, prod: .2 * avance, mot: 'lente' },
+               { id: 'chaud', titre: 'avec chauffage', x: pt ? L * .73 : E.x(1), chaud: 1, prod: avance, mot: 'rapide' }];
   cas.forEach((k, i) => {
     c.repere(k.id, k.x - r - 16, yB - r * 1.75 - 46, 2 * r + 32, r * 2.75 + 140, k.titre);
     if (S.t > 0 && !S.ecrit(c, k.id)) return;
@@ -54,15 +54,15 @@ function dessinerChauffage(c, S, scene) {
       }
       P.thermometre(g, k.x - r - 24, yB - r * 1.2, r * 1.5, k.chaud ? .8 : .2);
     });
-    c.texte(k.chaud ? '80 °C' : '20 °C', k.x - r - 24, yB - r * 1.2 - 10, { couleur: k.chaud ? 'orange' : 'cyan', taille: pt ? 22 : 16, align: 'center' });
+    c.texte(k.chaud ? '80 °C' : '20 °C', k.x - r - 24, yB - r * 1.2 - 10, { couleur: 'blanc', taille: pt ? 22 : 16, align: 'center' });
     // la barre « savon formé », produite par l'animation
     if (S.t <= 0 || S.a('temps')) {
-      const bx = k.x - r, by = yB + r + 56, bw = 2 * r;
+      const bx = k.x - r, by = yB + r + (pt ? 56 : 44), bw = 2 * r;
       c.direct(() => { const g = c.ctx; g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(bx, by, bw, 14); g.fillStyle = '#fef3c7'; g.fillRect(bx, by, bw * Math.min(1, k.prod), 14); });
       c.rect(bx, by, bw, 14, { couleur: 'faible', largeur: 1.2, arrondi: 3, duree: .1 });
-      if (!pt) c.texte('savon formé', k.x, by + 36, { couleur: 'blanc', taille: 16, align: 'center' });
+      if (!pt) c.texte('savon formé', k.x, by + 34, { couleur: 'blanc', taille: 16, align: 'center' });
     }
-    if ((S.t <= 0 || S.a('compare')) && S.conclusions) c.texte(k.mot, k.x, yB + r + (pt ? 100 : 104), { couleur: k.chaud ? 'vert' : 'rouge', taille: pt ? 30 : 24, gras: true, align: 'center' });
+    if ((S.t <= 0 || S.a('compare')) && S.conclusions) c.texte(k.mot, pt ? k.x : k.x + r + 14, pt ? yB + r + 100 : yB + r + 58, { couleur: k.chaud ? 'vert' : 'rose', taille: pt ? 30 : 24, gras: true, align: pt ? 'center' : 'left' });
   });
   if (S.t <= 0 || S.ecrit(c, 'temps')) {
     const min = Math.round(20 * avance);
@@ -77,8 +77,8 @@ function dessinerChauffage(c, S, scene) {
 
 /* ── vue « reflux » : vapeurs, condensation, gouttes qui retombent ── */
 const ETAPES = [
-  ['chauffe', 'le mélange bout', 'orange'], ['vapeurs', 'les vapeurs montent', 'blanc'],
-  ['condensation', 'l’eau froide les refroidit : elles redeviennent liquides', 'cyan'], ['gouttes', 'les gouttes retombent dans le ballon', 'cyan'],
+  ['chauffe', 'le mélange bout', 'blanc'], ['vapeurs', 'les vapeurs montent', 'blanc'],
+  ['condensation', 'l’eau froide les refroidit : elles redeviennent liquides', 'blanc'], ['gouttes', 'les gouttes retombent dans le ballon', 'blanc'],
   ['cycle', 'rien ne se perd : c’est le reflux', 'vert'],
 ];
 function dessinerReflux(c, S, scene) {
@@ -110,20 +110,21 @@ function dessinerReflux(c, S, scene) {
 
 /* ── vue « bilan » : à froid / chauffage sans réfrigérant / chauffage à reflux ── */
 const TROIS = [
-  { id: 'froid', titre: 'à froid', res: 'lente', coul: 'rouge' },
-  { id: 'ouvert', titre: 'chauffage sans réfrigérant', res: 'perte de matière', coul: 'rouge' },
+  { id: 'froid', titre: 'à froid', res: 'lente', coul: 'rose' },
+  { id: 'ouvert', titre: 'chauffage sans réfrigérant', res: 'perte de matière', coul: 'rose' },
   { id: 'reflux', titre: 'chauffage à reflux', res: 'rapide, sans perte', coul: 'vert' },
 ];
 function dessinerBilan(c, S, scene) {
   const pt = scene.petit, L = scene.L, tous = S.t <= 0;
   let courant = 0; TROIS.forEach((k, i) => { if (!tous && S.a(k.id)) courant = i; });
-  const vis = pt && !tous ? [courant] : pt ? [2] : [0, 1, 2];
-  const s = pt ? .72 : .7, yb = pt ? 336 : 318;
+  const E = window.Synthese.etale(S, TROIS.map(k => k.id), L);
+  const vis = pt && !tous ? [courant] : pt ? [2] : [0, 1, 2].slice(0, E.n);
+  const s = pt ? .72 : E.taille(n => [0, .82, .76, .7][n]), yb = pt ? 336 : 318;
   vis.forEach((idx, j) => {
-    const k = TROIS[idx], cx = pt ? L * .42 : L * (j + .5) / 3 + 24;
+    const k = TROIS[idx], cx = pt ? L * .42 : E.x(j) + 24;
     c.repere(k.id, cx - 120 * s, yb - 380 * s, 240 * s, 380 * s + 70, k.titre);
     if (!tous && !S.ecrit(c, k.id)) return;
-    if (!tous && courant === idx && !S.a('bilan')) lueur(c, cx - 130 * s, yb - 390 * s, 260 * s, 390 * s + 76, { vive: true });
+    if (!tous && courant === idx && !S.a('bilan')) { const bw = Math.max(260 * s, 236); lueur(c, cx - 15 * s - bw / 2, yb - 390 * s, bw, 390 * s + 76, { vive: true }); }
     const tt = Math.max(0, S.t - M[k.id]);
     const perte = idx === 1 ? (tous ? 1 : S.kl('perte', 4)) : 0;
     c.direct(() => {

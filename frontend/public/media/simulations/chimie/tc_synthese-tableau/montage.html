@@ -33,8 +33,8 @@ const FIN = { montage: 17, contenu: 15, roles: 12.5, application: 15.5 }[VUE];
 
 /* ── vue « montage » : chaque pièce paraît, s'allume et reçoit son nom ── */
 const PIECES = [
-  ['potence', 'potence', 'blanc'], ['elevateur', 'support élévateur', 'blanc'], ['chauffe', 'chauffe-ballon', 'orange'], ['ballon', 'ballon', 'cyan'],
-  ['refrigerant', 'réfrigérant à boules', 'cyan'], ['entree', 'entrée de l’eau froide', 'bleu'], ['sortie', 'sortie de l’eau', 'bleu'],
+  ['potence', 'potence', 'blanc'], ['elevateur', 'support élévateur', 'blanc'], ['chauffe', 'chauffe-ballon', 'blanc'], ['ballon', 'ballon', 'blanc'],
+  ['refrigerant', 'réfrigérant à boules', 'blanc'], ['entree', 'entrée de l’eau froide', 'cyan'], ['sortie', 'sortie de l’eau', 'cyan'],
 ];
 function dessinerMontage(c, S, scene) {
   const pt = scene.petit, L = scene.L, s = pt ? .98 : .96, cx = pt ? L * .3 : Math.min(300, L * .36), yb = 410;
@@ -88,7 +88,7 @@ function couchesContenu(S) {
   return f > .01 ? [{ f, col: melange }] : [];
 }
 function dessinerContenu(c, S, scene) {
-  const pt = scene.petit, L = scene.L, cx = pt ? L * .27 : Math.min(250, L * .3), r = pt ? 74 : 70, yBal = 300;
+  const pt = scene.petit, L = scene.L, cx = pt ? L * .27 : Math.min(250, L * .29), r = pt ? 96 : 86, yBal = pt ? 284 : 286;
   let enCours = null; for (const a of AJOUTS) if (S.t > 0 && S.a(a.id) && S.t < M[a.id] + 2.2) enCours = a;
   c.direct(() => {
     const g = c.ctx;
@@ -103,11 +103,11 @@ function dessinerContenu(c, S, scene) {
   });
   c.repere('ballon', cx - r - 4, yBal - r * 1.75, 2 * r + 8, r * 2.75, 'le ballon');
   // la liste, écrite au fur et à mesure (à droite)
-  const xl = pt ? L * .52 : Math.max(cx + r + 90, L * .5);
+  const xl = pt ? L * .52 : Math.max(cx + r + 64, L * .5);
   if (S.t <= 0 || S.ecrit(c, 'securite')) {
     if (!pt || (S.t > 0 && !S.a('huile'))) {
       c.direct(() => { const g = c.ctx; P.lunettes(g, xl + 34, pt ? 120 : 52, pt ? 56 : 40); P.gant(g, xl + (pt ? 120 : 100), pt ? 128 : 58, pt ? 52 : 38); P.flacon(g, xl + (pt ? 200 : 170), pt ? 70 : 22, pt ? 54 : 46, pt ? 92 : 74, { nom: 'soude', danger: 'corrosif', col: P.LIQ.soude, taille: pt ? 15 : 13 }); });
-      c.texte(pt ? 'lunettes + gants' : 'lunettes + gants', pt ? xl : xl + 210, pt ? 210 : 52, { couleur: 'orange', taille: pt ? 28 : 17, gras: true, max: L - xl - (pt ? 10 : 216) });
+      c.texte(pt ? 'lunettes + gants' : 'lunettes + gants', pt ? xl : xl + 210, pt ? 210 : 52, { couleur: 'rose', taille: pt ? 28 : 17, gras: true, max: L - xl - (pt ? 10 : 216) });
     }
     c.repere('securite', xl, 14, Math.min(260, L - xl - 8), 74, 'la sécurité : lunettes et gants');
   }
@@ -117,7 +117,7 @@ function dessinerContenu(c, S, scene) {
     if (S.t > 0 && !S.ecrit(c, a.id)) return;
     if (pt && enCours !== a) return;
     if (enCours === a && !pt) lueur(c, xl - 6, y - 28, Math.min(330, L - xl - 4), 42, { vive: true });
-    c.texte(pt ? a.nom : a.nom + ' : ' + a.q, xl, pt ? 120 : y, { couleur: a.id === 'huile' ? 'jaune' : a.id === 'soude' ? 'orange' : 'cyan', taille: pt ? 30 : 20, gras: true, max: L - xl - 10 });
+    c.texte(pt ? a.nom : a.nom + ' : ' + a.q, xl, pt ? 120 : y, { couleur: 'blanc', taille: pt ? 30 : 20, gras: true, max: L - xl - 10 });
     if (pt) c.texte(a.q, xl, 166, { couleur: 'blanc', taille: 30 });
   });
   if (S.t <= 0 || S.ecrit(c, 'ponce')) {
@@ -131,18 +131,19 @@ function dessinerContenu(c, S, scene) {
 
 /* ── vue « roles » : pourquoi l'éthanol, pourquoi la pierre ponce ── */
 const CAS = [
-  { id: 'sans_ethanol', titre: 'sans éthanol', res: 'deux couches', res2: 'contact faible', coul: 'rouge' },
+  { id: 'sans_ethanol', titre: 'sans éthanol', res: 'deux couches', res2: 'contact faible', coul: 'rose' },
   { id: 'avec_ethanol', titre: 'avec éthanol', res: 'un seul mélange', res2: 'bon contact', coul: 'vert' },
-  { id: 'sans_ponce', titre: 'sans pierre ponce', res: 'grosses bulles', res2: 'projections', coul: 'rouge' },
+  { id: 'sans_ponce', titre: 'sans pierre ponce', res: 'grosses bulles', res2: 'projections', coul: 'rose' },
   { id: 'avec_ponce', titre: 'avec pierre ponce', res: 'petites bulles', res2: 'ébullition calme', coul: 'vert' },
 ];
 function dessinerRoles(c, S, scene) {
   const pt = scene.petit, L = scene.L;
   let courant = 0; CAS.forEach((k, i) => { if (S.t > 0 && S.a(k.id)) courant = i; });
-  const visibles = pt ? (S.t <= 0 ? [0, 1] : courant < 2 ? [0, 1] : [2, 3]) : [0, 1, 2, 3];
-  const n = visibles.length, r = pt ? 62 : 64, yB = pt ? 250 : 236;
+  const E = window.Synthese.etale(S, CAS.map(k => k.id), L);
+  const visibles = pt ? (S.t <= 0 ? [0, 1] : courant < 2 ? [0, 1] : [2, 3]) : [0, 1, 2, 3].slice(0, E.n);
+  const n = pt ? 2 : E.n, r = pt ? 60 : E.taille(m => [0, 84, 80, 72, 64][m]), yB = pt ? 222 : 236;
   visibles.forEach((idx, j) => {
-    const k = CAS[idx], x = L * (j + .5) / n;
+    const k = CAS[idx], x = pt ? L * (j + .5) / n : E.x(j);
     c.repere(k.id, x - r - 10, yB - r * 1.75 - 40, 2 * r + 20, r * 2.75 + 110, k.titre);
     if (S.t > 0 && !S.ecrit(c, k.id)) return;
     const chaud = idx >= 2, tt = S.t - M[k.id];
@@ -170,10 +171,10 @@ function dessinerRoles(c, S, scene) {
         if (f > .5) for (let i = 0; i < 7; i++) P.goutte(g, x - 24 + i * 8, yB - r * 1.75 - 6 - (f - .5) * 120 * (.5 + (i % 3) * .3), 4, [253, 224, 71, 1]);
       }
     });
-    if (idx === 0) c.ligne(x - r * .9, yB + r - 2 * r * .3, x + r * .9, yB + r - 2 * r * .3, { couleur: 'rouge', largeur: 2.4, pointille: [5, 4] });
+    if (idx === 0) c.ligne(x - r * .9, yB + r - 2 * r * .3, x + r * .9, yB + r - 2 * r * .3, { couleur: 'rose', largeur: 2.4, pointille: [5, 4] });
     if (S.conclusions || S.t <= 0 || tt > 1.2) {
-      c.texte(k.res, x, yB + r + (chaud ? 50 : 34), { couleur: k.coul, taille: pt ? 24 : 18, gras: true, align: 'center', max: L / n - 8 });
-      c.texte(k.res2, x, yB + r + (chaud ? 76 : 60), { couleur: k.coul, taille: pt ? 24 : 18, align: 'center', max: L / n - 8 });
+      c.texte(k.res, x, yB + r + (pt ? 46 : chaud ? 50 : 34), { couleur: k.coul, taille: pt ? 24 : 18, gras: true, align: 'center', max: L / n - 8 });
+      c.texte(k.res2, x, yB + r + (pt ? 88 : chaud ? 76 : 60), { couleur: k.coul, taille: pt ? 24 : 18, align: 'center', max: L / n - 8 });
     }
   });
 }
@@ -190,13 +191,13 @@ function dessinerApplication(c, S, scene) {
   c.repere('ballon_app', G.boites.ballon[0], G.boites.ballon[1], G.boites.ballon[2], G.boites.ballon[3], 'le ballon');
   // les réactifs
   if ((tous || S.ecrit(c, 'reactifs')) && (!pt || !S.a('chauffage') || tous && false)) {
-    c.texte('alcool benzylique', xl, 60, { couleur: 'cyan', taille: pt ? 28 : 20, gras: true, max: w });
-    c.texte('+ acide acétique', xl, pt ? 100 : 88, { couleur: 'cyan', taille: pt ? 28 : 20, gras: true, max: w });
+    c.texte('alcool benzylique', xl, 60, { couleur: 'blanc', taille: pt ? 28 : 20, gras: true, max: w });
+    c.texte('+ acide acétique', xl, pt ? 100 : 88, { couleur: 'blanc', taille: pt ? 28 : 20, gras: true, max: w });
     c.texte(pt ? '→ acétate de benzyle' : '→ acétate de benzyle (odeur de jasmin)', xl, pt ? 140 : 116, { couleur: 'jaune', taille: pt ? 24 : 18, max: w });
     c.repere('reactifs', xl - 6, 36, Math.min(w, 400), pt ? 120 : 92, 'les réactifs et le produit');
   }
   if ((tous || S.ecrit(c, 'chauffage')) && (!pt || (S.a('chauffage') && !S.a('numeros')))) {
-    c.texte('chauffage à reflux', xl, pt ? 200 : 152, { couleur: 'orange', taille: pt ? 28 : 20, gras: true, max: w });
+    c.texte('chauffage à reflux', xl, pt ? 200 : 152, { couleur: 'jaune', taille: pt ? 28 : 20, gras: true, max: w });
     c.repere('chauffage', G.boites.ballon[0], G.yRh, G.boites.ballon[2], G.yBal - G.yRh, 'le chauffage à reflux');
   }
   // les numéros, allumés un à un, puis les noms (cachés tant que la question est ouverte)
