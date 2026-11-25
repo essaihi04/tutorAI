@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les couches électroniques — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_atome-tableau/atome.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Les couches électroniques K, L et M autour du noyau, leurs places (2, 8, 8), et les électrons qui tombent couche par couche : K d’abord, puis L, puis M"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/chimie/tc_atome-tableau/commun.js"></script>
+<script>
+/*
+ * La répartition électronique (diapos at_c1 à at_c5). Vues (?vue=) :
+ *  couches : le noyau ; la couche K et ses 2 places (allumées, comptées), L (8), M (8) ; règle 1 (nombre limité) ;
+ *            règle 2 (K, puis L, puis M). Moments : noyau 1 ; k 3,5 ; l 7 ; m 10,5 ; regle1 12 ; regle2 14 ; fin 15.
+ *  remplir : la méthode (&atome=O | Cl | Na | Al | Mg, &q=charge de l’ion, ex. q=1 pour Na⁺, q=-2 pour O²⁻) :
+ *            le nombre d’électrons (compté), puis ils tombent un à un dans K, puis L, puis M ; chaque couche pleine
+ *            s’écrit « saturée » ; la structure (K)ᵃ(L)ᵇ(M)ᶜ s’écrit ; la couche externe s’allume.
+ *            Moments calculés : compte, k, l, (m), structure, externe, fin.
+ * set_parameters {conclusions: false} : la structure et la couche externe restent cachées (question au tableau).
+ */
+const A = window.Atome, { P, compte, dureeCompte, avant } = A;
+const VUE = A.param('vue', 'couches');
+const ATOMES = { O: [8, 16, 'O', 'oxygène'], Cl: [17, 35, 'Cl', 'chlore'], Na: [11, 23, 'Na', 'sodium'], Al: [13, 27, 'Al', 'aluminium'], Mg: [12, 24, 'Mg', 'magnésium'], C: [6, 12, 'C', 'carbone'] };
+const [Z, AA, SYM, NOM] = ATOMES[A.param('atome', 'O')] || ATOMES.O;
+const Q = parseInt(A.param('q', '0'), 10) || 0;
+const NE = Z - Q, REP = A.repartition(NE);
+const CAP = [2, 8, 8], NOMS = ['K', 'L', 'M'], CHUTE = .45;   // s par électron qui tombe
+const MOMENTS = (() => {
+  if (VUE !== 'remplir') return { noyau: 1, k: 3.5, l: 7, m: 10.5, regle1: 12, regle2: 14 };
+  const m = {}; let t = 1.5 + dureeCompte(NE); m.compte = t;
+  REP.forEach((n, i) => { t += 1 + n * CHUTE; m[NOMS[i].toLowerCase()] = t; });
+  t += 2; m.structure = t; t += 2.5; m.externe = t;
+  return m;
+})();
+const FIN = VUE === 'remplir' ? MOMENTS.externe + 1.5 : 15;
+const qTxt = Q === 0 ? '' : (Math.abs(Q) > 1 ? Math.abs(Q) : '') + (Q > 0 ? '+' : '−');
+
+function noyauPetit(g, cx, cy, s) { P.noyau(g, cx, cy, Math.min(Z, 8), Math.min(AA - Z, 8), { r: 6 * s }); }
+
+function dessinerCouches(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cx = pt ? L * .3 : L * .28, cy = 215, Rs = pt ? [62, 120, 178] : [62, 116, 170];
+  c.direct(() => { const g = c.ctx; P.noyau(g, cx, cy, 6, 6, { r: 7 }); });
+  c.repere('noyau', cx - 25, cy - 25, 50, 50, 'le noyau');
+  ['k', 'l', 'm'].forEach((nom, i) => {
+    const k = avant(S, nom, 2.6); if (k <= 0) return;
+    const n = Math.min(CAP[i], Math.floor(k * CAP[i] * 1.0001 + 1e-6)), cur = S.t > 0 && !S.a(nom);
+    c.direct(() => {
+      const g = c.ctx; P.couche(g, cx, cy, Rs[i], { vive: cur || (S.t > 0 && S.a(nom) && !S.a(['l', 'm', 'regle1'][i])) });
+      P.places(cx, cy, Rs[i], CAP[i]).forEach((p, j) => {
+        g.save(); g.strokeStyle = 'rgba(186,230,253,.8)'; g.setLineDash([3, 3]); g.lineWidth = 1.5; g.beginPath(); g.arc(p.x, p.y, 9, 0, A.TAU); g.stroke(); g.restore();
+        if (j < n) { P.halo(g, p.x, p.y, 12, j === n - 1 && cur); g.save(); g.fillStyle = '#fde047'; g.font = "700 14px 'Patrick Hand', cursive"; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(j + 1), p.x, p.y + 1); g.restore(); }
+      });
+    });
+    c.texte(NOMS[i], cx + Rs[i] * .72 + 8, cy - Rs[i] * .72 - 4, { couleur: 'jaune', taille: pt ? 30 : 24, gras: true, duree: .1 });
+    c.repere(nom, cx - Rs[i], cy - Rs[i], 2 * Rs[i], 2 * Rs[i], 'la couche ' + NOMS[i]);
+  });
+  const x = pt ? L * .6 : L * .56, t = pt ? 28 : 22;
+  const L1 = [['k', 'K : 2 électrons au plus', 'blanc'], ['l', 'L : 8 électrons au plus', 'blanc'], ['m', 'M : 8 électrons au plus', 'blanc'], ['regle1', 'Règle 1 : une couche contient un nombre limité d’électrons', 'jaune'], ['regle2', 'Règle 2 : on remplit K, puis L, puis M', 'vert']];
+  if (pt) {
+    const der = S.t <= 0 ? 'regle2' : ['regle2', 'regle1', 'm', 'l', 'k'].find(n => S.a(n));
+    const l = L1.find(q => q[0] === der);
+    if (l) { const ls = A.lignes(c, l[1], L - x - 10, 28); ls.forEach((s, i) => c.texte(s, x, 170 + i * 40, { couleur: l[2], taille: 28, gras: true })); c.repere(der + '_txt', x, 140, L - x - 8, 40 * ls.length, l[1]); }
+    return;
+  }
+  let y = 80;
+  L1.forEach(([nom, txt, coul]) => {
+    if (!(S.t <= 0 || S.a(nom))) return;
+    if (nom.startsWith('regle') && !S.conclusions) return;
+    const ls = A.lignes(c, txt, L - x - 20, t), h = ls.length * 30 + 12;
+    if (nom.startsWith('regle')) c.rect(x - 8, y - 26, L - x - 10, h, { couleur: coul, fond: coul, fondAlpha: .08, largeur: 1.6, duree: .2 });
+    if (S.ecrit(c, nom) || S.t <= 0) ls.forEach((s, i) => c.texte(s, x, y + i * 30, { couleur: coul, taille: t, gras: true }));
+    c.repere(nom + '_txt', x - 8, y - 26, L - x - 10, h, txt);
+    y += h + (nom.startsWith('regle') ? 14 : 2);
+  });
+}
+
+function dessinerRemplir(c, S, sc) {
+  const L = sc.L, pt = sc.petit, M = MOMENTS, cx = pt ? L * .3 : L * .3, cy = 240, Rs = pt ? [58, 108, 158] : [56, 104, 152];
+  const nCouches = REP.length;
+  // l’ordre de chute : K, puis L, puis M ; chaque électron i a sa couche, sa place, son instant
+  const chutes = []; let tc = M.compte;
+  REP.forEach((n, i) => { tc += 1; for (let j = 0; j < n; j++) { chutes.push({ couche: i, place: j, t0: tc, t1: tc + CHUTE }); tc += CHUTE; } });
+  const dC = dureeCompte(NE), kc = compte(S, M, 'compte', NE, dC), enCompte = S.t > 0 && S.t > M.compte - dC && !S.a('compte');
+  // la rangée d’électrons en attente, en haut
+  const ex = j => (pt ? L * .08 : L * .06) + j * (pt ? 26 : 24), ey = pt ? 44 : 40;
+  c.direct(() => {
+    const g = c.ctx;
+    noyauPetit(g, cx, cy, 1);
+    for (let i = 0; i < 3; i++) {
+      const utile = i < nCouches, sat = utile && REP[i] === CAP[i] && (S.t <= 0 || S.a(NOMS[i].toLowerCase()));
+      const ext = (S.t <= 0 || S.a('externe')) && i === nCouches - 1 && S.conclusions;
+      P.couche(g, cx, cy, Rs[i], { alpha: utile ? 1 : .3, vive: ext });
+      if (sat) { g.save(); g.strokeStyle = 'rgba(74,222,128,.55)'; g.lineWidth = 7; g.beginPath(); g.arc(cx, cy, Rs[i], 0, A.TAU); g.stroke(); g.restore(); }
+      P.places(cx, cy, Rs[i], CAP[i]).forEach(p => { g.save(); g.strokeStyle = `rgba(186,230,253,${utile ? .6 : .25})`; g.setLineDash([3, 3]); g.lineWidth = 1.3; g.beginPath(); g.arc(p.x, p.y, 9, 0, A.TAU); g.stroke(); g.restore(); });
+    }
+    chutes.forEach((e, j) => {
+      const dest = P.places(cx, cy, Rs[e.couche], CAP[e.couche])[e.place];
+      const u = S.t <= 0 ? 1 : Math.max(0, Math.min(1, (S.t - e.t0) / (e.t1 - e.t0)));
+      const vis = S.t <= 0 || S.t > M.compte - dC - .3;
+      if (!vis) return;
+      const x = ex(j) + (dest.x - ex(j)) * A.doux(u), y = ey + (dest.y - ey) * u * u;
+      const lit = enCompte && j < kc;
+      if (lit) P.halo(g, x, y, 13, j === kc - 1);
+      P.electron(g, x, y, 9, { numero: lit ? j + 1 : null });
+    });
+  });
+  if (S.t > 0 && S.t < M.externe) sc.sale = true;
+  c.repere('electrons', ex(0) - 12, ey - 14, ex(NE - 1) - ex(0) + 24, 28, 'les électrons à placer');
+  for (let i = 0; i < nCouches; i++) c.repere(NOMS[i].toLowerCase(), cx - Rs[i], cy - Rs[i], 2 * Rs[i], 2 * Rs[i], 'la couche ' + NOMS[i]);
+  for (let i = 0; i < 3; i++) c.texte(NOMS[i], cx + Rs[i] * .72 + 6, cy - Rs[i] * .72 - 2, { couleur: i < nCouches ? 'jaune' : 'tresfaible', taille: pt ? 28 : 22, gras: true, duree: .05 });
+  // le texte de droite
+  const x = pt ? L * .6 : L * .6, t = pt ? 28 : 22, w = L - x - 14;
+  const ion = Q !== 0;
+  const nTxt = ion ? `${SYM}${qTxt} : ${Z} ${Q > 0 ? '−' : '+'} ${Math.abs(Q)} = ${NE} électrons` : `${SYM} : Z = ${Z} → ${NE} électrons`;
+  const structure = A.structure(NE), extNom = NOMS[nCouches - 1], extN = REP[nCouches - 1];
+  const L1 = [['compte', nTxt, 'cyan']];
+  REP.forEach((n, i) => L1.push([NOMS[i].toLowerCase(), `${NOMS[i]} : ${n} électron${n > 1 ? 's' : ''}${n === CAP[i] ? ' → saturée' : ''}`, n === CAP[i] ? 'vert' : 'blanc']));
+  L1.push(['structure', structure, 'jaune']);
+  L1.push(['externe', `couche externe : ${extNom} (${extN} électron${extN > 1 ? 's' : ''})`, 'orange']);
+  const nota = () => A.notation(c, String(AA), String(Z), SYM, x + 30, pt ? 92 : 98, { taille: pt ? 52 : 48, q: qTxt || undefined });
+  if (pt) {
+    const der = S.t <= 0 ? 'externe' : ['externe', 'structure', 'm', 'l', 'k', 'compte'].find(n => n in M && S.a(n));
+    const l = L1.find(q => q[0] === der);
+    if (!der) { nota(); return; }
+    if (l && (!['structure', 'externe'].includes(der) || S.conclusions)) { const ls = A.lignes(c, l[1], w, 28); ls.forEach((s, i) => c.texte(s, x, 190 + i * 38, { couleur: l[2], taille: der === 'structure' ? 32 : 28, gras: true, max: w })); c.repere(der + '_txt', x, 160, w, 38 * ls.length + 6, l[1]); }
+    nota();
+    return;
+  }
+  nota();
+  let y = 150;
+  L1.forEach(([nom, txt, coul]) => {
+    if (!(S.t <= 0 || S.a(nom))) return;
+    if (['structure', 'externe'].includes(nom) && !S.conclusions) return;
+    const big = nom === 'structure';
+    if (S.ecrit(c, nom) || S.t <= 0) {
+      if (big) c.rect(x - 8, y - 30, w, 44, { couleur: 'jaune', fond: 'jaune', fondAlpha: .1, largeur: 1.8, duree: .2 });
+      c.texte(txt, x, y, { couleur: coul, taille: big ? 28 : t, gras: true, max: w - 10 });
+    }
+    c.repere(nom + '_txt', x - 8, y - 30, w, 44, txt);
+    y += big ? 52 : 40;
+  });
+}
+
+const S = A.sim({
+  id: 'tc_atome_couches_' + VUE + (VUE === 'remplir' ? '_' + SYM + (Q || '') : ''), titre: 'La répartition électronique', vue: VUE, moments: MOMENTS, fin: FIN, graine: 43,
+  motifs: { noyau: 'le noyau', k: 'la couche K', l: 'la couche L', m: 'la couche M', regle1: 'règle 1', regle2: 'règle 2', compte: 'le nombre d’électrons', structure: 'la structure électronique', externe: 'la couche externe' },
+  dessiner: (c, S, sc) => (VUE === 'remplir' ? dessinerRemplir : dessinerCouches)(c, S, sc),
+  ceQuiSeVoit: S => {
+    const a = n => S.t <= 0 || S.a(n);
+    if (VUE === 'remplir') return [`${SYM}${qTxt} : ${NE} électrons à placer.`, ...REP.map((n, i) => a(NOMS[i].toLowerCase()) ? `${n} dans ${NOMS[i]}${n === CAP[i] ? ' (saturée)' : ''}.` : ''), a('structure') && S.conclusions ? `Structure : ${A.structure(NE)}.` : '', a('externe') && S.conclusions ? `Couche externe : ${NOMS[REP.length - 1]}.` : ''].join(' ');
+    return ['Un noyau.', a('k') ? 'Couche K : 2 places.' : '', a('l') ? 'Couche L : 8 places.' : '', a('m') ? 'Couche M : 8 places.' : '', a('regle1') ? 'Règle 1 : nombre limité d’électrons par couche.' : '', a('regle2') ? 'Règle 2 : K, puis L, puis M.' : ''].join(' ');
+  },
+  texte: 'Les électrons se répartissent en couches K (2 au plus), L (8), M (8 pour Z ≤ 18) ; on remplit K, puis L, puis M ; la dernière couche occupée est la couche externe ; une couche pleine est saturée.',
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

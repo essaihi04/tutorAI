@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Isotopes, ions, élément chimique — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_atome-tableau/atome.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Les isotopes du carbone, la formation des ions sodium et chlorure, l’élément oxygène, et la conservation de l’élément cuivre : la solution bleue de sulfate de cuivre et la soude donnent un précipité bleu"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/chimie/tc_atome-tableau/commun.js"></script>
+<script>
+/*
+ * L’élément chimique (diapos at_e1 à at_e5). Vues (?vue=) :
+ *  isotopes     : ¹²₆C, ¹³₆C, ¹⁴₆C côte à côte ; les protons s’allument (6 dans chacun), puis les neutrons (6, 7, 8).
+ *                 Moments : c12 1,5 ; c13 3,5 ; c14 5,5 ; protons 9 ; neutrons 12,5 ; definition 14 ; fin 15.
+ *  ions         : l’atome de sodium (11 + / 11 −) perd un électron → Na⁺ (11 + / 10 −), un cation ; l’atome de chlore
+ *                 (17 + / 17 −) gagne un électron → Cl⁻ (17 + / 18 −), un anion.
+ *                 Moments : na 1,5 ; perd 4,5 ; cation 6,5 ; cl 9 ; gagne 12 ; anion 14 ; fin 15.
+ *  element      : ¹⁶₈O, ¹⁷₈O, O²⁻ : même Z = 8 → un seul élément, l’oxygène.
+ *                 Moments : o16 1,5 ; o17 3,5 ; ion 5,5 ; z 8,5 ; element 10,5 ; fin 11,5.
+ *  conservation : un bécher de sulfate de cuivre (bleu, ions Cu²⁺) ; on verse goutte à goutte la soude (ions HO⁻) ;
+ *                 un précipité bleu se forme et tombe ; le cuivre est toujours là.
+ *                 Moments : becher 1,5 ; soude 5 ; precipite 8,5 ; cuivre 11 ; conserve 13 ; fin 14.
+ * set_parameters {conclusions: false} : la conclusion écrite reste cachée (question d’observation).
+ */
+const A = window.Atome, { P, compte, avant } = A;
+const VUE = A.param('vue', 'isotopes');
+const MOMENTS = {
+  isotopes: { c12: 1.5, c13: 3.5, c14: 5.5, protons: 9, neutrons: 12.5, definition: 14 },
+  ions: { na: 1.5, perd: 4.5, cation: 6.5, cl: 9, gagne: 12, anion: 14 },
+  element: { o16: 1.5, o17: 3.5, ion: 5.5, z: 8.5, element: 10.5 },
+  conservation: { becher: 1.5, soude: 5, precipite: 8.5, cuivre: 11, conserve: 13 },
+}[VUE] || {};
+const FIN = { isotopes: 15, ions: 15, element: 11.5, conservation: 14 }[VUE] || 12;
+const tps = () => S.scene.maintenant();
+
+/* ── isotopes ── */
+function dessinerIsotopes(c, S, sc) {
+  const L = sc.L, pt = sc.petit, xs = [L * .18, L * .5, L * .82], cy = pt ? 235 : 210, r = pt ? 15 : 14;
+  const isos = [['c12', 12, 6], ['c13', 13, 7], ['c14', 14, 8]];
+  const kp = compte(S, MOMENTS, 'protons', 6, 2.4), kn = (i) => compte(S, MOMENTS, 'neutrons', isos[i][2], 2.6);
+  const enP = S.t > 0 && S.t > MOMENTS.protons - 2.4 && !S.a('neutrons') && !(S.t > MOMENTS.neutrons - 2.6);
+  const enN = S.t > 0 && S.t > MOMENTS.neutrons - 2.6;
+  isos.forEach(([nom, AA, NN], i) => {
+    const x = xs[i], k = avant(S, nom, 1);
+    if (k <= 0) return;
+    c.direct(() => { c.ctx.save(); c.ctx.globalAlpha = k; P.noyauCompte(c.ctx, x, cy, 6, NN, r, enN ? 'n' : 'p', enN ? kn(i) : enP ? kp : 0, { palir: enP || enN }); c.ctx.restore(); });
+    A.notation(c, String(AA), '6', 'C', x + 4, pt ? 92 : 84, { taille: pt ? 60 : 54 });
+    c.repere(nom, x - 75, 30, 150, 260, 'le carbone ' + AA);
+    if ((S.t <= 0 || S.a('neutrons')) && !pt) c.texte(`N = ${AA} − 6 = ${NN}`, x, cy + 108, { couleur: 'blanc', taille: 21, align: 'center', gras: true });
+    if ((S.t <= 0 || S.a('protons')) && !pt) c.texte('Z = 6', x, cy + 80, { couleur: 'rose', taille: 21, align: 'center', gras: true });
+  });
+  const ty = pt ? 390 : 392;
+  if (pt) {
+    const der = S.t <= 0 ? 'definition' : ['definition', 'neutrons', 'protons'].find(n => S.a(n));
+    const txt = { protons: 'même Z = 6', neutrons: 'N = 6, 7, 8 : différents', definition: 'isotopes : même Z, A différent' }[der];
+    if (der && (der !== 'definition' || S.conclusions)) c.texte(txt, L / 2, ty, { couleur: 'jaune', taille: 30, align: 'center', gras: true });
+    return;
+  }
+  if ((S.t <= 0 || S.ecrit(c, 'definition')) && S.conclusions) {
+    c.rect(L / 2 - 270, ty - 30, 540, 42, { couleur: 'jaune', fond: 'jaune', fondAlpha: .1, largeur: 1.8 });
+    c.texte('isotopes : même Z, nombres de neutrons différents (A différent)', L / 2, ty - 2, { couleur: 'jaune', taille: 20, align: 'center', gras: true, max: 520 });
+    c.repere('definition', L / 2 - 270, ty - 30, 540, 42, 'la définition des isotopes');
+  }
+}
+
+/* ── ions ── */
+function dessinerIons(c, S, sc) {
+  const L = sc.L, pt = sc.petit, xa = L * .25, xb = L * .75, cy = 220, R = pt ? 125 : 118;
+  const t = tps(), M = MOMENTS;
+  const kNa = avant(S, 'na', 1), kCl = avant(S, 'cl', 1), uPerd = S.t <= 0 ? 1 : avant(S, 'perd', 2), uGagne = S.t <= 0 ? 1 : avant(S, 'gagne', 2);
+  c.direct(() => {
+    const g = c.ctx;
+    if (kNa > 0) {
+      g.save(); g.globalAlpha = kNa;
+      P.nuage(g, xa, cy, R, { points: 140 }); P.noyau(g, xa, cy, 11, 12, { r: 5.5 });
+      const el = P.placesNuage(xa, cy, R, 11, { t: S.t > 0 ? t * .3 : 0, graine: 41 });
+      el.forEach((q, i) => {
+        if (i === 0 && uPerd > 0) { const x9 = xa + R * 1.25, y9 = cy - R * .9; P.electron(g, q.x + (x9 - q.x) * A.doux(uPerd), q.y + (y9 - q.y) * A.doux(uPerd), 8, { alpha: 1 - .5 * uPerd }); }
+        else P.electron(g, q.x, q.y, 8);
+      });
+      g.restore();
+    }
+    if (kCl > 0) {
+      g.save(); g.globalAlpha = kCl;
+      P.nuage(g, xb, cy, R, { points: 140 }); P.noyau(g, xb, cy, 17, 18, { r: 4.6 });
+      const el = P.placesNuage(xb, cy, R, 18, { t: S.t > 0 ? t * .3 : 0, graine: 43 });
+      el.forEach((q, i) => {
+        if (i === 17) { if (uGagne > 0) { const x0 = xb + R * .2, y0 = 30; P.halo(g, x0 + (q.x - x0) * A.doux(uGagne), y0 + (q.y - y0) * A.doux(uGagne), 12, true); P.electron(g, x0 + (q.x - x0) * A.doux(uGagne), y0 + (q.y - y0) * A.doux(uGagne), 8); } }
+        else P.electron(g, q.x, q.y, 8);
+      });
+      g.restore();
+    }
+  });
+  if (S.t > 0) sc.sale = true;
+  if (kNa > 0) c.repere('sodium', xa - R, cy - R, 2 * R, 2 * R, 'l’atome de sodium');
+  if (kCl > 0) c.repere('chlore', xb - R, cy - R, 2 * R, 2 * R, 'l’atome de chlore');
+  const ts = pt ? 28 : 21, yb = pt ? 390 : 372;
+  const lab = (nom, txt, x, y, coul) => { if (S.t <= 0 || S.ecrit(c, nom)) { c.texte(txt, x, y, { couleur: coul, taille: ts, align: 'center', gras: true, max: L / 2 - 16 }); c.repere(nom + '_txt', x - 140, y - 24, 280, 32, txt); } };
+  if (pt) {
+    const derA = S.t <= 0 || S.a('cation') ? 'Na⁺ : un cation' : S.a('perd') ? 'perd 1 électron' : S.a('na') ? 'Na : 11 + / 11 −' : '';
+    const derB = S.t <= 0 || S.a('anion') ? 'Cl⁻ : un anion' : S.a('gagne') ? 'gagne 1 électron' : S.a('cl') ? 'Cl : 17 + / 17 −' : '';
+    if (derA) c.texte(derA, xa, yb, { couleur: 'rose', taille: 28, align: 'center', gras: true });
+    if (derB) c.texte(derB, xb, yb, { couleur: 'cyan', taille: 28, align: 'center', gras: true });
+    return;
+  }
+  lab('na', S.t > 0 && !S.a('cation') ? 'Na : 11 + et 11 − → neutre' : 'Na⁺ : 11 + et 10 − → charge +e', xa, 36, 'blanc');
+  if (S.t <= 0 || S.a('perd')) lab('perd', 'il perd un électron', xa, yb - 34, 'orange');
+  if (S.conclusions) lab('cation', 'Na⁺ : un cation (ion positif)', xa, yb, 'rose');
+  lab('cl', S.t > 0 && !S.a('anion') ? 'Cl : 17 + et 17 − → neutre' : 'Cl⁻ : 17 + et 18 − → charge −e', xb, 36, 'blanc');
+  if (S.t <= 0 || S.a('gagne')) lab('gagne', 'il gagne un électron', xb, yb - 34, 'orange');
+  if (S.conclusions) lab('anion', 'Cl⁻ : un anion (ion négatif)', xb, yb, 'cyan');
+}
+
+/* ── l’élément oxygène ── */
+function dessinerElement(c, S, sc) {
+  const L = sc.L, pt = sc.petit, xs = [L * .18, L * .5, L * .82], cy = pt ? 240 : 225, R = pt ? 92 : 86;
+  const ent = [['o16', '16', 8, 8, ''], ['o17', '17', 9, 8, ''], ['ion', '16', 8, 10, '2−']];
+  const kz = avant(S, 'z', 1);
+  ent.forEach(([nom, AA, NN, ne, q], i) => {
+    const k = avant(S, nom, 1); if (k <= 0) return;
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = k; P.nuage(g, xs[i], cy, R, { points: 90 }); P.noyau(g, xs[i], cy, 8, NN, { r: 3.6 }); P.placesNuage(xs[i], cy, R, ne, { graine: 51 + i, t: S.t > 0 ? tps() * .3 : 0 }).forEach(p => P.electron(g, p.x, p.y, 7)); g.restore(); });
+    const ny = pt ? 96 : 88;
+    A.notation(c, AA, '8', 'O', xs[i] - 4, ny, { taille: pt ? 56 : 50, q: q || undefined });
+    if (S.t <= 0 || S.a('z')) A.lueur(c, xs[i] - 32, ny - 18, 28, 32, { vive: true, couleur: '244, 114, 182' });
+    c.repere(nom, xs[i] - R, ny - 50, 2 * R, cy + R - ny + 50, ['l’atome oxygène 16', 'l’atome oxygène 17', 'l’ion oxyde'][i]);
+    if (!pt) c.texte(['8 électrons', '8 électrons', '10 électrons'][i], xs[i], cy + R + 26, { couleur: 'cyan', taille: 18, align: 'center' });
+  });
+  if (S.t > 0) sc.sale = true;
+  if ((S.t <= 0 || S.ecrit(c, 'z')) && !pt) c.texte('même Z = 8', L / 2, 30, { couleur: 'rose', taille: 22, align: 'center', gras: true });
+  if ((S.t <= 0 || S.ecrit(c, 'element')) && S.conclusions) {
+    const y = pt ? 404 : 406;
+    c.rect(12, 44, L - 24, 336, { couleur: 'jaune', largeur: 2, duree: .3 });
+    c.texte(pt ? 'un seul élément : l’oxygène' : 'même Z = 8 : un seul élément chimique, l’oxygène', L / 2, y, { couleur: 'jaune', taille: pt ? 28 : 22, align: 'center', gras: true, max: L - 30 });
+    c.repere('element', 12, 44, L - 24, y - 40, 'l’élément oxygène');
+  }
+}
+
+/* ── conservation : sulfate de cuivre + soude ── */
+function dessinerConservation(c, S, sc) {
+  const L = sc.L, pt = sc.petit, C = window.Lexique.chimie, M = MOMENTS;
+  const B = { x: pt ? L * .22 : L * .2, y: 150, w: pt ? 200 : 190, h: 210 };
+  const kS = S.t <= 0 ? 1 : Math.max(0, Math.min(1, (S.t - (M.soude - 2)) / (M.precipite - M.soude + 2)));   // la soude versée
+  const kP = S.t <= 0 ? 1 : Math.max(0, Math.min(1, (S.t - (M.precipite - 2.5)) / 4));                        // le précipité qui se forme et tombe
+  const bleu = C.SOLUTIONS.cuivre, clair = [140, 190, 235, .45];
+  const col = bleu.map((v, i) => v + (clair[i] - v) * kP * .85);
+  const t = tps();
+  c.direct(() => {
+    const g = c.ctx;
+    const yS = C.becher(g, B, .72, col);
+    // ions Cu²⁺ dans la solution (avant le précipité), puis les flocons bleus du précipité
+    const r = A.graine(7);
+    for (let i = 0; i < 8; i++) {
+      const x = B.x + 26 + (i % 3) * (B.w - 60) / 2 + (Math.floor(i / 3) % 2) * 18, y0 = yS + 22 + Math.floor(i / 3) * 34, libre = i >= 8 * kP;
+      if (libre) { g.save(); g.globalAlpha = .95; g.fillStyle = '#bfe3ff'; g.font = '700 15px sans-serif'; g.fillText('Cu²⁺', x - 12, y0 + Math.sin(t + i) * 2); g.restore(); }
+    }
+    const fond = B.y + B.h - 6;
+    for (let i = 0; i < 60 * kP; i++) {
+      const x = B.x + 12 + r() * (B.w - 24), y0 = yS + 10 + r() * 60, y = y0 + (fond - 10 - y0) * Math.min(1, kP * 1.2 * (0.6 + r() * .4));
+      g.fillStyle = `rgba(${70 + r() * 40},${140 + r() * 40},${235},.9)`; g.beginPath(); g.ellipse(x, Math.min(fond - 4 - r() * 14 * kP, y), 4 + r() * 4, 2.5 + r() * 2, r() * 3, 0, A.TAU); g.fill();
+    }
+    // le compte-gouttes de soude
+    if (S.t <= 0 || S.t > M.soude - 2.5) {
+      const xg = B.x + B.w * .5, yp = B.y - 30;
+      C.compteGouttes(g, xg, yp, C.SOLUTIONS.incolore);
+      if (S.t > 0 && kS > 0 && kS < 1) { const u = (t * 1.6) % 1; C.goutte(g, xg, yp + 6 + u * (yS - yp - 6), C.SOLUTIONS.incolore); sc.sale = true; }
+    }
+  });
+  if (S.t > 0) sc.sale = true;
+  c.repere('becher', B.x, B.y, B.w, B.h, 'le bécher de sulfate de cuivre');
+  c.repere('precipite', B.x, B.y + B.h - 50, B.w, 50, 'le précipité bleu');
+  const x = pt ? L * .5 : L * .47, ts = pt ? 28 : 21;
+  const L1 = [
+    ['becher', 'sulfate de cuivre : bleu (ions Cu²⁺)', 'cyan'],
+    ['soude', 'on ajoute la soude (ions HO⁻)', 'blanc'],
+    ['precipite', 'un précipité bleu : Cu(OH)₂', 'cyan'],
+    ['cuivre', 'Cu²⁺(aq) + 2HO⁻(aq) → Cu(OH)₂(s)', 'jaune'],
+    ['conserve', 'l’élément cuivre se conserve', 'vert'],
+  ];
+  if (pt) {
+    const der = S.t <= 0 ? 'conserve' : ['conserve', 'cuivre', 'precipite', 'soude', 'becher'].find(n => S.a(n));
+    const l = L1.find(q => q[0] === der);
+    if (l && (der !== 'conserve' || S.conclusions)) { c.texte(l[1], x, 230, { couleur: l[2], taille: 28, gras: true, max: L - x - 8 }); c.repere(der + '_txt', x, 200, L - x - 8, 40, l[1]); }
+    return;
+  }
+  L1.forEach(([nom, txt, coul], i) => {
+    if (nom === 'conserve' && !S.conclusions) return;
+    if (nom === 'precipite' && !S.conclusions) return;
+    const y = 90 + i * 66;
+    if (S.t <= 0 || S.ecrit(c, nom)) {
+      if (nom === 'conserve') c.rect(x - 8, y - 30, L - x - 10, 44, { couleur: 'vert', fond: 'vert', fondAlpha: .08, largeur: 1.8 });
+      c.texte(txt, x, y, { couleur: coul, taille: nom === 'cuivre' ? 20 : ts, gras: true, max: L - x - 20 });
+      c.repere(nom + '_txt', x - 8, y - 30, L - x - 10, 44, txt);
+    }
+  });
+}
+
+const DESSINS = { isotopes: dessinerIsotopes, ions: dessinerIons, element: dessinerElement, conservation: dessinerConservation };
+const S = A.sim({
+  id: 'tc_atome_element_' + VUE, titre: 'L’élément chimique : ' + VUE, vue: VUE, moments: MOMENTS, fin: FIN, graine: 37,
+  motifs: { c12: 'carbone 12', c13: 'carbone 13', c14: 'carbone 14', protons: 'même nombre de protons', neutrons: 'des neutrons différents', definition: 'les isotopes', na: 'l’atome de sodium', perd: 'il perd un électron', cation: 'Na⁺, un cation', cl: 'l’atome de chlore', gagne: 'il gagne un électron', anion: 'Cl⁻, un anion', o16: 'oxygène 16', o17: 'oxygène 17', ion: 'l’ion O²⁻', z: 'même Z = 8', element: 'l’élément oxygène', becher: 'le sulfate de cuivre', soude: 'la soude', precipite: 'le précipité bleu', cuivre: 'le cuivre est là', conserve: 'l’élément cuivre se conserve' },
+  dessiner: (c, S, sc) => (DESSINS[VUE] || dessinerIsotopes)(c, S, sc),
+  ceQuiSeVoit: S => {
+    const a = n => S.t <= 0 || S.a(n);
+    switch (VUE) {
+      case 'isotopes': return ['Trois noyaux : ¹²₆C, ¹³₆C, ¹⁴₆C.', a('protons') ? 'Chacun a 6 protons (comptés).' : '', a('neutrons') ? 'Neutrons : 6, 7 et 8.' : '', a('definition') && S.conclusions ? 'Isotopes : même Z, A différent.' : ''].join(' ');
+      case 'ions': return ['L’atome de sodium : 11 protons, 11 électrons.', a('perd') ? 'Un électron s’en va.' : '', a('cation') && S.conclusions ? 'Na⁺ : 11 + et 10 −, un cation.' : '', a('cl') ? 'L’atome de chlore : 17 protons, 17 électrons.' : '', a('gagne') ? 'Un électron arrive.' : '', a('anion') && S.conclusions ? 'Cl⁻ : 17 + et 18 −, un anion.' : ''].join(' ');
+      case 'element': return ['¹⁶₈O.', a('o17') ? '¹⁷₈O.' : '', a('ion') ? 'L’ion O²⁻ (10 électrons).' : '', a('z') ? 'Tous ont Z = 8 (allumé).' : '', a('element') && S.conclusions ? 'Un seul élément : l’oxygène.' : ''].join(' ');
+      case 'conservation': return ['Un bécher de sulfate de cuivre, bleu (ions Cu²⁺).', a('soude') ? 'On verse la soude goutte à goutte.' : '', a('precipite') ? 'Des flocons bleus se forment et tombent au fond.' : '', a('cuivre') ? 'Cu²⁺(aq) + 2HO⁻(aq) → Cu(OH)₂(s).' : '', a('conserve') && S.conclusions ? 'L’élément cuivre se conserve.' : ''].join(' ');
+    }
+    return '';
+  },
+  texte: 'Isotopes : même Z, A différent. Ion monoatomique : un atome qui a perdu (cation) ou gagné (anion) des électrons. Élément chimique : toutes les entités de même Z ; il se conserve au cours d’une transformation chimique (Cu²⁺ + 2HO⁻ → Cu(OH)₂).',
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

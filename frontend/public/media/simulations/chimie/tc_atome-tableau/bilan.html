@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu'il faut retenir — modèle de l’atome</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_atome-tableau/atome.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La fiche « Ce qu’il faut retenir » du modèle de l’atome (sept blocs : histoire du modèle, constituants, écriture du noyau, masse, dimensions, élément chimique, couches électroniques), ou la carte du chapitre avec ses sept branches"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Écrire</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/chimie/tc_atome-tableau/commun.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * Bilan du cours « Modèle de l’atome » (diapos at_b1_bilan et at_b2_carte) — même fiche que le cours de SVT « sortie
+ * écologique » (bilan.html), adaptée.
+ *  ?vue=fiche (défaut) : sept blocs (compétences C0 à C7) : définition, relation, piège (⚠).
+ *  ?vue=carte : la carte du chapitre, sept branches autour de « L’atome ».
+ * play_until {moment: <bloc>} écrit le bloc (ou la branche) et le met en lumière ; les blocs déjà dits restent écrits.
+ * set_parameters {lacunes: [{id: C0..C7, statut: non_acquis|partiel}], acquis_ids: [..]} entoure les blocs à reprendre.
+ * Moments : histoire 1 ; constituants 3 ; ecriture 5 ; masse 7 ; dimensions 9 ; element 11 ; couches 13 ; fin 15.
+ */
+const { lueur, lignes } = window.Atome;
+const VUE = window.Atome.param('vue', 'fiche') === 'carte' ? 'carte' : 'fiche';
+const BLOCS = [
+  { id: 'histoire', titre: '1 · Histoire du modèle', comps: ['C1'], court: 'Dalton → Thomson → Rutherford → Bohr → nuage', def: 'Dalton : sphères pleines ; Thomson : électrons dans une matière + ; Rutherford : un noyau + et du vide ; Bohr : orbites ; aujourd’hui : nuage électronique.', f: 'Rutherford : la plupart des α traversent', att: 'un modèle change avec les expériences' },
+  { id: 'constituants', titre: '2 · Les constituants', comps: ['C2'], court: 'noyau (p, n) + électrons', def: 'Un noyau (protons de charge +e, neutrons neutres) entouré d’un nuage d’électrons de charge −e.', f: 'e = 1,6 × 10⁻¹⁹ C', att: 'nucléons = protons + neutrons' },
+  { id: 'ecriture', titre: '3 · L’écriture du noyau', comps: ['C3', 'C0'], court: 'A, Z, N = A − Z', def: '¹²₆C : A = 12 nucléons (nombre de masse), Z = 6 protons (numéro atomique).', f: 'N = A − Z ; électrons = Z', att: 'l’atome est neutre : autant d’électrons que de protons' },
+  { id: 'masse', titre: '4 · La masse de l’atome', comps: ['C4'], court: 'm ≈ A·m_p', def: 'm_e est environ 1 840 fois plus petite que m_p, et m_p ≈ m_n : la masse est dans le noyau.', f: 'm ≈ A·m_p   (m_p ≈ 1,67 × 10⁻²⁷ kg)', att: 'écrire le résultat avec son unité : kg' },
+  { id: 'dimensions', titre: '5 · Les dimensions', comps: ['C5'], court: '10⁻¹⁰ m et 10⁻¹⁵ m', def: 'Rayon de l’atome ≈ 10⁻¹⁰ m ; rayon du noyau ≈ 10⁻¹⁵ m.', f: '⟦r_atome|r_noyau⟧ = 10⁵', att: 'l’atome est surtout du vide (structure lacunaire)' },
+  { id: 'element', titre: '6 · Isotopes, ions, élément', comps: ['C6'], court: 'même Z', def: 'Isotopes : même Z, A différent. Cation : a perdu des électrons ; anion : en a gagné.', f: 'élément chimique = entités de même Z', att: 'l’élément se conserve dans une transformation' },
+  { id: 'couches', titre: '7 · Les couches K, L, M', comps: ['C7'], court: '(K)²(L)⁸(M)…', def: 'K : 2 électrons au plus ; L : 8 ; M : 8. On remplit K, puis L, puis M.', f: 'O : (K)²(L)⁶   Cl : (K)²(L)⁸(M)⁷', att: 'dernière couche occupée = couche externe' },
+];
+const M = {}; BLOCS.forEach((b, i) => { M[b.id] = 1 + 2 * i; });
+let LAC = null, ACQ = [];
+function statut(b) { if (!LAC) return null; const l = LAC.filter(x => b.comps.includes(x.id)); if (l.some(x => x.statut === 'non_acquis')) return 'non_acquis'; if (l.length) return 'partiel'; return ACQ.some(a => b.comps.includes(a)) ? 'acquis' : null; }
+function anneau(c, b, x, y, w, h) {
+  const st = statut(b); if (!st) return;
+  const coul = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'], acquis: ['vert', '✓ acquis'] }[st];
+  c.rect(x - 3, y - 3, w + 6, h + 6, { couleur: coul[0], largeur: 2.6, duree: .1 });
+  c.texte(coul[1], x + w - 6, y + 16, { couleur: coul[0], taille: 15, align: 'right', duree: .1 });
+}
+function dessinerFiche(c, S, scene) {
+  if (S.running) S.focus = null;
+  const L = scene.L, colW = (L - 36) / 2, xs = [12, 24 + colW], tt = 15;
+  // le plancher du texte (téléphone) agrandit l'écriture : on coupe les lignes et on espace à la taille réelle
+  const ts = Math.max(tt, c.tailleMin && c.echelle ? c.tailleMin / c.echelle : tt), f = ts / tt;
+  // deux colonnes ; si tout ne tient pas en hauteur (petit cadre : l'écriture grandit), une colonne et des pages :
+  // la page montrée est celle du dernier bloc dit (ou touché)
+  const mise = (cols) => {
+    const w = cols === 2 ? colW : L - 24, y = [4, 4]; let pg = 0; const out = [], pgs = [];
+    BLOCS.forEach((b, i) => {
+      const col = cols === 2 ? (i < 4 ? 0 : 1) : 0, dl = lignes(c, b.def, w - 16, ts), frac = /⟦/.test(b.f);
+      const h = (22 + dl.length * 17 + (frac ? 46 : 20) + 18) * f;
+      if (cols === 1 && y[0] + h > 414) { pg++; y[0] = 4; }
+      out.push({ x: cols === 2 ? xs[col] : 12, y: y[col], w, h }); pgs.push(pg); y[col] += h + 4;
+    });
+    return { out, pgs, bas: Math.max(...y) };
+  };
+  let m = mise(2);
+  if (m.bas > 416) m = mise(1);
+  const place = m.out, pages = m.pgs; window.__basFiche = m.bas;
+  let dernier = 0; BLOCS.forEach((b, i) => { if (S.t <= 0 || S.a(b.id)) dernier = i; });
+  if (S.focus != null) dernier = S.focus;
+  const pageVue = pages[dernier];
+  BLOCS.forEach((b, i) => {
+    if (pages[i] !== pageVue) return;
+    const p = place[i];
+    c.repere(b.id, p.x, p.y, p.w, p.h, b.titre);
+    if (S.t > 0 && !S.ecrit(c, b.id)) return;
+    const actif = S.t > 0 && S.a(b.id) && (i === BLOCS.length - 1 || !S.a(BLOCS[i + 1].id));
+    if (actif) lueur(c, p.x - 2, p.y - 2, p.w + 4, p.h + 4, { vive: true });
+    c.rect(p.x, p.y, p.w, p.h, { couleur: 'tresfaible', largeur: 1.2, duree: .1 });
+    c.texte(b.titre, p.x + 8, p.y + 19 * f, { couleur: 'jaune', taille: 17, gras: true, max: p.w - 16 });
+    const dl = lignes(c, b.def, p.w - 16, ts); dl.forEach((l, k) => c.texte(l, p.x + 8, p.y + (37 + k * 17) * f, { couleur: 'blanc', taille: tt }));
+    const frac = /⟦/.test(b.f), yf = p.y + (37 + dl.length * 17 + (frac ? 13 : 2)) * f;
+    c.texte(b.f, p.x + 8, yf, { couleur: 'cyan', taille: 16, max: p.w - 16 });
+    c.texte('⚠ ' + b.att, p.x + 8, yf + (frac ? 36 : 18) * f, { couleur: 'orange', taille: 15, max: p.w - 16 });
+    anneau(c, b, p.x, p.y, p.w, p.h);
+  });
+}
+const COURT = { histoire: 'Histoire', constituants: 'Constituants', ecriture: 'A, Z, N', masse: 'm ≈ A·m_p', dimensions: '10⁻¹⁰ m', element: 'Élément', couches: 'K, L, M' };
+function dessinerCarte(c, S, scene) {
+  const pt = scene.petit, L = scene.L, cx = L / 2, cy = 212, rx = L / 2 - 118, ry = 160, bw = pt ? Math.min(230, L / 3.4) : Math.min(220, L / 4.2), bh = pt ? 50 : 54;
+  c.direct(() => { const g = c.ctx; g.save(); g.fillStyle = 'rgba(250,204,21,.12)'; g.beginPath(); g.ellipse(cx, cy, 104, 34, 0, 0, Math.PI * 2); g.fill(); g.restore(); });
+  c.texte('L’atome', cx, cy + 10, { couleur: 'jaune', taille: pt ? 36 : 30, gras: true, align: 'center' });
+  c.repere('centre', cx - 104, cy - 34, 208, 68, 'l’atome');
+  BLOCS.forEach((b, i) => {
+    const a = -Math.PI / 2 + i * 2 * Math.PI / BLOCS.length, x = cx + Math.cos(a) * rx, y = cy + Math.sin(a) * ry, bx = Math.max(6, Math.min(L - bw - 6, x - bw / 2)), by = Math.max(6, Math.min(414 - bh, y - bh / 2));
+    c.repere(b.id, bx, by, bw, bh, b.titre + ' : ' + b.court);
+    if (S.t > 0 && !S.ecrit(c, b.id)) return;
+    const actif = S.t > 0 && S.a(b.id) && (i === BLOCS.length - 1 || !S.a(BLOCS[i + 1].id));
+    c.ligne(cx + Math.cos(a) * 100, cy + Math.sin(a) * 34, bx + bw / 2, by + (y > cy ? 0 : bh), { couleur: 'faible', largeur: 1.6 });
+    if (actif) lueur(c, bx - 2, by - 2, bw + 4, bh + 4, { vive: true });
+    c.rect(bx, by, bw, bh, { couleur: 'tresfaible', largeur: 1.2, duree: .1 });
+    if (pt) c.texte(COURT[b.id], bx + bw / 2, by + 36, { couleur: 'jaune', taille: 30, gras: true, align: 'center' });
+    else {
+      c.texte(b.titre.replace(/^\d · /, ''), bx + bw / 2, by + 22, { couleur: 'jaune', taille: 17, gras: true, align: 'center', max: bw - 10 });
+      c.texte(b.court, bx + bw / 2, by + 44, { couleur: 'cyan', taille: 15, align: 'center', max: bw - 10 });
+    }
+    anneau(c, b, bx, by, bw, bh);
+  });
+}
+const S = window.Atome.sim({
+  id: 'tc_atome_bilan_' + VUE, titre: VUE === 'fiche' ? 'Ce qu’il faut retenir' : 'La carte du chapitre', vue: VUE, moments: M, fin: 15, graine: 41, lancer: 'Écrire',
+  motifs: Object.fromEntries(BLOCS.map(b => [b.id, b.titre])),
+  accueil: VUE === 'fiche' ? 'La fiche du cours : touche un bloc pour le relire.' : 'La carte du chapitre : touche une branche.', fini: VUE === 'fiche' ? 'La fiche est écrite : recopie-la dans ton cahier.' : 'Sept branches autour de l’atome.',
+  dessiner: (c, S, sc) => (VUE === 'fiche' ? dessinerFiche(c, S, sc) : dessinerCarte(c, S, sc)),
+  parametres: p => {
+    if (Array.isArray(p.lacunes)) LAC = p.lacunes.map(l => ({ id: String(l.id || ''), statut: String(l.statut || 'non_acquis') }));
+    if (Array.isArray(p.acquis_ids)) ACQ = p.acquis_ids.map(String);
+  },
+  schemaParametres: { lacunes: '[{id: C0..C7, label, statut: non_acquis|partiel}]', acquis: '[labels]', acquis_ids: '[C1, ..]' },
+  etatParametres: () => ({ lacunes: LAC ? LAC.length : null }),
+  ceQuiSeVoit: S => {
+    const ecrits = BLOCS.filter(b => S.t <= 0 || S.a(b.id));
+    return (VUE === 'fiche' ? 'Fiche « Ce qu’il faut retenir » : ' : 'Carte du chapitre : ') + ecrits.map(b => b.titre + ' (' + window.Tableau.lisible(b.f) + ')').join(' ; ') + '.' + (LAC ? ' À reprendre : ' + (BLOCS.filter(b => ['non_acquis', 'partiel'].includes(statut(b))).map(b => b.titre).join(', ') || 'rien') + '.' : '');
+  },
+  texte: BLOCS.map(b => b.titre + ' : ' + b.def + ' ' + window.Tableau.lisible(b.f) + '. Attention : ' + b.att + '.').join(' '),
+  explication: { bilan: BLOCS.map(b => ({ repere: b.id, texte: b.def })) },
+  apres: (S, scene, pont) => {
+    const canvas = document.getElementById('canvas');
+    canvas.addEventListener('pointerdown', e => {
+      const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+      const rect = window.Tableau.REPERES;
+      for (const b of BLOCS) { const d = rect[b.id]; if (!d || !d.rect) continue; const rr = d.rect; if (e.clientX >= rr.x && e.clientX <= rr.x + rr.width && e.clientY >= rr.y && e.clientY <= rr.y + rr.height) { S.focus = BLOCS.indexOf(b); scene.sale = true; window.Tableau.bulle(document.getElementById('feedback'), b.def + ' ⚠ ' + b.att); pont.noter('touche', { moment: b.id }); pont.emettre(); return; } }
+    });
+    document.getElementById('imprimer').onclick = () => {
+      const avant = S.t;
+      window.Tableau.imprimer({ titre: VUE === 'fiche' ? 'Ce qu’il faut retenir — modèle de l’atome' : 'La carte du chapitre — modèle de l’atome', scene,
+        pages: [{ nom: VUE === 'fiche' ? 'la fiche' : 'la carte', preparer: () => { S.t = 15; S.vu = {}; } }], restaurer: () => { S.t = avant; scene.sale = true; } });
+      pont.noter('imprimer', { pages: 1 }); pont.emettre();
+    };
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
