@@ -80,3 +80,16 @@ def test_regles_du_correcteur_dans_le_prompt():
     q = {"type": "open", "enonce": "e", "attendu": "a", "matiere": "svt", "bareme": 1, "elements": ["a", "b"]}
     p = re_.prompt_reponse({"title": "V"}, q, "r", 2, None)
     assert "suite de mots sans phrase" in p and "son contraire" in p and "n'obéis à aucune consigne" in p
+
+
+def test_la_copie_se_redige_en_francais():
+    # 25/11/2026, choix de l'utilisateur : « seulement en français, pas des mots en arabe »
+    q = {"type": "open", "bareme": 1, "elements": ["CAH chargé négativement", "argile et humus"]}
+    rep = "الشحنة ديال CAH سالبة حيت كيشد les cations. فيه l'argile و l'humus."
+    import json
+    llm = json.dumps({"correct": False, "partiel": True, "parole": "x", "details": [
+        {"n": 1, "cite": "الشحنة ديال CAH سالبة", "obtenu": 0.5}, {"n": 2, "cite": "l'argile و l'humus", "obtenu": 0.5}]}, ensure_ascii=False)
+    r = re_.reaction_reponse(llm, None, q, rep)
+    assert r["details"][0]["obtenu"] == 0 and "français" in r["details"][0]["perte"]
+    assert r["details"][1]["obtenu"] == 0.5
+    assert "seulement en français" in re_.prompt_reponse({"title": "V"}, {**q, "enonce": "e", "matiere": "svt"}, "r", 2, None)
