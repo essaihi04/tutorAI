@@ -48,7 +48,7 @@ COMPETENCES = [
     {'id': 'C6', 'label': 'Représenter le vecteur vitesse et exploiter un mouvement rectiligne uniforme (équation horaire)', 'dit': 'le vecteur vitesse et le mouvement rectiligne uniforme', 'rappels': [
         rv('C6_r1', 'Le vecteur vitesse en un point est tangent à la trajectoire et orienté dans le sens du mouvement.', 'شوف هاد السؤال: le vecteur vitesse tangent ل la trajectoire، و ف le sens du mouvement. vrai ou faux؟', 0),
         rl('C6_r2', 'Écris l’équation horaire d’un mouvement rectiligne uniforme.', 'شوف هاد السؤال: كتب l’équation horaire ديال le mouvement rectiligne uniforme.', 'x(t) = v_x·t + x₀'),
-        rq('C6_r3', 'Un MRU a v = 2 m/s et x₀ = 1 m (axe dans le sens du mouvement). Son équation est…', 'شوف هاد السؤال: MRU، v égale deux mètres par seconde، و x zéro égale un mètre. شنو هي l’équation horaire؟', ['x = t + 2', 'x = 2·t + 1', 'x = −2·t + 1'], 1)]},
+        rq('C6_r3', 'Un MRU a v = 2 m/s et x₀ = 1 m (axe dans le sens du mouvement). Son équation est…', 'شوف هاد السؤال: mouvement rectiligne uniforme، v égale deux mètres par seconde، و x zéro égale un mètre. شنو هي l’équation horaire؟', ['x = t + 2', 'x = 2·t + 1', 'x = −2·t + 1'], 1)]},
     {'id': 'C7', 'label': 'Exploiter un mouvement circulaire uniforme : ω, T, f', 'dit': 'le mouvement circulaire uniforme', 'rappels': [
         rl('C7_r1', 'Écris la relation entre ω, v et R.', 'شوف هاد السؤال: كتب la relation بين oméga، v و R.', 'ω = v/R'),
         rq('C7_r2', 'Si T = 0,5 s, la fréquence f vaut…', 'شوف هاد السؤال: T égale zéro virgule cinq seconde. شحال هي la fréquence؟', ['0,5 Hz', '2 Hz', '5 Hz'], 1),

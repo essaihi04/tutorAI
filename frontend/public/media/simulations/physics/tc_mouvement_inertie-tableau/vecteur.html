@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le vecteur vitesse — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le vecteur vitesse : sur la trajectoire d’un ballon, en M3, son origine, sa direction (la tangente), son sens et sa valeur ; puis, sur un enregistrement rectiligne, le tracé à l’échelle 1 cm pour 0,5 m/s"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * Le vecteur vitesse (diapos mi_e7_vecteur, mi_e8_echelle, mi_e9_eleve).
+ * Enregistrement du cours : τ = 20 ms ; deux points voisins à 2 cm (élève : 3 cm). Au tableau, 1 cm = 30 unités.
+ *  ?vue=caracteristiques : trajectoire courbe d’un ballon, points M0 … M6 ; en M3 : origine, direction (tangente),
+ *                          sens, valeur ; puis v⃗3 en vert.
+ *                          Moments : trajectoire 0,5 ; origine 2 ; direction 4 ; sens 6 ; valeur 8 ; vecteur 10 ; fin 12.
+ *  ?vue=echelle          : enregistrement rectiligne (2 cm, τ = 20 ms), v3 = 1 m/s ; échelle 1 cm ↔ 0,5 m/s ;
+ *                          longueur = 1/0,5 = 2 cm : deux carreaux de 1 cm allumés un à un, puis v⃗3 tracé depuis M3.
+ *                          Moments : enreg 0,5 ; valeur 2 ; echelle 4 ; longueur 6 ; compte 8 ; trace 10 ; fin 12.
+ *  ?vue=eleve            : points à 3 cm, v4 = 1,5 m/s, même échelle → 3 cm (trois carreaux comptés).
+ *                          Moments : enreg 0,5 ; valeur 2 ; longueur 4 ; trace 6 ; fin 8.
+ *                          conclusions:false cache la longueur (et son compte) et la flèche.
+ */
+const { P, lueur, panneau, vecteur, HEX } = window.Mvt;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const CM = 30;
+const tps = S => (S.t <= 0 ? 99 : S.t);
+const vu = (S, m) => S.t <= 0 || S.a(m);
+
+/* ── vue caractéristiques : la trajectoire courbe d'un ballon ── */
+const MC = { trajectoire: .5, origine: 2, direction: 4, sens: 6, valeur: 8, vecteur: 10 };
+const X0C = 50, YBC = 372, KC = 1.5;
+let DXC = 66;   // 66 au grand cadre, 85 au petit (le dessin y prend plus de place)
+const posC = u => [X0C + u * DXC, YBC - KC * (70 * u - 7 * u * u)];
+const tanC = u => { const vx = DXC, vy = -KC * (70 - 14 * u), n = Math.hypot(vx, vy); return [vx / n, vy / n]; };
+function dessinerCaract(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = tps(S), ts = pt ? 31 : 20;
+  DXC = pt ? 85 : 66;
+  // le ballon avance ; il laisse un point à chaque intervalle de temps égal
+  const u = S.t <= 0 ? 6.6 : clamp((t - MC.trajectoire) / .22, 0, 6.6);
+  c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = 'rgba(226,232,240,.22)'; g.lineWidth = 1.5; g.setLineDash([3, 6]); g.beginPath(); for (let k = 0; k <= 60; k++) { const [x, y] = posC(u * k / 60); k ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); g.restore(); });
+  const n = Math.min(6, Math.floor(u + 1e-6));
+  for (let i = 0; i <= n; i++) {
+    const [x, y] = posC(i), [tx, ty] = tanC(i), nx = -ty, ny = tx;   // normale vers le bas-droite (hors de la courbe)
+    c.direct(() => P.point(c.ctx, x, y, 5.5));
+    if (!pt || i % 2 === 0 || i === 3) c.direct(() => c.texte('M_' + i, x + nx * (pt ? 30 : 24), y + ny * (pt ? 30 : 24) + ts * .38, { couleur: 'blanc', taille: ts, align: 'center' }));
+    c.repere('M' + i, x - 12, y - 12, 24, 24, 'le point M' + i);
+  }
+  const [bx, by] = posC(u);
+  c.direct(() => P.ballon(c.ctx, bx + (u >= 6.6 ? 0 : 0), by, 13, u * 1.3));
+  c.repere('ballon', bx - 14, by - 14, 28, 28, 'le ballon');
+  if (u >= 6) c.repere('trajectoire', X0C - 10, posC(5)[1] - 10, posC(6.6)[0] - X0C + 20, YBC - posC(5)[1] + 20, 'la trajectoire courbe du ballon');
+  const [mx, my] = posC(3), [tx, ty] = tanC(3), hx = ty, hy = -tx;   // (hx, hy) : normale vers le haut-gauche
+  // 1) l'origine : le point M3
+  if (vu(S, 'origine')) { lueur(c, mx - 15, my - 15, 30, 30, { vive: S.t > 0 && !S.a('direction') }); c.repere('M3', mx - 15, my - 15, 30, 30, 'le point M3 : l’origine du vecteur'); }
+  // 2) la direction : la tangente en M3 (pointillés)
+  if (S.t <= 0 || S.ecrit(c, 'direction')) {
+    c.ligne(mx - 170 * tx, my - 170 * ty, mx + 185 * tx, my + 185 * ty, { couleur: 'cyan', largeur: 2, pointille: [8, 7] });
+    if (!pt) c.texte('tangente', mx - 170 * tx - 8, my - 170 * ty - 12, { couleur: 'cyan', taille: 20, align: 'right' });
+    c.repere('tangente', mx - 170 * tx, my + 185 * ty, 355 * tx, -355 * ty, 'la tangente en M3 : la direction');
+  }
+  // 3) le sens : celui du mouvement (flèche orange le long de la tangente, décalée)
+  if (S.t <= 0 || S.ecrit(c, 'sens')) {
+    const d = 28, ax = mx + hx * d - 10 * tx, ay = my + hy * d - 10 * ty, ex = mx + hx * d + 80 * tx, ey = my + hy * d + 80 * ty;
+    c.fleche(ax, ay, ex, ey, { couleur: 'orange', largeur: 2.6, tete: 12 });
+    c.texte(pt ? 'sens' : 'sens du mouvement', ax - 6, ay - (pt ? 26 : 34), { couleur: 'orange', taille: ts, align: 'right' });
+    c.repere('sens', Math.min(ax, ex) - 4, Math.min(ay, ey) - 4, Math.abs(ex - ax) + 8, Math.abs(ey - ay) + 8, 'le sens : celui du mouvement');
+  }
+  // 5) le vecteur v3 (vert)
+  if (S.t <= 0 || S.ecrit(c, 'vecteur')) {
+    const lv = 120, ex = mx + lv * tx, ey = my + lv * ty;
+    vecteur(c, mx, my, ex, ey, { couleur: 'vert', nom: 'v_3', nx: ex - 14, ny: ey - 16, align: 'right', taille: pt ? 32 : 24 });
+    c.repere('v3', mx, ey - 40, ex - mx + 4, my - ey + 46, 'le vecteur vitesse v3 en M3');
+  }
+  panneau(c, S, sc, Math.max(510, L - 300), 70, L - Math.max(510, L - 300) - 10, [
+    { m: 'origine', t: '1) origine : le point M_3', c: 'jaune' },
+    { m: 'direction', t: '2) direction : la tangente', c: 'cyan' },
+    { m: 'sens', t: '3) sens : celui du mouvement', c: 'orange' },
+    { m: 'valeur', t: '4) valeur : v_3 (en m/s)', c: 'blanc', r: 'valeur' },
+    { m: 'vecteur', t: '^v_3 : le vecteur vitesse', c: 'vert', g: true, taille: 22 },
+  ], { dy: 54, taille: 20, px: 330, py: 340, pw: L - 350, taillePetit: 32 });
+}
+
+/* ── l'enregistrement rectiligne et le quadrillage de 1 cm (vues échelle et élève) ── */
+function enregRect(c, sc, x0, y, n, pas) {
+  const X = i => x0 + i * pas * CM, pt = sc.petit, ts = pt ? 31 : 20;
+  // une bande de carreaux de 1 cm le long de la trajectoire
+  c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = 'rgba(148,163,184,.2)'; g.lineWidth = 1; const a = X(0) - CM, b = X(n - 1) + CM; for (let xx = a; xx <= b + .1; xx += CM) { g.beginPath(); g.moveTo(xx, y - CM / 2); g.lineTo(xx, y + CM / 2); g.stroke(); } g.beginPath(); g.moveTo(a, y - CM / 2); g.lineTo(b, y - CM / 2); g.moveTo(a, y + CM / 2); g.lineTo(b, y + CM / 2); g.stroke(); g.restore(); });
+  c.ligne(X(0) - 20, y, X(n - 1) + 30, y, { couleur: 'tresfaible', largeur: 1, duree: .05 });
+  for (let i = 0; i < n; i++) {
+    c.direct(() => P.point(c.ctx, X(i), y, 5.5));
+    c.texte('M_' + i, X(i), y - (pt ? 26 : 24), { couleur: 'blanc', taille: ts, align: 'center', duree: .04 });
+    c.repere('M' + i, X(i) - 12, y - 12, 24, 24, 'le point M' + i);
+  }
+  c.repere('enregistrement', X(0) - 14, y - 44, X(n - 1) - X(0) + 28, 60, 'l’enregistrement');
+  return X;
+}
+/** Les carreaux de 1 cm comptés depuis le point d'indice i : k carreaux, à partir de t0, 0,6 s chacun. */
+function carreaux(c, S, X, i, y, k, t0, pt, fige) {
+  const t = tps(S);
+  for (let j = 0; j < k; j++) {
+    if (S.t > 0 && t < t0 + j * .6) break;
+    const vive = S.t > 0 && !fige && t < t0 + (j + 1) * .6;
+    lueur(c, X(i) + j * CM + 2, y - CM / 2 + 2, CM - 4, CM - 4, { vive, r: 4, numero: j + 1, nx: X(i) + (j + .5) * CM, ny: y + CM / 2 + (pt ? 34 : 26), align: 'center', taille: pt ? 31 : 21 });
+  }
+}
+/** L'échelle dessinée : un segment de 1 cm et « 1 cm ↔ 0,5 m/s ». */
+function echelleDessin(c, sc, x, y, ecrire) {
+  const pt = sc.petit;
+  const dessin = () => {
+    c.cote(x, y, x + CM, y, '', { couleur: 'cyan' });
+    c.texte('1 cm ↔ 0,5 m/s', x + CM + 14, y + 8, { couleur: 'cyan', taille: pt ? 31 : 24, gras: true });
+    c.texte('échelle :', x, y - 30, { couleur: 'cyan', taille: pt ? 31 : 22 });
+  };
+  dessin();
+  c.repere('echelle', x - 4, y - 54, pt ? 330 : 250, 70, 'l’échelle : 1 cm pour 0,5 m/s');
+}
+
+/* ── vue échelle (méthode) ── */
+const ME = { enreg: .5, valeur: 2, echelle: 4, longueur: 6, compte: 8, trace: 10 };
+function dessinerEchelle(c, S, sc) {
+  const L = sc.L, pt = sc.petit, y = pt ? 150 : 128, x0 = 50, t = tps(S);
+  const X = enregRect(c, sc, x0, y, 8, 2);
+  c.texte(pt ? '2 cm · 20 ms' : 'τ = 20 ms · M_{i}M_{i+1} = 2 cm', L - 20, pt ? 46 : 44, { couleur: 'orange', taille: pt ? 31 : 21, gras: true, align: 'right' });
+  if (vu(S, 'valeur')) {
+    lueur(c, X(3) - 15, y - 15, 30, 30, { vive: S.t > 0 && !S.a('echelle') });
+    if (S.t > 0 && !S.a('echelle')) { lueur(c, X(2) - 12, y - 12, 24, 24, { couleur: '74, 222, 128' }); lueur(c, X(4) - 12, y - 12, 24, 24, { couleur: '74, 222, 128' }); }
+    c.repere('M3', X(3) - 15, y - 15, 30, 30, 'le point M3 : v3 = 1 m/s');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'echelle')) { if (!pt) echelleDessin(c, sc, 50, 290); else c.repere('echelle', 30, 300, L - 60, 60, 'l’échelle : 1 cm pour 0,5 m/s'); }
+  if (vu(S, 'compte')) carreaux(c, S, X, 3, y, 2, ME.compte, pt, S.a('trace'));
+  if (S.t <= 0 || S.ecrit(c, 'trace')) {
+    vecteur(c, X(3), y, X(3) + 2 * CM, y, { couleur: 'vert', nom: 'v_3', nx: X(3) + CM, ny: y - (pt ? 66 : 54), align: 'center', taille: pt ? 32 : 24, largeur: 4 });
+    c.repere('v3', X(3), y - 80, 2 * CM, 90, 'le vecteur v3 : 2 cm depuis M3');
+  }
+  panneau(c, S, sc, pt ? 30 : 340, 212, L - (pt ? 60 : 355), [
+    { m: 'valeur', t: 'v_3 = ⟦M_{2}M_{4}|2τ⟧ = ⟦0,04|0,04⟧ = 1 m/s', c: 'vert' },
+    pt && { m: 'echelle', t: '1 cm ↔ 0,5 m/s', c: 'cyan', g: true },
+    { m: 'longueur', t: 'longueur = ⟦1|0,5⟧ = 2 cm', c: 'jaune', g: true, r: 'longueur', lab: 'longueur du vecteur : 1/0,5 = 2 cm' },
+    { m: 'trace', t: '^v_3 : depuis M_3, 2 cm', c: 'vert', g: true },
+  ].filter(Boolean), { dy: 50, taille: 24, px: 30, py: 300, pw: L - 60, taillePetit: 32 });
+}
+
+/* ── vue élève : points à 3 cm ── */
+const MEl = { enreg: .5, valeur: 2, longueur: 4, trace: 6 };
+function dessinerEleve(c, S, sc) {
+  const L = sc.L, pt = sc.petit, y = pt ? 150 : 128, x0 = 50;
+  const X = enregRect(c, sc, x0, y, 6, 3);
+  c.texte(pt ? '3 cm · 20 ms' : 'τ = 20 ms · M_{i}M_{i+1} = 3 cm', L - 20, pt ? 46 : 44, { couleur: 'orange', taille: pt ? 31 : 21, gras: true, align: 'right' });
+  if (!pt) echelleDessin(c, sc, 50, 290); else c.repere('echelle', 30, 300, L - 60, 60, 'l’échelle : 1 cm pour 0,5 m/s');
+  if (vu(S, 'valeur')) { lueur(c, X(4) - 15, y - 15, 30, 30, { vive: S.t > 0 && !S.a('longueur') }); c.repere('M4', X(4) - 15, y - 15, 30, 30, 'le point M4 : v4 = 1,5 m/s'); }
+  if (vu(S, 'longueur')) {
+    if (S.conclusions) carreaux(c, S, X, 4, y, 3, MEl.longueur, pt, S.a('trace'));
+    c.repere('longueur', X(4), y - CM / 2, 3 * CM, CM, 'la longueur du vecteur : 1,5/0,5 = 3 cm');
+  }
+  if (vu(S, 'trace')) {
+    if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'trace'))) vecteur(c, X(4), y, X(4) + 3 * CM, y, { couleur: 'vert', nom: 'v_4', nx: X(4) + 1.5 * CM, ny: y - (pt ? 66 : 54), align: 'center', taille: pt ? 32 : 24, largeur: 4 });
+    c.repere('v4', X(4), y - 80, 3 * CM, 90, 'le vecteur v4 : 3 cm depuis M4');
+  }
+  panneau(c, S, sc, pt ? 30 : 340, 212, L - (pt ? 60 : 355), [
+    { m: 'valeur', t: 'v_4 = ⟦M_{3}M_{5}|2τ⟧ = ⟦0,06|0,04⟧ = 1,5 m/s', c: 'vert' },
+    { m: 'longueur', t: 'longueur = ⟦1,5|0,5⟧ = 3 cm', c: 'jaune', g: true, conclusion: true, lab: 'longueur du vecteur : 1,5/0,5 = 3 cm' },
+    { m: 'trace', t: '^v_4 : depuis M_4, 3 cm', c: 'vert', g: true, conclusion: true },
+  ], { dy: 52, taille: 24, px: 30, py: 300, pw: L - 60, taillePetit: 32 });
+}
+
+window.Mvt.vues('tc_mi_vecteur', {
+  caracteristiques: { titre: 'Le vecteur vitesse', moments: MC, fin: 12, dessiner: dessinerCaract,
+    motifs: { trajectoire: 'la trajectoire du ballon', origine: 'l’origine : M3', direction: 'la direction : la tangente', sens: 'le sens du mouvement', valeur: 'la valeur v3', vecteur: 'le vecteur v3' },
+    accueil: 'Un ballon lancé : sa trajectoire est courbe.', fini: 'En M3 : origine M3, direction la tangente, sens du mouvement, valeur v3 : le vecteur v3.',
+    voir: S => ['Trajectoire courbe d’un ballon, points M0 à M6 à intervalles de temps égaux.', S.a('origine') && 'M3 allumé : l’origine.', S.a('direction') && 'Tangente en M3 en pointillés cyan : la direction.', S.a('sens') && 'Flèche orange le long de la tangente : le sens du mouvement.', S.a('valeur') && 'Écrit : valeur v3 en m/s.', S.a('vecteur') && 'Flèche verte v3 partant de M3, le long de la tangente.'].filter(Boolean).join(' '),
+    texte: 'Le vecteur vitesse v3 en M3 : origine M3 ; direction : la tangente à la trajectoire en M3 ; sens : celui du mouvement ; valeur : la vitesse instantanée v3 (m/s).' },
+  echelle: { titre: 'Tracer un vecteur vitesse à l’échelle', moments: ME, fin: 12, dessiner: dessinerEchelle,
+    motifs: { enreg: 'l’enregistrement', valeur: 'v3 = 1 m/s', echelle: 'l’échelle', longueur: 'la longueur : 2 cm', compte: 'on compte les carreaux', trace: 'le vecteur v3' },
+    accueil: 'Un enregistrement rectiligne : 2 cm, τ = 20 ms.', fini: 'v3 = 1 m/s, échelle 1 cm ↔ 0,5 m/s : v3 mesure 2 cm, tracé depuis M3.',
+    voir: S => ['Enregistrement rectiligne M0 à M7, 2 cm entre deux points, sur une bande de carreaux de 1 cm.', S.a('valeur') && 'M3 allumé ; v3 = M2M4/(2τ) = 1 m/s.', S.a('echelle') && 'Échelle : 1 cm ↔ 0,5 m/s.', S.a('longueur') && 'Longueur = 1/0,5 = 2 cm.', S.a('compte') && 'Deux carreaux de 1 cm allumés un à un depuis M3 (1, 2).', S.a('trace') && 'Flèche verte v3 de 2 cm depuis M3, vers la droite.'].filter(Boolean).join(' '),
+    texte: 'v3 = 1 m/s. Échelle 1 cm ↔ 0,5 m/s : longueur = 1/0,5 = 2 cm. On trace v3 depuis M3, 2 cm, dans le sens du mouvement.' },
+  eleve: { titre: 'À toi : tracer v4', moments: MEl, fin: 8, dessiner: dessinerEleve,
+    motifs: { enreg: 'l’enregistrement', valeur: 'v4 = 1,5 m/s', longueur: 'la longueur', trace: 'le vecteur v4' },
+    accueil: 'Points à 3 cm, τ = 20 ms, échelle 1 cm ↔ 0,5 m/s.', fini: 'v4 = 1,5 m/s : longueur 1,5/0,5 = 3 cm ; v4 tracé depuis M4.',
+    voir: S => ['Enregistrement M0 à M5, points à 3 cm, τ = 20 ms ; échelle 1 cm ↔ 0,5 m/s.', S.a('valeur') && 'M4 allumé ; v4 = 1,5 m/s.', S.a('longueur') && (S.conclusions ? 'Trois carreaux de 1 cm allumés un à un depuis M4 : longueur = 1,5/0,5 = 3 cm.' : 'La longueur du vecteur n’est pas encore écrite.'), S.a('trace') && (S.conclusions ? 'Flèche verte v4 de 3 cm depuis M4.' : 'Le vecteur v4 n’est pas encore tracé.')].filter(Boolean).join(' '),
+    texte: 'Points à 3 cm, τ = 20 ms : v4 = 0,06/0,04 = 1,5 m/s. Échelle 1 cm ↔ 0,5 m/s : longueur = 1,5/0,5 = 3 cm ; v4 tracé depuis M4.' },
+});
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
