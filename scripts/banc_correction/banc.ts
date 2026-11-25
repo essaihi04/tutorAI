@@ -12,7 +12,8 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { EXAMEN, type PartieExamen, type QuestionExamen } from '../../frontend/src/publication/tronc-commun/sujet';
 import { SUJET_PHYSIQUE, SUJET_CHIMIE } from '../../frontend/src/publication/bac2pcf/sujets';
-import { configExamen, corpsCorrection, etatDeCorrection, noterValeur, noterChoix, texteDuSujet, utiliserSujet, type CorrectionTuteur, type Etat } from '../../frontend/src/publication/tronc-commun/Examen';
+import { SUJET_TCF } from '../../frontend/src/publication/tcf/sujet';
+import { choixLus, configExamen, corpsCorrection, etatDeCorrection, noterValeur, noterChoix, texteDuSujet, utiliserSujet, type CorrectionTuteur, type Etat } from '../../frontend/src/publication/tronc-commun/Examen';
 import { choixDuTexte } from '../../frontend/src/components/course/photoTelephone';
 
 const SITE = 'https://moalim.online/api/v1/public/classe';
@@ -24,6 +25,7 @@ const SUJETS: Record<string, { sujet: unknown; matiere: string; retour: string; 
   svt_tc: { sujet: { ...EXAMEN, programme: 'la sortie écologique ; les facteurs édaphiques (texture et structure, propriétés chimiques, propriétés hydriques du sol)' }, matiere: 'svt', retour: 'Tronc Commun', cle: 'examen' },
   physique: { sujet: SUJET_PHYSIQUE, matiere: 'physique', retour: '2ᵉ Bac PC', cle: 'examen_physique' },
   chimie: { sujet: SUJET_CHIMIE, matiere: 'chimie', retour: '2ᵉ Bac PC', cle: 'examen_chimie' },
+  tcf: { sujet: SUJET_TCF, matiere: 'physique', retour: 'Tronc Commun PC', cle: 'examen_tcf' },
 };
 const lettre = (k: number) => String.fromCharCode(65 + k);
 
@@ -71,7 +73,8 @@ async function appel<T>(chemin: string, corps: unknown, methode = 'POST', entete
       try {
         lu = (await appel<{ texte: string }>(`/${code}/lire`, { image_b64: image, image_mime: 'image/jpeg', question: q.id, enonce: enonceOcr.slice(0, 1500),
           titre: p.titre.slice(0, 300), matiere: s.matiere, niveau: configExamen().sujet.niveau, vocabulaire: motsDuSujet(p, q) })).texte;
-        if (q.genre === 'qcm' || q.genre === 'vf') etat = noterChoix(q, choixDuTexte(q.genre, q.items.length, lu));
+        if (q.genre === 'qcm') etat = noterChoix(q, choixLus(q, lu, choixDuTexte('qcm', q.items.length, lu)));
+        else if (q.genre === 'vf') etat = noterChoix(q, choixDuTexte('vf', q.items.length, lu));
         else if (q.genre === 'valeur') etat = await noterValeur(p, q, lu, corps => appel<CorrectionTuteur>(`/${code}/corriger`, { ...corps, question: { ...corps.question, photo: true } }));
         else {
           const corps = q.genre === 'redaction'

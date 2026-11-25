@@ -277,7 +277,7 @@ export const SUJET_TCF = {
           id: '3-5', genre: 'redaction', points: 1,
           texte: 'On prend M₀ comme origine de l’axe (Ox), orienté dans le sens du mouvement, et l’instant où M passe en M₁ comme origine des temps (t = 0). Écris l’équation horaire x(t) du mouvement de M.',
           attendu: 'x(t) = v·t + x₀ avec v = 2 m/s et x₀ = M₀M₁ = 4 cm = 0,04 m (abscisse de M à t = 0) : x(t) = 2t + 0,04 (x en m, t en s).',
-          elements: ['La forme x(t) = v·t + x₀', 'v = 2 m/s et x₀ = M₀M₁ = 0,04 m', 'x(t) = 2t + 0,04 (en m, t en s)'],
+          elements: ['La forme x(t) = v·t + x₀ (mouvement rectiligne uniforme)', 'La vitesse v = 2 m/s', 'L’abscisse initiale x₀ = M₀M₁ = 0,04 m, d’où x(t) = 2t + 0,04 (x en m, t en s)'],
           correction: ['Mouvement rectiligne uniforme : x(t) = v·t + x₀', 'v = 2 m/s ; à t = 0, M est en M₁ : x₀ = M₀M₁ = 4 cm = 0,04 m', 'x(t) = 2t + 0,04 (x en m, t en s)'],
         },
         { id: '3-6', genre: 'valeur', points: 0.5, texte: 'Figure 2 : calcule la vitesse angulaire ω du point M du disque.', grandeur: 'ω', valeur: 2, unites: ['rad/s', 'rad.s', 'rad·s', 'rad s'],

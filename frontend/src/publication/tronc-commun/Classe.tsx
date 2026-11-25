@@ -20,7 +20,7 @@ import { COULEUR_VERDICT, MOT_VERDICT, nomComplet, nomCourt, RapportEleve, Resul
 import { Formule } from '../../components/course/Formule';
 import { pts } from '../../components/exercice/types';
 import { choixDuTexte, lienComplet, lienCourt, octets, QrCode, reduireImage } from '../../components/course/photoTelephone';
-import { Choix, configExamen, corpsCorrection, DonneesPartie, etatDeCorrection, noterChoix, noterValeur, texteDuSujet, Verdict, type CorrectionTuteur, type Etat } from './Examen';
+import { Choix, configExamen, corpsCorrection, DonneesPartie, etatDeCorrection, choixLus, noterChoix, noterValeur, texteDuSujet, Verdict, type CorrectionTuteur, type Etat } from './Examen';
 import { Histogramme, histoVide, Triangle } from './Traces';
 import type { PartieExamen, QuestionExamen } from './sujet';
 
@@ -697,7 +697,7 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
       const { texte } = await appel<{ texte: string }>(`/${code}/lire`, { method: 'POST', body: JSON.stringify({
         image_b64: grande, image_mime: 'image/jpeg', question: q.id, enonce: enonceOcr.slice(0, 1500), titre: p.titre.slice(0, 300),
         matiere: configExamen().matiere, niveau: configExamen().sujet.niveau, vocabulaire }) });
-      poser({ phase: 'relire', mini, nette, lu: texte, texte, choix: q.genre === 'qcm' || q.genre === 'vf' ? choixDuTexte(q.genre, q.items.length, texte) : undefined });
+      poser({ phase: 'relire', mini, nette, lu: texte, texte, choix: q.genre === 'qcm' ? choixLus(q, texte, choixDuTexte('qcm', q.items.length, texte)) : q.genre === 'vf' ? choixDuTexte('vf', q.items.length, texte) : undefined });
     } catch (err) {
       poser({ phase: 'vide', erreur: (err as Error).message.replace(/^\d+$/, 'La photo n’a pas pu être lue : réessaie, ou écris la réponse.') });
     }

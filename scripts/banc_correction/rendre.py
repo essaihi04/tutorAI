@@ -180,6 +180,36 @@ def triangle(pl, x0, y0, spec):
     return y0 + cote + 60
 
 
+def fleche(pl, p, q, nom):
+    pl.trait(p, q, 4)
+    a = math.atan2(q[1] - p[1], q[0] - p[0])
+    for s in (-1, 1):
+        pl.trait(q, (q[0] - 18 * math.cos(a + s * 0.45), q[1] - 18 * math.sin(a + s * 0.45)), 4)
+    lx, ly = q[0] + 14, (p[1] + q[1]) / 2 - 20
+    pl.ecrire(lx, ly, jetons(nom), 0.8)
+    pl.trait((lx, ly - 2), (lx + 26, ly - 2), 2)
+    pl.trait((lx + 26, ly - 2), (lx + 19, ly - 7), 2)
+
+
+def forces(pl, x0, y0, spec):
+    """le palet sur la glace : le poids vers le bas, la réaction vers le haut (et une force de frottement si faux)"""
+    sol = y0 + 220
+    pl.trait((x0, sol), (x0 + 560, sol))
+    for k in range(0, 560, 40):
+        pl.trait((x0 + k, sol), (x0 + k - 20, sol + 22), 2)
+    g, d, h = x0 + 210, x0 + 350, sol - 70
+    pl.trait((g, sol), (g, h)); pl.trait((g, h), (d, h)); pl.trait((d, h), (d, sol))
+    G = ((g + d) / 2, (h + sol) / 2)
+    pl.d.ellipse([G[0] - 5, G[1] - 5, G[0] + 5, G[1] + 5], fill=pl.encre)
+    pl.ecrire(G[0] - 30, G[1] - 30, jetons('G'), 0.7)
+    fleche(pl, G, (G[0], G[1] + 170), 'P')
+    fleche(pl, ((g + d) / 2, sol), ((g + d) / 2, sol - 205), 'R')
+    if not spec.get('juste'):
+        fleche(pl, (g, sol - 20), (g - 140, sol - 20), 'f')
+    pl.ecrire(x0 + 440, sol - 60, jetons('palet'), 0.6)
+    return sol + 200
+
+
 def rendre(copie, chemin, graine):
     rnd = random.Random(graine)
     main = rnd.choice(MAINS)
@@ -187,7 +217,7 @@ def rendre(copie, chemin, graine):
     encre = rnd.choice([(20, 30, 120), (25, 25, 35), (30, 50, 140)])
     lignes = copie['texte'].split('\n')
     haut_txt = sum(150 if '\\frac' in l else 78 for l in lignes)
-    haut_dessin = {'tableau': 330, 'histo': 760, 'triangle': 620}.get((copie.get('dessin') or {}).get('type'), 0)
+    haut_dessin = {'tableau': 330, 'histo': 760, 'triangle': 620, 'forces': 460}.get((copie.get('dessin') or {}).get('type'), 0)
     W, H = 1400, max(600, 120 + haut_txt + haut_dessin + 80)
     papier = Image.new('RGB', (W, H), (rnd.randint(238, 250), rnd.randint(236, 248), rnd.randint(228, 242)))
     d = ImageDraw.Draw(papier)
@@ -207,6 +237,8 @@ def rendre(copie, chemin, graine):
             y = tableau(pl, 150, y + 10, dessin['lignes']) + 40
     if dessin and dessin['type'] == 'histo':
         histo(pl, 150, y + 10, dessin)
+    if dessin and dessin['type'] == 'forces':
+        forces(pl, 200, y + 10, dessin)
     if dessin and dessin['type'] == 'triangle':
         triangle(pl, 300, y + 40, dessin)
     papier = papier.rotate(rnd.uniform(-2.5, 2.5), resample=Image.BICUBIC, expand=True, fillcolor=(205, 200, 190))

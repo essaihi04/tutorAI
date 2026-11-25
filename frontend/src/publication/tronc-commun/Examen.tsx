@@ -133,6 +133,31 @@ export function noterChoix(q: Extract<QuestionExamen, { genre: 'qcm' | 'vf' }>, 
     retour: n === q.items.length ? 'Tout est juste.' : `${n} sur ${q.items.length} juste${n > 1 ? 's' : ''} : lis l’explication sous chaque proposition.` };
 }
 
+const motsDe = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(m => m.length >= 3 && !['les', 'des', 'une', 'est', 'qui'].includes(m));
+/** QCM lu sur une photo : chaque ligne donne une lettre (A–D) ou le texte du choix (« ② ballon », « ④ entrée de l'eau
+ *  froide ») ; le choix dont les mots couvrent le mieux la ligne. 25/11/2026 : une copie juste écrite en toutes lettres
+ *  était notée 0. Sinon, la lecture par lettres de choixDuTexte. */
+export function choixLus(q: Extract<QuestionExamen, { genre: 'qcm' }>, texte: string, parLettres: (number | boolean | null)[]): (number | null)[] {
+  // une ligne par proposition, sans son repère (« 1-1) », « ① », « a) »)
+  const lignes = texte.split(/[\n;]+/).map(l => l.replace(/^\s*(?:\d+\s*[-.]\s*\d+\s*\)?|\(?[a-h1-9]\s*[).:-])?\s*/i, '').trim()).filter(Boolean);
+  const parNumero = (k: number) => lignes.find(x => x.includes(String.fromCharCode(0x2460 + k)));
+  return q.items.map((it, k) => {
+    const lettre = typeof parLettres[k] === 'number' ? parLettres[k] as number : null;
+    const l = (parNumero(k) ?? (lignes.length === q.items.length ? lignes[k] : '')).replace(/[①-⑳]/g, ' ');
+    const lm = new Set(motsDe(l));
+    if (!lm.size) return lettre;
+    let mieux: number | null = null, score = 0;
+    it.choix.forEach((c, m) => {
+      const cm = motsDe(c);
+      const commun = cm.filter(w => lm.has(w)).length;
+      const s = commun ? commun / cm.length + commun * 0.01 : 0;
+      if (s > score) { score = s; mieux = m; }
+    });
+    // le texte d'un choix l'emporte ; sinon la lettre lue (une formule comme « C₂H₅ » peut passer pour la lettre C)
+    return score >= 0.5 ? mieux : lettre;
+  });
+}
+
 /** La partie d'une copie qui répond à la question `id` (« 1-1 », « 3-4 », « 2 ») : une photo prend souvent la page
  *  entière, avec d'autres questions (25/11/2026 : les « 1-1 » justes notés 0 parce que le dernier « = » de la page était
  *  celui de la 2-1). Repères reconnus en début de ligne : « 1-1) », « 1.1 : », « Q1-1 », « 1) » après « Exercice 1 ».
@@ -203,13 +228,17 @@ export function jugerValeur(q: Extract<QuestionExamen, { genre: 'valeur' }>, tex
   const lignes = lignesDeLaGrandeur(toute, q.grandeur);
   const partie = lignes.length ? lignes.join(String.fromCharCode(10)) : toute;
   const tol = q.tolerance ?? 0.02;
-  const bon = (v: number) => Math.abs(v - q.valeur) <= tol * Math.max(Math.abs(q.valeur), 1e-12);
+  // la tolérance est relative à la valeur attendue (25/11/2026 : l'ancien plancher de 10⁻¹² acceptait n'importe quel
+  // nombre devant 4×10⁻²⁶ kg ou 3,2×10⁻¹⁹ C, même de signe contraire)
+  const bon = (v: number) => (q.valeur === 0 ? Math.abs(v) <= 1e-9 : Math.abs(v - q.valeur) <= tol * Math.abs(q.valeur));
   const valeurs = resultatsEcrits(partie);
   const juste = valeurs.some(bon);
   // le résultat lu : le bon s'il est écrit, sinon le dernier résultat de la partie
   const lu = juste ? q.valeur : valeurs.length ? valeurs[valeurs.length - 1] : null;
   const t = toute.toLowerCase().replace(/\s+/g, ' ');
-  const unite = q.unites.some(u => t.includes(u.toLowerCase()));
+  // une unité d'une ou deux lettres (« C », « j », « m ») doit être un mot à elle seule
+  const unite = q.unites.some(u => { const v = u.toLowerCase().trim(); if (!v) return true;
+    return v.length <= 2 ? new RegExp(`(^|[^a-zà-ÿ])${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-zà-ÿ]|$)`).test(t) : t.includes(v); });
   const sansUnite = juste && !unite && q.points > 0.25;
   // le résultat porte les points ; l'unité vaut 0,25 point quand la question en vaut plus
   const surUnite = q.points > 0.25 ? 0.25 : 0;
@@ -233,7 +262,7 @@ export function corpsValeur(p: PartieExamen, q: Extract<QuestionExamen, { genre:
 }
 const auQuart = (n: number) => Math.round(n * 4) / 4;
 /** la question demande aussi une conclusion (« Conclure », « En déduire… la nature ») : un nombre juste ne suffit pas */
-export const demandeConclusion = (q: QuestionExamen) => /\bconclu/i.test(q.texte);
+export const demandeConclusion = (q: QuestionExamen) => /\bconclu|\?\s*$/i.test(q.texte.trim());
 
 /** Un calcul noté comme sur la copie du national (25/11/2026, banc de 51 copies) :
  *  - résultat juste : la note du résultat ; si la question demande une conclusion, le tuteur la note aussi (elle vaut
