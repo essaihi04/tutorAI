@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La chromatographie sur couche mince — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/chimie/tc_synthese-tableau/synthese.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La chromatographie sur couche mince, pas à pas : la plaque et l’éluant, les dépôts, l’éluant qui monte et entraîne les taches, la révélation, puis la lecture du chromatogramme et le calcul du rapport frontal"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
+<script src="/media/simulations/chimie/tc_synthese-tableau/commun.js"></script>
+<script>
+/*
+ * La CCM, une vue par diapo. Une seule plaque pour tout le cours (P.plaque de commun.js) ; la « plaque 1 » (dépôts A, B, P ;
+ * H = 8 cm ; A monte de 4 cm, B de 2 cm ; P donne deux taches, à 4 cm et à 2 cm) sert du dépôt jusqu'au calcul de Rf.
+ *   ?vue=principe      (sy_c1_principe)    moments : plaque, cuve, monte, bilan
+ *   ?vue=depot         (sy_c2_depot)       moments : ligne, depotA, depotB, depotP, sec
+ *   ?vue=elution       (sy_c3_elution)     moments : plonger, niveau, couvercle, monte, front
+ *   ?vue=revelation    (sy_c4_revelation)  moments : incolores, uv, diiode, chromatogramme
+ *   ?vue=compter       (sy_c5_compter)     moments : A, B, P, conclusion
+ *   ?vue=identifier    (sy_c6_identifier)  moments : hauteurA, hauteurB, conclusion, pure
+ *   ?vue=rf            (sy_c7_rf)          moments : H, hA, formule, calculA, hB, calculB, soluble
+ *   ?vue=rf_eleve      (sy_c8_rf_eleve)    moments : plaque, H, h, atoi, reponse
+ *   ?vue=application   (sy_a2_chromatogramme) moments : depots, compterD, C, conclusion
+ *   ?vue=application_rf (sy_a3_rf)        moments : H, hA, rfA, hB, atoi, rfB, soluble
+ * set_parameters {conclusions: false} : la conclusion ou la réponse de l'élève reste cachée tant que la question est ouverte.
+ * Compter = allumer : chaque centimètre de la règle et chaque tache s'allume à son tour avec son numéro.
+ */
+const { P, lueur, lignes, param } = window.Synthese;
+const VUES = ['principe', 'depot', 'elution', 'revelation', 'compter', 'identifier', 'rf', 'rf_eleve', 'application', 'application_rf'];
+const VUE = VUES.includes(param('vue')) ? param('vue') : 'principe';
+const MOMENTS = {
+  principe: { plaque: .5, cuve: 3.5, monte: 6.5, bilan: 13 },
+  depot: { ligne: .5, depotA: 3, depotB: 5.5, depotP: 8, sec: 10.5 },
+  elution: { plonger: .5, niveau: 3, couvercle: 5.5, monte: 8, front: 14.5 },
+  revelation: { incolores: .5, uv: 3, diiode: 7.5, chromatogramme: 11 },
+  compter: { A: .5, B: 3, P: 5.5, conclusion: 9 },
+  identifier: { hauteurA: .5, hauteurB: 3.5, conclusion: 6.5, pure: 9.5 },
+  rf: { H: .5, hA: 4.5, formule: 7.5, calculA: 10, hB: 12.5, calculB: 14.5, soluble: 17 },
+  rf_eleve: { plaque: .5, H: 2, h: 7, atoi: 10, reponse: 11.5 },
+  application: { depots: .5, compterD: 3.5, C: 8, conclusion: 11.5 },
+  application_rf: { H: .5, hA: 5, rfA: 7, hB: 9, atoi: 11.5, rfB: 13, soluble: 15 },
+};
+const M = MOMENTS[VUE];
+const FIN = Math.max(...Object.values(M)) + 3;
+const k01 = v => Math.max(0, Math.min(1, v));
+const VIOLET = [76, 29, 149], BRUN = [146, 64, 14];
+
+/* Les plaques du cours (hauteurs en cm au-dessus de la ligne de dépôt). */
+const PLAQUE1 = { H: 8, depots: [{ nom: 'A', h: [4] }, { nom: 'B', h: [2] }, { nom: 'P', h: [4, 2] }] };
+const PLAQUE_X = { H: 10, depots: [{ nom: 'X', h: [6] }] };
+const PLAQUE_APP = { H: 10, depots: [{ nom: 'A', h: [3] }, { nom: 'B', h: [6] }, { nom: 'C', h: [3, 6] }, { nom: 'D', h: [1.5, 6, 8.5] }] };
+const PL = { rf_eleve: PLAQUE_X, application: PLAQUE_APP, application_rf: PLAQUE_APP }[VUE] || PLAQUE1;
+
+/** Géométrie de la plaque : 1 cm sous la ligne de dépôt, 1 cm au-dessus du front. */
+function geo(scene, o = {}) {
+  const pt = scene.petit, L = scene.L, n = PL.depots.length;
+  const Ht = PL.H + 2, ph = o.ph || (pt ? 318 : 312), pc = ph / Ht, pw = Math.max(130, 50 * n + 30);
+  const x = o.x ?? (pt ? 92 : Math.max(90, L * .14)), y = o.y ?? (pt ? 46 : 52);
+  const yLigne = y + ph - pc, yFront = yLigne - PL.H * pc;
+  const ux = i => x + pw * (i + .5) / n;
+  return { x, y, pw, ph, pc, Ht, yLigne, yFront, ux, vLigne: 1 / Ht, vFront: (1 + PL.H) / Ht, v: h => (1 + h) / Ht, yh: h => yLigne - h * pc, xt: x + pw + (pt ? 40 : 60) };
+}
+/** Les taches de la plaque. o.prog (0..1) : jusqu'où l'éluant les a entraînées ; o.vis : 'fantome' | 'uv' | 'diiode' | 'net'. */
+function taches(G, o = {}) {
+  const prog = o.prog ?? 1, out = [];
+  PL.depots.forEach((d, i) => d.h.forEach(h => {
+    const vis = o.vis || 'net', col = vis === 'diiode' ? BRUN : VIOLET;
+    out.push({ u: (i + .5) / PL.depots.length, v: G.v(h * prog), r: 7, col, a: vis === 'fantome' ? .22 : vis === 'uv' ? .9 : 1, cerne: o.cerne });
+  }));
+  return out;
+}
+function noms(c, G, o = {}) {
+  const pt = o.pt;
+  PL.depots.forEach((d, i) => c.texte(d.nom, G.ux(i), G.y + G.ph + (pt ? 30 : 24), { couleur: 'jaune', taille: pt ? 28 : 21, gras: true, align: 'center' }));
+}
+/** Compter les centimètres en allumant (règle à gauche) : de 0 à n, le cm i s'allume à t0 + i·dt. */
+function compterCm(c, S, G, nom, n, xr, dt, o = {}) {
+  if (!(S.t <= 0 || S.a(nom))) return 0;
+  const t0 = MOMENTS[VUE][nom], nb = S.t <= 0 ? n : Math.min(n, Math.floor((S.t - t0) / dt) + 1);
+  for (let i = 0; i < nb; i++) {
+    const y1 = G.yLigne - (i + 1) * G.pc;
+    lueur(c, xr - 4, y1, 38, G.pc, { vive: i === nb - 1 && o.vive !== false, couleur: o.couleur });
+    if (!o.sansNumeros || i === nb - 1) c.texte(String(i + 1), xr - 10, y1 + 6, { couleur: 'jaune', taille: o.taille || 16, align: 'right', gras: true, duree: .05 });
+  }
+  return nb;
+}
+/** Une cote verticale (flèche double) de la ligne de dépôt jusqu'à y, avec son nom. */
+function cote(c, x, y1, y2, nom, coul, o = {}) {
+  c.fleche(x, y1, x, y2, { couleur: coul, largeur: 2.2 }); c.fleche(x, y2, x, y1, { couleur: coul, largeur: 2.2 });
+  if (nom) c.texte(nom, x + (o.dx ?? 8), (y1 + y2) / 2 + 6, { couleur: coul, taille: o.taille || 20, gras: true, align: o.align || 'left' });
+}
+/** Une colonne de lignes écrites à droite, chacune à son moment ; sur téléphone, seulement la dernière dite. */
+function colonne(c, S, scene, G, L_, o = {}) {
+  const pt = scene.petit, L = scene.L, xt = o.xt ?? G.xt, w = L - xt - 10;
+  let dernier = -1; L_.forEach((l, i) => { if (S.t <= 0 || S.a(l.m)) dernier = i; });
+  let y = o.y0 ?? 52;
+  L_.forEach((l, i) => {
+    const visible = S.t <= 0 || S.a(l.m);
+    const taille = pt ? (l.tp || 28) : (l.t || 19), haut = l.frac ? taille * 2.1 : taille * 1.35;
+    const morceaux = l.frac ? [l.txt] : lignes(c, l.txt, w * .94, taille);
+    const hBloc = morceaux.length * haut + 6;
+    if (pt) { if (i !== dernier) return; y = o.y0p ?? 90; }
+    if (l.cache && !S.conclusions) { y += hBloc; return; }
+    if (visible && (S.t <= 0 || S.ecrit(c, l.m))) {
+      if (!pt && i === dernier && S.t > 0 && !o.sansLueur) lueur(c, xt - 8, y - 4, Math.min(w + 4, 560), hBloc, { vive: true });
+      morceaux.forEach((m, j) => c.texte(m, xt, y + (l.frac ? taille * 1.25 : taille) + j * haut, { couleur: l.c || 'blanc', taille, gras: !!l.g, max: w }));
+      c.repere(l.r || ('l_' + l.m), xt - 8, y - 4, Math.min(w + 4, 560), hBloc, l.txt.replace(/⟦([^|]*)\|([^⟧]*)⟧/g, '$1/$2'));
+    }
+    y += hBloc + (pt ? 0 : (l.ecart ?? 8));
+  });
+}
+
+/* ── principe : la plaque, l'éluant, deux espèces qui montent à des vitesses différentes ── */
+function dessinerPrincipe(c, S, scene) {
+  const pt = scene.petit, tous = S.t <= 0;
+  const G = geo(scene, { ph: 288, y: 82 });
+  const cuve = tous || S.a('cuve'), prog = tous ? 1 : S.kl('monte', 5.5);
+  if (tous || S.ecrit(c, 'plaque')) {
+    c.direct(() => {
+      const g = c.ctx, cx = G.x - 24, cw = G.pw + 48, cy = G.y - 30, ch = G.ph + 40;
+      if (cuve) P.cuve(g, cx, cy, cw, ch, 22);
+      P.plaque(g, G.x, G.y, G.pw, G.ph, { ligne: G.vLigne, mouille: cuve ? (G.vLigne * .6 + prog * (G.vFront - G.vLigne * .6)) : 0, front: prog >= 1 ? G.vFront : null,
+        taches: [{ u: .3, v: G.v(PL.H * .75 * prog), r: 8, col: [37, 99, 235] }, { u: .7, v: G.v(PL.H * .3 * prog), r: 8, col: [220, 38, 38] }] });
+      if (cuve) P.cuveDevant(g, cx, cy, cw, ch, { couvercle: 1 });
+    });
+    c.repere('plaque', G.x, G.y, G.pw, G.ph, 'la plaque : la phase fixe');
+    if (cuve) c.repere('cuve', G.x - 24, G.y - 30, G.pw + 48, G.ph + 40, 'la cuve et l’éluant : la phase mobile');
+    if (tous || S.a('monte')) c.repere('monte', G.x, G.y, G.pw, G.ph, 'l’éluant monte et entraîne les espèces');
+  }
+  colonne(c, S, scene, G, [
+    { m: 'plaque', txt: 'la plaque : la phase fixe', c: 'jaune', g: 1 },
+    { m: 'plaque', r: 'gel', txt: 'une couche blanche de gel de silice', t: 17, tp: 26 },
+    { m: 'cuve', txt: 'l’éluant : la phase mobile', c: 'cyan', g: 1 },
+    { m: 'cuve', r: 'solvant', txt: 'un solvant au fond d’une cuve fermée', t: 17, tp: 26 },
+    { m: 'monte', txt: 'l’éluant monte et entraîne les espèces', c: 'blanc', g: 1 },
+    { m: 'bilan', txt: 'chaque espèce monte à sa vitesse : elles se séparent', c: 'vert', g: 1, cache: true },
+  ]);
+}
+
+/* ── dépôt : la ligne au crayon, les trois dépôts, le séchage ── */
+function dessinerDepot(c, S, scene) {
+  const pt = scene.petit, tous = S.t <= 0, G = geo(scene);
+  const kl = tous ? 1 : S.kl('ligne', 1.6);
+  const deposes = ['depotA', 'depotB', 'depotP'].filter(m => tous || S.a(m)).length;
+  c.direct(() => {
+    const g = c.ctx;
+    P.plaque(g, G.x, G.y, G.pw, G.ph, { taches: PL.depots.slice(0, deposes).map((d, i) => ({ u: (i + .5) / 3, v: G.vLigne, r: 5, col: [100, 116, 139], a: .8 })) });
+    g.strokeStyle = 'rgba(71,85,105,.85)'; g.lineWidth = 1.3; g.beginPath(); g.moveTo(G.x + 4, G.yLigne); g.lineTo(G.x + 4 + (G.pw - 8) * kl, G.yLigne); g.stroke();
+    if (!tous && S.a('ligne') && !S.a('depotA')) P.crayon(g, G.x + 4 + (G.pw - 8) * kl, G.yLigne, 80, -.9);
+    const enCours = ['depotA', 'depotB', 'depotP'].findIndex(m => !tous && S.a(m) && S.t < M[m] + 2);
+    if (enCours >= 0) { const f = S.kl(['depotA', 'depotB', 'depotP'][enCours], 1); P.capillaire(g, G.ux(enCours), G.yLigne - 30 * (1 - Math.min(1, f * 2)) - 2, 80); }
+  });
+  c.repere('ligne', G.x, G.yLigne - 10, G.pw, 20, 'la ligne de dépôt');
+  if (tous || S.a('ligne')) { cote(c, G.x + G.pw + 14, G.y + G.ph, G.yLigne, pt ? '' : '1 cm', 'orange', { taille: 17 }); }
+  PL.depots.forEach((d, i) => { if (tous || S.a('depot' + d.nom)) { c.texte(d.nom, G.ux(i), G.y + G.ph + (pt ? 30 : 24), { couleur: 'jaune', taille: pt ? 28 : 21, gras: true, align: 'center' }); c.repere('depot' + d.nom, G.ux(i) - 16, G.yLigne - 16, 32, 32, 'le dépôt ' + d.nom); } });
+  colonne(c, S, scene, G, [
+    { m: 'ligne', txt: 'ligne de dépôt au crayon, à 1 cm du bas', c: 'jaune', g: 1 },
+    { m: 'depotA', txt: 'A : une espèce pure (référence)', c: 'cyan' },
+    { m: 'depotB', txt: 'B : une autre espèce pure', c: 'cyan' },
+    { m: 'depotP', txt: 'P : le produit à analyser', c: 'orange', g: 1 },
+    { m: 'depotP', r: 'capillaire', txt: 'une petite goutte avec un tube fin', t: 17, tp: 26 },
+    { m: 'sec', txt: 'on laisse sécher les dépôts', c: 'vert', g: 1 },
+  ], { xt: G.xt + 40 });
+}
+
+/* ── élution : la plaque dans la cuve, l'éluant monte, les taches suivent ── */
+function dessinerElution(c, S, scene) {
+  const pt = scene.petit, tous = S.t <= 0, G = geo(scene, { ph: 288, y: 82 });
+  const kp = tous ? 1 : S.k('plonger', 2), couv = tous ? 1 : S.k('couvercle', 1.2), prog = tous ? 1 : S.kl('monte', 6);
+  const sortie = tous || S.a('front');
+  const dy = (1 - kp) * -120;
+  c.direct(() => {
+    const g = c.ctx, cx = G.x - 24, cw = G.pw + 48, cy = G.y - 30, ch = G.ph + 40;
+    P.cuve(g, cx, cy, cw, ch, 22);
+    g.save(); g.translate(0, dy);
+    P.plaque(g, G.x, G.y, G.pw, G.ph, { ligne: G.vLigne, mouille: kp >= 1 ? (G.vLigne * .55 + prog * (G.vFront - G.vLigne * .55)) : 0, front: sortie ? G.vFront : null, taches: taches(G, { prog, vis: 'fantome' }) });
+    g.restore();
+    P.cuveDevant(g, cx, cy, cw, ch, { couvercle: couv });
+    if (sortie && !pt) P.crayon(g, G.x + G.pw - 4, G.yFront, 70, -.9);
+  });
+  noms(c, G, { pt });
+  c.repere('cuve', G.x - 24, G.y - 30, G.pw + 48, G.ph + 40, 'la cuve');
+  if (tous || S.a('niveau')) { c.repere('niveau', G.x - 24, G.yLigne - 12, G.pw + 48, 40, 'l’éluant sous la ligne de dépôt'); if (!pt) c.ligne(G.x + G.pw + 26, G.yLigne + 14, G.x + G.pw + 54, G.yLigne + 14, { couleur: 'cyan', largeur: 1.4 }); }
+  if (tous || S.a('couvercle')) c.repere('couvercle', G.x - 30, G.y - 44, G.pw + 60, 20, 'le couvercle');
+  if (tous || S.a('monte')) c.repere('monte', G.x, G.yFront, G.pw, G.yLigne - G.yFront, 'l’éluant qui monte');
+  if (sortie) c.repere('front', G.x, G.yFront - 10, G.pw, 20, 'le front de l’éluant');
+  colonne(c, S, scene, G, [
+    { m: 'plonger', txt: 'on pose la plaque dans la cuve', c: 'jaune', g: 1 },
+    { m: 'niveau', txt: 'l’éluant reste sous la ligne de dépôt', c: 'cyan', g: 1 },
+    { m: 'couvercle', txt: 'on ferme la cuve', c: 'orange', g: 1 },
+    { m: 'monte', txt: 'l’éluant monte et entraîne les espèces', c: 'blanc', g: 1 },
+    { m: 'front', txt: 'on sort la plaque et on marque le front', c: 'vert', g: 1 },
+  ], { xt: G.xt + 30 });
+}
+
+/* ── révélation : incolores, lampe UV, diiode ── */
+function dessinerRevelation(c, S, scene) {
+  const pt = scene.petit, tous = S.t <= 0, G = geo(scene);
+  const uv = !tous && S.a('uv') && !S.a('diiode'), di = !tous && S.a('diiode') && !S.a('chromatogramme');
+  const vis = tous || S.a('chromatogramme') ? 'net' : di ? 'diiode' : uv ? 'uv' : 'fantome';
+  const kuv = uv ? S.k('uv', 1) : 0, kdi = di ? S.k('diiode', 2) : 0;
+  c.direct(() => {
+    const g = c.ctx;
+    if (di) P.diiode(g, G.x - 22, G.y - 24, G.pw + 44, G.ph + 34, kdi);
+    const tt = taches(G, { vis: vis === 'fantome' ? 'fantome' : vis, cerne: tous || S.a('chromatogramme') || (uv && S.kl('uv', 3) >= 1) });
+    if (vis === 'fantome') tt.forEach(t => { t.a = .0; });
+    if (uv) tt.forEach(t => { t.a = Math.min(1, kuv * 1.2); });
+    if (di) tt.forEach(t => { t.a = kdi; });
+    P.plaque(g, G.x, G.y, G.pw, G.ph, { ligne: G.vLigne, front: G.vFront, taches: tt });
+    if (uv) { P.lampeUV(g, G.x + G.pw / 2, G.y - 40, G.pw + 20, kuv); g.save(); g.fillStyle = `rgba(139,92,246,${.12 * kuv})`; g.fillRect(G.x, G.y, G.pw, G.ph); g.restore(); }
+    if (uv && S.kl('uv', 3) >= 1 && S.t < M.uv + 4.3) P.crayon(g, G.ux(2) + 12, G.yh(4) + 4, 70, -.9);
+  });
+  noms(c, G, { pt });
+  c.repere('plaque', G.x, G.y, G.pw, G.ph, 'la plaque');
+  if (uv || tous) c.repere('uv', G.x - 10, G.y - 40, G.pw + 20, 30, 'la lampe UV');
+  if (di) c.repere('diiode', G.x - 22, G.y - 24, G.pw + 44, G.ph + 34, 'le diiode');
+  if (tous || S.a('chromatogramme')) c.repere('chromatogramme', G.x, G.y, G.pw, G.ph, 'le chromatogramme');
+  colonne(c, S, scene, G, [
+    { m: 'incolores', txt: 'les espèces sont souvent incolores : on ne voit rien', c: 'blanc', g: 1 },
+    { m: 'uv', txt: 'sous une lampe UV, les taches paraissent', c: 'cyan', g: 1 },
+    { m: 'uv', r: 'entourer', txt: 'on les entoure au crayon', t: 17, tp: 26 },
+    { m: 'diiode', txt: 'ou : des vapeurs de diiode les colorent en brun', c: 'orange', g: 1 },
+    { m: 'chromatogramme', txt: 'la plaque révélée : le chromatogramme', c: 'vert', g: 1 },
+  ], { xt: G.xt + 20 });
+}
+
+/* ── compter les taches de chaque dépôt (allumer en comptant) ── */
+function dessinerCompter(c, S, scene) {
+  const pt = scene.petit, tous = S.t <= 0, G = geo(scene);
+  c.direct(() => P.plaque(c.ctx, G.x, G.y, G.pw, G.ph, { ligne: G.vLigne, front: G.vFront, taches: taches(G, { cerne: true }) }));
+  noms(c, G, { pt });
+  const quand = [['A', M.A, [4]], ['B', M.B, [2]], ['P', M.P, [4, 2]]];
+  quand.forEach(([nom, t0, hs], i) => {
+    c.repere(nom, G.ux(i) - 20, G.y, 40, G.ph, 'le dépôt ' + nom);
+    hs.forEach((h, j) => {
+      const tj = t0 + j * 1.3;
+      if (!(tous || S.t >= tj)) return;
+      const actif = !tous && S.t >= tj && S.t < tj + 1.3 + (j === hs.length - 1 ? 1.2 : 0);
+      lueur(c, G.ux(i) - 14, G.yh(h) - 12, 28, 24, { vive: actif, numero: j + 1, nx: G.ux(i) + 26, ny: G.yh(h) + 7, align: 'center', taille: pt ? 26 : 20 });
+    });
+  });
+  colonne(c, S, scene, G, [
+    { m: 'A', txt: 'A : 1 tache', c: 'cyan', g: 1 },
+    { m: 'B', txt: 'B : 1 tache', c: 'cyan', g: 1 },
+    { m: 'P', txt: 'P : 2 taches', c: 'orange', g: 1 },
+    { m: 'conclusion', txt: 'une espèce pure : une seule tache', c: 'vert', g: 1, cache: true },
+    { m: 'conclusion', r: 'melange', txt: 'plusieurs taches : un mélange', c: 'vert', g: 1, cache: true },
+  ], { xt: G.xt + 30 });
+}
+
+/* ── identifier : même hauteur = même espèce ── */
+function dessinerIdentifier(c, S, scene) {
+  const pt = scene.petit, tous = S.t <= 0, G = geo(scene);
+  c.direct(() => P.plaque(c.ctx, G.x, G.y, G.pw, G.ph, { ligne: G.vLigne, front: G.vFront, taches: taches(G, { cerne: true }) }));
+  noms(c, G, { pt });
+  [['hauteurA', 4, 0, 'cyan'], ['hauteurB', 2, 1, 'orange']].forEach(([m, h, i, coul]) => {
+    if (!(tous || S.ecrit(c, m))) return;
+    c.ligne(G.x - 6, G.yh(h), G.x + G.pw + 10, G.yh(h), { couleur: coul, largeur: 2, pointille: [6, 4] });
+    const actif = !tous && S.a(m) && !S.a(m === 'hauteurA' ? 'hauteurB' : 'conclusion');
+    lueur(c, G.ux(i) - 14, G.yh(h) - 12, 28, 24, { vive: actif });
+    lueur(c, G.ux(2) - 14, G.yh(h) - 12, 28, 24, { vive: actif });
+    c.repere(m, G.x, G.yh(h) - 14, G.pw, 28, m === 'hauteurA' ? 'même hauteur que A' : 'même hauteur que B');
+  });
+  colonne(c, S, scene, G, [
+    { m: 'hauteurA', txt: 'une tache de P à la hauteur de A : P contient A', c: 'cyan', g: 1 },
+    { m: 'hauteurB', txt: 'l’autre tache à la hauteur de B : P contient B', c: 'orange', g: 1 },
+    { m: 'conclusion', txt: 'même hauteur → même espèce', c: 'vert', g: 1, cache: true },
+    { m: 'pure', txt: 'P n’est pas pur : il contient A et B', c: 'jaune', g: 1, cache: true },
+  ], { xt: G.xt + 20 });
+}
+
+/* ── Rf : le tuteur (plaque 1), l'élève (plaque X), l'application ── */
+function dessinerRf(c, S, scene) {
+  const pt = scene.petit, tous = S.t <= 0, app = VUE === 'application_rf', eleve = VUE === 'rf_eleve';
+  const G = geo(scene, { x: pt ? 120 : Math.max(120, scene.L * .17) });
+  const xr = G.x - 46;
+  const a = m => tous || S.a(m);
+  c.direct(() => { const g = c.ctx; P.regle(g, xr, G.yLigne, PL.H, G.pc); P.plaque(g, G.x, G.y, G.pw, G.ph, { ligne: G.vLigne, front: G.vFront, taches: taches(G, { cerne: true }) }); });
+  noms(c, G, { pt });
+  c.repere('regle', xr, G.yFront - 10, 30, G.yLigne - G.yFront + 20, 'la règle');
+  // H : de la ligne de dépôt au front (compté cm par cm)
+  const enH = !tous && S.a('H') && !S.a(eleve ? 'h' : 'hA');
+  if (a('H')) {
+    const n = compterCm(c, S, G, 'H', PL.H, xr, .38, { sansNumeros: !enH && !tous, vive: enH });
+    if (n >= PL.H || tous || !enH) { cote(c, G.x + G.pw + 18, G.yLigne, G.yFront, 'H = ' + PL.H + ' cm', 'jaune', { taille: pt ? 26 : 20 }); c.repere('cote_H', G.x + G.pw + 8, G.yFront, 120, G.yLigne - G.yFront, 'H : de la ligne de dépôt au front'); }
+  }
+  const cotes = eleve ? [['h', 0, 'h']] : [['hA', 0, 'h(A)'], ['hB', 1, 'h(B)']];
+  cotes.forEach(([m, i, nom]) => {
+    if (!a(m)) return;
+    const h = PL.depots[i].h[0], en = !tous && S.a(m) && !S.a(eleve ? 'atoi' : (m === 'hA' ? (app ? 'rfA' : 'formule') : (app ? 'atoi' : 'calculB')));
+    if (en) compterCm(c, S, G, m, h, xr, .38, { couleur: '34, 211, 238' });
+    const xc = G.ux(i) + (i === 0 ? -22 : 22);
+    if (!en || S.t - M[m] > h * .38) {
+      cote(c, xc, G.yLigne, G.yh(h), '', 'cyan');
+      const val = String(h).replace('.', ',') + ' cm';
+      c.direct(() => P.ecrit(c.ctx, val, xc + (i === 0 ? 6 : -6), (G.yLigne + G.yh(h)) / 2 + (h < 3 ? 0 : 14), pt ? 26 : 17, '#0e7490', i === 0 ? 'left' : 'right'));
+    }
+    c.repere('cote_' + m, xc - 10, G.yh(h), 20, G.yLigne - G.yh(h), nom + ' : de la ligne de dépôt au centre de la tache');
+  });
+  const L_ = eleve ? [
+    { m: 'plaque', txt: 'une autre plaque : l’espèce X', c: 'jaune', g: 1 },
+    { m: 'H', txt: 'H = 10 cm', c: 'jaune', g: 1 },
+    { m: 'h', txt: 'h = 6 cm', c: 'cyan', g: 1 },
+    { m: 'atoi', txt: 'À toi : Rf(X) = ?', c: 'orange', g: 1 },
+    { m: 'reponse', txt: 'Rf(X) = ⟦h|H⟧ = ⟦6|10⟧ = 0,6', c: 'vert', g: 1, frac: true, t: 24, tp: 30, cache: true },
+  ] : app ? [
+    { m: 'H', txt: 'H = 10 cm', c: 'jaune', g: 1 },
+    { m: 'hA', txt: 'h(A) = 3 cm', c: 'cyan', g: 1 },
+    { m: 'rfA', txt: 'Rf(A) = ⟦3|10⟧ = 0,3', c: 'cyan', g: 1, frac: true, t: 22, tp: 28 },
+    { m: 'hB', txt: 'h(B) = 6 cm', c: 'cyan', g: 1 },
+    { m: 'atoi', txt: 'À toi : Rf(B) = ?', c: 'orange', g: 1 },
+    { m: 'rfB', txt: 'Rf(B) = ⟦6|10⟧ = 0,6', c: 'vert', g: 1, frac: true, t: 22, tp: 28, cache: true },
+    { m: 'soluble', txt: 'Rf(B) > Rf(A) : B est plus soluble dans l’éluant', c: 'vert', g: 1, cache: true },
+  ] : [
+    { m: 'H', txt: 'H : de la ligne de dépôt au front', c: 'jaune', g: 1, t: 18 },
+    { m: 'hA', txt: 'h : de la ligne au centre de la tache', c: 'cyan', g: 1, t: 18 },
+    { m: 'formule', txt: 'Rf = ⟦h|H⟧  sans unité, entre 0 et 1', c: 'jaune', g: 1, frac: true, t: 22, tp: 28 },
+    { m: 'calculA', txt: 'Rf(A) = ⟦4|8⟧ = 0,5', c: 'cyan', g: 1, frac: true, t: 22, tp: 28 },
+    { m: 'calculB', txt: 'Rf(B) = ⟦2|8⟧ = 0,25', c: 'orange', g: 1, frac: true, t: 22, tp: 28 },
+    { m: 'soluble', txt: 'Rf(A) > Rf(B) : A est plus soluble dans l’éluant', c: 'vert', g: 1, cache: true },
+  ];
+  colonne(c, S, scene, G, L_, { xt: G.xt + (pt ? 110 : 120), y0: 40 });
+}
+
+/* ── application : quatre dépôts A, B, C, D ── */
+function dessinerApplication(c, S, scene) {
+  const pt = scene.petit, tous = S.t <= 0, G = geo(scene);
+  c.direct(() => P.plaque(c.ctx, G.x, G.y, G.pw, G.ph, { ligne: G.vLigne, front: G.vFront, taches: taches(G, { cerne: true }) }));
+  noms(c, G, { pt });
+  PL.depots.forEach((d, i) => c.repere('depot_' + d.nom, G.ux(i) - 20, G.y, 40, G.ph, 'le dépôt ' + d.nom));
+  if (tous || S.a('compterD')) PL.depots[3].h.forEach((h, j) => {
+    const tj = M.compterD + j * 1.2; if (!(tous || S.t >= tj)) return;
+    const actif = !tous && S.t >= tj && S.t < M.C;
+    lueur(c, G.ux(3) - 14, G.yh(h) - 12, 28, 24, { vive: actif && S.t < tj + 1.2 + (j === 2 ? 2 : 0), numero: j + 1, nx: G.ux(3) + 28, ny: G.yh(h) + 7, align: 'center', taille: pt ? 26 : 20 });
+  });
+  if (tous || S.ecrit(c, 'C')) [[3, 0, 'cyan'], [6, 1, 'orange']].forEach(([h, i, coul]) => {
+    c.ligne(G.x - 6, G.yh(h), G.ux(2) + 16, G.yh(h), { couleur: coul, largeur: 2, pointille: [6, 4] });
+    lueur(c, G.ux(i) - 14, G.yh(h) - 12, 28, 24, { vive: !tous && !S.a('conclusion') });
+    lueur(c, G.ux(2) - 14, G.yh(h) - 12, 28, 24, { vive: !tous && !S.a('conclusion') });
+  });
+  colonne(c, S, scene, G, [
+    { m: 'depots', txt: 'A : alcool benzylique pur', c: 'cyan', t: 17, tp: 24 },
+    { m: 'depots', r: 'legende_B', txt: 'B : acétate de benzyle du commerce', c: 'cyan', t: 17, tp: 24 },
+    { m: 'depots', r: 'legende_C', txt: 'C : liquide en fin de synthèse', c: 'orange', t: 17, tp: 24 },
+    { m: 'depots', r: 'legende_D', txt: 'D : extrait naturel de jasmin', c: 'blanc', t: 17, tp: 24 },
+    { m: 'compterD', txt: 'D : 3 taches → 3 espèces', c: 'jaune', g: 1 },
+    { m: 'C', txt: 'C : taches à la hauteur de A et de B', c: 'orange', g: 1 },
+    { m: 'conclusion', txt: 'C contient l’acétate formé et de l’alcool restant', c: 'vert', g: 1, cache: true },
+  ], { xt: G.xt + 36, y0: 36 });
+}
+
+const DESSINS = { principe: dessinerPrincipe, depot: dessinerDepot, elution: dessinerElution, revelation: dessinerRevelation, compter: dessinerCompter,
+  identifier: dessinerIdentifier, rf: dessinerRf, rf_eleve: dessinerRf, application: dessinerApplication, application_rf: dessinerRf };
+const MOTIFS = { plaque: 'la plaque', cuve: 'la cuve et l’éluant', monte: 'l’éluant monte', bilan: 'les espèces se séparent', ligne: 'la ligne de dépôt', depotA: 'le dépôt A', depotB: 'le dépôt B', depotP: 'le dépôt P', sec: 'le séchage',
+  plonger: 'la plaque dans la cuve', niveau: 'l’éluant sous la ligne', couvercle: 'la cuve fermée', front: 'le front de l’éluant', incolores: 'les taches incolores', uv: 'la lampe UV', diiode: 'le diiode', chromatogramme: 'le chromatogramme',
+  A: 'le dépôt A', B: 'le dépôt B', P: 'le dépôt P', conclusion: 'la conclusion', hauteurA: 'même hauteur que A', hauteurB: 'même hauteur que B', pure: 'P n’est pas pur',
+  H: 'H', hA: 'h(A)', hB: 'h(B)', h: 'h', formule: 'Rf = h/H', calculA: 'Rf(A)', calculB: 'Rf(B)', soluble: 'la solubilité', atoi: 'à toi', reponse: 'la réponse', rfA: 'Rf(A)', rfB: 'Rf(B)', depots: 'les quatre dépôts', compterD: 'les taches de D', C: 'les taches de C' };
+const VUS = {
+  principe: S => 'Une plaque blanche (phase fixe) dans une cuve fermée avec un peu d’éluant (phase mobile).' + (S.t <= 0 || S.a('monte') ? ' L’éluant monte ; une tache bleue monte plus haut qu’une tache rouge : elles se séparent.' : ''),
+  depot: S => 'Plaque : ligne de dépôt au crayon à 1 cm du bas ; dépôts ' + ['A', 'B', 'P'].filter(n => S.t <= 0 || S.a('depot' + n)).join(', ') + '.',
+  elution: S => 'Plaque dans la cuve, éluant sous la ligne de dépôt' + (S.t <= 0 || S.a('couvercle') ? ', cuve fermée' : '') + (S.t <= 0 || S.a('monte') ? ', l’éluant monte et entraîne les espèces' : '') + (S.t <= 0 || S.a('front') ? ' ; on sort la plaque et on marque le front.' : '.'),
+  revelation: S => (S.t <= 0 || S.a('chromatogramme')) ? 'Le chromatogramme : A une tache à 4 cm, B une tache à 2 cm, P deux taches (4 cm et 2 cm).' : S.a('diiode') ? 'Vapeurs de diiode : taches brunes.' : S.a('uv') ? 'Lampe UV : les taches paraissent, on les entoure au crayon.' : 'Taches incolores : on ne voit rien.',
+  compter: S => 'Chromatogramme : A 1 tache, B 1 tache, P 2 taches.' + (S.conclusions && (S.t <= 0 || S.a('conclusion')) ? ' Une espèce pure donne une seule tache ; plusieurs taches : un mélange.' : ''),
+  identifier: S => 'Une tache de P à la même hauteur que A, l’autre à la même hauteur que B.' + (S.conclusions && (S.t <= 0 || S.a('conclusion')) ? ' Même hauteur, même espèce : P contient A et B.' : ''),
+  rf: S => 'Règle : H = 8 cm, h(A) = 4 cm, h(B) = 2 cm.' + (S.t <= 0 || S.a('calculA') ? ' Rf(A) = 4/8 = 0,5.' : '') + (S.t <= 0 || S.a('calculB') ? ' Rf(B) = 2/8 = 0,25.' : '') + (S.conclusions && (S.t <= 0 || S.a('soluble')) ? ' A est plus soluble dans l’éluant.' : ''),
+  rf_eleve: S => 'Plaque de l’espèce X : H = 10 cm, h = 6 cm.' + (S.conclusions && (S.t <= 0 || S.a('reponse')) ? ' Rf(X) = 6/10 = 0,6.' : ''),
+  application: S => 'Quatre dépôts : A alcool benzylique, B acétate de benzyle du commerce, C fin de synthèse, D extrait de jasmin. D : 3 taches ; C : 2 taches, aux hauteurs de A et de B.' + (S.conclusions && (S.t <= 0 || S.a('conclusion')) ? ' C contient de l’acétate de benzyle et de l’alcool restant.' : ''),
+  application_rf: S => 'H = 10 cm, h(A) = 3 cm, h(B) = 6 cm ; Rf(A) = 0,3.' + (S.conclusions && (S.t <= 0 || S.a('rfB')) ? ' Rf(B) = 0,6 ; B plus soluble dans l’éluant.' : ''),
+};
+const S = window.Synthese.sim({
+  id: 'tc_synthese_ccm_' + VUE, titre: 'La CCM : ' + VUE, vue: VUE, moments: M, fin: FIN, graine: 47,
+  motifs: MOTIFS, accueil: 'La chromatographie sur couche mince.', debut: 'Regarde…', fini: 'Voilà le chromatogramme.',
+  dessiner: (c, S, sc) => DESSINS[VUE](c, S, sc),
+  ceQuiSeVoit: S => VUS[VUE](S),
+  texte: 'CCM : plaque (phase fixe), éluant (phase mobile) dans une cuve fermée ; ligne de dépôt au crayon à 1 cm du bas, au-dessus de l’éluant ; l’éluant monte et entraîne les espèces ; front marqué ; révélation (UV ou diiode). Une espèce pure donne une seule tache ; même hauteur = même espèce ; Rf = h/H, sans unité, entre 0 et 1 ; plus Rf est grand, plus l’espèce est soluble dans l’éluant.',
+  explication: { [VUE]: Object.keys(M).map(k => ({ repere: k, texte: MOTIFS[k] || k })) },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

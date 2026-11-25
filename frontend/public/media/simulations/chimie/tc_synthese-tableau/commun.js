@@ -515,6 +515,32 @@
     ctx.save(); ctx.strokeStyle = 'rgba(225,240,252,.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + l * .35, y - l); ctx.stroke();
     ctx.strokeStyle = rgba(col.concat([.8])); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x + 1, y - 2); ctx.lineTo(x + l * .12, y - l * .35); ctx.stroke(); ctx.restore();
   };
+  /** Un crayon à papier (corps jaune, pointe de graphite) : on trace la ligne de dépôt et on entoure les taches. */
+  P.crayon = (ctx, x, y, l = 70, a = -0.9) => {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    P.ombre(ctx, () => { const g = ctx.createLinearGradient(0, -5, 0, 5); g.addColorStop(0, '#fde68a'); g.addColorStop(.5, '#f59e0b'); g.addColorStop(1, '#b45309'); ctx.fillStyle = g; ctx.fillRect(12, -5, l - 20, 10); }, 4);
+    ctx.fillStyle = '#f5d0a9'; ctx.beginPath(); ctx.moveTo(12, -5); ctx.lineTo(0, 0); ctx.lineTo(12, 5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#334155'; ctx.beginPath(); ctx.moveTo(4, -1.7); ctx.lineTo(0, 0); ctx.lineTo(4, 1.7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#f9a8d4'; ctx.fillRect(l - 8, -5, 8, 10); ctx.fillStyle = '#cbd5e1'; ctx.fillRect(l - 12, -5, 4, 10);
+    ctx.restore();
+  };
+  /** Une règle graduée verticale (plastique clair) : zéro en y0, `n` centimètres vers le haut, `pc` px par cm. */
+  P.regle = (ctx, x, y0, n, pc) => {
+    ctx.save();
+    const top = y0 - (n + .4) * pc, bot = y0 + .6 * pc;
+    P.ombre(ctx, () => { const g = ctx.createLinearGradient(x, 0, x + 30, 0); g.addColorStop(0, 'rgba(254,249,195,.92)'); g.addColorStop(1, 'rgba(253,230,138,.85)'); ctx.fillStyle = g; ctx.fillRect(x, top, 30, bot - top); }, 4);
+    ctx.strokeStyle = '#78350f'; ctx.lineWidth = 1.2;
+    for (let i = 0; i <= n * 2; i++) { const yy = y0 - i * pc / 2; ctx.beginPath(); ctx.moveTo(x + 30, yy); ctx.lineTo(x + 30 - (i % 2 ? 6 : 12), yy); ctx.stroke(); }
+    ctx.restore();
+  };
+  /** Le flacon de diiode (cristaux violet-noir, vapeurs brunes) pour révéler les taches. */
+  P.diiode = (ctx, x, y, w, h, k = 1) => {
+    ctx.save();
+    ctx.fillStyle = 'rgba(190,220,240,.10)'; ctx.fillRect(x, y, w, h);
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, `rgba(146,64,14,${.10 * k})`); g.addColorStop(1, `rgba(146,64,14,${.38 * k})`); ctx.fillStyle = g; ctx.fillRect(x + 2, y + 6, w - 4, h - 8);
+    const R = graine(5); for (let i = 0; i < 9; i++) { ctx.fillStyle = i % 2 ? '#1e1b4b' : '#3b0764'; const cx = x + 10 + R() * (w - 20), cy = y + h - 6 - R() * 6; ctx.beginPath(); ctx.moveTo(cx - 4, cy); ctx.lineTo(cx, cy - 4); ctx.lineTo(cx + 4, cy); ctx.lineTo(cx, cy + 3); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+  };
   /** Des lunettes de protection (vues de face). */
   P.lunettes = (ctx, x, y, s) => {
     ctx.save(); ctx.lineWidth = s * .08;
