@@ -17,3 +17,5 @@ tous les cours ; les noms sont ceux du kit (`Tableau.COULEURS` de `shared/tablea
 - Jamais de bleu foncé, de noir ou de gris foncé sur le tableau vert.
 - Les cartes `concentration.centre` et le cahier gardent la charte du cahier (skill `cahier-de-l-eleve` § 6 : « Donc… »
   orange, « Définition : » vert…) : c'est une autre surface, rendue par le lecteur.
+- En code : `Lexique.physique.ECRITURE` (`titre`, `motCle`, `relation` → jaune ; `legende`, `donnee` → blanc ;
+  `resultat`, `conclusion` → vert ; `piege` → rose). Mécanique : [mecanique.md](mecanique.md).

@@ -20,7 +20,7 @@ dans les prochains cours, le glucose doit garder la même forme et les mêmes co
 | Module | Objet global | Contenu | Branché sur |
 |---|---|---|---|
 | `lexique.js` | `window.Lexique` | atomes et molécules (glucose, acides pyruvique et lactique, éthanol, CO₂, H₂O, O₂, H₃O⁺, HO⁻), proton, électron, neutron, modèle de l'atome (noyau, nuage, couches K L M, charge d'un ion), Ca²⁺, ATP/ADP/Pi, NAD, FAD, CoA, cellule, mitochondrie, membrane, protéine, levure, bécher simple | SVT ch1 (via `peinture.js`), chimie TC atome |
-| `lexique-physique.js` | `Lexique.physique` | générateur, bornes, condensateur (réaliste, armatures, symbole), résistor, interrupteur, bobine (réaliste, symbole), noyau de fer, lampe, ampèremètre/voltmètre, ohmmètre, oscilloscope, GBF, cordons ; ondes (corde, perle, poignée, micro, écran, trace, front) ; `lumiere.couleurDe(λ)` ; `GRANDEURS` | RC, RL, RLC (15 pages) |
+| `lexique-physique.js` | `Lexique.physique` | générateur, bornes, condensateur (réaliste, armatures, symbole), résistor, interrupteur, bobine (réaliste, symbole), noyau de fer, lampe, ampèremètre/voltmètre, ohmmètre, oscilloscope, GBF, cordons ; ondes (corde, perle, poignée, micro, écran, trace, front) ; `lumiere.couleurDe(λ)` ; `GRANDEURS` ; mécanique : `MECANIQUE` (couleurs des vecteurs), `mecanique` (point d'enregistrement, G, table à coussin d'air, autoporteur, règle, chrono, flèche), `ECRITURE` (code de la craie) | RC, RL, RLC (15 pages) ; mouvement et inertie (TC, 14 pages) |
 | `lexique-chimie.js` | `Lexique.chimie` | bécher, bain, goutte, filet, pipette, compte-gouttes, glaçon, pH-mètre et sonde, conductimètre et cellule, bulles ; `SOLUTIONS`, `BBT` ; montage à reflux (`montageReflux`, ballon, réfrigérant à boules, chauffe-ballon, potence, élévateur, tuyau, pierre ponce, vapeur, gouttelette), CCM (plaque, cuve, capillaire, lampe UV, diiode), filtration (entonnoir, flocons), éprouvette, tube, flacon, thermomètre, balance, ions (`ion`, `IONS`) ; `LIQUIDES` | chimie ch9 à ch13 (25 pages), TC synthèse (7 pages) |
 | `lexique-genetique.js` | `window.Molecules` = `Lexique.genetique` | ADN, ARN, bases, nucléotides, ribosome, ARNt, acides aminés, protéine, noyau, cytoplasme, hématie | SVT ch4 (12 pages) |
 | `lexique-muscle.js` | `window.MoleculesPeintes` = `Lexique.muscle` | actine, myosine, tropomyosine, troponine, Ca²⁺, pastille ATP, réticulum, cuve, fibre | SVT ch2 (4 pages) |
@@ -94,6 +94,7 @@ pièges roses, ce qui désigne un objet dans la couleur de l'objet) : [craie.md]
 | Ampèremètre, voltmètre, ohmmètre | [appareils-de-mesure.md](appareils-de-mesure.md) | `physique.cadran`, `ohmmetre` |
 | Oscilloscope | [oscilloscope.md](oscilloscope.md) | `physique.oscillo`, `ondes.oscillo`, `ondes.trace` |
 | Couleurs des grandeurs (u_C, i, u_R, u_b, E) | [grandeurs-electriques.md](grandeurs-electriques.md) | `physique.GRANDEURS` |
+| Mécanique : v⃗, P⃗, R⃗, T⃗, F⃗, OM⃗, i⃗ j⃗, G, points, trajectoire ; autoporteur, table à coussin d'air | [mecanique.md](mecanique.md) | `physique.MECANIQUE`, `physique.mecanique.*`, `physique.ECRITURE` |
 | Corde, perle, point M | [corde.md](corde.md) | `physique.ondes.corde`, `perle` |
 | Micro | [micro.md](micro.md) | `physique.ondes.micro` |
 | Lumière (λ → couleur) | [lumiere.md](lumiere.md) | `physique.lumiere.couleurDe` |
