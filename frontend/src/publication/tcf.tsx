@@ -7,7 +7,7 @@
  *   - `?cours=tc_chim_synthese`                « Synthèse d'une espèce chimique » ;
  *   - `?cours=tc_chim_atome`                   « Modèle de l'atome » ;
  *   - `?cours=tc_phys_mouvement_inertie`       « Le mouvement et le principe d'inertie » ;
- *   - `?cours=tc_tcf_revision`                 la révision des trois chapitres (~30 diapos, demande de l'utilisateur) ;
+ *   - `?cours=tc_tcf_revision`                 la révision des trois chapitres : 31 diapos des cours assemblées par scripts/tcf/assembler_revision.py, sans voix nouvelle ;
  *   - `?examen`                                l'évaluation formative des trois chapitres (20 points, sans chronomètre) ;
  *   - `?classe` / `?c=<code>`                  le mode classe (écran du prof / téléphone de l'élève), sans fiche ;
  *   - `?t=<code>`                              le téléphone relié au PC de l'élève (« 📱 Avec mon téléphone »).
@@ -41,13 +41,13 @@ const source = (id: string) => SOURCES[Object.keys(SOURCES).find(f => f.endsWith
 const MATIERES = [
   { cle: 'chimie', nom: 'Chimie', couleur: '#c2571a', matiere: 'chimie', cours: [
     { id: 'tc_chim_synthese', titre: 'Synthèse d’une espèce chimique', sous: 'Chimie de synthèse, réactifs et produits, chauffage à reflux, synthèse du savon, identification par CCM' },
-    { id: 'tc_chim_atome', titre: 'Modèle de l’atome', sous: 'Histoire du modèle, électrons et noyau, écriture ᴬ_Z X, masse et taille, isotopes, ions, élément, couches K, L, M' },
+    { id: 'tc_chim_atome', titre: 'Modèle de l’atome', sous: 'Histoire du modèle, électrons et noyau, écriture du noyau, masse et taille, isotopes, ions, élément, couches K, L, M' },
   ] },
   { cle: 'physique', nom: 'Physique', couleur: '#2a78d6', matiere: 'physique', cours: [
     { id: 'tc_phys_mouvement_inertie', titre: 'Le mouvement et le principe d’inertie', sous: 'Référentiel, repères, trajectoire, vitesses, mouvement rectiligne uniforme et circulaire uniforme, centre d’inertie, principe d’inertie, centre de masse' },
   ] },
   { cle: 'revision', nom: 'Révision', couleur: '#2f5d8a', matiere: 'physique', cours: [
-    { id: 'tc_tcf_revision', titre: 'Révision des trois chapitres', sous: 'L’essentiel en une trentaine de diapos : chaque définition, chaque formule et chaque méthode refaite sur un nouvel exemple' },
+    { id: 'tc_tcf_revision', titre: 'Révision des trois chapitres', sous: 'L’essentiel des trois chapitres en 31 diapos des cours : définitions, formules, méthodes et exercices, avec leur voix' },
   ] },
 ];
 const TOUS = MATIERES.flatMap(m => m.cours.map(c => ({ ...c, m })));

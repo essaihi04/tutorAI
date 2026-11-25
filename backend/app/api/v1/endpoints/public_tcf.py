@@ -33,7 +33,7 @@ COURS = {
     "tc_chim_synthese": ("Synthèse d'une espèce chimique", 38),
     "tc_chim_atome": ("Modèle de l'atome", 38),
     "tc_phys_mouvement_inertie": ("Le mouvement et le principe d'inertie", 59),
-    "tc_tcf_revision": ("Révision des trois chapitres", 30),
+    "tc_tcf_revision": ("Révision des trois chapitres", 31),
 }
 #: l'évaluation sur 20 points qui englobe les trois chapitres (demande de l'utilisateur, 25/11/2026)
 EXAMENS = {"examen_tcf": "Évaluation"}
