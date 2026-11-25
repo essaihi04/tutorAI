@@ -21,7 +21,7 @@ dans les prochains cours, le glucose doit garder la même forme et les mêmes co
 |---|---|---|---|
 | `lexique.js` | `window.Lexique` | atomes et molécules (glucose, acides pyruvique et lactique, éthanol, CO₂, H₂O, O₂, H₃O⁺, HO⁻), proton, électron, neutron, Ca²⁺, ATP/ADP/Pi, NAD, FAD, CoA, cellule, mitochondrie, membrane, protéine, levure, bécher simple | SVT ch1 (via `peinture.js`) |
 | `lexique-physique.js` | `Lexique.physique` | générateur, bornes, condensateur (réaliste, armatures, symbole), résistor, interrupteur, bobine (réaliste, symbole), noyau de fer, lampe, ampèremètre/voltmètre, ohmmètre, oscilloscope, GBF, cordons ; ondes (corde, perle, poignée, micro, écran, trace, front) ; `lumiere.couleurDe(λ)` ; `GRANDEURS` | RC, RL, RLC (15 pages) |
-| `lexique-chimie.js` | `Lexique.chimie` | bécher, bain, goutte, filet, pipette, compte-gouttes, glaçon, pH-mètre et sonde, conductimètre et cellule, bulles ; `SOLUTIONS`, `BBT` | chimie ch9 à ch13 (25 pages) |
+| `lexique-chimie.js` | `Lexique.chimie` | bécher, bain, goutte, filet, pipette, compte-gouttes, glaçon, pH-mètre et sonde, conductimètre et cellule, bulles ; `SOLUTIONS`, `BBT` ; montage à reflux (`montageReflux`, ballon, réfrigérant à boules, chauffe-ballon, potence, élévateur, tuyau, pierre ponce, vapeur, gouttelette), CCM (plaque, cuve, capillaire, lampe UV, diiode), filtration (entonnoir, flocons), éprouvette, tube, flacon, thermomètre, balance, ions (`ion`, `IONS`) ; `LIQUIDES` | chimie ch9 à ch13 (25 pages), TC synthèse (7 pages) |
 | `lexique-genetique.js` | `window.Molecules` = `Lexique.genetique` | ADN, ARN, bases, nucléotides, ribosome, ARNt, acides aminés, protéine, noyau, cytoplasme, hématie | SVT ch4 (12 pages) |
 | `lexique-muscle.js` | `window.MoleculesPeintes` = `Lexique.muscle` | actine, myosine, tropomyosine, troponine, Ca²⁺, pastille ATP, réticulum, cuve, fibre | SVT ch2 (4 pages) |
 | `lexique-maths.js` | `Lexique.maths` | `ROLES` (courbe cyan, point jaune, tangente orange, asymptote pointillé blanc, + vert, − rouge), `tangente()`, `asymptote()`, `couleurSigne()` | les six cours de maths (chargé par `maths-tableau.js`) |
@@ -78,6 +78,9 @@ Texte écrit SUR un objet clair : sombre et gras (`#0b1f2a`, `Lexique.etiquette`
 | Protéine | [proteine.md](proteine.md) | `proteine` |
 | Levure | [levure.md](levure.md) | `levure` |
 | Bécher | [becher.md](becher.md) | `becher` |
+| Montage à reflux (ballon, réfrigérant, chauffe-ballon, potence) | [montage-reflux.md](montage-reflux.md) | `Lexique.chimie.montageReflux`, `ballon`, `refrigerant`, `chauffeBallon` |
+| CCM (plaque, cuve, capillaire, lampe UV) | [ccm.md](ccm.md) | `Lexique.chimie.plaque`, `cuve`, `cuveDevant` |
+| Filtration, précipité, éprouvette, flacon, ions | [filtration.md](filtration.md) | `Lexique.chimie.entonnoir`, `flocons`, `ion` |
 | **Physique** | | |
 | Générateur, GBF | [generateur.md](generateur.md) | `physique.generateur`, `gbf`, `borne` |
 | Condensateur | [condensateur.md](condensateur.md) | `physique.condensateur`, `armatures`, `symboleCondo` |

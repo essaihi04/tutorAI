@@ -49,7 +49,7 @@ diapo(A1, 'sy_o2_naturelle', 'Espèce naturelle, espèce synthétique', 'Elle ex
       pointage=[('une espèce naturelle', 'naturelle'), ('بحال الريحة اللي فالورد', '@naturelle'), ('une espèce synthétique', 'synthetique'),
                 ('l’aspirine', '@synthetique'), ('وشوف هاد الجوج ديال القرعات', 'identiques'), ('نفس الخصائص', '@identiques')],
       centre=[('naturelle : existe dans la nature', 'une espèce naturelle'), ('synthétique : préparée par l’Homme', 'une espèce synthétique')],
-      cahier='Une espèce naturelle existe dans la nature ; une espèce synthétique est préparée par l’Homme.', comp=['C1'],
+      cahier='| Espèce naturelle | Espèce synthétique |\n| existe dans la nature (sucre) | préparée par l’Homme (aspirine) |', comp=['C1'],
       q=question('qcm', 'L’aspirine, préparée au laboratoire, est une espèce…', ['naturelle', 'synthétique', 'impure'], 1,
                  'شوف هاد السؤال: l’aspirine، اللي كتصاوب فالمختبر، شنو هي؟',
                  [(('l’aspirine ماكتجيش من الطبيعة. شكون اللي كيصاوبها؟', 'L’aspirine ne vient pas de la nature : qui la prépare ?'),
@@ -187,7 +187,7 @@ diapo(A2, 'sy_m3_roles', 'Le rôle de l’éthanol et de la pierre ponce', 'Un b
       url='montage.html?vue=roles',
       pointage=[('بلا éthanol', 'sans_ethanol'), ('مع l’éthanol', 'avec_ethanol'), ('بلا بيها', 'sans_ponce'), ('معاها، البلبولات صغار', 'avec_ponce')],
       centre=[('éthanol : contact entre les réactifs', 'l’éthanol favorise'), ('pierre ponce : ébullition régulière', 'une ébullition régulière')],
-      cahier='L’éthanol favorise le contact entre les réactifs ; la pierre ponce régularise l’ébullition.', comp=['C4'],
+      cahier='| Éthanol | Pierre ponce |\n| favorise le contact entre les réactifs | régularise l’ébullition |', comp=['C4'],
       q=question('qcm', 'Pourquoi ajoute-t-on de l’éthanol dans le ballon ?',
                  ['pour refroidir le mélange', 'pour favoriser le contact entre les réactifs', 'pour obtenir une ébullition régulière'], 1,
                  'شوف هاد السؤال: علاش كنزيدو l’éthanol ف le ballon؟',
@@ -217,7 +217,7 @@ diapo(A2, 'sy_r2_reflux', 'Le reflux : rien ne se perd', 'Les vapeurs se condens
       pointage=[('le mélange كيغلي', 'chauffe'), ('les vapeurs كيطلعو لفوق', 'vapeurs'), ('شوف شنو كيوقع ليهم', '@refrigerant'),
                 ('هادي la condensation', '@condensation'), ('les gouttes كيهبطو', '@gouttes'), ('هادا هو le reflux', 'cycle')],
       centre=[('vapeurs → condensation → gouttes', 'هادي la condensation'), ('reflux : pas de perte', 'هادا هو le reflux')],
-      cahier='Le reflux : les vapeurs se condensent dans le réfrigérant et retombent dans le ballon : pas de perte de réactifs ni de produits.',
+      cahier='Le reflux : les vapeurs se condensent dans le réfrigérant et retombent dans le ballon.\nDonc pas de perte de réactifs ni de produits.',
       obs={'apres_mot': 'شوف شنو كيوقع ليهم فوسط الكورات الباردين.', 'sim_avant': {'conclusions': False}, 'sim_apres': {'conclusions': True},
            'gestes': [{'commande': 'play_until', 'parametres': {'moment': 'gouttes'}}, {'repere': 'refrigerant'}],
            'enonce': 'Dans le réfrigérant froid, que deviennent les vapeurs ?',
@@ -259,7 +259,7 @@ diapo(A2, 'sy_t1_refroidir', 'Refroidir, puis verser dans l’eau salée', 'Le s
       pointage=[('كنطفيو le chauffe-ballon', 'arret'), ('de l’eau salée concentrée', 'salee'), ('دابا نزيدو le mélange', 'verser'),
                 ('le savon précipite', 'precipite')],
       centre=[('eau salée : le savon précipite', 'le savon précipite')],
-      cahier='Traitement : 1) arrêter le chauffage et laisser refroidir ; 2) verser dans l’eau salée concentrée : le savon précipite.',
+      cahier='Méthode : 1) arrêter le chauffage et laisser refroidir ; 2) verser dans l’eau salée concentrée : le savon précipite.',
       comp=['C6'])
 
 diapo(A2, 'sy_t2_filtrer', 'Filtrer : on obtient le savon', 'Le liquide passe, le savon reste sur le filtre.',
@@ -269,7 +269,7 @@ diapo(A2, 'sy_t2_filtrer', 'Filtrer : on obtient le savon', 'Le liquide passe, l
       url='traitement.html?vue=filtrer',
       pointage=[('دابا كنصفيو', 'filtrer'), ('هادا هو le savon اللي درنا', 'savon'), ('ولكن رد البال', 'attention')],
       centre=[('filtration : le savon reste sur le filtre', 'كيبقى فوق le papier filtre')],
-      cahier='3) filtrer : le savon solide reste sur le papier filtre.\nAttention : le savon obtenu contient encore de la soude : ne pas le toucher sans gants.',
+      cahier='Méthode : 3) filtrer : le savon solide reste sur le papier filtre.\nAttention : le savon obtenu contient encore de la soude : ne pas le toucher sans gants.',
       comp=['C6'])
 
 diapo(A2, 'sy_t3_etapes', 'Les étapes de la synthèse du savon', 'Chauffage à reflux, refroidissement et eau salée, filtration.',

@@ -14,7 +14,7 @@ diapo(A3, 'sy_i1_pourquoi', 'Identifier le produit obtenu', 'On mesure ses carac
       pointage=[('درنا واحد le produit', 'produit'), ('اللولة: la température', 'temperature'), ('الثانية: la solubilité', 'solubilite'),
                 ('الثالثة: la masse volumique', 'densite'), ('وفاللخر، كنقارنو', 'tables')],
       centre=[('mêmes valeurs que les tables → même espèce', 'يلا كانو نفس les valeurs')],
-      cahier='IV. Identifier l’espèce synthétisée\nOn compare ses caractéristiques physiques (températures de fusion et d’ébullition, solubilité, ρ, d) aux valeurs des tables.',
+      cahier='III. Identifier l’espèce synthétisée\n1. Les caractéristiques physiques\nOn compare ses caractéristiques physiques (températures de fusion et d’ébullition, solubilité, ρ, d) aux valeurs des tables.',
       comp=['C7'])
 
 diapo(A3, 'sy_i2_temperature', 'La température de fusion ou d’ébullition', 'Une valeur mesurée, comparée à la table.',
@@ -101,7 +101,7 @@ diapo(A4, 'sy_c1_principe', 'La CCM : le principe', 'Une phase fixe, une phase m
       pointage=[('شوف la plaque', 'plaque'), ('هي la phase fixe', '@plaque'), ('فواحد la cuve مسدودة', 'cuve'), ('هو la phase mobile', '@cuve'),
                 ('دابا l’éluant كيطلع', 'monte'), ('إذن les espèces كيتفرقو', 'bilan')],
       centre=[('plaque : phase fixe', 'هي la phase fixe'), ('éluant : phase mobile', 'هو la phase mobile')],
-      cahier='V. La chromatographie sur couche mince (CCM)\nLa plaque est la phase fixe ; l’éluant est la phase mobile : il monte et sépare les espèces.',
+      cahier='3. La chromatographie sur couche mince (CCM)\n| Phase fixe | Phase mobile |\n| la plaque (gel de silice) | l’éluant (un solvant) |\nL’éluant monte et sépare les espèces.',
       comp=['C8'])
 
 diapo(A4, 'sy_c2_depot', 'La CCM : les dépôts', 'Une ligne au crayon, trois petites gouttes.',
@@ -113,7 +113,7 @@ diapo(A4, 'sy_c2_depot', 'La CCM : les dépôts', 'Une ligne au crayon, trois pe
       pointage=[('une ligne de dépôt', 'ligne'), ('كنحطو نقطة صغيرة: A', 'depotA'), ('من بعد B', 'depotB'), ('وفاللخر P', 'depotP'),
                 ('كنخليو les dépôts ينشفو', 'sec')],
       centre=[('ligne de dépôt au crayon, à 1 cm', 'une ligne de dépôt')],
-      cahier='Méthode CCM : 1) tracer au crayon la ligne de dépôt à 1 cm du bas ; 2) déposer une petite goutte de chaque échantillon ; 3) laisser sécher.',
+      cahier='Méthode : 1) tracer au crayon la ligne de dépôt à 1 cm du bas ; 2) déposer une petite goutte de chaque échantillon ; 3) laisser sécher.',
       comp=['C8'])
 
 diapo(A4, 'sy_c3_elution', 'La CCM : l’éluant monte', 'La cuve fermée, l’éluant sous la ligne de dépôt.',
@@ -125,7 +125,7 @@ diapo(A4, 'sy_c3_elution', 'La CCM : l’éluant monte', 'La cuve fermée, l’�
       pointage=[('دابا كنحطو la plaque', 'plonger'), ('تحت la ligne de dépôt', 'niveau'), ('كنسدو la cuve', 'couvercle'),
                 ('l’éluant كيطلع شوية بشوية', 'monte'), ('le front de l’éluant', 'front')],
       centre=[('éluant sous la ligne de dépôt', 'تحت la ligne de dépôt'), ('cuve fermée', 'كنسدو la cuve')],
-      cahier='4) éluant sous la ligne de dépôt, cuve fermée ; 5) sortir la plaque avant le haut et marquer le front de l’éluant.',
+      cahier='Méthode : 4) éluant sous la ligne de dépôt, cuve fermée ; 5) sortir la plaque avant le haut et marquer le front de l’éluant.',
       comp=['C8'])
 
 diapo(A4, 'sy_c4_revelation', 'La CCM : la révélation', 'Lampe UV ou vapeurs de diiode.',
@@ -136,7 +136,7 @@ diapo(A4, 'sy_c4_revelation', 'La CCM : la révélation', 'Lampe UV ou vapeurs d
       url='ccm.html?vue=revelation',
       pointage=[('les espèces incolores', 'incolores'), ('la lampe UV', 'uv'), ('le diiode', 'diiode'), ('le chromatogramme', 'chromatogramme')],
       centre=[('révéler : lampe UV ou diiode', 'la lampe UV')],
-      cahier='6) révéler les taches incolores : lampe UV ou vapeurs de diiode. On obtient le chromatogramme.', comp=['C8'],
+      cahier='Méthode : 6) révéler les taches incolores : lampe UV ou vapeurs de diiode.\nOn obtient le chromatogramme.', comp=['C8'],
       q=question('qcm', 'Pourquoi la ligne de dépôt doit-elle rester au-dessus de l’éluant ?',
                  ['pour que les dépôts ne se dissolvent pas dans l’éluant', 'pour que l’éluant ne s’évapore pas', 'pour voir les taches sous UV'], 0,
                  'شوف هاد السؤال: علاش la ligne de dépôt خاصها تبقى فوق l’éluant؟',
@@ -154,7 +154,7 @@ diapo(A4, 'sy_c5_compter', 'Lire le chromatogramme : compter les taches', 'Une e
       url='ccm.html?vue=compter',
       pointage=[('A: une tache', 'A'), ('B: une tache', 'B'), ('P: une، deux taches', 'P'), ('إذن A و B espèces pures', 'conclusion')],
       centre=[('espèce pure : une seule tache', 'إذن A و B espèces pures'), ('plusieurs taches : un mélange', 'هو un mélange')],
-      cahier='Une espèce pure donne une seule tache ; plusieurs taches : un mélange.', comp=['C8'])
+      cahier='| Une seule tache | Plusieurs taches |\n| une espèce pure | un mélange |', comp=['C8'])
 
 diapo(A4, 'sy_c6_identifier', 'Lire le chromatogramme : la même hauteur', 'Même hauteur, même espèce.',
       'دابا كيفاش نعرفو شنو كاين ف P؟ نقارنو الطول. tache ديال P فنفس الطول ديال A: إذن P فيه A. '
@@ -178,7 +178,7 @@ diapo(A4, 'sy_c7_rf', 'Le rapport frontal Rf', 'Rf = h/H, sans unité, entre 0 e
                 ('Rf de A égale quatre sur huit', 'calculA'), ('ول B، h égale', 'hB'), ('Rf de B égale deux sur huit', 'calculB'),
                 ('و Rf de A كبر', 'soluble')],
       centre=[('Rf = h/H', 'la relation: Rf égale'), ('Rf grand : plus soluble dans l’éluant', 'و Rf de A كبر')],
-      cahier='Formule : Rf = h/H (h : de la ligne de dépôt au centre de la tache ; H : de la ligne de dépôt au front), sans unité, 0 < Rf < 1\nPlus Rf est grand, plus l’espèce est soluble dans l’éluant.',
+      cahier='Formule : Rf = h/H (h : de la ligne de dépôt au centre de la tache ; H : de la ligne de dépôt au front), sans unité, 0 < Rf < 1\nRemarque : plus Rf est grand, plus l’espèce est soluble dans l’éluant.',
       figures=[{'type': 'schema', 'titre': 'Le rapport frontal', 'legende': 'h et H se mesurent depuis la ligne de dépôt.',
                 'cadre': {'l': 8, 'h': 10},
                 'elements': [
@@ -247,7 +247,7 @@ diapo(A5, 'sy_a2_chromatogramme', 'Application : le chromatogramme', 'Quatre dé
                        {'parole': 'شوف مزيان: كاينة حتى tache لتحت، فنفس الطول ديال A.', 'ecrit': 'Regarde : la tache du bas est à la hauteur de A.'},
                        {'parole': 'لا، قارن مع A و B، هوما les références.', 'ecrit': 'Non : compare avec A et B, les références.'}],
            'solution': {'parole': 'C فيه tache فطول A، و tache فطول B: إذن فيه A و B.', 'ecrit': 'C : une tache à la hauteur de A, une à la hauteur de B : C contient A et B.'}},
-      cahier='Méthode : compter les taches d’un dépôt ; chercher les taches à la même hauteur que les références.', comp=['C8'])
+      cahier='Méthode : 1) compter les taches d’un dépôt ; 2) chercher les taches à la même hauteur que les références.', comp=['C8'])
 
 diapo(A5, 'sy_a3_rf', 'Application : les rapports frontaux', 'Calculer Rf(A) et Rf(B), puis comparer.',
       'دابا نحسبو les Rf. H: من la ligne de dépôt حتى le front، dix centimètres. '
@@ -315,5 +315,5 @@ diapo(A6, 'sy_fermeture_cours', 'Ce qu’il faut retenir, et comment réviser', 
       'كتب هادشي ف الدفتر ديالك. راك خدمتي مزيان، الله يعاونك!',
       centre=[('Retenir : reflux · ρ et d · CCM et Rf', 'ثلاثة ديال الأفكار'), ('Réviser : relire le cahier, refaire les calculs', 'عاود قرا'),
               ('Rédiger : relation → A.N. → résultat et unité', 'ملي تحسب'), ('Jour J : gérer son temps · bien dormir', 'نهار الفرض')],
-      cahier='Pour réviser : relire le cahier ; refaire seul les calculs (ρ, d, Rf) ; écrire la relation, l’application numérique, le résultat avec son unité ; le jour du contrôle, partager son temps ; la veille, bien dormir.',
+      cahier='Méthode : 1) relire le cahier ; 2) refaire seul les calculs (ρ, d, Rf) ; 3) écrire la relation, l’application numérique, le résultat avec son unité ; 4) le jour du contrôle, partager son temps ; 5) la veille, bien dormir.',
       typ='synthesis', comp=[], fermeture_cours=True)
