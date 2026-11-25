@@ -178,7 +178,7 @@
       progression: () => (S.fait ? 1 : S.t / FIN()),
       executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p) })[cmd]?.(),
     });
-    S.pont = pont;
+    S.pont = pont; window.__S = S; window.__M = M;   // pour les captures de contrôle
     etiquette(LANCER); bulle(fb, o.accueil || '');
     if (o.apres) o.apres(S, scene, pont);
     return S;
