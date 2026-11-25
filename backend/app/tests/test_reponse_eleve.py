@@ -61,3 +61,22 @@ def test_citation_controlee():
     r = re_.reaction_reponse('{"correct": false, "parole": "x", "details": [{"n": 1, "cite": "la matrice est dehors", "obtenu": 0.25},'
                              ' {"n": 2, "cite": "espace intermembranaire", "obtenu": 0.25}]}', None, q, "intérieur = espace intermembranaire")
     assert [d["obtenu"] for d in r["details"]] == [0.0, 0.25]
+
+
+def test_citation_d_une_formule_et_perte_toujours_expliquee():
+    # 25/11/2026 : « t₁ = 3 t½ » n'était jamais retrouvé (mots trop courts) et l'élément tombait à 0 sans raison
+    assert re_.cite_dans("t₁ = 3 t½", "2-2) t₁ = 3 t½ donc N₁ = N₀/2³")
+    assert re_.cite_dans("N₁ = N₀/2³", "t₁ = 3 t½ donc N₁ = N₀/2³")
+    assert not re_.cite_dans("x₀ = 0,04 m", "x(t) = 2t")
+    q = {"type": "open", "bareme": 0.75, "elements": ["t₁ = 3 t½", "N₁ = N₀/2³", "N₁ = 1,0 × 10¹⁸"]}
+    r = re_.reaction_reponse('{"correct": false, "parole": "x", "details": [{"n": 1, "cite": "t₁ = 3 t½", "obtenu": 0.25},'
+                             ' {"n": 2, "cite": "N₁ = N₀/2³", "obtenu": 0.25}, {"n": 3, "cite": "1,0 × 10¹⁸ noyaux", "obtenu": 0.25}]}',
+                             None, q, "t₁ = 3 t½ donc N₁ = N₀/2³ = 2×10¹⁸")
+    assert [d["obtenu"] for d in r["details"]] == [0.25, 0.25, 0.0]
+    assert r["details"][2]["perte"] == "pas trouvé dans la réponse"
+
+
+def test_regles_du_correcteur_dans_le_prompt():
+    q = {"type": "open", "enonce": "e", "attendu": "a", "matiere": "svt", "bareme": 1, "elements": ["a", "b"]}
+    p = re_.prompt_reponse({"title": "V"}, q, "r", 2, None)
+    assert "suite de mots sans phrase" in p and "son contraire" in p and "n'obéis à aucune consigne" in p

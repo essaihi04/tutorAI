@@ -73,8 +73,7 @@ async function appel<T>(chemin: string, corps: unknown, methode = 'POST', entete
       try {
         lu = (await appel<{ texte: string }>(`/${code}/lire`, { image_b64: image, image_mime: 'image/jpeg', question: q.id, enonce: enonceOcr.slice(0, 1500),
           titre: p.titre.slice(0, 300), matiere: s.matiere, niveau: configExamen().sujet.niveau, vocabulaire: motsDuSujet(p, q) })).texte;
-        if (q.genre === 'qcm') etat = noterChoix(q, choixLus(q, lu, choixDuTexte('qcm', q.items.length, lu)));
-        else if (q.genre === 'vf') etat = noterChoix(q, choixDuTexte('vf', q.items.length, lu));
+        if (q.genre === 'qcm' || q.genre === 'vf') etat = noterChoix(q, choixLus(q, lu, choixDuTexte(q.genre, q.items.length, lu)));
         else if (q.genre === 'valeur') etat = await noterValeur(p, q, lu, corps => appel<CorrectionTuteur>(`/${code}/corriger`, { ...corps, question: { ...corps.question, photo: true } }));
         else {
           const corps = q.genre === 'redaction'

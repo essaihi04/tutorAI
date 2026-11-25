@@ -134,18 +134,45 @@ export function noterChoix(q: Extract<QuestionExamen, { genre: 'qcm' | 'vf' }>, 
 }
 
 const motsDe = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(m => m.length >= 3 && !['les', 'des', 'une', 'est', 'qui'].includes(m));
-/** QCM lu sur une photo : chaque ligne donne une lettre (A–D) ou le texte du choix (« ② ballon », « ④ entrée de l'eau
- *  froide ») ; le choix dont les mots couvrent le mieux la ligne. 25/11/2026 : une copie juste écrite en toutes lettres
- *  était notée 0. Sinon, la lecture par lettres de choixDuTexte. */
-export function choixLus(q: Extract<QuestionExamen, { genre: 'qcm' }>, texte: string, parLettres: (number | boolean | null)[]): (number | null)[] {
-  // une ligne par proposition, sans son repère (« 1-1) », « ① », « a) »)
-  const lignes = texte.split(/[\n;]+/).map(l => l.replace(/^\s*(?:\d+\s*[-.]\s*\d+\s*\)?|\(?[a-h1-9]\s*[).:-])?\s*/i, '').trim()).filter(Boolean);
-  const parNumero = (k: number) => lignes.find(x => x.includes(String.fromCharCode(0x2460 + k)));
+/** QCM ou vrai/faux lu sur une photo (25/11/2026, copies piégées) :
+ *  - chaque ligne est rattachée à sa proposition par son repère (« c) », « ③ »), sinon par son rang : un élève qui
+ *    répond dans le désordre (c, a, d, b) n'est plus noté sur la mauvaise proposition ;
+ *  - une ligne donne une lettre (A–D, en majuscule ou en minuscule), le texte du choix (« ② ballon ») ou vrai / faux ;
+ *  - deux réponses pour une même proposition (« B ou C ») : rien n'est retenu.
+ *  `parLettres` : la lecture de choixDuTexte, gardée quand une ligne ne dit rien de plus. */
+export function choixLus(q: Extract<QuestionExamen, { genre: 'qcm' | 'vf' }>, texte: string, parLettres: (number | boolean | null)[]): (number | boolean | null)[] {
+  const n = q.items.length;
+  const parRepere: (string | undefined)[] = Array(n).fill(undefined);
+  const sansRepere: string[] = [];
+  for (const brute of texte.split(/[\n;]+/)) {
+    // le numéro de la question en tête de ligne (« 1) », « 1-1) », « Partie I - 1 ») n'est pas un repère de proposition
+    let l = brute.replace(/^\s*(?:partie\s+[ivx]+\s*[-–:]?\s*)?(?:\d+\s*[-.]\s*\d+\s*\)|\d+\s*\)|\d+\s*[-–.]\s*(?=[a-h]\s*[).:-]))\s*/i, '').trim();
+    while (l) {
+      const m = l.match(/^(?:([a-h])\s*[).:-]|([①-⑧]))\s*/i);
+      if (!m) { sansRepere.push(l); break; }
+      const k = m[1] ? m[1].toLowerCase().charCodeAt(0) - 97 : m[2].charCodeAt(0) - 0x2460;
+      // la suite de la ligne jusqu'au repère suivant (« a) A   b) A »)
+      const reste = l.slice(m[0].length);
+      const suivant = reste.search(/\s(?:[a-h]\s*[).:-]|[①-⑧])\s*/i);
+      const contenu = suivant >= 0 ? reste.slice(0, suivant) : reste;
+      if (k >= 0 && k < n && parRepere[k] === undefined) parRepere[k] = contenu.trim();
+      l = suivant >= 0 ? reste.slice(suivant).trim() : '';
+    }
+  }
+  const lignes = sansRepere.filter(Boolean);
+  const reperes = parRepere.some(x => x !== undefined);
   return q.items.map((it, k) => {
-    const lettre = typeof parLettres[k] === 'number' ? parLettres[k] as number : null;
-    const l = (parNumero(k) ?? (lignes.length === q.items.length ? lignes[k] : '')).replace(/[①-⑳]/g, ' ');
-    const lm = new Set(motsDe(l));
-    if (!lm.size) return lettre;
+    const brut = reperes ? parRepere[k] : lignes.length === n ? lignes[k] : undefined;
+    if (brut === undefined) return parLettres[k] ?? null;
+    if (q.genre === 'vf') {
+      const vf = [...brut.matchAll(/\b(vrai|faux|v|f)\b/gi)].map(x => /^v/i.test(x[1]));
+      // la première affirmation compte (« Faux, c'est l'inverse ») ; « vrai ou faux » sans choix : rien
+      if (!vf.length || (/\bou\b/i.test(brut) && new Set(vf).size > 1)) return null;
+      return vf[0];
+    }
+    const lettres = [...new Set([...brut.matchAll(/(?:^|[^A-Za-zÀ-ÿ])([A-Da-d])(?![A-Za-zÀ-ÿ₀-₉0-9])/g)].map(x => x[1].toUpperCase()))];
+    if (lettres.length > 1) return null;
+    const lm = new Set(motsDe(brut));
     let mieux: number | null = null, score = 0;
     it.choix.forEach((c, m) => {
       const cm = motsDe(c);
@@ -153,8 +180,9 @@ export function choixLus(q: Extract<QuestionExamen, { genre: 'qcm' }>, texte: st
       const s = commun ? commun / cm.length + commun * 0.01 : 0;
       if (s > score) { score = s; mieux = m; }
     });
-    // le texte d'un choix l'emporte ; sinon la lettre lue (une formule comme « C₂H₅ » peut passer pour la lettre C)
-    return score >= 0.5 ? mieux : lettre;
+    // le texte d'un choix l'emporte ; sinon la lettre (une formule comme « C₂H₅ » n'est pas la lettre C)
+    if (score >= 0.5) return mieux;
+    return lettres.length === 1 ? lettres[0].charCodeAt(0) - 65 : null;
   });
 }
 
@@ -208,17 +236,52 @@ export function lignesDeLaGrandeur(partie: string, grandeur: string): string[] {
   });
 }
 
+/** Un résultat écrit : le nombre et l'unité qui le suit (« 0,02 m » → 0,02 et « m »). */
+export interface Resultat { valeur: number; unite: string }
+
 /** les résultats écrits après un « = » ou un « ≈ » : seulement un membre qui est un nombre (avec sa puissance de dix et
- *  son unité), pas un calcul (« = 2Dλ/a » ne donne pas 2, « = 2 × 2,5 × 4×10⁻³ » ne donne pas 2) ; dans l'ordre */
-export function resultatsEcrits(texte: string): number[] {
+ *  son unité), pas un calcul (« = 2Dθ » ne donne pas 2, « = 2 × 2,5 × 4×10⁻³ » ne donne pas 2) ; dans l'ordre.
+ *  Une copie sans aucun « = » (« l'aire minimale est 16 m² ») : son premier nombre. */
+export function resultatsEcrits(texte: string): Resultat[] {
   const membres = texte.split(/[=≈]/).slice(1).map(m => m.split(/\r?\n/)[0].trim());
-  const tete = /^[-−]?\d+(?:[.,]\d+)?(?:\s*[×x·*]\s*10\s*(?:\^\s*\(?\s*[-−]?\d+(?:[.,]\d+)?\s*\)?|[⁻⁺]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+))?/;
-  // après le nombre : seulement son unité (ni chiffre, ni opération)
-  const resultat = (m: string) => { const t = m.match(tete); return !!t && !/[0-9]|^\s*[×x·*/+^(-]/.test(m.slice(t[0].length)); };
-  const vus = membres.filter(resultat).map(m => lireNombre('=' + m)).filter((v): v is number => v != null);
-  if (vus.length) return vus;
-  const v = lireNombre(texte);
-  return v == null ? [] : [v];
+  const tete = /^[-−+]?\s*\d+(?:[.,]\d+)?(?:e[-−+]?\d+(?![\d.,])|\s*[×x·*.]\s*10\s*(?:\^\s*\(?\s*[-−]?\d+(?:[.,]\d+)?\s*\)?|[⁻⁺]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+|-\d+))?/;
+  const lu = (brut: string): Resultat | null => {
+    // « 4.10⁻³ » : le point devant 10 et son exposant est un « fois »
+    const m = brut.replace(/(\d)\s*\.\s*10(?=\s*(?:\^|[⁻⁺⁰¹²³⁴⁵⁶⁷⁸⁹]))/g, '$1×10');
+    const t = m.match(tete);
+    if (!t) return null;
+    const reste = m.slice(t[0].length);
+    // après le nombre : rien, ou une unité séparée par une espace (ou %, °) ; ni chiffre, ni opération, ni lettre grecque
+    // collée (« 2Dθ », « 2τ » sont des relations)
+    if (reste && !/^(\s|%|°)/.test(reste)) return null;
+    if (/[0-9]|^\s*[×x·*/+^(-]|[α-ωϑϕ]/.test(reste)) return null;
+    if (/\bou\b/i.test(reste)) return null;
+    const v = lireNombre('=' + t[0]);
+    return v == null ? null : { valeur: v, unite: reste.trim().split(/[\s,;.)]+/)[0] || '' };
+  };
+  const vus = membres.map(lu).filter((r): r is Resultat => r != null);
+  if (vus.length || /[=≈]/.test(texte)) return vus;
+  const m = texte.match(/[-−]?\d+(?:[.,]\d+)?(?:\s*[×x·*]\s*10\s*[⁻⁺]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+)?(?:\s*[%°]|\s+[a-zA-Zµ/²³⁻¹]+)?/);
+  return m ? [lu(m[0])].filter((r): r is Resultat => r != null) : [];
+}
+
+/** unités convertibles (même grandeur) : la valeur d'une unité dans l'unité de base */
+const UNITES_CONV: Record<string, [string, number]> = {
+  km: ['m', 1e3], m: ['m', 1], dm: ['m', 0.1], cm: ['m', 1e-2], mm: ['m', 1e-3], µm: ['m', 1e-6], um: ['m', 1e-6], nm: ['m', 1e-9],
+  kg: ['kg', 1], g: ['kg', 1e-3], mg: ['kg', 1e-6],
+  s: ['s', 1], ms: ['s', 1e-3], min: ['s', 60], h: ['s', 3600], j: ['s', 86400], jour: ['s', 86400], jours: ['s', 86400],
+  mol: ['mol', 1], mmol: ['mol', 1e-3],
+  l: ['l', 1], ml: ['l', 1e-3], cl: ['l', 1e-2],
+};
+/** une valeur écrite dans une autre unité que celle demandée, ramenée à l'unité demandée (0,02 m → 2 cm ;
+ *  2,6 % → 0,026 quand on attend une valeur décimale) ; null si on ne sait pas convertir */
+export function versUniteDemandee(r: Resultat, unites: string[]): number | null {
+  const u = r.unite.toLowerCase();
+  const demandee = (unites[0] || '').toLowerCase().trim();
+  if (u === '%' && !demandee.includes('%')) return r.valeur / 100;
+  const a = UNITES_CONV[u], b = UNITES_CONV[demandee];
+  if (!a || !b || a[0] !== b[0] || u === demandee) return null;
+  return r.valeur * a[1] / b[1];
 }
 
 export function jugerValeur(q: Extract<QuestionExamen, { genre: 'valeur' }>, texte: string): Etat {
@@ -231,25 +294,40 @@ export function jugerValeur(q: Extract<QuestionExamen, { genre: 'valeur' }>, tex
   // la tolérance est relative à la valeur attendue (25/11/2026 : l'ancien plancher de 10⁻¹² acceptait n'importe quel
   // nombre devant 4×10⁻²⁶ kg ou 3,2×10⁻¹⁹ C, même de signe contraire)
   const bon = (v: number) => (q.valeur === 0 ? Math.abs(v) <= 1e-9 : Math.abs(v - q.valeur) <= tol * Math.abs(q.valeur));
-  const valeurs = resultatsEcrits(partie);
-  const juste = valeurs.some(bon);
-  // le résultat lu : le bon s'il est écrit, sinon le dernier résultat de la partie
-  const lu = juste ? q.valeur : valeurs.length ? valeurs[valeurs.length - 1] : null;
+  const resultats = resultatsEcrits(partie);
+  // une conversion d'unités entre deux résultats (« 2×10⁻² m = 2 cm ») n'est pas un second résultat
+  const conversion = (a: number, b: number) => { if (!a || !b) return false; const r = Math.log10(Math.abs(a / b)); return Math.abs(r - Math.round(r)) < 0.01 && Math.sign(a) === Math.sign(b); };
+  const k = resultats.findIndex(r => bon(r.valeur));
+  // 25/11/2026 (copies piégées) : le bon nombre suivi d'un autre résultat (« = 5,1×10⁻⁴ » puis « = 3,29×10⁻¹ ») n'est
+  // pas juste : la réponse de l'élève est la dernière
+  const juste = k >= 0 && resultats.slice(k + 1).every(r => bon(r.valeur) || conversion(r.valeur, q.valeur));
+  const contradiction = k >= 0 && !juste;
+  // juste dans une autre unité que celle demandée (0,02 m pour 2 cm ; 2,6 % pour 0,026) : le résultat, pas l'unité
+  const dernier = resultats[resultats.length - 1];
+  const converti = !juste && dernier ? versUniteDemandee(dernier, q.unites) : null;
+  const justeAutreUnite = converti != null && bon(converti);
+  const lu = juste ? q.valeur : dernier ? dernier.valeur : null;
   const t = toute.toLowerCase().replace(/\s+/g, ' ');
   // une unité d'une ou deux lettres (« C », « j », « m ») doit être un mot à elle seule
-  const unite = q.unites.some(u => { const v = u.toLowerCase().trim(); if (!v) return true;
+  const unite = !justeAutreUnite && q.unites.some(u => { const v = u.toLowerCase().trim(); if (!v) return true;
     return v.length <= 2 ? new RegExp(`(^|[^a-zà-ÿ])${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-zà-ÿ]|$)`).test(t) : t.includes(v); });
-  const sansUnite = juste && !unite && q.points > 0.25;
+  const bonNombre = juste || justeAutreUnite;
+  const sansUnite = bonNombre && !unite && q.points > 0.25;
   // le résultat porte les points ; l'unité vaut 0,25 point quand la question en vaut plus
   const surUnite = q.points > 0.25 ? 0.25 : 0;
-  const details: Detail[] = [{ element: 'Relation, application numérique et résultat', sur: q.points - surUnite, obtenu: juste ? q.points - surUnite : 0,
-    perte: juste ? '' : lu == null ? 'pas de résultat chiffré' : 'résultat faux' }];
-  if (surUnite) details.push({ element: 'Unité du résultat', sur: surUnite, obtenu: juste && unite ? surUnite : 0, perte: juste && !unite ? 'unité manquante' : !juste ? 'résultat faux' : '' });
+  const details: Detail[] = [{ element: 'Relation, application numérique et résultat', sur: q.points - surUnite, obtenu: bonNombre ? q.points - surUnite : 0,
+    perte: bonNombre ? '' : contradiction ? RESULTATS_CONTRADICTOIRES : lu == null ? 'pas de résultat chiffré' : 'résultat faux' }];
+  if (surUnite) details.push({ element: 'Unité du résultat', sur: surUnite, obtenu: bonNombre && unite ? surUnite : 0,
+    perte: justeAutreUnite ? `résultat donné en ${dernier!.unite}, demandé en ${q.unites[0] || 'valeur décimale'}` : bonNombre && !unite ? 'unité manquante' : !bonNombre ? 'résultat faux' : '' });
   const note = details.reduce((n, d) => n + d.obtenu, 0);
-  return { fait: true, texte, note, details, verdict: juste ? (sansUnite ? 'partiel' : 'juste') : 'faux',
-    retour: juste ? (sansUnite ? 'Le nombre est juste, mais l’unité manque : sur la copie, elle compte.' : 'Le résultat est juste, avec son unité.')
+  return { fait: true, texte, note, details, verdict: bonNombre ? (sansUnite || justeAutreUnite ? 'partiel' : 'juste') : 'faux',
+    retour: justeAutreUnite ? `Le résultat est juste, mais il est demandé en ${q.unites[0] || 'valeur décimale'} : convertis-le.`
+      : bonNombre ? (sansUnite ? 'Le nombre est juste, mais l’unité manque : sur la copie, elle compte.' : 'Le résultat est juste, avec son unité.')
+      : contradiction ? 'Tu donnes deux résultats différents pour la même grandeur : sur la copie, le résultat est compté faux.'
       : lu == null ? 'Je ne trouve pas de résultat chiffré dans ta réponse.' : `Ton résultat (${String(lu).replace('.', ',')}) n’est pas le bon : regarde la correction.` };
 }
+/** deux résultats différents pour la même grandeur : le correcteur ne choisit pas pour l'élève */
+export const RESULTATS_CONTRADICTOIRES = 'deux résultats différents';
 
 /** la demande de correction d'un calcul au tuteur : noté sur les étapes de la correction (relation, application
  *  numérique, résultat, conclusion) */
@@ -274,7 +352,7 @@ export async function noterValeur(p: PartieExamen, q: Extract<QuestionExamen, { 
   corriger: (corps: ReturnType<typeof corpsValeur>) => Promise<CorrectionTuteur>): Promise<Etat> {
   const r = jugerValeur(q, texte);
   const juste = r.verdict === 'juste' || r.verdict === 'partiel';
-  if (!texte.trim() || (juste && !demandeConclusion(q))) return r;
+  if (!texte.trim() || (juste && !demandeConclusion(q)) || r.details?.[0]?.perte === RESULTATS_CONTRADICTOIRES) return r;
   try {
     const t = etatDeCorrection(q, texte, await corriger(corpsValeur(p, q, texte)));
     const tuteur = t.note ?? 0;

@@ -10,7 +10,7 @@ from fontTools.ttLib import TTFont
 B = Path(sys.argv[1])
 F = 'C:/Windows/Fonts/'
 MAINS = ['Inkfree.ttf', 'comic.ttf']
-SECOURS = ['comic.ttf', 'seguisym.ttf']
+SECOURS = ['comic.ttf', 'seguisym.ttf', 'arial.ttf']
 CMAP = {f: TTFont(F + f).getBestCmap() for f in set(MAINS + SECOURS)}
 SUB = {'₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9'}
 SUP = {'²': '2', '³': '3', '⁺': '+', '⁻': '-'}
@@ -36,6 +36,10 @@ def jetons(s, sorte='n'):
             num, i = bloc(s, i + 5)
             den, i = bloc(s, i)
             out.append(('frac', jetons(num), jetons(den)))
+            continue
+        if s.startswith('~~', i):
+            out.append(('', 'barre'))
+            i += 2
             continue
         if s.startswith('^{', i) or s.startswith('_{', i):
             txt, j = bloc(s, i + 1)
@@ -71,7 +75,17 @@ class Plume:
 
     def ecrire(self, x, y, js, echelle=1.0, dessiner=True):
         rnd = self.rnd
+        barre = None
         for j in js:
+            if j[1] == 'barre':
+                if barre is None:
+                    barre = x
+                else:
+                    yb = y + self.taille * echelle * 0.62
+                    self.trait((barre - 4, yb + rnd.randint(-3, 3)), (x + 4, yb + rnd.randint(-3, 3)), 3)
+                    self.trait((barre - 4, yb + 8), (x + 4, yb - 6), 2)
+                    barre = None
+                continue
             if j[0] == 'frac':
                 wn, wd = self.largeur(j[1], 0.8), self.largeur(j[2], 0.8)
                 w = max(wn, wd) + 10
@@ -228,6 +242,10 @@ def rendre(copie, chemin, graine):
     y = 100 - taille
     dessin = copie.get('dessin')
     for k, ligne in enumerate(lignes):
+        if any('؀' <= ch <= 'ۿ' for ch in ligne):
+            from arabic_reshaper import reshape
+            from bidi.algorithm import get_display
+            ligne = get_display(reshape(ligne))
         if '\\frac' in ligne:
             y += 36
         pl.ecrire(140 + rnd.randint(-6, 10), y, jetons(ligne))
