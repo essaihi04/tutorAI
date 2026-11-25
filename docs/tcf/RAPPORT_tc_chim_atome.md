@@ -98,3 +98,51 @@ Exemples choisis pour ne pas reprendre ceux de l’évaluation (²⁴₁₂Mg).
 - Les voix ne sont pas générées (lot Kaggle sans tunnel, plus tard).
 
 Dernier commit poussé sur `tcf-cours` : voir `git log origin/tcf-cours -- docs/tcf/RAPPORT_tc_chim_atome.md`.
+
+## Finitions (25/11/2026, session cloud « finitions atome »)
+
+Brief : `docs/tcf/BRIEF_FINITIONS.md`. Aucun texte parlé changé : `lister_voix_tcf.py` relancé, `tc_chim_atome_voix.json`
+inchangé (git diff vide).
+
+### Charte de couleurs
+- **L’atome entre au lexique commun** (`shared/lexique/lexique.js`, fiche `docs/lexique-visuel/atome.md`, README) :
+  `noyau` (amas rose « + » / gris à halo rose, comptage avec numéros), `nuage`, `placesNuage`, `couche` (anneau bleu pâle,
+  jaune allumée), `placesCouche`, `placeVide`, `repartition`, `atomeModele` (forme nuage ou couches), `charge` (anneau
+  pointillé de l’ion : rose cation, bleu ciel anion), `allume`. Les couleurs restent celles des particules (proton rose,
+  neutron gris, électron bleu ciel). `proton` / `electron` / `neutron` acceptent `nom` et `taille` (numéro écrit dessus).
+  Le `commun.js` du cours n’a plus de copie locale : `P.noyau`, `P.nuage`, `P.couche`, `P.places`, `P.atome`,
+  `P.noyauCompte`, `P.halo`, particules → lexique.
+- **Code de la craie** écrit au lexique (`docs/lexique-visuel/craie.md`, pour les trois cours) : titres, mots-clés, règles
+  en jaune ; légendes et données en blanc ; **résultats calculés et conclusions en vert** (encadré vert) ; pièges en rose ;
+  ce qui désigne un objet dans sa couleur (électron cyan, proton / noyau / Z rose, α orange). Appliqué à toutes les pages :
+  encadrés de conclusion et résultats jaunes → verts (masse, dimensions, neutralité, nucléons, isotopes, élément, Rutherford,
+  structure électronique, couche externe), « on néglige les électrons » orange → vert, « il perd / gagne un électron »
+  orange → blanc, ⚠ du bilan orange → rose, « Règle 2 » vert → jaune (une règle).
+- Les ions Na⁺ / Cl⁻ et l’ion O²⁻ portent maintenant l’anneau de charge du lexique.
+- **Cahier** (générateur `scripts/tcf/construire_tc_chim_atome.py`, cours régénéré) : une idée par ligne (Règle 1 / Règle 2,
+  corps neutre), « Donc … » pour les conclusions, « Remarque : » pour m_e ≪ m_p, sous-titres « 1. La masse de l’atome » /
+  « 2. Les dimensions de l’atome » dans la partie III, « Fiche : » → « Bilan : ». Les cartes `centre` (mots-clés courts) sont
+  inchangées.
+
+### Simulations qui remplissent le cadre
+- Thomson : le tube occupe toute la largeur (grand, 12 électrons « e− ») puis se range à gauche quand le pain aux raisins
+  arrive (plus grand à droite) ; légendes agrandies.
+- Électron : bille de 62 px dans un grand nuage, lignes de texte à 30 px.
+- Élément oxygène : atomes plus grands (R 105, noyau et électrons plus gros).
+- Conservation : bécher 260 × 255 au lieu de 190 × 210.
+- Bohr : orbites 92 / 162 (au lieu de 75 / 130), noyau plus gros ; frise des modèles : icônes 54 px, textes 22 / 18 px.
+- Captures regardées : chaque vue (36 URL) finie à 760×420 et 429×250 ; les 36 diapos à simulation dans le lecteur /TCF à
+  1280×720 et 724×350 (Vite, « Commencer le cours », 12 s). Aucune erreur console des simulations.
+
+### Vérifications (§ 3)
+`verifier_formules.py` (cours + dossier) : rien ; `verifier_parcours.py` : rien ; `verifier_figures_cahier.py` : 0 erreur ;
+`lister_voix_tcf.py` : voix inchangée.
+
+### Reste
+- Dans le lecteur à 1280×720 le cadre fait ~800×565 (rapport 1,4) : la scène 760×420 garde une bande vide en haut et en bas
+  (c’est le lecteur qui fixe le cadre ; pas changé ici).
+- Les vues se remplissent au fil de la voix : à l’arrêt sur un premier moment (montage de Rutherford, stade, Dalton), une
+  partie du tableau est encore vide par construction.
+- Rutherford : les observations gardent leurs couleurs d’objet (tout droit vert, déviées orange, retour rose), pas la
+  règle « conclusion verte ».
+- Pendant le rejeu sur téléphone, le sous-titre du lecteur couvre le bas de certaines scènes (Bohr, balance).
