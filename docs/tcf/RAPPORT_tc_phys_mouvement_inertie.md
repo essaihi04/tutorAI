@@ -41,7 +41,7 @@ puis l’élève (tige, 30 cm).
 
 ## Vérifié, et comment
 
-- `python -I scripts/verifier_formules.py <cours>` : 0 ; sur le dossier des simulations : voir la fin du rapport.
+- `python -I scripts/verifier_formules.py` sur le cours et sur le dossier des simulations : 0.
 - `python -I backend/scripts/verifier_parcours.py <cours>` : rien.
 - `python -I scripts/verifier_pointage.py <cours>` : 0 défaut (chaque `mot` trouvé dans l’ordre, chaque moment et
   repère déclaré dans la simulation).
@@ -49,8 +49,9 @@ puis l’élève (tige, 30 cm).
 - Chaque vue : captures Playwright de chaque moment à 760×420 et 429×250 (scripts dans le scratchpad de la session),
   regardées ; aucune erreur console.
 - Le cours dans la page /TCF (serveur Vite `vite.tcf.config.ts` + un petit proxy local pour `/media`, que la
-  configuration de dev ne sert pas sous `/TCF/`) : chargement, une simulation par diapo, aucune erreur ; captures à
-  1280×720 et 724×350.
+  configuration de dev ne sert pas sous `/TCF/`) : les 59 diapos ouvertes une à une (`?diapo=`) à 1280×720, chacune
+  charge sa simulation (ouverture et fermeture : sans figure, comme prévu), aucune erreur console ; captures de
+  quelques diapos à 1280×720 et en téléphone paysage 724×350.
 
 ## Ce qui reste douteux
 
@@ -63,6 +64,12 @@ puis l’élève (tige, 30 cm).
 - Science : l’enregistrement du cours prend τ = 20 ms et 2 cm (v = 1 m/s) au lieu de 40 ms (0,5 m/s) pour des nombres
   simples ; le MCU garde T ≈ 0,63 s et f ≈ 1,6 Hz (π) ; dans la vue « translation », A (au centre) et G sont confondus :
   deux rangées de points, pas trois (la voix le dit).
-- Vues : au petit cadre, les noms M₀…M₇ sont serrés et les graduations de la règle très petites ; un peu de tableau vide
+- Vues : `masse.html` écrit les vecteurs dans les fractions par des aides locales (la flèche de `texteV` ne couvre
+  que la lettre de base) ; au petit cadre, les noms M₀…M₇ sont serrés et les graduations de la règle très petites ; un peu de tableau vide
   sous la colonne de texte des vues curling et grue.
 - Le lecteur coupe le bouton « Au cahier » à 724 px de large (lecteur commun, pas touché).
+
+## Commit
+
+Dernier commit poussé sur `tcf-cours` : voir `git log -1 -- docs/tcf/RAPPORT_tc_phys_mouvement_inertie.md` (le SHA est
+aussi donné dans le compte rendu de la session).
