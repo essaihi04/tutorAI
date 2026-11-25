@@ -352,7 +352,7 @@ D['at_h4_montage'] = diapo(
 D['at_h5_resultats'] = diapo(
     'at_h5_resultats', 'Rutherford : ce qu’on observe', 'On tire beaucoup de particules α : où arrivent-elles ?',
     ['La plupart traversent la feuille sans être déviées.', 'Quelques-unes sont déviées ; de très rares reviennent en arrière.'],
-    'La plupart des particules α traversent la feuille d’or sans déviation ; quelques-unes sont déviées.', 'rutherford.html?vue=resultats',
+    'La plupart des particules α traversent la feuille d’or sans déviation ; quelques-unes sont déviées.', 'rutherford.html?vue=resultats&vierge=1',
     'Les éclairs sur l’écran', 'Presque tous les éclairs derrière la feuille ; quelques-uns sur les côtés ; un très rare du côté de la source',
     'Maintenant on tire beaucoup de particules alpha sur la feuille d’or, et on regarde les éclairs sur l’écran. '
     'Observe bien où ils arrivent. Presque toutes les particules passent tout droit, à travers la feuille, sans être '
@@ -589,7 +589,7 @@ D['at_s6_methode'] = diapo(
 D['at_s7_toi'] = diapo(
     'at_s7_toi', 'À toi : le tableau du chlore ³⁵₁₇Cl', 'Même méthode, sur l’atome de chlore.',
     ['³⁵₁₇Cl : A = 35, Z = 17.'],
-    'Exemple : ³⁵₁₇Cl : 17 protons (+17e), 18 neutrons (0), 17 électrons (−17e).', 'structure.html?vue=tableau&atome=Cl',
+    'Exemple : ³⁵₁₇Cl : 17 protons (+17e), 18 neutrons (0), 17 électrons (−17e).', 'structure.html?vue=tableau&atome=Cl&vierge=1',
     'Le tableau de ³⁵₁₇Cl', 'L’atome de chlore et son tableau, rempli après ta réponse',
     'À toi maintenant, avec l’atome de chlore : trente-cinq, dix-sept, C l. Voici son écriture et son tableau vide. '
     'Lis bien A et Z, puis fais les trois étapes dans ta tête : les protons, les neutrons, les électrons. Ensuite, '
@@ -601,7 +601,7 @@ D['at_s7_toi'] = diapo(
     pointage=[pu('هادي هي الكتابة', 'notation'), rp('هادي هي الكتابة', 'notation'), rp('قرا', 'notation'), rp('les trois étapes', 'tableau')],
     centre=[ce('قرا', 'A = 35 · Z = 17')],
     apres=[{'etapes': [pu('', 'protons') | {}, {'commande': 'play_until', 'parametres': {'moment': 'neutrons'}},
-                       {'commande': 'play_until', 'parametres': {'moment': 'electrons'}}, {'repere': 'case_neutrons'}], 'duree_s': 9}],
+                       {'commande': 'play_until', 'parametres': {'moment': 'electrons'}}, {'repere': 'case_neutrons'}], 'duree_s': 14}],
     cahier='Exemple : ³⁵₁₇Cl : protons 17 (+17e) ; neutrons 35 − 17 = 18 (0) ; électrons 17 (−17e).',
     comps=['C3'],
     q=question('qcm', 'Combien de neutrons le noyau ³⁵₁₇Cl contient-il ?', ['17', '18', '35'], 1,
@@ -668,7 +668,7 @@ D['at_m2_methode'] = diapo(
 D['at_m3_toi'] = diapo(
     'at_m3_toi', 'À toi : la masse de l’atome de carbone ¹²₆C', 'Même méthode : A, puis m ≈ A·m_p.',
     ['¹²₆C ; m_p ≈ 1,67 × 10⁻²⁷ kg.'],
-    'Exemple : ¹²₆C : m ≈ 12 × 1,67 × 10⁻²⁷ ≈ 2,0 × 10⁻²⁶ kg.', 'masse.html?vue=methode&atome=C',
+    'Exemple : ¹²₆C : m ≈ 12 × 1,67 × 10⁻²⁷ ≈ 2,0 × 10⁻²⁶ kg.', 'masse.html?vue=methode&atome=C&vierge=1',
     'La masse de l’atome de carbone', 'Le noyau du carbone ; le calcul s’écrit après ta réponse',
     'À toi, avec le carbone douze six. Voici son écriture et son noyau. Lis A, écris la relation, fais l’application '
     'numérique, puis choisis le bon résultat au tableau. N’oublie pas l’unité : le kilogramme.',
@@ -679,7 +679,7 @@ D['at_m3_toi'] = diapo(
     apres=[{'sim_avant': {'conclusions': False},
             'etapes': [{'commande': 'set_parameters', 'parametres': {'conclusions': True}},
                        {'commande': 'play_until', 'parametres': {'moment': 'A'}}, {'commande': 'play_until', 'parametres': {'moment': 'resultat'}},
-                       {'repere': 'resultat'}], 'duree_s': 9}],
+                       {'repere': 'resultat'}], 'duree_s': 10}],
     cahier='Exemple : ¹²₆C : m ≈ 12 × 1,67 × 10⁻²⁷ kg ≈ 2,0 × 10⁻²⁶ kg.',
     comps=['C4'],
     q=question('qcm', 'La masse approchée de l’atome ¹²₆C est… (m_p ≈ 1,67 × 10⁻²⁷ kg)',
@@ -832,7 +832,7 @@ D['at_e3_element'] = diapo(
 D['at_e4_conservation'] = diapo(
     'at_e4_conservation', 'L’élément chimique se conserve', 'Sulfate de cuivre + soude : un précipité bleu ; le cuivre est toujours là.',
     ['Solution bleue de sulfate de cuivre (ions Cu²⁺) + soude (ions HO⁻) → précipité bleu Cu(OH)₂(s).', 'L’élément cuivre change de forme, mais il ne disparaît pas.'],
-    'L’élément chimique se conserve au cours d’une transformation chimique : Cu²⁺(aq) + 2HO⁻(aq) → Cu(OH)₂(s).', 'element.html?vue=conservation',
+    'L’élément chimique se conserve au cours d’une transformation chimique : Cu²⁺(aq) + 2HO⁻(aq) → Cu(OH)₂(s).', 'element.html?vue=conservation&vierge=1',
     'La conservation de l’élément cuivre', 'Un bécher bleu ; la soude goutte à goutte ; un précipité bleu tombe au fond',
     'Une expérience. Dans ce bécher, une solution de sulfate de cuivre : elle est bleue, à cause des ions cuivre Cu deux '
     'plus. Avec le compte-gouttes, on ajoute de la soude, qui contient des ions hydroxyde H O moins. Regarde bien ce qui '
@@ -914,7 +914,7 @@ D['at_c2_methode'] = diapo(
 D['at_c3_toi'] = diapo(
     'at_c3_toi', 'À toi : la structure électronique de ³⁵₁₇Cl', 'Même méthode : compter, remplir K, L, M, écrire.',
     ['Cl : Z = 17.'],
-    'Exemple : Cl (Z = 17) : (K)²(L)⁸(M)⁷ ; couche externe M (7 électrons).', 'couches.html?vue=remplir&atome=Cl',
+    'Exemple : Cl (Z = 17) : (K)²(L)⁸(M)⁷ ; couche externe M (7 électrons).', 'couches.html?vue=remplir&atome=Cl&vierge=1',
     'Les couches du chlore', 'Les dix-sept électrons attendent ; ils tombent après ta réponse',
     'À toi, avec l’atome de chlore. Z égale dix-sept. Voici ses électrons, qui attendent d’être placés. Fais les étapes '
     'dans ta tête : combien d’électrons, puis K, puis L, puis M. Ensuite choisis la bonne structure au tableau.',
@@ -925,7 +925,7 @@ D['at_c3_toi'] = diapo(
     apres=[{'sim_avant': {'conclusions': False},
             'etapes': [{'commande': 'set_parameters', 'parametres': {'conclusions': True}}, {'commande': 'play_until', 'parametres': {'moment': 'k'}},
                        {'commande': 'play_until', 'parametres': {'moment': 'l'}}, {'commande': 'play_until', 'parametres': {'moment': 'm'}},
-                       {'commande': 'play_until', 'parametres': {'moment': 'externe'}}, {'repere': 'structure_txt'}], 'duree_s': 12}],
+                       {'commande': 'play_until', 'parametres': {'moment': 'externe'}}, {'repere': 'structure_txt'}], 'duree_s': 14}],
     cahier='Exemple : Cl (Z = 17) : (K)²(L)⁸(M)⁷ ; couche externe : M, 7 électrons.',
     comps=['C7'],
     q=question('qcm', 'La structure électronique de l’atome de chlore (Z = 17) est…', ['(K)²(L)⁸(M)⁷', '(K)²(L)⁷(M)⁸', '(K)⁸(L)⁸(M)¹'], 0,
@@ -1214,6 +1214,14 @@ SEANCES = [
 # la figure de la notation dans le bloc 8
 SEANCES[2]['blocs'][1]['cahier_figures'] = [D['at_s4_notation']['concentration']['cahier_figures'][0]]
 SEANCES[4]['blocs'][0]['cahier_figures'] = [D['at_e2_ions']['concentration']['cahier_figures'][0]]
+
+# La simulation écrit déjà ces relations au tableau, sur leur mot : pas de carte qui la répète à côté (règle
+# « simulation d'abord » : les cartes ne répètent pas la simulation).
+for _id in ['at_s2_electron', 'at_s3_noyau', 'at_s4_notation', 'at_s5_neutralite', 'at_m1_masse', 'at_m2_methode', 'at_d1_rapport',
+            'at_d2_stade', 'at_c1_couches', 'at_c4_ion', 'at_e1_isotopes', 'at_e3_element']:
+    D[_id]['concentration'].pop('centre', None)
+D['at_e4_conservation']['concentration']['centre'] = [c for c in D['at_e4_conservation']['concentration']['centre'] if '→' not in c['texte']]
+D['at_c2_methode']['concentration']['centre'] = D['at_c2_methode']['concentration']['centre'][:1]
 
 ORDRE = [sid for se in SEANCES for b in se['blocs'] for sid in b['slide_ids']]
 ACTIVITES = [

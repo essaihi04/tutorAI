@@ -113,7 +113,10 @@
   function sim(o) {
     const { bulle, protocole } = window.Tableau;
     const $ = id => document.getElementById(id);
-    const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, vu: {}, conclusions: true, vue: o.vue || param('vue', o.vueDefaut || ''), p: {} };
+    // ?vierge=1 : la scène s'ouvre vide (pas d'aperçu de la figure finie) — diapos « À toi » et questions d'observation,
+    // où l'aperçu donnerait la réponse avant la question.
+    const T0 = param('vierge') === '1' ? .001 : 0;
+    const S = { t: T0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, vu: {}, conclusions: true, vue: o.vue || param('vue', o.vueDefaut || ''), p: {} };
     const M = () => (typeof o.moments === 'function' ? o.moments(S) : o.moments);
     const FIN = () => (typeof o.fin === 'function' ? o.fin(S) : o.fin);
     const canvas = $('canvas'), btn = $('run'), fb = $('feedback');
@@ -135,7 +138,9 @@
     const etiquette = (txt) => { if (btn) btn.textContent = txt; };
     scene.avancer = dt => {
       if (!S.running) return false;
-      S.t = Math.min(FIN(), S.t + dt); marquer();
+      // rattrapage : un arrêt lointain (correction jouée après une réponse) est atteint plus vite
+      const vite = S.jusqua != null && S.jusqua - S.t > 5 ? 2.2 : 1;
+      S.t = Math.min(FIN(), S.t + dt * vite); marquer();
       if (S.jusqua != null && S.t >= S.jusqua - 1e-6) {
         S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; etiquette('Reprendre');
         bulle(fb, 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre(); return true;
@@ -149,7 +154,7 @@
     function start() { S.jusqua = null; S.t = 0; S.vu = {}; S.running = true; S.pause = false; S.fait = false; scene.reecrire(); etiquette('Pause'); bulle(fb, o.debut || 'Regarde…'); pont.noter('start'); pont.emettre(); }
     function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; etiquette('Reprendre'); bulle(fb, 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
     function resume() { if (S.running) return; if (!S.pause || S.fait) return start(); S.running = true; S.pause = false; etiquette('Pause'); pont.noter('resume'); pont.emettre(); }
-    function reset() { S.t = 0; S.vu = {}; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.reecrire(); etiquette(LANCER); bulle(fb, o.accueil || ''); pont.noter('reset'); pont.emettre(); }
+    function reset() { S.t = T0; S.vu = {}; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.reecrire(); etiquette(LANCER); bulle(fb, o.accueil || ''); pont.noter('reset'); pont.emettre(); }
     function playUntil(p) {
       const m = M(), nom = p.moment != null && p.moment in m ? p.moment : null, cible = nom ? m[nom] : +p.time_s;
       if (!Number.isFinite(cible)) return;
