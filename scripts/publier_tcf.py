@@ -34,7 +34,7 @@ PREFIXE = "/TCF"
 DEST = "/var/www/moalim/TCF"
 #: Dossiers copiés en entier (les pages s'y servent de chemins relatifs, ou le lecteur compose les noms).
 #: les trois cours du lien ; un nouveau cours ajoute son id ici (ses simulations et ses voix sont copiées)
-DECKS = ["tc_chim_synthese", "tc_chim_atome", "tc_phys_mouvement_inertie"]
+DECKS = ["tc_chim_synthese", "tc_chim_atome", "tc_phys_mouvement_inertie", "tc_tcf_revision", "tc_tcf_examen"]
 #: Dossiers copiés en entier (les pages s'y servent de chemins relatifs, ou le lecteur compose les noms).
 DOSSIERS = ["media/simulations/shared/tableau", "media/audio/reactions",
             "media/simulations/chimie/tc_synthese-tableau", "media/simulations/chimie/tc_atome-tableau",
@@ -44,7 +44,7 @@ FICHIERS = ["media/simulations/professor-locate.js", "media/avatar/moalim-profes
             "media/audio/reactions/manifest.json"]
 TEXTE = {".js", ".html", ".css", ".json", ".mjs"}
 REF = re.compile(r"/media/[A-Za-z0-9_\-./%]+")
-PISTE = re.compile(r"(/media/audio/courses/tc_(?:chim|phys)_[a-z_]+/[^\"'`\\\s]+?)\.wav")
+PISTE = re.compile(r"(/media/audio/courses/tc_(?:chim|phys|tcf)_[a-z_]+/[^\"'`\\\s]+?)\.wav")
 
 
 def lancer(*cmd: str, **kw) -> None:

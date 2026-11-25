@@ -7,6 +7,7 @@
  *   - `?cours=tc_chim_synthese`                « Synthèse d'une espèce chimique » ;
  *   - `?cours=tc_chim_atome`                   « Modèle de l'atome » ;
  *   - `?cours=tc_phys_mouvement_inertie`       « Le mouvement et le principe d'inertie » ;
+ *   - `?cours=tc_tcf_revision`                 la révision des trois chapitres (~30 diapos, demande de l'utilisateur) ;
  *   - `?examen`                                l'évaluation formative des trois chapitres (20 points, sans chronomètre) ;
  *   - `?classe` / `?c=<code>`                  le mode classe (écran du prof / téléphone de l'élève), sans fiche ;
  *   - `?t=<code>`                              le téléphone relié au PC de l'élève (« 📱 Avec mon téléphone »).
@@ -44,6 +45,9 @@ const MATIERES = [
   ] },
   { cle: 'physique', nom: 'Physique', couleur: '#2a78d6', matiere: 'physique', cours: [
     { id: 'tc_phys_mouvement_inertie', titre: 'Le mouvement et le principe d’inertie', sous: 'Référentiel, repères, trajectoire, vitesses, mouvement rectiligne uniforme et circulaire uniforme, centre d’inertie, principe d’inertie, centre de masse' },
+  ] },
+  { cle: 'revision', nom: 'Révision', couleur: '#2f5d8a', matiere: 'physique', cours: [
+    { id: 'tc_tcf_revision', titre: 'Révision des trois chapitres', sous: 'L’essentiel en une trentaine de diapos : chaque définition, chaque formule et chaque méthode refaite sur un nouvel exemple' },
   ] },
 ];
 const TOUS = MATIERES.flatMap(m => m.cours.map(c => ({ ...c, m })));

@@ -36,6 +36,7 @@ export const LIEN_TCF: LienSuivi = { titre: 'Tronc Commun PC', fichier: 'tcf', l
   { id: 'tc_chim_synthese', nom: 'Synthèse', c: '#eb6834' },
   { id: 'tc_chim_atome', nom: 'Atome', c: '#f4a988' },
   { id: 'tc_phys_mouvement_inertie', nom: 'Mouvement et inertie', c: '#2a78d6' },
+  { id: 'tc_tcf_revision', nom: 'Révision', c: '#86b6ef' },
 ], examens: avecQuestions([{ cle: 'examen_tcf', nom: 'Évaluation', sujet: SUJET_TCF as unknown as Sujet }]) };
 /** l'onglet affiché (un seul à la fois dans le tableau de bord) : réglé par la prop `lien` à chaque rendu */
 let SEANCES = LIEN_2BAC.seances, EXAMENS = LIEN_2BAC.examens;
