@@ -32,7 +32,7 @@
  *                  x(t) = 0,4·t + 0,04. Moments : enreg 0,5 ; v 2 ; x0 4 ; equation 6 ; fin 8.
  *                  conclusions:false cache v, x0 et l’équation.
  */
-const { P, lueur, panneau, vecteur, texteV, graphique, doux, HEX } = window.Mvt;
+const { P, lueur, panneau, vecteur, texteV, graphique, doux, HEX, ME: MECA, ROLES: RO } = window.Mvt;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const CM = 30;
 const tps = S => (S.t <= 0 ? 99 : S.t);
@@ -70,8 +70,8 @@ function dessinerTableau(c, S, sc) {
   const cx = i => tx0 + colH + (i + .5) * colW, cy = r => ty0 + (r + .5) * rh + tc * .36;
   for (let r = 0; r <= 2; r++) c.ligne(tx0, ty0 + r * rh, tx0 + colH + 8 * colW, ty0 + r * rh, { couleur: 'faible', largeur: 1.2, duree: .05 });
   for (let j = 0; j <= 9; j++) { const xx = j === 0 ? tx0 : tx0 + colH + (j - 1) * colW; c.ligne(xx, ty0, xx, ty0 + 2 * rh, { couleur: 'faible', largeur: 1.2, duree: .04 }); }
-  c.texte('t (ms)', tx0 + colH / 2, cy(0), { couleur: 'orange', taille: ts, gras: true, align: 'center' });
-  c.texte('x (cm)', tx0 + colH / 2, cy(1), { couleur: 'cyan', taille: ts, gras: true, align: 'center' });
+  c.texte('t (ms)', tx0 + colH / 2, cy(0), { couleur: 'jaune', taille: ts, gras: true, align: 'center' });
+  c.texte('x (cm)', tx0 + colH / 2, cy(1), { couleur: 'jaune', taille: ts, gras: true, align: 'center' });
   c.repere('tableau', tx0, ty0, colH + 8 * colW, 2 * rh, 'le tableau des dates t et des abscisses x');
   // les origines
   if (vu(S, 'origine_x')) {
@@ -94,16 +94,16 @@ function dessinerTableau(c, S, sc) {
     const lerp = (a, b) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f], taille = ts + (tc - ts) * f;
     const pT = lerp(sT, dT), pX = lerp(sX, dX);
     c.direct(() => {
-      c.texte(fr(T[i]), pT[0], pT[1], { couleur: 'orange', taille, gras: true, align: 'center' });
-      c.texte(fr(XC[i]), pX[0], pX[1], { couleur: 'cyan', taille, gras: true, align: 'center' });
+      c.texte(fr(T[i]), pT[0], pT[1], { couleur: 'blanc', taille, gras: true, align: 'center' });
+      c.texte(fr(XC[i]), pX[0], pX[1], { couleur: 'blanc', taille, gras: true, align: 'center' });
     });
     if (k >= .85 && k < 1.3 && S.t > 0) lueur(c, cx(i) - colW / 2 + 3, ty0 + 3, colW - 6, 2 * rh - 6, { vive: k < 1 });
     if (k >= .85) c.repere('col' + i, cx(i) - colW / 2, ty0, colW, 2 * rh, 'M' + i + ' : t = ' + fr(T[i]) + ' ms ; x = ' + XC[i] + ' cm');
   }
   panneau(c, S, sc, Math.max(530, L - 240), 50, 220, [
-    { m: 'enreg', t: 'τ = 20 ms', c: 'orange', g: true },
-    { m: 'origine_x', t: 'x = 0 en M_0', c: 'cyan', g: true, r: 'origine_x' },
-    { m: 'origine_t', t: 't = 0 en M_2', c: 'orange', g: true, r: 'origine_t' },
+    { m: 'enreg', t: 'τ = 20 ms', c: 'blanc', g: true },
+    { m: 'origine_x', t: 'x = 0 en M_0', c: 'blanc', g: true, r: 'origine_x' },
+    { m: 'origine_t', t: 't = 0 en M_2', c: 'blanc', g: true, r: 'origine_t' },
   ], { dy: 40, taille: 22, px: Math.max(560, L - 300), py: 46, pw: 280, taillePetit: 32 });
 }
 
@@ -114,7 +114,7 @@ function repereGraph(c, sc) {
   if (sc.petit) return graphique(c, 70, 128, 520, 236, Object.assign({}, AX, { lab: [-40, 40, 80] }), Object.assign({}, AY, { lab: [4, 8, 12] }), { taille: 31, tailleNom: 31 });
   return graphique(c, 60, 44, 390, 326, AX, AY, { taille: 18, tailleNom: 20 });
 }
-function droiteXT(c, R, ecrire) { if (ecrire) c.ligne(R.X(-40), R.Y(0), R.X(110), R.Y(15), { couleur: 'cyan', largeur: 2.8 }); }
+function droiteXT(c, R, ecrire) { if (ecrire) c.ligne(R.X(-40), R.Y(0), R.X(110), R.Y(15), { couleur: RO.courbe, largeur: 2.8 }); }
 function pointsXT(c, R, alpha) { for (let i = 0; i < 8; i++) c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = alpha; g.fillStyle = HEX.jaune; g.beginPath(); g.arc(R.X(T[i]), R.Y(XC[i]), 5.5, 0, Math.PI * 2); g.fill(); g.restore(); }); }
 
 /* ── vue courbe ── */
@@ -128,13 +128,13 @@ function dessinerCourbe(c, S, sc) {
   const tx = Math.max(540, L - 220), tw = 190, rh = 36, ty = 44, ts = 21;
   const ligneY = r => ty + (r + 1) * rh;
   if (!pt) {
-    c.texte('t (ms)', tx + tw * .25, ty + rh * .7, { couleur: 'orange', taille: ts, gras: true, align: 'center', duree: .05 });
-    c.texte('x (cm)', tx + tw * .75, ty + rh * .7, { couleur: 'cyan', taille: ts, gras: true, align: 'center', duree: .05 });
+    c.texte('t (ms)', tx + tw * .25, ty + rh * .7, { couleur: 'jaune', taille: ts, gras: true, align: 'center', duree: .05 });
+    c.texte('x (cm)', tx + tw * .75, ty + rh * .7, { couleur: 'jaune', taille: ts, gras: true, align: 'center', duree: .05 });
     c.ligne(tx, ty + rh, tx + tw, ty + rh, { couleur: 'faible', largeur: 1.2, duree: .05 });
     c.ligne(tx + tw / 2, ty + 4, tx + tw / 2, ty + 9 * rh, { couleur: 'faible', largeur: 1.2, duree: .05 });
     for (let i = 0; i < 8; i++) {
-      c.texte(fr(T[i]), tx + tw * .25, ligneY(i) + rh * .7, { couleur: 'orange', taille: ts, align: 'center', duree: .03 });
-      c.texte(fr(XC[i]), tx + tw * .75, ligneY(i) + rh * .7, { couleur: 'cyan', taille: ts, align: 'center', duree: .03 });
+      c.texte(fr(T[i]), tx + tw * .25, ligneY(i) + rh * .7, { couleur: 'blanc', taille: ts, align: 'center', duree: .03 });
+      c.texte(fr(XC[i]), tx + tw * .75, ligneY(i) + rh * .7, { couleur: 'blanc', taille: ts, align: 'center', duree: .03 });
     }
     c.repere('tableau', tx, ty, tw, 9 * rh, 'le tableau t / x');
   }
@@ -144,13 +144,13 @@ function dessinerCourbe(c, S, sc) {
     const vive = S.t > 0 && t < t0 + .6;
     const px = R.X(T[i]), py = R.Y(XC[i]);
     if (!pt) lueur(c, tx + 3, ligneY(i) + 2, tw - 6, rh - 4, { vive, numero: i + 1, nx: tx - 10, ny: ligneY(i) + rh * .72, taille: 20 });
-    if (vive) { c.direct(() => { c.ligne(px, R.Y(0), px, py, { couleur: 'jaune', largeur: 1.4, pointille: [5, 5], alpha: .7 }); c.ligne(R.X(0), py, px, py, { couleur: 'jaune', largeur: 1.4, pointille: [5, 5], alpha: .7 }); }); lueur(c, px - 13, py - 13, 26, 26, { vive: true }); }
-    c.direct(() => c.point(px, py, 6, 'jaune'));
+    if (vive) { c.direct(() => { c.ligne(px, R.Y(0), px, py, { couleur: RO.point, largeur: 1.4, pointille: [5, 5], alpha: .7 }); c.ligne(R.X(0), py, px, py, { couleur: RO.point, largeur: 1.4, pointille: [5, 5], alpha: .7 }); }); lueur(c, px - 13, py - 13, 26, 26, { vive: true }); }
+    c.direct(() => c.point(px, py, 6, RO.point));
     c.repere('P' + i, px - 10, py - 10, 20, 20, 'le point (' + fr(T[i]) + ' ; ' + XC[i] + ')');
   }
   if (S.t <= 0 || S.ecrit(c, 'droite')) {
     droiteXT(c, R, true);
-    if (!pt) c.texte('une droite', R.X(14), R.Y(14.6), { couleur: 'cyan', taille: 22, gras: true });
+    if (!pt) c.texte('une droite', R.X(14), R.Y(14.6), { couleur: 'vert', taille: 22, gras: true });
     c.repere('droite', R.X(-40), R.Y(15), R.X(110) - R.X(-40), R.Y(0) - R.Y(15), 'la droite : les points sont alignés');
   }
   if (pt) {   // petit cadre : le couple en cours, en grand, en haut
@@ -158,7 +158,7 @@ function dessinerCourbe(c, S, sc) {
     for (let i = 0; i < 8; i++) if (S.t <= 0 || t >= MCo.points + i * .6) txt = (i + 1) + ') t = ' + fr(T[i]) + ' ms ; x = ' + XC[i] + ' cm';
     if (S.t > 0 && t < MCo.points) txt = 'les axes : t (ms) et x (cm)';
     if (S.t <= 0 || S.a('droite')) txt = 'les points sont alignés : une droite';
-    if (txt) c.direct(() => c.texte(txt, 30, 56, { couleur: S.a('droite') || S.t <= 0 ? 'cyan' : 'jaune', taille: 32, gras: true, max: L - 60 }));
+    if (txt) c.direct(() => c.texte(txt, 30, 56, { couleur: S.a('droite') || S.t <= 0 ? 'vert' : 'blanc', taille: 32, gras: true, max: L - 60 }));
   }
 }
 
@@ -172,31 +172,31 @@ function dessinerPente(c, S, sc) {
   if (S.t <= 0 || S.ecrit(c, 'b')) {
     lueur(c, R.X(0) - 13, R.Y(4) - 13, 26, 26, { vive: S.t > 0 && !S.a('points') });
     const lx = R.X(0) - (pt ? 46 : 34), ly = R.Y(pt ? 9.6 : 8.6);
-    c.texte('b = 4 cm', lx, ly, { couleur: 'orange', taille: ts, gras: true, align: 'right' });
-    c.ligne(lx - 20, ly + 6, R.X(0) - 8, R.Y(4) - 8, { couleur: 'orange', largeur: 1.4 });
+    c.texte('b = 4 cm', lx, ly, { couleur: RO.point, taille: ts, gras: true, align: 'right' });
+    c.ligne(lx - 20, ly + 6, R.X(0) - 8, R.Y(4) - 8, { couleur: RO.point, largeur: 1.4 });
     c.repere('b', R.X(0) - 13, R.Y(4) - 13, 26, 26, 'b = x(0) = 4 cm : la droite coupe l’axe x');
   }
   if (S.t <= 0 || S.ecrit(c, 'points')) {
-    for (const [a, b] of [[0, 4], [100, 14]]) { c.direct(() => c.point(R.X(a), R.Y(b), 7, 'jaune')); lueur(c, R.X(a) - 13, R.Y(b) - 13, 26, 26, { vive: S.t > 0 && !S.a('dx') }); }
+    for (const [a, b] of [[0, 4], [100, 14]]) { c.direct(() => c.point(R.X(a), R.Y(b), 7, RO.point)); lueur(c, R.X(a) - 13, R.Y(b) - 13, 26, 26, { vive: S.t > 0 && !S.a('dx') }); }
     if (!pt) { c.texte('(0 ; 4)', R.X(0) + 12, R.Y(4) + 24, { couleur: 'jaune', taille: 19 }); c.texte('(100 ; 14)', R.X(100) - 16, R.Y(14) - 12, { couleur: 'jaune', taille: 19, align: 'right' }); }
     c.repere('points', R.X(0) - 10, R.Y(14) - 10, R.X(100) - R.X(0) + 20, R.Y(4) - R.Y(14) + 20, 'les points (0 ; 4) et (100 ; 14)');
   }
   if (S.t <= 0 || S.ecrit(c, 'dx')) {
-    c.cote(R.X(100), R.Y(4), R.X(100), R.Y(14), '', { couleur: 'orange' });
-    c.texte(pt ? 'Δx' : 'Δx = 10 cm', R.X(100) - 10, R.Y(8.6), { couleur: 'orange', taille: ts, gras: true, align: 'right' });
+    c.cote(R.X(100), R.Y(4), R.X(100), R.Y(14), '', { couleur: RO.tangente });
+    c.texte(pt ? 'Δx' : 'Δx = 10 cm', R.X(100) - 10, R.Y(8.6), { couleur: RO.tangente, taille: ts, gras: true, align: 'right' });
     c.repere('dx', R.X(100) - 10, R.Y(14), 20, R.Y(4) - R.Y(14), 'Δx = 14 − 4 = 10 cm');
   }
   if (S.t <= 0 || S.ecrit(c, 'dt')) {
-    c.cote(R.X(0), R.Y(4), R.X(100), R.Y(4), '', { couleur: 'vert' });
-    c.texte(pt ? 'Δt' : 'Δt = 100 ms', R.X(50), R.Y(pt ? 1.2 : 1.9), { couleur: 'vert', taille: ts, gras: true, align: 'center' });
+    c.cote(R.X(0), R.Y(4), R.X(100), R.Y(4), '', { couleur: RO.tangente });
+    c.texte(pt ? 'Δt' : 'Δt = 100 ms', R.X(50), R.Y(pt ? 1.2 : 1.9), { couleur: RO.tangente, taille: ts, gras: true, align: 'center' });
     c.repere('dt', R.X(0), R.Y(4) - 10, R.X(100) - R.X(0), 20, 'Δt = 100 − 0 = 100 ms');
   }
   panneau(c, S, sc, Math.max(500, L - 300), 60, Math.min(290, L - 510), [
-    { m: 'b', t: 'b = x(0) = 4 cm', c: 'orange' },
+    { m: 'b', t: 'b = x(0) = 4 cm', c: 'blanc' },
     { m: 'points', t: '(0 ; 4) et (100 ; 14)', c: 'jaune' },
-    { m: 'dx', t: 'Δx = 14 − 4 = 10 cm', c: 'orange' },
-    { m: 'dt', t: 'Δt = 100 − 0 = 100 ms', c: 'vert' },
-    { m: 'pente', t: 'a = ⟦Δx|Δt⟧ = ⟦0,10 m|0,10 s⟧ = 1 m/s', c: 'jaune', g: true, r: 'pente', lab: 'la pente a = Δx/Δt = 1 m/s' },
+    { m: 'dx', t: 'Δx = 14 − 4 = 10 cm', c: RO.tangente },
+    { m: 'dt', t: 'Δt = 100 − 0 = 100 ms', c: RO.tangente },
+    { m: 'pente', t: 'a = ⟦Δx|Δt⟧ = ⟦0,10 m|0,10 s⟧ = 1 m/s', c: 'vert', g: true, r: 'pente', lab: 'la pente a = Δx/Δt = 1 m/s' },
     { m: 'egal_v', t: 'a = v = 1 m/s', c: 'vert', g: true, taille: 26, r: 'egal_v', lab: 'la pente est la vitesse' },
   ], { dy: 46, taille: 21, px: 30, py: 50, pw: L - 60, taillePetit: 32 });
 }
@@ -210,14 +210,14 @@ function dessinerEquation(c, S, sc) {
   c.repere('droite', R.X(-40), R.Y(15), R.X(110) - R.X(-40), R.Y(0) - R.Y(15), 'la droite x(t)');
   if (vu(S, 'x0')) lueur(c, R.X(0) - 13, R.Y(4) - 13, 26, 26, { vive: S.t > 0 && !S.a('v') });
   if (S.t <= 0 || S.ecrit(c, 'v')) {
-    c.trait([[R.X(0), R.Y(4)], [R.X(100), R.Y(4)], [R.X(100), R.Y(14)]], { couleur: 'vert', largeur: 2, pointille: [6, 5] });
+    c.trait([[R.X(0), R.Y(4)], [R.X(100), R.Y(4)], [R.X(100), R.Y(14)]], { couleur: RO.tangente, largeur: 2, pointille: [6, 5] });
   }
   panneau(c, S, sc, Math.max(490, L - 310), 70, Math.min(300, L - 500), [
-    { m: 'relation', t: 'x(t) = v·t + x_0', c: 'blanc', g: true, taille: 25, r: 'relation', lab: 'l’équation horaire du MRU : x(t) = v·t + x0' },
-    { m: 'x0', t: 'x_0 = x(0) = 4 cm = 0,04 m', c: 'orange', r: 'x0', lab: 'x0 = x(0) = 0,04 m' },
+    { m: 'relation', t: 'x(t) = v·t + x_0', c: 'jaune', g: true, taille: 25, r: 'relation', lab: 'l’équation horaire du MRU : x(t) = v·t + x0' },
+    { m: 'x0', t: 'x_0 = x(0) = 4 cm = 0,04 m', c: 'blanc', r: 'x0', lab: 'x0 = x(0) = 0,04 m' },
     { m: 'v', t: 'v = a = 1 m/s', c: 'vert', r: 'v', lab: 'v = la pente = 1 m/s' },
-    { m: 'equation', t: pt ? 'x(t) = 1·t + 0,04 (en m)' : 'x(t) = 1·t + 0,04', c: 'jaune', g: true, taille: 28, r: 'equation', lab: 'x(t) = 1·t + 0,04 (x en m, t en s)' },
-    !pt && { m: 'equation', t: '(x en m ; t en s)', c: 'jaune', taille: 20 },
+    { m: 'equation', t: pt ? 'x(t) = 1·t + 0,04 (en m)' : 'x(t) = 1·t + 0,04', c: 'vert', g: true, taille: 28, r: 'equation', lab: 'x(t) = 1·t + 0,04 (x en m, t en s)' },
+    !pt && { m: 'equation', t: '(x en m ; t en s)', c: 'blanc', taille: 20 },
   ].filter(Boolean), { dy: 54, taille: 22, px: 30, py: 56, pw: L - 60, taillePetit: 32 });
 }
 
@@ -230,29 +230,29 @@ function rangee(c, S, sc, y, sens, t0, nom) {
   const xa = X(0) + clamp(u, 0, 8) * 2 * CM;
   c.direct(() => P.autoporteur(c.ctx, xa, y, 17, { alpha: u > 8 ? .55 : 1 }));
   // le vecteur vitesse (vert) : même sens dans les deux rangées
-  if (u > 8) vecteur(c, X(7) + 40, y - 34, X(7) + 40 + 2 * CM, y - 34, { couleur: 'vert', nom: 'v', nx: X(7) + 40 + CM, ny: y - 48, align: 'center', taille: pt ? 31 : 22, point: false });
+  if (u > 8) vecteur(c, X(7) + 40, y - 34, X(7) + 40 + 2 * CM, y - 34, { couleur: MECA.v, nom: 'v', nx: X(7) + 40 + CM, ny: y - 48, align: 'center', taille: pt ? 31 : 22, point: false });
   // l'axe orienté
   const ya = y + 34, a = X(0) - 34, b = X(7) + 44;
   if (sens > 0) c.fleche(a, ya, b, ya, { couleur: 'blanc', largeur: 1.8 }); else c.fleche(b, ya, a, ya, { couleur: 'blanc', largeur: 1.8 });
   const xo = sens > 0 ? X(0) : X(7);
   c.ligne(xo, ya - 6, xo, ya + 6, { couleur: 'blanc', largeur: 1.8 });
   c.texte('O', xo - sens * (pt ? 16 : 12), ya + (pt ? 34 : 26), { couleur: 'blanc', taille: pt ? 31 : 20, align: 'center' });
-  vecteur(c, xo, ya, xo + sens * 1.5 * CM, ya, { couleur: 'cyan', nom: 'i', nx: xo + sens * CM * .9, ny: ya + (pt ? 38 : 30), align: 'center', taille: pt ? 31 : 22, point: false, largeur: 3, tete: 11 });
+  vecteur(c, xo, ya, xo + sens * 1.5 * CM, ya, { couleur: MECA.i, nom: 'i', nx: xo + sens * CM * .9, ny: ya + (pt ? 38 : 30), align: 'center', taille: pt ? 31 : 22, point: false, largeur: 3, tete: 11 });
   c.texte('x', sens > 0 ? b + 6 : a - 6, ya + 6, { couleur: 'blanc', taille: pt ? 31 : 22, align: sens > 0 ? 'left' : 'right' });
   c.repere(nom, a, y - 20, b - a, 70, sens > 0 ? 'l’axe orienté dans le sens du mouvement' : 'l’axe orienté en sens contraire du mouvement');
 }
 function dessinerSigne(c, S, sc) {
   const L = sc.L, pt = sc.petit, y1 = pt ? 100 : 92, y2 = pt ? 236 : 222, xr = 60 + 14 * CM + 120;
   if (vu(S, 'axe1')) rangee(c, S, sc, y1, 1, MS.axe1, 'axe1');
-  if (S.t <= 0 || S.ecrit(c, 'vx_plus')) { c.texte('v_x = +1 m/s', xr, y1 + 40, { couleur: 'vert', taille: pt ? 32 : 26, gras: true }); c.repere('vx_plus', xr - 4, y1 + 10, 170, 40, 'v_x = +1 m/s'); }
+  if (S.t <= 0 || S.ecrit(c, 'vx_plus')) { c.texte('v_x = +1 m/s', xr, y1 + 40, { couleur: RO.positif, taille: pt ? 32 : 26, gras: true }); c.repere('vx_plus', xr - 4, y1 + 10, 170, 40, 'v_x = +1 m/s'); }
   if (vu(S, 'axe2')) rangee(c, S, sc, y2, -1, MS.axe2, 'axe2');
-  if (S.t <= 0 || S.ecrit(c, 'vx_moins')) { c.texte('v_x = −1 m/s', xr, y2 + 40, { couleur: 'rouge', taille: pt ? 32 : 26, gras: true }); c.repere('vx_moins', xr - 4, y2 + 10, 170, 40, 'v_x = −1 m/s'); }
+  if (S.t <= 0 || S.ecrit(c, 'vx_moins')) { c.texte('v_x = −1 m/s', xr, y2 + 40, { couleur: RO.negatif, taille: pt ? 32 : 26, gras: true }); c.repere('vx_moins', xr - 4, y2 + 10, 170, 40, 'v_x = −1 m/s'); }
   if (S.t <= 0 || S.ecrit(c, 'regle')) {
     const ts = pt ? 30 : 22, yy = pt ? 352 : 338;
-    if (pt) c.texte('v_x > 0 : même sens ; v_x < 0 : sens contraire', 20, yy + 30, { couleur: 'jaune', taille: ts, gras: true, max: L - 40 });
+    if (pt) c.texte('v_x > 0 : même sens ; v_x < 0 : sens contraire', 20, yy + 30, { couleur: 'vert', taille: ts, gras: true, max: L - 40 });
     else {
-      c.texte('axe dans le sens du mouvement : v_x > 0', 40, yy, { couleur: 'vert', taille: ts, gras: true });
-      c.texte('axe en sens contraire du mouvement : v_x < 0', 40, yy + 40, { couleur: 'rouge', taille: ts, gras: true });
+      c.texte('axe dans le sens du mouvement : v_x > 0', 40, yy, { couleur: RO.positif, taille: ts, gras: true });
+      c.texte('axe en sens contraire du mouvement : v_x < 0', 40, yy + 40, { couleur: RO.negatif, taille: ts, gras: true });
     }
     c.repere('regle', 30, yy - 28, Math.min(L - 60, 520), pt ? 60 : 76, 'le signe de v_x dépend de l’orientation de l’axe');
   }
@@ -266,12 +266,12 @@ function dessinerEleve(c, S, sc) {
   const yR = y + 46;
   c.direct(() => P.regle(c.ctx, X(0), yR, 15, CM, { h: 30 }));
   c.repere('regle', X(0) - 8, yR, 15 * CM + 16, 30, 'la règle : son zéro sur M0');
-  c.texte(pt ? 'τ = 50 ms' : 'τ = 50 ms · M_{i}M_{i+1} = 2 cm', L - 20, pt ? 46 : 40, { couleur: 'orange', taille: pt ? 31 : 22, gras: true, align: 'right' });
+  c.texte(pt ? 'τ = 50 ms' : 'τ = 50 ms · M_{i}M_{i+1} = 2 cm', L - 20, pt ? 46 : 40, { couleur: 'blanc', taille: pt ? 31 : 22, gras: true, align: 'right' });
   const yo = yR + (pt ? 66 : 58);
-  c.texte('x = 0', X(0), yo, { couleur: 'cyan', taille: ts, gras: true, align: 'center' });
-  c.texte('t = 0', X(2), yo, { couleur: 'orange', taille: ts, gras: true, align: 'center' });
-  c.ligne(X(0), yo - ts, X(0), y + 12, { couleur: 'cyan', largeur: 1.2, pointille: [4, 4] });
-  c.ligne(X(2), yo - ts, X(2), y + 12, { couleur: 'orange', largeur: 1.2, pointille: [4, 4] });
+  c.texte('x = 0', X(0), yo, { couleur: 'blanc', taille: ts, gras: true, align: 'center' });
+  c.texte('t = 0', X(2), yo, { couleur: 'blanc', taille: ts, gras: true, align: 'center' });
+  c.ligne(X(0), yo - ts, X(0), y + 12, { couleur: 'blanc', largeur: 1.2, pointille: [4, 4] });
+  c.ligne(X(2), yo - ts, X(2), y + 12, { couleur: 'blanc', largeur: 1.2, pointille: [4, 4] });
   if (vu(S, 'v')) {
     if (S.t > 0 && !S.a('x0')) intervalle(c, X, 2, y, true, null, pt, '74, 222, 128');
     c.repere('v', X(2), y - 14, X(3) - X(2), 28, 'un intervalle : 2 cm en τ = 50 ms');
@@ -283,8 +283,8 @@ function dessinerEleve(c, S, sc) {
   if (vu(S, 'equation')) c.repere('equation', 40, pt ? 300 : 330, L - 80, 60, 'l’équation horaire x(t)');
   panneau(c, S, sc, 300, 262, L - 320, [
     { m: 'v', t: 'v = ⟦M_{2}M_{3}|τ⟧ = ⟦0,02|0,05⟧ = 0,4 m/s', c: 'vert', g: true, conclusion: true },
-    { m: 'x0', t: 'x_0 = M_{0}M_{2} = 4 cm = 0,04 m', c: 'orange', g: true, conclusion: true },
-    { m: 'equation', t: 'x(t) = 0,4·t + 0,04', c: 'jaune', g: true, taille: 27, conclusion: true },
+    { m: 'x0', t: 'x_0 = M_{0}M_{2} = 4 cm = 0,04 m', c: 'blanc', g: true, conclusion: true },
+    { m: 'equation', t: 'x(t) = 0,4·t + 0,04', c: 'vert', g: true, taille: 27, conclusion: true },
   ], { dy: 50, taille: 23, px: 30, py: 300, pw: L - 60, taillePetit: 32 });
 }
 
@@ -305,12 +305,12 @@ window.Mvt.vues('tc_mi_mru', {
   pente: { titre: 'La pente de la droite', moments: MP, fin: 12, dessiner: dessinerPente,
     motifs: { b: 'b = x(0) = 4 cm', points: 'deux points de la droite', dx: 'Δx = 10 cm', dt: 'Δt = 100 ms', pente: 'la pente a', egal_v: 'a = v' },
     accueil: 'La droite x = a·t + b.', fini: 'a = Δx/Δt = 0,10/0,10 = 1 m/s : la pente est la vitesse v.',
-    voir: S => ['La droite x(t) et ses huit points.', S.a('b') && 'b = 4 cm allumé sur l’axe x (t = 0).', S.a('points') && 'Points (0 ; 4) et (100 ; 14) allumés.', S.a('dx') && 'Cote orange verticale : Δx = 10 cm.', S.a('dt') && 'Cote verte horizontale : Δt = 100 ms.', S.a('pente') && 'a = Δx/Δt = 0,10 m/0,10 s = 1 m/s.', S.a('egal_v') && 'a = v = 1 m/s.'].filter(Boolean).join(' '),
+    voir: S => ['La droite x(t) et ses huit points.', S.a('b') && 'b = 4 cm allumé sur l’axe x (t = 0).', S.a('points') && 'Points (0 ; 4) et (100 ; 14) allumés.', S.a('dx') && 'Cote orange verticale : Δx = 10 cm.', S.a('dt') && 'Cote orange horizontale : Δt = 100 ms.', S.a('pente') && 'a = Δx/Δt = 0,10 m/0,10 s = 1 m/s.', S.a('egal_v') && 'a = v = 1 m/s.'].filter(Boolean).join(' '),
     texte: 'b = x(0) = 4 cm. Points (0 ; 4) et (100 ; 14) : Δx = 10 cm = 0,10 m ; Δt = 100 ms = 0,10 s ; a = Δx/Δt = 1 m/s = v.' },
   equation: { titre: 'L’équation horaire', moments: MEq, fin: 8.5, dessiner: dessinerEquation,
     motifs: { relation: 'x(t) = v·t + x0', x0: 'x0 = 0,04 m', v: 'v = 1 m/s', equation: 'x(t) = 1·t + 0,04' },
     accueil: 'L’équation horaire du mouvement rectiligne uniforme.', fini: 'x(t) = 1·t + 0,04 (x en m, t en s).',
-    voir: S => ['La droite x(t).', S.a('relation') && 'Écrit : x(t) = v·t + x0.', S.a('x0') && 'Le point (0 ; 4) allumé : x0 = 4 cm = 0,04 m.', S.a('v') && 'Triangle vert en pointillés sur la droite : v = a = 1 m/s.', S.a('equation') && 'Écrit : x(t) = 1·t + 0,04 (x en m, t en s).'].filter(Boolean).join(' '),
+    voir: S => ['La droite x(t).', S.a('relation') && 'Écrit : x(t) = v·t + x0.', S.a('x0') && 'Le point (0 ; 4) allumé : x0 = 4 cm = 0,04 m.', S.a('v') && 'Triangle orange en pointillés sur la droite : v = a = 1 m/s.', S.a('equation') && 'Écrit : x(t) = 1·t + 0,04 (x en m, t en s).'].filter(Boolean).join(' '),
     texte: 'Équation horaire du MRU : x(t) = v·t + x0. Ici x0 = 0,04 m et v = 1 m/s : x(t) = 1·t + 0,04 (en m).' },
   signe: { titre: 'Le signe de la vitesse', moments: MS, fin: 11, dessiner: dessinerSigne,
     motifs: { axe1: 'l’axe dans le sens du mouvement', vx_plus: 'v_x = +1 m/s', axe2: 'l’axe inversé', vx_moins: 'v_x = −1 m/s', regle: 'la règle du signe' },

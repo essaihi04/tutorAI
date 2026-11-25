@@ -285,8 +285,8 @@
     c.fleche(X(Math.max(ax.min, 0)), y + h, X(Math.max(ax.min, 0)), y - 14, { couleur: 'blanc', largeur: 1.8 });
     (ax.lab || []).forEach(v => c.texte(String(v).replace('.', ','), X(v), Y(Math.max(ay.min, 0)) + tg + 6, { couleur: 'faible', taille: tg, align: 'center', duree: .05 }));
     (ay.lab || []).forEach(v => c.texte(String(v).replace('.', ','), X(Math.max(ax.min, 0)) - 6, Y(v) + tg * .35, { couleur: 'faible', taille: tg, align: 'right', duree: .05 }));
-    c.texte(ax.nom + (ax.unite ? ' (' + ax.unite + ')' : ''), x + w + (pt ? -4 : 4), Y(Math.max(ay.min, 0)) - 12, { couleur: 'cyan', taille: o.tailleNom || 17, align: pt ? 'right' : 'left' });
-    c.texte(ay.nom + (ay.unite ? ' (' + ay.unite + ')' : ''), X(Math.max(ax.min, 0)) + 10, y - 6, { couleur: 'cyan', taille: o.tailleNom || 17 });
+    c.texte(ax.nom + (ax.unite ? ' (' + ax.unite + ')' : ''), x + w + (pt ? -4 : 4), Y(Math.max(ay.min, 0)) - 12, { couleur: 'blanc', taille: o.tailleNom || 17, align: pt ? 'right' : 'left' });
+    c.texte(ay.nom + (ay.unite ? ' (' + ay.unite + ')' : ''), X(Math.max(ax.min, 0)) + 10, y - 6, { couleur: 'blanc', taille: o.tailleNom || 17 });
     return { X, Y };
   }
 

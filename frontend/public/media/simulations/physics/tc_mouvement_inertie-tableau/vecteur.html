@@ -27,9 +27,9 @@
  *                          Moments : enreg 0,5 ; valeur 2 ; longueur 4 ; trace 6 ; fin 8.
  *                          conclusions:false cache la longueur (et son compte) et la flèche.
  */
-const { P, lueur, panneau, vecteur, HEX } = window.Mvt;
+const { P, lueur, panneau, vecteur, HEX, ME: MECA, ROLES: RO } = window.Mvt;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const CM = 30;
+const CM = 44;   // un cm à l’écran : grand, pour que l’enregistrement remplisse le cadre
 const tps = S => (S.t <= 0 ? 99 : S.t);
 const vu = (S, m) => S.t <= 0 || S.a(m);
 
@@ -61,27 +61,27 @@ function dessinerCaract(c, S, sc) {
   if (vu(S, 'origine')) { lueur(c, mx - 15, my - 15, 30, 30, { vive: S.t > 0 && !S.a('direction') }); c.repere('M3', mx - 15, my - 15, 30, 30, 'le point M3 : l’origine du vecteur'); }
   // 2) la direction : la tangente en M3 (pointillés)
   if (S.t <= 0 || S.ecrit(c, 'direction')) {
-    c.ligne(mx - 170 * tx, my - 170 * ty, mx + 185 * tx, my + 185 * ty, { couleur: 'cyan', largeur: 2, pointille: [8, 7] });
-    if (!pt) c.texte('tangente', mx - 170 * tx - 8, my - 170 * ty - 12, { couleur: 'cyan', taille: 20, align: 'right' });
+    c.ligne(mx - 170 * tx, my - 170 * ty, mx + 185 * tx, my + 185 * ty, { couleur: RO.tangente, largeur: 2, pointille: [8, 7] });
+    if (!pt) c.texte('tangente', mx - 170 * tx - 8, my - 170 * ty - 12, { couleur: RO.tangente, taille: 20, align: 'right' });
     c.repere('tangente', mx - 170 * tx, my + 185 * ty, 355 * tx, -355 * ty, 'la tangente en M3 : la direction');
   }
   // 3) le sens : celui du mouvement (flèche orange le long de la tangente, décalée)
   if (S.t <= 0 || S.ecrit(c, 'sens')) {
     const d = 28, ax = mx + hx * d - 10 * tx, ay = my + hy * d - 10 * ty, ex = mx + hx * d + 80 * tx, ey = my + hy * d + 80 * ty;
-    c.fleche(ax, ay, ex, ey, { couleur: 'orange', largeur: 2.6, tete: 12 });
-    c.texte(pt ? 'sens' : 'sens du mouvement', ax - 6, ay - (pt ? 26 : 34), { couleur: 'orange', taille: ts, align: 'right' });
+    c.fleche(ax, ay, ex, ey, { couleur: 'blanc', largeur: 2.6, tete: 12 });
+    c.texte(pt ? 'sens' : 'sens du mouvement', ax - 6, ay - (pt ? 26 : 34), { couleur: 'blanc', taille: ts, align: 'right' });
     c.repere('sens', Math.min(ax, ex) - 4, Math.min(ay, ey) - 4, Math.abs(ex - ax) + 8, Math.abs(ey - ay) + 8, 'le sens : celui du mouvement');
   }
   // 5) le vecteur v3 (vert)
   if (S.t <= 0 || S.ecrit(c, 'vecteur')) {
     const lv = 120, ex = mx + lv * tx, ey = my + lv * ty;
-    vecteur(c, mx, my, ex, ey, { couleur: 'vert', nom: 'v_3', nx: ex - 14, ny: ey - 16, align: 'right', taille: pt ? 32 : 24 });
+    vecteur(c, mx, my, ex, ey, { couleur: MECA.v, nom: 'v_3', nx: ex - 14, ny: ey - 16, align: 'right', taille: pt ? 32 : 24 });
     c.repere('v3', mx, ey - 40, ex - mx + 4, my - ey + 46, 'le vecteur vitesse v3 en M3');
   }
   panneau(c, S, sc, Math.max(510, L - 300), 70, L - Math.max(510, L - 300) - 10, [
     { m: 'origine', t: '1) origine : le point M_3', c: 'jaune' },
-    { m: 'direction', t: '2) direction : la tangente', c: 'cyan' },
-    { m: 'sens', t: '3) sens : celui du mouvement', c: 'orange' },
+    { m: 'direction', t: '2) direction : la tangente', c: RO.tangente },
+    { m: 'sens', t: '3) sens : celui du mouvement', c: 'blanc' },
     { m: 'valeur', t: '4) valeur : v_3 (en m/s)', c: 'blanc', r: 'valeur' },
     { m: 'vecteur', t: '^v_3 : le vecteur vitesse', c: 'vert', g: true, taille: 22 },
   ], { dy: 54, taille: 20, px: 330, py: 340, pw: L - 350, taillePetit: 32 });
@@ -114,9 +114,9 @@ function carreaux(c, S, X, i, y, k, t0, pt, fige) {
 function echelleDessin(c, sc, x, y, ecrire) {
   const pt = sc.petit;
   const dessin = () => {
-    c.cote(x, y, x + CM, y, '', { couleur: 'cyan' });
-    c.texte('1 cm ↔ 0,5 m/s', x + CM + 14, y + 8, { couleur: 'cyan', taille: pt ? 31 : 24, gras: true });
-    c.texte('échelle :', x, y - 30, { couleur: 'cyan', taille: pt ? 31 : 22 });
+    c.cote(x, y, x + CM, y, '', { couleur: 'blanc' });
+    c.texte('1 cm ↔ 0,5 m/s', x + CM + 14, y + 8, { couleur: 'blanc', taille: pt ? 31 : 24, gras: true });
+    c.texte('échelle :', x, y - 30, { couleur: 'blanc', taille: pt ? 31 : 22 });
   };
   dessin();
   c.repere('echelle', x - 4, y - 54, pt ? 330 : 250, 70, 'l’échelle : 1 cm pour 0,5 m/s');
@@ -127,7 +127,7 @@ const ME = { enreg: .5, valeur: 2, echelle: 4, longueur: 6, compte: 8, trace: 10
 function dessinerEchelle(c, S, sc) {
   const L = sc.L, pt = sc.petit, y = pt ? 150 : 128, x0 = 50, t = tps(S);
   const X = enregRect(c, sc, x0, y, 8, 2);
-  c.texte(pt ? '2 cm · 20 ms' : 'τ = 20 ms · M_{i}M_{i+1} = 2 cm', L - 20, pt ? 46 : 44, { couleur: 'orange', taille: pt ? 31 : 21, gras: true, align: 'right' });
+  c.texte(pt ? '2 cm · 20 ms' : 'τ = 20 ms · M_{i}M_{i+1} = 2 cm', L - 20, pt ? 46 : 44, { couleur: 'blanc', taille: pt ? 31 : 21, gras: true, align: 'right' });
   if (vu(S, 'valeur')) {
     lueur(c, X(3) - 15, y - 15, 30, 30, { vive: S.t > 0 && !S.a('echelle') });
     if (S.t > 0 && !S.a('echelle')) { lueur(c, X(2) - 12, y - 12, 24, 24, { couleur: '74, 222, 128' }); lueur(c, X(4) - 12, y - 12, 24, 24, { couleur: '74, 222, 128' }); }
@@ -136,13 +136,13 @@ function dessinerEchelle(c, S, sc) {
   if (S.t <= 0 || S.ecrit(c, 'echelle')) { if (!pt) echelleDessin(c, sc, 50, 290); else c.repere('echelle', 30, 300, L - 60, 60, 'l’échelle : 1 cm pour 0,5 m/s'); }
   if (vu(S, 'compte')) carreaux(c, S, X, 3, y, 2, ME.compte, pt, S.a('trace'));
   if (S.t <= 0 || S.ecrit(c, 'trace')) {
-    vecteur(c, X(3), y, X(3) + 2 * CM, y, { couleur: 'vert', nom: 'v_3', nx: X(3) + CM, ny: y - (pt ? 66 : 54), align: 'center', taille: pt ? 32 : 24, largeur: 4 });
+    vecteur(c, X(3), y, X(3) + 2 * CM, y, { couleur: MECA.v, nom: 'v_3', nx: X(3) + CM, ny: y - (pt ? 66 : 54), align: 'center', taille: pt ? 32 : 24, largeur: 4 });
     c.repere('v3', X(3), y - 80, 2 * CM, 90, 'le vecteur v3 : 2 cm depuis M3');
   }
   panneau(c, S, sc, pt ? 30 : 340, 212, L - (pt ? 60 : 355), [
     { m: 'valeur', t: 'v_3 = ⟦M_{2}M_{4}|2τ⟧ = ⟦0,04|0,04⟧ = 1 m/s', c: 'vert' },
-    pt && { m: 'echelle', t: '1 cm ↔ 0,5 m/s', c: 'cyan', g: true },
-    { m: 'longueur', t: 'longueur = ⟦1|0,5⟧ = 2 cm', c: 'jaune', g: true, r: 'longueur', lab: 'longueur du vecteur : 1/0,5 = 2 cm' },
+    pt && { m: 'echelle', t: '1 cm ↔ 0,5 m/s', c: 'blanc', g: true },
+    { m: 'longueur', t: 'longueur = ⟦1|0,5⟧ = 2 cm', c: 'vert', g: true, r: 'longueur', lab: 'longueur du vecteur : 1/0,5 = 2 cm' },
     { m: 'trace', t: '^v_3 : depuis M_3, 2 cm', c: 'vert', g: true },
   ].filter(Boolean), { dy: 50, taille: 24, px: 30, py: 300, pw: L - 60, taillePetit: 32 });
 }
@@ -150,9 +150,9 @@ function dessinerEchelle(c, S, sc) {
 /* ── vue élève : points à 3 cm ── */
 const MEl = { enreg: .5, valeur: 2, longueur: 4, trace: 6 };
 function dessinerEleve(c, S, sc) {
-  const L = sc.L, pt = sc.petit, y = pt ? 150 : 128, x0 = 50;
+  const L = sc.L, pt = sc.petit, y = pt ? 150 : 142, x0 = 50;
   const X = enregRect(c, sc, x0, y, 6, 3);
-  c.texte(pt ? '3 cm · 20 ms' : 'τ = 20 ms · M_{i}M_{i+1} = 3 cm', L - 20, pt ? 46 : 44, { couleur: 'orange', taille: pt ? 31 : 21, gras: true, align: 'right' });
+  c.texte(pt ? '3 cm · 20 ms' : 'τ = 20 ms · M_{i}M_{i+1} = 3 cm', L - 20, pt ? 46 : 44, { couleur: 'blanc', taille: pt ? 31 : 21, gras: true, align: 'right' });
   if (!pt) echelleDessin(c, sc, 50, 290); else c.repere('echelle', 30, 300, L - 60, 60, 'l’échelle : 1 cm pour 0,5 m/s');
   if (vu(S, 'valeur')) { lueur(c, X(4) - 15, y - 15, 30, 30, { vive: S.t > 0 && !S.a('longueur') }); c.repere('M4', X(4) - 15, y - 15, 30, 30, 'le point M4 : v4 = 1,5 m/s'); }
   if (vu(S, 'longueur')) {
@@ -160,12 +160,12 @@ function dessinerEleve(c, S, sc) {
     c.repere('longueur', X(4), y - CM / 2, 3 * CM, CM, 'la longueur du vecteur : 1,5/0,5 = 3 cm');
   }
   if (vu(S, 'trace')) {
-    if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'trace'))) vecteur(c, X(4), y, X(4) + 3 * CM, y, { couleur: 'vert', nom: 'v_4', nx: X(4) + 1.5 * CM, ny: y - (pt ? 66 : 54), align: 'center', taille: pt ? 32 : 24, largeur: 4 });
+    if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'trace'))) vecteur(c, X(4), y, X(4) + 3 * CM, y, { couleur: MECA.v, nom: 'v_4', nx: X(4) + 1.5 * CM, ny: y - (pt ? 66 : 54), align: 'center', taille: pt ? 32 : 24, largeur: 4 });
     c.repere('v4', X(4), y - 80, 3 * CM, 90, 'le vecteur v4 : 3 cm depuis M4');
   }
   panneau(c, S, sc, pt ? 30 : 340, 212, L - (pt ? 60 : 355), [
     { m: 'valeur', t: 'v_4 = ⟦M_{3}M_{5}|2τ⟧ = ⟦0,06|0,04⟧ = 1,5 m/s', c: 'vert' },
-    { m: 'longueur', t: 'longueur = ⟦1,5|0,5⟧ = 3 cm', c: 'jaune', g: true, conclusion: true, lab: 'longueur du vecteur : 1,5/0,5 = 3 cm' },
+    { m: 'longueur', t: 'longueur = ⟦1,5|0,5⟧ = 3 cm', c: 'vert', g: true, conclusion: true, lab: 'longueur du vecteur : 1,5/0,5 = 3 cm' },
     { m: 'trace', t: '^v_4 : depuis M_4, 3 cm', c: 'vert', g: true, conclusion: true },
   ], { dy: 52, taille: 24, px: 30, py: 300, pw: L - 60, taillePetit: 32 });
 }
@@ -174,7 +174,7 @@ window.Mvt.vues('tc_mi_vecteur', {
   caracteristiques: { titre: 'Le vecteur vitesse', moments: MC, fin: 12, dessiner: dessinerCaract,
     motifs: { trajectoire: 'la trajectoire du ballon', origine: 'l’origine : M3', direction: 'la direction : la tangente', sens: 'le sens du mouvement', valeur: 'la valeur v3', vecteur: 'le vecteur v3' },
     accueil: 'Un ballon lancé : sa trajectoire est courbe.', fini: 'En M3 : origine M3, direction la tangente, sens du mouvement, valeur v3 : le vecteur v3.',
-    voir: S => ['Trajectoire courbe d’un ballon, points M0 à M6 à intervalles de temps égaux.', S.a('origine') && 'M3 allumé : l’origine.', S.a('direction') && 'Tangente en M3 en pointillés cyan : la direction.', S.a('sens') && 'Flèche orange le long de la tangente : le sens du mouvement.', S.a('valeur') && 'Écrit : valeur v3 en m/s.', S.a('vecteur') && 'Flèche verte v3 partant de M3, le long de la tangente.'].filter(Boolean).join(' '),
+    voir: S => ['Trajectoire courbe d’un ballon, points M0 à M6 à intervalles de temps égaux.', S.a('origine') && 'M3 allumé : l’origine.', S.a('direction') && 'Tangente en M3 en pointillés orange : la direction.', S.a('sens') && 'Flèche blanche le long de la tangente : le sens du mouvement.', S.a('valeur') && 'Écrit : valeur v3 en m/s.', S.a('vecteur') && 'Flèche verte v3 partant de M3, le long de la tangente.'].filter(Boolean).join(' '),
     texte: 'Le vecteur vitesse v3 en M3 : origine M3 ; direction : la tangente à la trajectoire en M3 ; sens : celui du mouvement ; valeur : la vitesse instantanée v3 (m/s).' },
   echelle: { titre: 'Tracer un vecteur vitesse à l’échelle', moments: ME, fin: 12, dessiner: dessinerEchelle,
     motifs: { enreg: 'l’enregistrement', valeur: 'v3 = 1 m/s', echelle: 'l’échelle', longueur: 'la longueur : 2 cm', compte: 'on compte les carreaux', trace: 'le vecteur v3' },

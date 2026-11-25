@@ -17,7 +17,7 @@
 /*
  * Le mouvement circulaire uniforme (diapos mi_c1_circulaire … mi_c5_eleve).
  * Table à coussin d’air vue de dessus, feuille d’enregistrement ; l’autoporteur est relié par un fil à un clou fixe O.
- * Valeurs du livre : R = 10 cm, τ = 20 ms, arcs M_iM_{i+1} = 2 cm → v = 1 m/s, ω = 10 rad/s, T ≈ 0,63 s, f ≈ 1,6 Hz.
+ * Valeurs du livre : R = 10 cm, τ = 20 ms, arcs M_{i}M_{i+1} = 2 cm → v = 1 m/s, ω = 10 rad/s, T ≈ 0,63 s, f ≈ 1,6 Hz.
  * Au tableau : 1 cm = 14 unités (R = 140) ; un arc de 2 cm = 0,2 rad.
  *  ?vue=circulaire : les points se marquent sur le cercle ; six arcs égaux s’allument un à un (comptés).
  *                    Moments : lance 0,5 ; points 1 ; arcs 6 ; conclusion 9 ; fin 11. Repères : O, rayon, arc, trajectoire.
@@ -77,9 +77,10 @@ function lueurArc(c, O, R, a0, a1, o = {}) {
 }
 /** Les points de l’enregistrement sur le cercle, de l’angle a0, tous les da, n points. */
 function points(c, O, R, a0, da, n, r = 5) { for (let i = 0; i < n; i++) { const [x, y] = pos(O, R, a0 + i * da); c.direct(() => P.point(c.ctx, x, y, r)); } }
-/** Le cercle-trajectoire en pointillé (encre). */
+/** Le cercle-trajectoire en pointillé : la couleur de la trajectoire (Lexique.physique.MECANIQUE.trajectoire, cyan), en encre foncée sur la feuille claire. */
+const TRAJ_ENCRE = 'rgba(8,145,178,.9)', TRAJ_PALE = 'rgba(8,145,178,.55)';
 function cercle(c, O, R, o = {}) {
-  c.direct(() => { const g = c.ctx; g.save(); g.setLineDash([7, 7]); g.strokeStyle = o.couleur || 'rgba(15,118,110,.75)'; g.lineWidth = o.largeur || 2; g.beginPath(); g.arc(O[0], O[1], R, 0, TAU); g.stroke(); g.restore(); });
+  c.direct(() => { const g = c.ctx; g.save(); g.setLineDash(window.Lexique.physique.POINTILLE_TRAJECTOIRE); g.strokeStyle = o.couleur || TRAJ_ENCRE; g.lineWidth = o.largeur || 2.2; g.beginPath(); g.arc(O[0], O[1], R, 0, TAU); g.stroke(); g.restore(); });
 }
 
 /* ── vue circulaire ── */
@@ -110,13 +111,13 @@ function dessinerCirculaire(c, S, sc) {
   if (S.a('arcs') || S.t <= 0) for (let i = 0; i < 6; i++) if (t >= MC.arcs + i * .5) lueurArc(c, O, R, A0 + (I0 + i) * DA, A0 + (I0 + i + 1) * DA, { vive: t < MC.arcs + (i + 1) * .5, numero: i + 1, taille: pt ? 27 : 21, dr: pt ? 26 : 24 });
   if (S.a('arcs') || S.t <= 0) { const a = pos(O, R, A0 + I0 * DA), b = pos(O, R, A0 + (I0 + 6) * DA); c.repere('arc', Math.min(a[0], b[0]) - 10, Math.min(a[1], b[1]) - 10, Math.abs(a[0] - b[0]) + 40, Math.abs(a[1] - b[1]) + 20, 'six arcs égaux de 2 cm, parcourus chacun en τ'); }
   panneau(c, S, sc, L - 330, 64, 318, [
-    { m: 'lance', t: 'R = 10 cm ; τ = 20 ms', c: 'orange' },
+    { m: 'lance', t: 'R = 10 cm ; τ = 20 ms', c: 'blanc' },
     { m: 'points', t: 'un point toutes les τ', c: 'blanc' },
-    { m: 'arcs', t: 'arcs égaux : 2 cm', c: 'jaune', g: true, r: 'l_arcs' },
-    { m: 'conclusion', t: 'trajectoire : un cercle', c: 'cyan', g: true, conclusion: true },
+    { m: 'arcs', t: 'arcs égaux : 2 cm', c: 'blanc', g: true, r: 'l_arcs' },
+    { m: 'conclusion', t: 'trajectoire : un cercle', c: 'vert', g: true, conclusion: true },
     { m: 'conclusion', t: 'v = 1 m/s, constante', c: 'vert', g: true, conclusion: true },
-    { m: 'conclusion', t: 'mouvement circulaire', c: 'jaune', g: true, taille: 23, conclusion: true, r: 'conclusion' },
-    { m: 'conclusion', t: 'uniforme', c: 'jaune', g: true, taille: 23, conclusion: true },
+    { m: 'conclusion', t: 'mouvement circulaire', c: 'vert', g: true, taille: 23, conclusion: true, r: 'conclusion' },
+    { m: 'conclusion', t: 'uniforme', c: 'vert', g: true, taille: 23, conclusion: true },
   ], { dy: 44, px: L - 334, py: 150, pw: 322, petit: 2, taillePetit: 28, taille: 21 });
 }
 
@@ -125,7 +126,7 @@ const MO = { rayon: .5, angle: 2, relation: 4, calcul: 6 };
 function dessinerOmega(c, S, sc) {
   const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, O = [210, 210], R = 140, a0 = -.5, dth = 1;
   plateau(c, 6, 6, 408, 408);
-  cercle(c, O, R, { couleur: 'rgba(15,118,110,.45)', largeur: 1.6 });
+  cercle(c, O, R, { couleur: TRAJ_PALE, largeur: 1.8 });
   const u = S.t <= 0 ? 1 : clamp((t - MO.angle) / 1.5, 0, 1), a = a0 + u * dth;
   const n = S.t <= 0 || S.a('angle') ? Math.floor(u * 5 + 1e-6) + 1 : 1;
   points(c, O, R, a0, DA, n);
@@ -151,8 +152,8 @@ function dessinerOmega(c, S, sc) {
     c.repere('angle', O[0], M5[1], R, M0[1] - M5[1], 'l’angle Δθ balayé par le rayon pendant Δt');
   }
   panneau(c, S, sc, L - 330, 70, 318, [
-    { m: 'rayon', t: 'R = 10 cm = 0,10 m', c: 'orange' },
-    { m: 'rayon', t: 'v = 1 m/s', c: 'orange' },
+    { m: 'rayon', t: 'R = 10 cm = 0,10 m', c: 'blanc' },
+    { m: 'rayon', t: 'v = 1 m/s', c: 'blanc' },
     { m: 'angle', t: 'pendant Δt, le rayon', c: 'blanc' },
     { m: 'angle', t: 'tourne de l’angle Δθ', c: 'blanc' },
     { m: 'relation', t: 'ω = ⟦Δθ|Δt⟧ = ⟦v|R⟧', c: 'jaune', g: true, taille: 24, r: 'relation' },
@@ -166,7 +167,7 @@ const T_PHYS = 2 * Math.PI / 10;   // 0,628 s
 function dessinerPeriode(c, S, sc) {
   const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, O = [210, 210], R = 140, a0 = -Math.PI / 2;
   plateau(c, 6, 6, 408, 408);
-  cercle(c, O, R, { couleur: 'rgba(15,118,110,.4)', largeur: 1.6 });
+  cercle(c, O, R, { couleur: TRAJ_PALE, largeur: 1.8 });
   // l’angle de l’autoporteur et le temps du chronomètre (en secondes réelles)
   let ang = a0, chrono = 0, tours = 0;
   if (S.t > 0 && t < MP.f) { const u = clamp((t - MP.tour) / (MP.T - MP.tour), 0, 1); ang = a0 + u * TAU; chrono = u * T_PHYS; tours = u; }
@@ -174,7 +175,7 @@ function dessinerPeriode(c, S, sc) {
   // la trace du tour (encre orange) pendant le premier tour
   if (S.t <= 0 || S.a('tour')) {
     const u1 = S.t > 0 && t < MP.f ? clamp((t - MP.tour) / (MP.T - MP.tour), 0, 1) : 1;
-    if (u1 > .005) c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = 'rgba(234,88,12,.55)'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.arc(O[0], O[1], R, -a0, -(a0 + u1 * TAU), true); g.stroke(); g.restore(); });
+    if (u1 > .005) c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = 'rgba(8,145,178,.6)'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.arc(O[0], O[1], R, -a0, -(a0 + u1 * TAU), true); g.stroke(); g.restore(); });
     c.repere('tour', O[0] - R, O[1] - R, 2 * R, 2 * R, 'un tour complet : Δθ = 2π rad');
   }
   const M = pos(O, R, ang);
@@ -201,11 +202,11 @@ function dessinerPeriode(c, S, sc) {
     if (!pt && fin) c.direct(() => c.texte('en 1 s', x, y1 + 28, { couleur: 'jaune', taille: 20 }));
   }
   panneau(c, S, sc, L - 330, 168, 318, [
-    { m: 'tour', t: 'un tour : Δθ = 2π rad', c: 'orange' },
-    { m: 'T', t: 'T ≈ 0,63 s : durée d’un tour', c: 'jaune', g: true, r: 'T' },
-    { m: 'relationT', t: 'T = ⟦2π|ω⟧ = ⟦2π|10⟧ ≈ 0,63 s', taille: 23, c: 'jaune', g: true, r: 'relationT' },
-    { m: 'f', t: 'f : nombre de tours en 1 s', c: 'cyan', g: true, r: 'f' },
-    { m: 'relationf', t: 'f = ⟦1|T⟧ = ⟦1|0,63⟧ ≈ 1,6 Hz', taille: 23, c: 'cyan', g: true, r: 'relationf', conclusion: true },
+    { m: 'tour', t: 'un tour : Δθ = 2π rad', c: 'blanc' },
+    { m: 'T', t: 'T ≈ 0,63 s : durée d’un tour', c: 'vert', g: true, r: 'T' },
+    { m: 'relationT', t: 'T = ⟦2π|ω⟧ = ⟦2π|10⟧ ≈ 0,63 s', taille: 23, c: 'vert', g: true, r: 'relationT' },
+    { m: 'f', t: 'f : nombre de tours en 1 s', c: 'jaune', g: true, r: 'f' },
+    { m: 'relationf', t: 'f = ⟦1|T⟧ = ⟦1|0,63⟧ ≈ 1,6 Hz', taille: 23, c: 'vert', g: true, r: 'relationf', conclusion: true },
   ], { dy: 38, px: L - 334, py: 200, pw: 322, petit: 2, taillePetit: 28, taille: 20 });
 }
 
@@ -213,7 +214,7 @@ function dessinerPeriode(c, S, sc) {
 function figureMethode(c, S, sc, o) {
   const pt = sc.petit, O = [176, 210], R = 120;
   plateau(c, 6, 36, 340, 348);
-  cercle(c, O, R, { couleur: 'rgba(15,118,110,.45)', largeur: 1.6 });
+  cercle(c, O, R, { couleur: TRAJ_PALE, largeur: 1.8 });
   const da = o.da, a0 = -1.0, n = Math.round(2.2 / da) + 1;
   points(c, O, R, a0, da, n, o.r);
   const aF = a0 + (n - 1) * da + da * .6, M = pos(O, R, aF);
@@ -225,28 +226,28 @@ function figureMethode(c, S, sc, o) {
   c.ligne(O[0], O[1], MR[0], MR[1], { couleur: ENCRE_B, largeur: 2.2, pointille: [9, 6], duree: .05 });
   c.direct(() => c.texte(o.rayon, O[0] - 56, O[1] + (pt ? 100 : 75), { couleur: ENCRE_B, taille: ts, gras: true, align: 'center' }));
   c.repere('rayon', MR[0], O[1], O[0] - MR[0], MR[1] - O[1] + 30, 'le rayon ' + o.rayon);
-  // l’arc choisi M_iM_{i+1}, en bas à droite
+  // l’arc choisi M_{i}M_{i+1}, en bas à droite
   const i0 = Math.round(.4 / da), aa = a0 + i0 * da, ab = aa + da, [lx, ly] = pos(O, R - (pt ? 46 : 40), (aa + ab) / 2);
   const allumeArc = S.t <= 0 || S.a('donnees');
   if (allumeArc) {
     lueurArc(c, O, R, aa, ab, { vive: S.t > 0 && S.a('v') && !S.a('omega') });
     c.direct(() => c.texte(o.arc, lx + 2, ly + 8, { couleur: ENCRE_O, taille: ts, gras: true, align: 'center' }));
   }
-  c.repere('arc', lx - 34, ly - 30, 68, 50, 'l’arc M_iM_{i+1} = ' + o.arc + ', parcouru en τ');
+  c.repere('arc', lx - 34, ly - 30, 68, 50, 'l’arc M_{i}M_{i+1} = ' + o.arc + ', parcouru en τ');
   if (S.t > 0 && S.a('omega') && !S.a('T')) Mvt.lueur(c, MR[0] - 8, O[1] - 8, O[0] - MR[0] + 16, MR[1] - O[1] + 16, { vive: true, couleur: '96, 165, 250' });
-  if (S.t > 0 && S.a('T')) c.direct(() => { const g = c.ctx; g.save(); g.shadowColor = 'rgba(234,88,12,.8)'; g.shadowBlur = S.a('f') ? 6 : 14; g.strokeStyle = `rgba(234,88,12,${S.a('f') ? .35 : .6})`; g.lineWidth = 5; g.beginPath(); g.arc(O[0], O[1], R, 0, TAU); g.stroke(); g.restore(); });
+  if (S.t > 0 && S.a('T')) c.direct(() => { const g = c.ctx; g.save(); g.shadowColor = 'rgba(8,145,178,.8)'; g.shadowBlur = S.a('f') ? 6 : 14; g.strokeStyle = `rgba(8,145,178,${S.a('f') ? .35 : .6})`; g.lineWidth = 5; g.beginPath(); g.arc(O[0], O[1], R, 0, TAU); g.stroke(); g.restore(); });
 }
 const MMe = { donnees: .5, v: 2, omega: 4, T: 6, f: 8 };
 function dessinerMethode(c, S, sc) {
   const L = sc.L;
   figureMethode(c, S, sc, { da: .2, r: 5, rayon: 'R = 10 cm', arc: '2 cm' });
   panneau(c, S, sc, L - 400, 58, 392, [
-    { m: 'donnees', t: 'M_{i}M_{i+1} = 2 cm = 0,02 m', c: 'orange', r: 'donnees' },
-    { m: 'donnees', t: 'τ = 20 ms = 0,02 s ; R = 0,10 m', c: 'orange' },
+    { m: 'donnees', t: 'M_{i}M_{i+1} = 2 cm = 0,02 m', c: 'blanc', r: 'donnees' },
+    { m: 'donnees', t: 'τ = 20 ms = 0,02 s ; R = 0,10 m', c: 'blanc' },
     { m: 'v', t: 'v = ⟦M_{i}M_{i+1}|τ⟧ = ⟦0,02|0,02⟧ = 1 m/s', taille: 23, c: 'vert', g: true, r: 'v' },
-    { m: 'omega', t: 'ω = ⟦v|R⟧ = ⟦1|0,10⟧ = 10 rad/s', taille: 23, c: 'jaune', g: true, r: 'omega' },
-    { m: 'T', t: 'T = ⟦2π|ω⟧ = ⟦2π|10⟧ ≈ 0,63 s', taille: 23, c: 'jaune', g: true, r: 'T' },
-    { m: 'f', t: 'f = ⟦1|T⟧ = ⟦1|0,63⟧ ≈ 1,6 Hz', taille: 23, c: 'cyan', g: true, r: 'f' },
+    { m: 'omega', t: 'ω = ⟦v|R⟧ = ⟦1|0,10⟧ = 10 rad/s', taille: 23, c: 'vert', g: true, r: 'omega' },
+    { m: 'T', t: 'T = ⟦2π|ω⟧ = ⟦2π|10⟧ ≈ 0,63 s', taille: 23, c: 'vert', g: true, r: 'T' },
+    { m: 'f', t: 'f = ⟦1|T⟧ = ⟦1|0,63⟧ ≈ 1,6 Hz', taille: 23, c: 'vert', g: true, r: 'f' },
   ], { dy: 42, px: L - 404, py: 150, pw: 396, petit: 2, taillePetit: 28, taille: 21 });
 }
 const MEl = { donnees: .5, v: 2, omega: 3.5, T: 5, f: 6.5 };
@@ -254,12 +255,12 @@ function dessinerEleve(c, S, sc) {
   const L = sc.L, ok = S.conclusions;
   figureMethode(c, S, sc, { da: .1, r: 3.8, rayon: 'R = 30 cm', arc: '3 cm' });
   panneau(c, S, sc, L - 400, 58, 392, [
-    { m: 'donnees', t: 'M_{i}M_{i+1} = 3 cm ; τ = 20 ms', c: 'orange', r: 'donnees' },
-    { m: 'donnees', t: 'R = 30 cm', c: 'orange' },
+    { m: 'donnees', t: 'M_{i}M_{i+1} = 3 cm ; τ = 20 ms', c: 'blanc', r: 'donnees' },
+    { m: 'donnees', t: 'R = 30 cm', c: 'blanc' },
     ok ? { m: 'v', t: 'v = ⟦M_{i}M_{i+1}|τ⟧ = ⟦0,03|0,02⟧ = 1,5 m/s', taille: 23, c: 'vert', g: true, r: 'v' } : { m: 'v', t: 'v = ?', c: 'vert', g: true, r: 'v' },
-    ok ? { m: 'omega', t: 'ω = ⟦v|R⟧ = ⟦1,5|0,30⟧ = 5 rad/s', taille: 23, c: 'jaune', g: true, r: 'omega' } : { m: 'omega', t: 'ω = ?', c: 'jaune', g: true, r: 'omega' },
-    ok ? { m: 'T', t: 'T = ⟦2π|ω⟧ = ⟦2π|5⟧ ≈ 1,26 s', taille: 23, c: 'jaune', g: true, r: 'T' } : { m: 'T', t: 'T = ?', c: 'jaune', g: true, r: 'T' },
-    ok ? { m: 'f', t: 'f = ⟦1|T⟧ = ⟦1|1,26⟧ ≈ 0,8 Hz', taille: 23, c: 'cyan', g: true, r: 'f' } : { m: 'f', t: 'f = ?', c: 'cyan', g: true, r: 'f' },
+    ok ? { m: 'omega', t: 'ω = ⟦v|R⟧ = ⟦1,5|0,30⟧ = 5 rad/s', taille: 23, c: 'vert', g: true, r: 'omega' } : { m: 'omega', t: 'ω = ?', c: 'vert', g: true, r: 'omega' },
+    ok ? { m: 'T', t: 'T = ⟦2π|ω⟧ = ⟦2π|5⟧ ≈ 1,26 s', taille: 23, c: 'vert', g: true, r: 'T' } : { m: 'T', t: 'T = ?', c: 'vert', g: true, r: 'T' },
+    ok ? { m: 'f', t: 'f = ⟦1|T⟧ = ⟦1|1,26⟧ ≈ 0,8 Hz', taille: 23, c: 'vert', g: true, r: 'f' } : { m: 'f', t: 'f = ?', c: 'vert', g: true, r: 'f' },
   ], { dy: 42, px: L - 404, py: 150, pw: 396, petit: 2, taillePetit: 28, taille: 21 });
 }
 
@@ -285,8 +286,8 @@ window.Mvt.vues('tc_mi_mcu', {
   methode: { titre: 'Méthode : v, ω, T et f', moments: MMe, fin: 10, dessiner: dessinerMethode,
     motifs: { donnees: 'les données', v: 'la vitesse v', omega: 'la vitesse angulaire ω', T: 'la période T', f: 'la fréquence f' },
     accueil: 'Arcs de 2 cm, τ = 20 ms, R = 10 cm.', fini: 'v = 1 m/s ; ω = 10 rad/s ; T ≈ 0,63 s ; f ≈ 1,6 Hz.',
-    voir: S => ['Enregistrement circulaire sur la table, R = 10 cm.', S.a('donnees') && 'Données : arc M_iM_{i+1} = 2 cm = 0,02 m (allumé), τ = 0,02 s, R = 0,10 m.', S.a('v') && 'v = 0,02/0,02 = 1 m/s.', S.a('omega') && 'Rayon allumé ; ω = v/R = 1/0,10 = 10 rad/s.', S.a('T') && 'Cercle allumé ; T = 2π/ω ≈ 0,63 s.', S.a('f') && 'f = 1/T ≈ 1,6 Hz.'].filter(Boolean).join(' '),
-    texte: 'Méthode : v = M_iM_{i+1}/τ = 0,02/0,02 = 1 m/s ; ω = v/R = 1/0,10 = 10 rad/s ; T = 2π/ω ≈ 0,63 s ; f = 1/T ≈ 1,6 Hz.' },
+    voir: S => ['Enregistrement circulaire sur la table, R = 10 cm.', S.a('donnees') && 'Données : arc M_{i}M_{i+1} = 2 cm = 0,02 m (allumé), τ = 0,02 s, R = 0,10 m.', S.a('v') && 'v = 0,02/0,02 = 1 m/s.', S.a('omega') && 'Rayon allumé ; ω = v/R = 1/0,10 = 10 rad/s.', S.a('T') && 'Cercle allumé ; T = 2π/ω ≈ 0,63 s.', S.a('f') && 'f = 1/T ≈ 1,6 Hz.'].filter(Boolean).join(' '),
+    texte: 'Méthode : v = M_{i}M_{i+1}/τ = 0,02/0,02 = 1 m/s ; ω = v/R = 1/0,10 = 10 rad/s ; T = 2π/ω ≈ 0,63 s ; f = 1/T ≈ 1,6 Hz.' },
   eleve: { titre: 'À toi : un mouvement circulaire', moments: MEl, fin: 8, dessiner: dessinerEleve,
     motifs: { donnees: 'les données', v: 'la vitesse v', omega: 'la vitesse angulaire ω', T: 'la période T', f: 'la fréquence f' },
     accueil: 'Arcs de 3 cm, τ = 20 ms, R = 30 cm : v, ω, T, f ?', fini: 'v = 1,5 m/s ; ω = 5 rad/s ; T ≈ 1,26 s ; f ≈ 0,8 Hz.',
