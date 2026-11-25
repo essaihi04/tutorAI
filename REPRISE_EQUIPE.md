@@ -14,8 +14,9 @@ Restent sur le PC, quel que soit le compte : les fichiers, la mémoire du projet
 quand son quota est fini, et repart seule quand il revient.
 
 ## 2. Première phrase à donner à Claude
-> Lis REPRISE_EQUIPE.md (d'abord les § 3 decies et 3 nonies, les plus récents) et la mémoire du projet, puis continue : voix des
-> cours, écoutes à choisir, déploiement avec mon accord, republication du lien libre.
+> Lis REPRISE_EQUIPE.md (d'abord le § 3 undecies, le plus récent, puis les § 3 decies et 3 nonies) et la mémoire du
+> projet, puis continue : revue des cahiers de 2ᵉ Bac, voix des cours, écoutes à choisir, déploiement avec mon accord,
+> republication des liens libres.
 
 Les sous-agents doivent tourner avec le modèle **Opus**. La voix est toujours **Bodi**, jamais Amine. On ne déploie
 le serveur **qu'avec l'accord** du responsable.
@@ -394,6 +395,98 @@ sessions sont finies (Réglages › Ce PC › Stockage). Pas de place → la pos
 5. **Écoutes** : les 38 mots de `_ecoute_INDEX.md` (worktree ci-dessus, 39 dossiers `_ecoute_*`) restent à choisir.
 6. **Tableau du cache voix** à refaire après ce déploiement (nombres en français) : non vérifié.
 7. **Disque C:** 4,9 Go libres (98 %) ; 7 worktrees dans `.claude/worktrees/` à nettoyer quand leurs sessions sont finies.
+
+## 3 undecies. Reprise du 25 novembre 2026 (matin) — liens libres, mode classe, cahiers
+
+Session « liens libres /tronc-commun et /2bacpcf ». Tout est commité sur `main` ; production sur `bb97a9a3` (déployée
+le 24/11 à 21 h 15), /tronc-commun et /2bacpcf republiés juste après.
+
+### En ligne (vérifié)
+- **Mode classe** (`?classe` sur /tronc-commun et /2bacpcf ; téléphone : `?c=<code>`) :
+  - écran du prof : fil des réponses corrigées par l'IA, la plus récente en haut, avec le nom de l'élève, la question,
+    l'heure, la note, ce qui est juste et ce qui est perdu ; filtre « Toutes les questions / Question projetée » ;
+  - puce « 📱 1-2 » quand un élève regarde une autre question sur son téléphone ;
+  - téléphone du prof accepté d'un clic (« ✓ Accepter ») : l'examen s'ouvre aussitôt sur le PC et sur le téléphone ;
+    le téléphone du prof sert de télécommande (changer de question change le tableau, bouton Correction) ;
+  - lecture des photos guidée par les mots du sujet (« PB » n'est plus lu « Qb ») ; une lettre mal lue sur une photo ne
+    coûte plus de points ;
+  - **les séances sont gardées pour toujours** (l'utilisateur a renversé « rien d'enregistré ») :
+    `/opt/moalim/backend/data/classes/<date>_<code>_<id>/seance.json` + `photos/<réponse>.jpg` ; onglet admin
+    **« Mode classe »** (grille élèves × questions, réponse et photo d'un clic, CSV) ; une séance en cours reprend après
+    un déploiement ; photos plafonnées à 3 Go (`MAX_DISQUE_PHOTOS`, disque du serveur à 95 %) ;
+  - pour entraîner plus tard nos modèles d'OCR, chaque réponse garde la photo lue par l'IA, le texte lu (`lu`) et le
+    texte relu (`texte`).
+- **Évaluation du Tronc Commun ouverte tout de suite** (plus besoin de finir le cours).
+- **Cahier** :
+  - nouvelle mise en page commune à tous les cours (`frontend/src/components/course/memoire/LignesCahier.tsx`) : titre
+    au milieu, définitions et formules encadrées, méthodes en étapes, tableaux `| a | b |`, charte de couleurs ;
+  - règles ajoutées au skill `cahier-de-l-eleve` (§ 2 bis : jamais les données d'un exercice ; § 6 : mise en page et
+    charte ; § 7 : le niveau de la classe) ;
+  - cahier des 3 cours du Tronc Commun réécrit (`c0a477d5`).
+
+### À reprendre : revue des cahiers de 2ᵉ Bac (demandée par l'utilisateur, PAS commencée)
+Appliquer aux cahiers de 2ᵉ Bac toutes les règles du cahier du Tronc Commun. Aucun fichier de cours n'est encore
+modifié. Tout est prêt :
+- **Brief des agents** : `scripts/revue_cahier/BRIEF.md` (à lire en entier). **Vérificateur** :
+  `scripts/revue_cahier/verifier_seul_cahier.py` (seuls `cahier` et `cahier_figures` peuvent changer).
+- **Où travailler** : dans un worktree sur `origin/main`. Celui de la session, avec `backend/data/courses/` déjà dans
+  son sparse-checkout :
+  `C:\Users\HP\AppData\Local\Temp\claude\9269525a2680ed40\1e9c1767-17b1-498d-845f-3ca11b660834\scratchpad\wt-tc`.
+  **Ne pas** partir des cours du dossier principal : ils datent du 21/11, et main en a des versions plus récentes.
+- **Ampleur** : 22 cours (`backend/data/courses/<deck>.json` ET `en_attente/<deck>.json`) + 2 révisions de /2bacpcf
+  (`frontend/src/publication/bac2pcf/cours/rev_*.json`). Au total, environ 2 800 lignes de cahier et 1 500 bulles.
+- **Découpage prévu** (un agent Opus par groupe, en parallèle ; chacun ne touche que ses fichiers) :
+
+  | Groupe | Cours |
+  |---|---|
+  | maths 1 | math_ch1_limites_continuite, math_ch2_derivation_etude_fonctions, math_ch3_suites_numeriques |
+  | maths 2 | math_ch4_primitives, math_ch5_fonctions_ln, math_ch6_nombres_complexes |
+  | physique 1 | phys_ch2_ondes_periodiques, phys_ch3_ondes_lumineuses, phys_ch4_radioactivite |
+  | physique 2 | phys_ch5_energie_nucleaire, phys_ch6_dipole_RC, phys_ch7_dipole_RL |
+  | physique 3 | phys_ch8_circuit_RLC, phys_ch9_transformations_lentes_rapides, phys_ch10_cinetique |
+  | chimie | phys_ch11_transformations_deux_sens, phys_ch12_etat_equilibre, phys_ch13_acides_bases |
+  | SVT 1 | svt_ch1_reactions_responsables_liberation_energie, svt_ch2_role_muscle_strie_squelettique |
+  | SVT 2 | svt_ch3_notion_information_genetique, svt_ch4_relation_gene_proteine |
+  | révisions | bac2pcf/cours/rev_chim_deux_sens_equilibre, bac2pcf/cours/rev_phys_ondes_radioactivite |
+
+  Phrase pour chaque agent : « Lis en entier `<WT>/scripts/revue_cahier/BRIEF.md` puis le skill qu'il cite, et suis-les
+  à la lettre. Tes cours : … (avec leurs deux copies, en ligne et en attente). Rends le rapport court demandé. »
+  En maths, le « cours en général », ce sont les définitions, les théorèmes avec leurs conditions, les tableaux de
+  limites et de dérivées usuelles et les méthodes : pas les fonctions d'un exercice.
+- **Ensuite** :
+  1. `verifier_seul_cahier.py` → `OK` sur tous les fichiers ;
+  2. relire à l'écran : un aperçu se monte avec un petit fichier `.tsx` qui rend `LignesCahier` et
+     `partiesDuCahier`, bundlé avec l'API `require('esbuild').build(...)` dans `frontend/`, puis servi par le serveur de
+     test (`.claude/launch.json` → `tronc-commun-api-test`) ;
+  3. un commit par groupe, `git fetch && git rebase origin/main && git push origin HEAD:main` ;
+  4. **demander l'accord** ; déployer (`ssh moalim-vps 'cd /opt/moalim && bash deploy/deploy-ubuntu.sh'`) ; republier
+     /2bacpcf (`python -I scripts/publier_2bacpcf.py --public-secours "C:/Users/HP/Desktop/ai-tutor-bac/frontend/public"`).
+
+### Voix des 171 pistes « facteurs édaphiques » (activités 4 à 7)
+La session voix de l'équipe (« Vérification fichier équipe MD ») les génère, en 4 parties. Ne pas les relancer en
+parallèle. Mes deux lots du 24/11 (comptes 3 et 4, kernels `academy-tts-lot` et `academy-tts-lot2`, liste
+`/srv/corpus_v4/voix_lot/liste_tc_edaph_suite.json`) sont restés en `QUEUED` et sont abandonnés. Pour les brancher,
+poser les MP3 ne suffit pas : il faut lancer `scripts/brancher_voix_edaph.py <frontend/public> --cours <cours.json>
+--voix <cours_voix.json>`, qui écrit les champs audio dans le JSON du cours. Ensuite, commit, puis republier
+/tronc-commun (`python -I scripts/publier_tronc_commun.py`).
+
+### Pièges vus le 24/11
+- **`npx tsc --noEmit -p .` dans `frontend/` ne vérifie aucun fichier** : une chaîne cassée est passée et a fait
+  échouer le build sur le serveur. Pour un fichier modifié, vérifier avec
+  `node -e "require('esbuild').transformSync(require('fs').readFileSync(F,'utf8'),{loader:'tsx'})"`. Le déploiement
+  n'a rien remplacé tant que le build échouait : vérifier la date de `/var/www/moalim/index.html` après un déploiement.
+- **Git Bash change les chemins** qui commencent par `/` (`git sparse-checkout add /backend/...` devient
+  `C:/Program Files/Git/backend/...`) : modifier directement `$(git rev-parse --git-path info/sparse-checkout)`, puis
+  `git sparse-checkout reapply`.
+- Un `cp: cannot create … File exists` au déploiement : un autre déploiement tourne → relancer.
+
+### Pas fait, proposé, à décider
+- Écran admin « Mode classe » pas vu à l'écran (il faut le mot de passe admin) ; lecture d'un vrai « PB » manuscrit pas
+  essayée sur une vraie copie.
+- Idées proposées, non demandées : notation rapide au toucher, photos qui tournent, photo de copie entière après la
+  séance, feuille-réponse à imprimer.
+- 2ᵉ Bac : les totaux `COURS` des révisions affichent encore 38/39 diapositives (il y en a 27/26) ; le relais PC +
+  téléphone (`?t`) n'est pas sur /2bacpcf ; la facturation Mistral reste à régler par l'utilisateur.
 
 ## 4. Ce qui attend une décision
 - Écouter et choisir les 38 mots douteux (§ 3 nonies), puis les symboles chimiques douteux.
