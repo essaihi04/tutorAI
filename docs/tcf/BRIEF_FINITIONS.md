@@ -45,7 +45,7 @@ vide (ex. le tube de Thomson, les deux ballons « sans / avec éthanol »). Chaq
 l'objet principal grand et centré, la colonne d'écriture à côté s'il y en a une, rien de minuscule ; et en téléphone
 paysage (cadre ~429×250) seulement l'étape en cours, en grand, texte ≥ 15 px. Vérifie CHAQUE vue de chaque page
 (captures Playwright du cadre seul à 760×420 et 429×250, et du lecteur entier à 1280×720 et 724×350 :
-`npx vite --config vite.tcf.config.ts` puis `http://localhost:5173/tcf.html?cours=<id>&diapo=<id>`, cliquer
+`npx vite --config vite.tcf.config.ts` puis `http://localhost:5173/TCF/tcf.html?cours=<id>&diapo=<id>`, cliquer
 « Commencer le cours », attendre ~12 s) et regarde les captures. Corrige aussi les petits défauts vus (texte coupé ou
 qui déborde, étiquette parasite dans un coin, chevauchements).
 

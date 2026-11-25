@@ -21,7 +21,8 @@ dossier : ne touche QUE tes fichiers.
   (interrompu) : relis-la, garde ce qui est bon, complète et corrige.
 - La page /TCF existe (`W/frontend/src/publication/tcf.tsx`, `W/frontend/tcf.html`, `W/frontend/vite.tcf.config.ts`) : ne
   la modifie pas. En local : `cd W/frontend && npm ci` (si besoin) puis `npx vite --config vite.tcf.config.ts --port 5173`
-  puis `http://localhost:5173/TCF/tcf.html?cours=<id>` (`&diapo=<slide id>`). En dev, pas de fiche à remplir.
+  puis `http://localhost:5173/TCF/tcf.html?cours=<id>` (`&diapo=<slide id>`). En dev, pas de fiche à remplir. En local, `/media/…`
+  est aussi servi à la racine (comme en ligne) : simulations et avatar se chargent sans `--base /`.
 
 ## À lire d'abord (en entier)
 
