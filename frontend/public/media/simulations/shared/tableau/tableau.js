@@ -530,15 +530,25 @@
   const cibleDe = (p) => p && (p.target || p.repere || p.element || p.id || p.variant_id);
 
   /** Écrit `texte` dans `el` lettre par lettre (annule une écriture en cours sur le même élément). */
+  // (25 novembre 2026) « v⃗ », « OM⃗ », « 0⃗ », « v⃗_G » : la flèche combinante U+20D7 s'affiche en carreau dans la police
+  // craie (signalé par l'utilisateur). Une fois la phrase écrite, la flèche est dessinée au-dessus du nom (`.vec` de
+  // tableau.css) ; pendant l'écriture, elle est ôtée.
+  const VEC = /(^|[^A-Za-zΔ])(Δ?[A-Za-z0-9]{1,3})⃗(?:_([A-Za-z0-9]+))?/g;
+  const echapper = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function poser(el, texte) {
+    if (!texte.includes('⃗')) { el.textContent = texte; return; }
+    el.innerHTML = echapper(texte).replace(VEC, (m, a, n, ind) =>
+      `${a}<span class="vec${/^[acegmnopqrsuvwxyzij]+$/.test(n) ? ' bas' : ''}">${n}</span>${ind ? `<sub>${ind}</sub>` : ''}`);
+  }
   function ecrire(el, texte, { vitesse = 28, apres } = {}) {
     if (!el) return;
     if (el._ecriture) { clearInterval(el._ecriture); el._ecriture = null; }
     texte = String(texte ?? '');
-    if (REDUIT || !texte) { el.textContent = texte; apres && apres(); return; }
+    if (REDUIT || !texte) { poser(el, texte); apres && apres(); return; }
     let i = 0; el.textContent = ''; el.classList.add('en-cours');
     el._ecriture = setInterval(() => {
-      i++; el.textContent = texte.slice(0, i);
-      if (i >= texte.length) { clearInterval(el._ecriture); el._ecriture = null; el.classList.remove('en-cours'); apres && apres(); }
+      i++; el.textContent = texte.slice(0, i).replace(/⃗/g, '');
+      if (i >= texte.length) { clearInterval(el._ecriture); el._ecriture = null; el.classList.remove('en-cours'); poser(el, texte); apres && apres(); }
     }, 1000 / vitesse);
   }
 

@@ -123,27 +123,62 @@ function rendre(t: string, k: { n: number }): ReactNode[] {
   return parts;
 }
 
-/** « lim_{…} » (l'indice dessous), « lettre_indice », « ]_indice », « ^(exposant) » et « ^x ». */
+/** Un nom de vecteur avec sa flèche dessinée au-dessus (comme la craie des simulations), quelle que soit la police. */
+function Vecteur({ nom }: { nom: string }) {
+  const w = 10 * nom.length;
+  // la flèche se pose juste au-dessus des lettres : plus bas sur « v », « i », « u » que sur « OM », « P », « 0 »
+  const bas = /^[acegmnopqrsuvwxyzij]+$/.test(nom);
+  return (
+    <span className="relative inline-block whitespace-nowrap" aria-label={`vecteur ${nom}`}>
+      <svg aria-hidden="true" viewBox={`0 0 ${w} 6`} preserveAspectRatio="none" className="absolute left-0 w-full overflow-visible" style={{ height: '0.32em', top: bas ? '0.02em' : '-0.26em' }}>
+        <path d={`M1 3H${w - 1.5}M${w - 4.5} 0.8L${w - 1} 3L${w - 4.5} 5.2`} fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      {nom}
+    </span>
+  );
+}
+
+/** « v⃗ » (vecteur), « lim_{…} » (l'indice dessous), « lettre_indice », « ]_indice », « ^(exposant) » et « ^x ». */
 function indices(t: string, k: { n: number }): ReactNode[] {
   const parts: ReactNode[] = [];
   // (16 novembre 2026) L'état physique collé à une espèce chimique, « HCOOH(aq) + H₂O(l) », s'écrit en petit et en bas.
-  const re = /lim_(\{[^}]+\}|[^\s(]+)|([A-Za-zτθΔλωφℓ\]])_(\{[^}]+\}|[A-Za-z0-9éèêàçℓ]+(?:,[A-Za-zéèêàç]+)?)|\^(\([^()]*(?:\([^()]*\)[^()]*)*\)|[A-Za-z0-9−\-+]+)|(?<=[A-Za-z₀-₉⁺⁻)])(\((?:aq|l|s|g)\))/g;
+  // (25 novembre 2026) Un vecteur « v⃗ », « OM⃗ », « 0⃗ », « v⃗_G », « OG⃗₁ » : la flèche combinante U+20D7 s'affichait en
+  // carreau dans la police craie (signalé par l'utilisateur) ; la flèche est dessinée au-dessus du nom, l'indice dessous.
+  const re = /(?<![A-Za-zΔ])(Δ?[A-Za-z0-9]{1,3})⃗(?:_(\{[^}]+\}|[A-Za-z0-9]+)|([₀-₉]+))?|lim_(\{[^}]+\}|[^\s(]+)|([A-Za-zτθΔλωφℓ\]])_(\{[^}]+\}|[A-Za-z0-9éèêàçℓ]+(?:,[A-Za-zéèêàç]+)?)|\^(\([^()]*(?:\([^()]*\)[^()]*)*\)|[A-Za-z0-9−\-+]+)|(?<=[A-Za-z₀-₉⁺⁻)])(\((?:aq|l|s|g)\))|(?<![\dA-Za-z⁰-⁹])([⁰¹²³⁴⁵⁶⁷⁸⁹ᴬ]+)(?:([₀₁₂₃₄₅₆₇₈₉]+)|_([A-Za-z0-9]+)) ?([A-Z][a-z]?)(?![a-z])/g;
   let i = 0, m: RegExpExecArray | null;
   while ((m = re.exec(t))) {
     if (m.index > i) parts.push(t.slice(i, m.index));
     if (m[1] !== undefined) {
+      parts.push(<Vecteur key={k.n++} nom={m[1]} />);
+      if (m[2] !== undefined) parts.push(<sub key={k.n++} className="text-[0.7em]">{m[2].replace(/[{}]/g, '')}</sub>);
+      if (m[3] !== undefined) parts.push(m[3]);
+    } else if (m[4] !== undefined) {
       parts.push(
         <span key={k.n++} className="mr-[0.15em] inline-flex flex-col items-center align-baseline leading-none">
           <span>lim</span>
-          <span className="mt-0.5 whitespace-nowrap text-[0.55em]">{m[1].replace(/[{}]/g, '')}</span>
+          <span className="mt-0.5 whitespace-nowrap text-[0.55em]">{m[4].replace(/[{}]/g, '')}</span>
         </span>,
       );
-    } else if (m[2] !== undefined) {
-      parts.push(m[2], <sub key={k.n++} className="text-[0.7em]">{m[3].replace(/[{}]/g, '')}</sub>);
     } else if (m[5] !== undefined) {
-      parts.push(<sub key={k.n++} className="text-[0.62em]">{m[5]}</sub>);
+      parts.push(m[5], <sub key={k.n++} className="text-[0.7em]">{m[6].replace(/[{}]/g, '')}</sub>);
+    } else if (m[8] !== undefined) {
+      parts.push(<sub key={k.n++} className="text-[0.62em]">{m[8]}</sub>);
+    } else if (m[9] !== undefined) {
+      // (25 novembre 2026) Un noyau « ᴬ_Z X », « ³⁵₁₇Cl » : A au-dessus de Z, tous deux à gauche du symbole (« _Z »
+      // restait écrit tel quel).
+      const chiffres = (s: string) => s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉ᴬ]/g, c => {
+        const h = '⁰¹²³⁴⁵⁶⁷⁸⁹'.indexOf(c), b = '₀₁₂₃₄₅₆₇₈₉'.indexOf(c);
+        return h >= 0 ? String(h) : b >= 0 ? String(b) : 'A';
+      });
+      parts.push(
+        <span key={k.n++} className="whitespace-nowrap">
+          <span className="mr-[0.08em] inline-flex flex-col items-end text-[0.62em] leading-[1.05]" style={{ verticalAlign: '-0.35em' }}>
+            <span>{chiffres(m[9])}</span><span>{chiffres(m[10] ?? m[11])}</span>
+          </span>{m[12]}
+        </span>,
+      );
     } else {
-      const e = m[4].startsWith('(') ? m[4].slice(1, -1) : m[4];
+      const e = m[7].startsWith('(') ? m[7].slice(1, -1) : m[7];
       parts.push(<sup key={k.n++} className="text-[0.7em]">{indices(e, k)}</sup>);
     }
     i = re.lastIndex;
