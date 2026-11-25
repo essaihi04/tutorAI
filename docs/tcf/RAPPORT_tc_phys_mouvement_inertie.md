@@ -73,3 +73,69 @@ puis l’élève (tige, 30 cm).
 
 Dernier commit poussé sur `tcf-cours` : voir `git log -1 -- docs/tcf/RAPPORT_tc_phys_mouvement_inertie.md` (le SHA est
 aussi donné dans le compte rendu de la session).
+
+## Finitions (25 novembre 2026, `docs/tcf/BRIEF_FINITIONS.md`)
+
+Aucun texte parlé changé : `speech_text`, `enonce_dit`, `parole`, `dit` et chaque `mot` sont identiques (comparaison
+des 639 champs avant / après) ; `lister_voix_tcf.py` réécrit `tc_phys_mouvement_inertie_voix.json` sans aucune
+différence (git diff vide). La voix ne nomme que deux couleurs (« v trois » en vert, la valve « الحمرا ») : gardées.
+
+### 1. La charte de couleurs
+
+- **Le lexique de la mécanique** (nouveau, pour tous les cours de mécanique) : `Lexique.physique.MECANIQUE` dans
+  `shared/lexique/lexique-physique.js` — v⃗ vert, P⃗ rouge, R⃗ bleu, T⃗ orange, F⃗ violet, OM⃗ rose, i⃗ j⃗ k⃗ cyan,
+  G point rose, points d'enregistrement jaunes (= `Lexique.maths.ROLES.point`), trajectoire cyan en pointillé [9, 6]
+  (= `ROLES.courbe`), repères blanc, éclateurs A rouge / B orange ; `Lexique.physique.mecanique` : les dessins nés dans
+  ce cours (point d'enregistrement, G, étincelle, table à coussin d'air, autoporteur de dessus et de côté, règle,
+  chronomètre, flèche d'un vecteur dans la couleur de sa grandeur) ; `Lexique.physique.ECRITURE` : le code de la craie.
+  Fiche `docs/lexique-visuel/mecanique.md`, index du README, renvoi depuis `craie.md`.
+- **Le cours lit le lexique** : les 14 pages chargent `lexique-physique.js` et `lexique-maths.js` ; `commun.js` n'a
+  plus de table de couleurs ni de copie des dessins (`Mvt.COUL` ← `MECANIQUE`, `ROLES`, `ECRITURE` ; `Mvt.P.point`,
+  `table`, `autoporteur`… appellent le lexique ; `Mvt.HEX` = `Tableau.COULEURS`). Graphes x(t) et droite : courbe
+  `ROLES.courbe`, points `ROLES.point`, triangle de pente Δx/Δt `ROLES.tangente` (orange ; Δt était vert), signe de
+  v_x `ROLES.positif` / `negatif` ; tangente du vecteur vitesse orange (était cyan) et flèche « sens » blanche.
+- **Trajectoire** : cyan en pointillé partout (le ballon l'était ; rectiligne / circulaire / curviligne étaient
+  cyan / vert / orange, la valve jaune, le cercle du MCU sarcelle et orange) ; sur la feuille claire du MCU, encre cyan
+  foncée. F⃗₂ du dynamomètre violet (était orange, la couleur de T⃗).
+- **La craie** (même code que les cours atome et synthèse et que 2ᵉ Bac) : titres, mots-clés, relations générales
+  jaune ; légendes et valeurs données blanc (τ, R, m, d, Δt, MᵢMᵢ₊₁ lus : étaient orange, cyan ou jaune) ; résultats
+  calculés et conclusions vert (P = 20 N, v₃ = 1 m/s, T = 80 N, ω, T, f, « elles se compensent », « pseudo-isolé »,
+  « le mouvement est relatif », « G est à 30 cm de A » : étaient jaune, cyan, rose ou orange) ; pièges rose (« ⚠ » de la
+  fiche bilan) ; noms des axes blanc. Les « Système : {…} » et la question du curling en jaune.
+- **Cahier** (blocs et traces des diapos, via `scripts/tcf/mi_donnees_*.py` puis `mi_construire.py`) : une idée par
+  ligne, avec son début de la charte — « Le poids P⃗ est vertical… » sorti de la ligne Formule, « Donc le mouvement est
+  relatif », « Donc la pente a est la vitesse v », « Attention : v_x = −v si l'axe est orienté contre le mouvement »,
+  « Définition : un référentiel galiléen est… » + « Exemple : … », centre de masse en Définition / Remarque / Exemple,
+  « Bilan : principe d'inertie… », méthodes en 1) 2) 3) ; traces des diapos découpées en lignes (`\n`). Les cartes
+  `centre` (rendues d'une seule couleur par le lecteur) n'ont pas changé.
+- Corrigé en passant : « M_iM_{i+1} », « M_4M_6 » s'écrivaient « Mᵢₘ_{i+1} » (l'indice avalait la lettre suivante) →
+  `M_{i}M_{i+1}` (table et MCU) ; l'étiquette « feuille » (jaune sur papier crème) et « éclateur » (à cheval sur le cadre)
+  en encre foncée sur la feuille.
+
+### 2. Les vues remplissent leur cadre
+
+- Dans le lecteur à 1280×720, l'iframe fait ~800-900 × 565 : le cadre virtuel 760×420 y prend toute la largeur ; le
+  vide à droite de l'iframe est la place du lecteur (cartes, professeur), pas celle de la simulation.
+- Enregistrements agrandis pour remplir la largeur : vues « lire » (règle de 14 cm sur toute la largeur, texte dessous),
+  « instant », « élève », « comparer » (v₅ à gauche, v_m à droite, la conclusion en bas sur toute la largeur — elle
+  sortait du cadre), vecteur vitesse « échelle » et « élève » (1 cm = 44 px au lieu de 30 : le vecteur se voit).
+- Téléphone (429×250) : données du vecteur vitesse remises en haut à gauche (elles touchaient le nom v⃗₄).
+
+### Captures regardées
+
+Chaque vue à la fin de son animation, à 760×420 et 429×250 (57 vues × 2, avant et après), aucune erreur console ;
+le lecteur /TCF entier (Vite `vite.tcf.config.ts`, `?diapo=`, « Commencer le cours », simulation menée à sa fin) pour
+les 57 diapos à simulation, à 1280×720 et 724×350.
+
+### Vérifications
+
+`verifier_formules.py` (cours et simulations) : 0 ; `verifier_parcours.py` : rien ; `verifier_pointage.py` : 0 défaut ;
+`verifier_figures_cahier.py` : 0 erreur ; `lister_voix_tcf.py` : `_voix.json` inchangé.
+
+### Ce qui reste
+
+- Les cartes `centre` et le bandeau d'un bloc restent de la seule couleur du lecteur (lecteur commun, pas touché).
+- Vues encore un peu vides sous leur colonne de texte : curling, grue (déjà signalé) ; dans `bus/tableau` le petit bus
+  à gauche est petit à côté du tableau.
+- Les lueurs de comptage sur la feuille claire du MCU restent orange (le jaune ne se voit pas sur le papier).
+- Les pages des autres cours de mécanique (1ʳᵉ / 2ᵉ Bac, s'il y en a) ne lisent pas encore `MECANIQUE`.
