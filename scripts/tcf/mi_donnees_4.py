@@ -14,9 +14,9 @@ ACTIVITES = [
   {'id': 'mi_act_principe', 'titre': 'Partie 2 — Le principe d’inertie', 'minutes': 30, 'diapos': [
     {'id': 'mi_i5_translation', 'titre': 'L’autoporteur lancé sans tourner', 'lead': 'A, B et G : trois mouvements rectilignes uniformes.',
      'vue': 'inertie.html?vue=translation', 'demarrer': 'reset', 'comp': ['C8'],
-     'fr': 'Maintenant, on lance l’autoporteur sans le faire tourner. Regarde : A, B et G. Tous les trois ont un mouvement rectiligne uniforme : des points sur des droites, régulièrement espacés.',
-     'mixed': 'دابا كنلوحو l’autoporteur بلا ما يدور. شوف: A، B و G. كاملين عندهم mouvement rectiligne uniforme: des points على des droites، وبنفس la distance.',
-     'pointage': [('بلا ما يدور', 'm:lance'), ('شوف: A، B و G', 'm:trace'), ('كاملين عندهم', 'm:mru')],
+     'fr': 'Maintenant, on lance l’autoporteur sans le faire tourner. Regarde : A au centre, qui est à la place de G, et B au bord. Tous ont un mouvement rectiligne uniforme : des points sur des droites, régulièrement espacés.',
+     'mixed': 'دابا كنلوحو l’autoporteur بلا ما يدور. شوف: A فالوسط، وهو فالبلاصة ديال G، و B فالطرف. كاملين عندهم mouvement rectiligne uniforme: des points على des droites، وبنفس la distance.',
+     'pointage': [('بلا ما يدور', 'm:lance'), ('شوف: A فالوسط', 'm:trace'), ('كاملين عندهم', 'm:mru')],
      'centre': [('Sans rotation : A, B et G en MRU', 'كاملين عندهم')],
      'cahier': 'Lancé sans rotation, tous les points de l’autoporteur ont un MRU.'},
 
@@ -139,7 +139,7 @@ ACTIVITES = [
      'vue': 'bilan.html?vue=fiche', 'demarrer': 'reset', 'comp': [], 'acquis': True,
      'puces': ['1 · Forces : P = m·g ; deux forces se compensent : même droite, sens contraires, même intensité.',
                '2 · Relativité : le mouvement dépend du référentiel.', '3 · Repères : OM⃗ = x·i⃗ + y·j⃗ + z·k⃗ ; origine des dates t = 0.',
-               '4 · Trajectoire : ensemble des positions successives.', '5 · Vitesse : v_m = d/Δt ; v_i = M_{i−1}M_{i+1}/(2τ) ; 1 m/s = 3,6 km/h.',
+               '4 · Trajectoire : ensemble des positions successives.', '5 · Vitesse : v_m = d/Δt ; v_i = Mᵢ₋₁Mᵢ₊₁/(2τ) ; 1 m/s = 3,6 km/h.',
                '6 · MRU : x(t) = v_x·t + x₀.', '7 · MCU : ω = v/R ; T = 2π/ω ; f = 1/T.',
                '8 · Principe d’inertie : isolé ou pseudo-isolé ⇒ v⃗_G constant (référentiel galiléen).', '9 · Centre de masse : OG⃗ = (m₁·OG⃗₁ + m₂·OG⃗₂)/(m₁ + m₂).'],
      'fr': 'Voici ce qu’il faut retenir. Un : les forces : P égale m fois g, et deux forces qui se compensent. Deux : le mouvement est relatif, on choisit le référentiel. Trois : les repères : le vecteur OM, et t égale zéro. Quatre : la trajectoire. Cinq : la vitesse : v m égale d sur delta t, et v i égale M i moins un M i plus un sur deux tau. Six : le mouvement rectiligne uniforme : x de t égale v x fois t plus x zéro. Sept : le mouvement circulaire uniforme : oméga égale v sur R, T égale deux pi sur oméga, f égale un sur T. Huit : le principe d’inertie : isolé ou pseudo-isolé, G au repos ou en mouvement rectiligne uniforme. Neuf : le centre de masse, avec la relation barycentrique.',
@@ -147,7 +147,7 @@ ACTIVITES = [
      'pointage': [('un: les forces', 'm:prerequis'), ('deux: le mouvement', 'm:relativite'), ('trois: les repères', 'm:reperes'), ('quatre: la trajectoire', 'm:trajectoire'),
                   ('cinq: la vitesse', 'm:vitesse'), ('six: le mouvement rectiligne', 'm:mru'), ('sept: le mouvement circulaire', 'm:mcu'), ('huit: le principe', 'm:inertie'),
                   ('neuf: le centre de masse', 'm:masse')],
-     'cahier': '| v_m = d/Δt | v_i = M_{i−1}M_{i+1}/(2τ) | x(t) = v_x·t + x₀ |\n| ω = v/R | T = 2π/ω | f = 1/T |'},
+     'cahier': '| v_m = d/Δt | v_i = Mᵢ₋₁Mᵢ₊₁/(2τ) | x(t) = v_x·t + x₀ |\n| ω = v/R | T = 2π/ω | f = 1/T |'},
 
     {'id': 'mi_b2_carte', 'type': 'synthesis', 'titre': 'La carte du chapitre', 'lead': 'Neuf branches autour du mouvement et de l’inertie.',
      'vue': 'bilan.html?vue=carte', 'demarrer': 'reset', 'comp': [], 'acquis': True,

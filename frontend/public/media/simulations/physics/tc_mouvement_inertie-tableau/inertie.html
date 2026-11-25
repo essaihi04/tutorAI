@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le principe d’inertie — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le principe d’inertie : un palet de curling glisse sur la glace ; un autoporteur lancé en tournant (éclateur A au centre, éclateur B au bord) ; les axes de symétrie et le centre d’inertie G ; un autoporteur en translation ; le poids et la réaction ; système isolé et pseudo-isolé ; l’énoncé du principe d’inertie"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * Le principe d'inertie (diapos mi_i1_curling … mi_i8_enonce). Contrat : docs/tcf/ARCHITECTURE_tc_phys_mouvement_inertie.md.
+ *  ?vue=curling     : palet de granit sur la glace, positions toutes les 0,5 s (intervalles allumés un à un), P⃗ et R⃗.
+ *                     Moments : lance 0,5 ; glisse 1,5 ; positions 6 ; forces 8 ; question 10 ; fin 11,5.
+ *  ?vue=rotation    : autoporteur lancé en tournant : A (centre) points alignés équidistants ; B (bord, 0,7 r) cycloïde
+ *                     à boucles, un point tous les τ. Moments : lance 0,5 ; trace 1 ; A 7 ; B 9 ; fin 11.
+ *  ?vue=axes        : lancer 1 (sur une face) → Δ₁ ; lancer 2 (sur la tranche) → Δ₂ ; G à l'intersection.
+ *                     Moments : delta1 0,5 ; delta2 3 ; G 5,5 ; mru 7,5 ; fin 10.
+ *  ?vue=corps       : sphère, cylindre, disque, barre homogènes : axes de symétrie et G. Moments : sphere 0,5 ;
+ *                     cylindre 3 ; disque 5,5 ; barre 8 ; fin 10.
+ *  ?vue=translation : autoporteur lancé sans rotation : rangées de points de A (= G) et de B à pas égaux.
+ *                     Moments : lance 0,5 ; trace 1 ; mru 6 ; fin 8.
+ *  ?vue=forces      : de côté : P⃗ (en G, vers le bas), R⃗ (au contact, vers le haut) ; P⃗ + R⃗ = 0⃗ ; pseudo-isolé.
+ *                     Moments : systeme 0,5 ; P 2 ; R 4 ; compense 6 ; pseudo 8 ; fin 10.
+ *  ?vue=isole       : sonde loin de tout (isolé) / autoporteur (pseudo-isolé). Moments : sonde 0,5 ; isole 2,5 ;
+ *                     autoporteur 5 ; pseudo 7 ; fin 9.
+ *  ?vue=enonce      : G au repos, G en MRU, l'énoncé. Moments : repos 0,5 ; mru 3 ; enonce 6 ; fin 9.
+ * Le palet de curling et la sonde spatiale ne servent que dans cette page : ils sont peints ici (palet, glace, sonde).
+ */
+const { P, lueur, panneau, vecteur, texteV, HEX, TAU } = window.Mvt;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ── Objets peints propres à cette page ─────────────────────────────────────────────────────────────────── */
+/** La glace bleutée vue de côté : surface claire (reflets, grain) et tranche bleue. */
+function glace(g, x, y, w, h) {
+  g.save();
+  const hs = h * .52, gs = g.createLinearGradient(0, y, 0, y + hs); gs.addColorStop(0, '#f0f9ff'); gs.addColorStop(1, '#bae6fd');
+  g.fillStyle = gs; g.fillRect(x, y, w, hs);
+  const gf = g.createLinearGradient(0, y + hs, 0, y + h); gf.addColorStop(0, '#7dd3fc'); gf.addColorStop(1, '#0c4a6e');
+  g.fillStyle = gf; g.fillRect(x, y + hs, w, h - hs);
+  g.globalAlpha = .5; g.strokeStyle = '#ffffff'; g.lineWidth = 1;
+  for (let i = 0; i < 14; i++) { const xx = x + ((i * 97) % 101) / 101 * w, yy = y + 3 + ((i * 41) % 13) / 13 * (hs - 6); g.beginPath(); g.moveTo(xx, yy); g.lineTo(xx + 30 + (i % 4) * 12, yy); g.stroke(); }
+  g.globalAlpha = .35; g.fillStyle = '#0369a1';
+  for (let i = 0; i < 70; i++) g.fillRect(x + ((i * 53) % 197) / 197 * w, y + 2 + ((i * 29) % 31) / 31 * (hs - 4), 1.4, 1.4);
+  g.globalAlpha = 1; g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y + .5); g.lineTo(x + w, y + .5); g.stroke();
+  g.restore();
+}
+/** Le palet de curling en granit vu de côté (posé en (x, yb)), poignée rouge ; renvoie G. */
+function palet(g, x, yb, w) {
+  const h = w * .52, wb = w * .66, wt = w * .8, ym = yb - h * .45;
+  g.save();
+  g.fillStyle = 'rgba(12,74,110,.35)'; g.beginPath(); g.ellipse(x, yb + 2, w * .45, 4, 0, 0, TAU); g.fill();
+  const corps = () => { g.beginPath(); g.moveTo(x - wb / 2, yb); g.bezierCurveTo(x - w / 2 - 2, yb - 2, x - w / 2 - 2, ym, x - w / 2, ym); g.bezierCurveTo(x - w / 2, yb - h * .85, x - wt / 2 - 2, yb - h, x - wt / 2, yb - h); g.lineTo(x + wt / 2, yb - h); g.bezierCurveTo(x + wt / 2 + 2, yb - h, x + w / 2, yb - h * .85, x + w / 2, ym); g.bezierCurveTo(x + w / 2 + 2, ym, x + w / 2 + 2, yb - 2, x + wb / 2, yb); g.closePath(); };
+  P.ombre(g, () => { const gr = g.createLinearGradient(x - w / 2, 0, x + w / 2, 0); gr.addColorStop(0, '#4b5563'); gr.addColorStop(.35, '#d1d5db'); gr.addColorStop(.7, '#9ca3af'); gr.addColorStop(1, '#374151'); g.fillStyle = gr; corps(); g.fill(); }, 6);
+  g.save(); corps(); g.clip();
+  for (let i = 0; i < 120; i++) { g.fillStyle = i % 3 ? 'rgba(31,41,55,.45)' : 'rgba(255,255,255,.55)'; g.fillRect(x - w / 2 + ((i * 37) % 113) / 113 * w, yb - h + ((i * 59) % 97) / 97 * h, 1.6, 1.6); }
+  g.fillStyle = 'rgba(17,24,39,.55)'; g.fillRect(x - w / 2, ym - 2, w, 3);   // la bande de frappe
+  g.restore();
+  g.fillStyle = '#3f3f46'; g.beginPath(); g.ellipse(x, yb - h, wt / 2, w * .06, 0, 0, TAU); g.fill();
+  // la poignée (plastique rouge) : un pied, puis la prise vers l'arrière
+  const gp = g.createLinearGradient(0, yb - h - 22, 0, yb - h); gp.addColorStop(0, '#fca5a5'); gp.addColorStop(.5, '#dc2626'); gp.addColorStop(1, '#7f1d1d');
+  g.fillStyle = gp; g.beginPath(); g.roundRect(x - 8, yb - h - 14, 16, 14, 3); g.fill();
+  g.beginPath(); g.roundRect(x - w * .42, yb - h - 22, w * .5, 10, 5); g.fill();
+  g.restore();
+  return [x, yb - h * .5];
+}
+/** La sonde spatiale : corps doré, deux panneaux solaires, antenne parabolique. */
+function sonde(g, x, y, s) {
+  g.save();
+  g.strokeStyle = '#94a3b8'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - s * 1.7, y); g.lineTo(x + s * 1.7, y); g.stroke();
+  for (const sx of [-1, 1]) {
+    const px = x + sx * s * 1.05 - (sx < 0 ? s * 1.5 : 0), gr = g.createLinearGradient(px, y - s * .5, px + s * 1.5, y + s * .5); gr.addColorStop(0, '#1e3a8a'); gr.addColorStop(.5, '#3b82f6'); gr.addColorStop(1, '#1e40af');
+    g.fillStyle = gr; g.fillRect(px, y - s * .45, s * 1.5, s * .9);
+    g.strokeStyle = 'rgba(191,219,254,.6)'; g.lineWidth = 1; for (let k = 1; k < 5; k++) { g.beginPath(); g.moveTo(px + k * s * .3, y - s * .45); g.lineTo(px + k * s * .3, y + s * .45); g.stroke(); }
+    g.beginPath(); g.moveTo(px, y); g.lineTo(px + s * 1.5, y); g.stroke();
+  }
+  P.ombre(g, () => { const gr = g.createLinearGradient(x - s * .5, y - s * .5, x + s * .5, y + s * .5); gr.addColorStop(0, '#fde68a'); gr.addColorStop(.5, '#d97706'); gr.addColorStop(1, '#78350f'); g.fillStyle = gr; g.fillRect(x - s * .5, y - s * .5, s, s); }, 8);
+  g.strokeStyle = 'rgba(120,53,15,.6)'; g.lineWidth = 1; for (let k = 1; k < 4; k++) { g.beginPath(); g.moveTo(x - s * .5, y - s * .5 + k * s / 4); g.lineTo(x + s * .5, y - s * .5 + k * s / 4 + 3); g.stroke(); }
+  g.strokeStyle = '#cbd5e1'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y - s * .5); g.lineTo(x, y - s * .85); g.stroke();
+  g.fillStyle = '#e2e8f0'; g.beginPath(); g.ellipse(x, y - s * .95, s * .45, s * .16, 0, Math.PI, TAU); g.fill();
+  g.fillStyle = '#94a3b8'; g.beginPath(); g.ellipse(x, y - s * .95, s * .45, s * .07, 0, 0, TAU); g.fill();
+  g.restore();
+}
+/** L'espace : un cadre sombre étoilé (la sonde y est loin de tout astre). */
+function espace(g, x, y, w, h) {
+  g.save(); const gr = g.createRadialGradient(x + w * .7, y + h * .3, 10, x + w / 2, y + h / 2, w * .8); gr.addColorStop(0, '#1e1b4b'); gr.addColorStop(1, '#020617');
+  g.fillStyle = gr; g.beginPath(); g.roundRect(x, y, w, h, 10); g.fill();
+  for (let i = 0; i < 60; i++) { g.globalAlpha = .35 + (i % 5) * .13; g.fillStyle = '#f8fafc'; const r = i % 7 === 0 ? 1.6 : .9; g.beginPath(); g.arc(x + 6 + ((i * 73) % 211) / 211 * (w - 12), y + 6 + ((i * 47) % 157) / 157 * (h - 12), r, 0, TAU); g.fill(); }
+  g.restore();
+}
+/** La table à coussin d'air vue de côté : plateau bleu nuit dans un cadre de métal, deux pieds. */
+function tableCote(g, x, y, w, hp = 26, pied = 90) {
+  g.save();
+  g.fillStyle = '#475569'; g.fillRect(x + 24, y + hp, 14, pied); g.fillRect(x + w - 38, y + hp, 14, pied);
+  g.fillStyle = '#334155'; g.fillRect(x + 18, y + hp + pied - 6, 26, 6); g.fillRect(x + w - 44, y + hp + pied - 6, 26, 6);
+  P.ombre(g, () => { const gr = g.createLinearGradient(0, y, 0, y + hp); gr.addColorStop(0, '#cbd5e1'); gr.addColorStop(1, '#475569'); g.fillStyle = gr; g.fillRect(x, y, w, hp); }, 6);
+  g.fillStyle = '#1e3a5f'; g.fillRect(x + 4, y, w - 8, 6);
+  g.restore();
+}
+/** Un disque homogène vu de dessus (même bois orangé que P.disque), un repère au bord pour voir qu'il tourne. */
+function disqueDessus(g, x, y, r, a, alpha = 1) {
+  g.save(); g.globalAlpha = alpha;
+  P.ombre(g, () => { g.fillStyle = '#9a3412'; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }, 6);
+  const gr = g.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r); gr.addColorStop(0, '#fed7aa'); gr.addColorStop(1, '#ea580c');
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, r * .92, 0, TAU); g.fill();
+  g.strokeStyle = '#431407'; g.lineWidth = 3; g.beginPath(); g.moveTo(x + Math.cos(a) * r * .35, y + Math.sin(a) * r * .35); g.lineTo(x + Math.cos(a) * r * .9, y + Math.sin(a) * r * .9); g.stroke();
+  g.restore();
+}
+/** Le même disque posé sur sa tranche, vu de dessus : un rectangle 2r × e qui tourne. */
+function disqueTranche(g, x, y, r, e, a, alpha = 1) {
+  g.save(); g.globalAlpha = alpha; g.translate(x, y); g.rotate(a);
+  P.ombre(g, () => { const gr = g.createLinearGradient(0, -e / 2, 0, e / 2); gr.addColorStop(0, '#fed7aa'); gr.addColorStop(.5, '#f97316'); gr.addColorStop(1, '#9a3412'); g.fillStyle = gr; g.beginPath(); g.roundRect(-r, -e / 2, 2 * r, e, 3); g.fill(); }, 6);
+  g.fillStyle = '#431407'; g.fillRect(r - 8, -e / 2, 4, e);
+  g.restore();
+}
+/** Le point laissé par l'éclateur B (orange cerclé de sombre, pour le distinguer de la rangée jaune de A). */
+function pointB(g, x, y, r = 4.5) { g.save(); g.fillStyle = '#1f2937'; g.beginPath(); g.arc(x, y, r + 1.6, 0, TAU); g.fill(); g.fillStyle = '#fb923c'; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); g.restore(); }
+/** Un point de la trace du centre d'inertie (rose cerclé, comme P.G en plus petit). */
+const pointG = (g, x, y) => P.G(g, x, y, 3.6);
+
+/* ── vue curling ── */
+const MC = { lance: .5, glisse: 1.5, positions: 6, forces: 8, question: 10 };
+function dessinerCurling(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t;
+  const yS = 286, yb = 300, wP = 128, x0 = 120, dx = (L - 270) / 9, X = i => x0 + i * dx, yP = 316;
+  c.direct(() => glace(c.ctx, 0, yS, L, 52));
+  c.repere('glace', 0, yS, L, 52, 'la glace');
+  const k = clamp((t - MC.glisse) / .5, 0, 9), xs = x0 + k * dx, n = t >= MC.glisse ? Math.floor(k + 1e-6) : -1;
+  for (let i = 0; i <= n; i++) c.direct(() => P.point(c.ctx, X(i), yP, 4.5));
+  if (n >= 0) c.repere('positions', X(0) - 10, yP - 12, X(n) - X(0) + 20, 24, 'les positions du palet toutes les 0,5 s');
+  // les intervalles égaux allumés un à un (positions 6 → 7,8 s), puis restent allumés
+  if (S.t > 0 && S.a('positions')) for (let i = 0; i < 9; i++) if (t >= MC.positions + i * .2) {
+    lueur(c, X(i) + 8, yP - 9, dx - 16, 18, { vive: t < MC.positions + (i + 1) * .2, numero: i + 1, nx: (X(i) + X(i + 1)) / 2, ny: pt ? 374 : 366, align: 'center', taille: pt ? 28 : 19 });
+  }
+  const G = (() => { let r; c.direct(() => { r = palet(c.ctx, xs, yb, wP); }); return r; })();
+  c.repere('palet', xs - wP / 2, yb - 100, wP, 100, 'le palet de granit');
+  if (S.t > 0 && S.a('lance') && !S.a('glisse')) c.fleche(xs - wP / 2 - 80, yb - 30, xs - wP / 2 - 10, yb - 30, { couleur: 'blanc', largeur: 2.6, duree: .2 });
+  if (S.t > 0 && S.a('glisse') && t < MC.positions) c.fleche(xs + wP / 2 + 10, yb - 30, xs + wP / 2 + 60, yb - 30, { couleur: 'vert', largeur: 2.6, duree: .1 });
+  if (S.t <= 0 || S.ecrit(c, 'forces')) {
+    c.direct(() => P.G(c.ctx, G[0], G[1], 4));
+    vecteur(c, G[0] - 4, G[1], G[0] - 4, G[1] + 118, { couleur: 'rouge', nom: 'P', nx: G[0] + 10, ny: G[1] + 126, taille: pt ? 30 : 22, point: false });
+    c.repere('P', G[0] - 16, G[1], 50, 136, 'le poids P du palet, vers le bas');
+    vecteur(c, G[0] + 4, yb, G[0] + 4, yb - 118, { couleur: 'bleu', nom: 'R', nx: G[0] + 16, ny: yb - 104, taille: pt ? 30 : 22 });
+    c.repere('R', G[0] - 6, yb - 122, 50, 122, 'la réaction R de la glace, vers le haut');
+  }
+  panneau(c, S, sc, 20, 46, L - 320, [
+    { m: 'lance', t: 'On lance le palet sur la glace', c: 'blanc' },
+    { m: 'positions', t: 'Toutes les 0,5 s : distances égales', c: 'jaune', g: true, r: 'l_positions' },
+    { m: 'forces', t: '^P + ^R = ^0 : elles se compensent', c: 'jaune', g: true, r: 'somme' },
+    { m: 'question', t: 'Pourquoi garde-t-il sa vitesse ?', c: 'cyan', g: true, r: 'question' },
+  ], { dy: 46, px: 20, py: 52, pw: L - 40, taille: 22 });
+}
+
+/* ── vues rotation et translation : l'autoporteur sur la feuille, éclateurs A et B ── */
+function autoporteurLance(c, S, sc, o) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t;
+  const tx = 10, ty = 22, tw = L - 20, th = 272, yc = ty + th / 2, r = 54, x0 = tx + 96, x1 = tx + tw - 96;
+  const v = (x1 - x0) / (o.T1 - o.T0);
+  const pos = u => { const uu = clamp(u, o.T0, o.T1) - o.T0, x = x0 + v * uu, a = o.angle(uu); return { x, a, bx: x + Math.cos(a) * r * .7, by: yc + Math.sin(a) * r * .7 }; };
+  c.direct(() => P.table(c.ctx, tx, ty, tw, th, { feuille: true }));
+  c.repere('table', tx, ty, tw, th, 'la table à coussin d’air et sa feuille');
+  const nb = t < o.Tp ? -1 : Math.floor((Math.min(t, o.T1) - o.Tp) / o.tau + 1e-6);
+  if (o.lueurs) o.lueurs(x0, x1, yc, r);
+  if (o.courbe && nb > 0) c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = 'rgba(234,88,12,.6)'; g.lineWidth = 2; g.beginPath(); for (let k = 0; k <= nb * 4; k++) { const q = pos(o.Tp + k * o.tau / 4); k ? g.lineTo(q.bx, q.by) : g.moveTo(q.bx, q.by); } g.stroke(); g.restore(); });
+  c.direct(() => { const g = c.ctx; for (let k = 0; k <= nb; k++) { const p = pos(o.Tp + k * o.tau); P.point(g, p.x, yc, 4); pointB(g, p.bx, p.by, 4); } });
+  const p = pos(t), fini = t >= o.T1;
+  if (S.t > 0 && !fini && t >= o.Tp) { const f = ((t - o.Tp) / o.tau) % 1; if (f < .35) c.direct(() => { P.etincelle(c.ctx, p.x, yc, 14, 1 - f * 2.8); P.etincelle(c.ctx, p.bx, p.by, 14, 1 - f * 2.8); }); }
+  c.direct(() => P.autoporteur(c.ctx, p.x, yc, r, { b: true, angle: p.a, alpha: fini ? .35 : 1 }));
+  c.repere('autoporteur', p.x - r, yc - r, 2 * r, 2 * r, 'l’autoporteur');
+  return { pos, p, x0, x1, yc, r, nb, fini, t, L, pt };
+}
+
+const MRo = { lance: .5, trace: 1, A: 7, B: 9 };
+function dessinerRotation(c, S, sc) {
+  const t0 = S.t <= 0 ? 99 : S.t;
+  const R = autoporteurLance(c, S, sc, { T0: MRo.lance, T1: MRo.A, Tp: MRo.trace, tau: .15, courbe: true, angle: u => -Math.PI / 2 + u * TAU / 1.2,
+    lueurs: (x0, x1, yc) => {
+      if (S.t > 0 && S.a('A')) lueur(c, x0 - 12, yc - 11, x1 - x0 + 24, 22, { vive: !S.a('B') });
+      if (S.t > 0 && S.a('B')) lueur(c, x0 - 50, yc - 48, x1 - x0 + 100, 96, { vive: true, couleur: '251, 146, 60', r: 30 });
+    } });
+  const { p, x0, x1, yc, r, L, pt } = R;
+  c.repere('A', p.x - 10, yc - 10, 20, 20, 'l’éclateur A, au centre');
+  c.repere('B', p.bx - 9, p.by - 9, 18, 18, 'l’éclateur B, au bord');
+  if (R.nb >= 0) { c.repere('traceA', x0 - 10, yc - 10, x1 - x0 + 20, 20, 'la trace de A'); c.repere('traceB', x0 - 44, yc - 44, x1 - x0 + 88, 88, 'la trace de B'); }
+  legende(c, S, sc, 'lance', 'trace', 'lancé en tournant sur lui-même');
+  const xr = L * .5;
+  if (pt) {
+    const der = !S.conclusions ? null : (S.t <= 0 || S.a('B')) ? 'B' : S.a('A') ? 'A' : null;
+    if (der === 'A') { S.ecrit(c, 'A'); c.texte('A : points alignés, à pas égaux', xr, 386, { couleur: 'jaune', taille: 30, gras: true, max: L - xr - 10 }); }
+    if (der === 'B') { if (S.t > 0) S.ecrit(c, 'B'); c.texte('B : des boucles', xr, 386, { couleur: 'orange', taille: 30, gras: true, max: L - xr - 10 }); }
+  } else panneau(c, S, sc, xr, 336, L - xr - 14, [
+    { m: 'A', t: 'A : points alignés, à pas égaux', c: 'jaune', g: true, r: 'l_A', conclusion: true },
+    { m: 'B', t: 'B : des boucles', c: 'orange', g: true, r: 'l_B', conclusion: true },
+  ], { dy: 42, taille: 21 });
+  void t0;
+}
+/** La légende sous la table : ce qu'on fait (moment m1), puis les deux éclateurs (moment m2). */
+function legende(c, S, sc, m1, m2, quoi, nomA = 'A : éclateur du centre') {
+  const pt = sc.petit, x = 24;
+  if (pt) {
+    if (S.t <= 0 || S.ecrit(c, m2)) { c.direct(() => { P.point(c.ctx, x + 6, 330, 6); pointB(c.ctx, x + 6, 380, 6); }); c.texte(nomA.split(' : ')[0] + ' : centre', x + 22, 342, { couleur: 'rouge', taille: 30, gras: true }); c.texte('B : bord', x + 22, 392, { couleur: 'orange', taille: 30, gras: true }); }
+    return;
+  }
+  if (S.t <= 0 || S.ecrit(c, m1)) c.texte(quoi, x, 322, { couleur: 'blanc', taille: 20, max: sc.L * .5 - 40 });
+  if (S.t <= 0 || S.ecrit(c, m2)) {
+    c.direct(() => { P.point(c.ctx, x + 6, 352, 5); pointB(c.ctx, x + 6, 388, 5); });
+    c.texte(nomA, x + 20, 359, { couleur: 'rouge', taille: 20, gras: true, max: sc.L * .5 - 60 });
+    c.texte('B : éclateur du bord', x + 20, 395, { couleur: 'orange', taille: 20, gras: true });
+  }
+}
+
+const MTr = { lance: .5, trace: 1, mru: 6 };
+function dessinerTranslation(c, S, sc) {
+  const R = autoporteurLance(c, S, sc, { T0: MTr.lance, T1: MTr.mru, Tp: MTr.trace, tau: .25, angle: () => -Math.PI / 2,
+    lueurs: (x0, x1, yc, r) => {
+      if (S.t > 0 && S.a('mru')) { lueur(c, x0 - 12, yc - 11, x1 - x0 + 24, 22, { vive: true }); lueur(c, x0 - 12, yc - r * .7 - 11, x1 - x0 + 24, 22, { vive: true, couleur: '251, 146, 60' }); }
+    } });
+  const { p, x0, x1, yc, r, L, pt } = R;
+  if (R.nb >= 0 || S.t <= 0) {
+    c.repere('A', x0 - 10, yc - 10, x1 - x0 + 20, 20, 'la rangée de points de A');
+    c.repere('B', x0 - 10, yc - r * .7 - 10, x1 - x0 + 20, 20, 'la rangée de points de B');
+  }
+  c.repere('G', p.x - 10, yc - 10, 20, 20, 'G, au centre de l’autoporteur (là où est A)');
+  legende(c, S, sc, 'lance', 'trace', 'lancé sans le faire tourner', 'A : éclateur du centre (A = G)');
+  const xr = L * .5;
+  if (S.conclusions && (S.t <= 0 || S.ecrit(c, 'mru'))) {
+    if (pt) c.texte('A, B, G : MRU', xr, 386, { couleur: 'jaune', taille: 30, gras: true });
+    else { c.texte('A, B et G : points alignés, à pas égaux', xr, 344, { couleur: 'jaune', taille: 21, gras: true, max: L - xr - 14 }); c.texte('mouvement rectiligne uniforme', xr, 382, { couleur: 'jaune', taille: 21, gras: true, max: L - xr - 14 }); }
+    c.repere('l_mru', xr - 4, 322, L - xr - 10, 70, 'A, B et G en mouvement rectiligne uniforme');
+  }
+}
+
+/* ── vue axes ── */
+const MAx = { delta1: .5, delta2: 3, G: 5.5, mru: 7.5 };
+function dessinerAxes(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t;
+  const sx = 14, sw = Math.round(L * .55), sh = 104, ys = [44, 186], rD = 30;
+  const xr = sx + sw + (L - sx - sw) / 2, yr = 168, r = Math.min(118, (L - sx - sw) / 2 - 34);
+  const ts = pt ? 30 : 20;
+  // les deux lancers, vus de dessus
+  [['delta1', 'lancer 1 : sur une face', MAx.delta1], ['delta2', 'lancer 2 : sur la tranche', MAx.delta2]].forEach(([m, titre, T0], j) => {
+    const y = ys[j], yc = y + sh / 2, xa = sx + 46, xb = sx + sw - 46;
+    if (!(S.t <= 0 || S.a(m))) return;
+    c.direct(() => P.table(c.ctx, sx, y, sw, sh, { feuille: true }));
+    S.t > 0 && S.ecrit(c, m);
+    c.texte(titre, sx + 4, y - 8, { couleur: 'cyan', taille: ts, gras: true, max: sw });
+    const u = clamp(t - T0, 0, 2), x = xa + (xb - xa) * u / 2, a = 7.5 * u, nb = Math.floor(u / .2 + 1e-6);
+    if (S.t > 0 && S.a('mru')) lueur(c, xa - 10, yc - 10, xb - xa + 20, 20, { vive: true, couleur: '244, 114, 182' });
+    c.direct(() => { for (let k = 0; k <= nb; k++) pointG(c.ctx, xa + (xb - xa) * k * .1, yc); });
+    c.direct(() => (j === 0 ? disqueDessus(c.ctx, x, yc, rD, a, u >= 2 ? .45 : 1) : disqueTranche(c.ctx, x, yc, rD, 14, a, u >= 2 ? .45 : 1)));
+    c.repere('lancer' + (j + 1), sx, y, sw, sh, titre);
+  });
+  // le disque homogène, en perspective : Δ₁ (axe perpendiculaire aux faces), Δ₂ (un diamètre), G
+  c.direct(() => P.disque(c.ctx, xr, yr, r));
+  c.repere('disque', xr - r, yr - r * .42, 2 * r, r * .84 + 6, 'le disque homogène');
+  c.texte('disque homogène', xr, 310, { couleur: 'blanc', taille: ts, align: 'center', max: L - sx - sw - 10 });
+  if (S.t <= 0 || S.ecrit(c, 'delta1')) {
+    c.ligne(xr, yr - 120, xr, yr + 108, { couleur: 'cyan', largeur: 2.2, pointille: [9, 6] });
+    c.texte('Δ_1', xr + 10, yr - 98, { couleur: 'cyan', taille: pt ? 30 : 24, gras: true });
+    c.repere('delta1', xr - 12, yr - 122, 60, 232, 'Δ₁ : l’axe de symétrie perpendiculaire aux faces');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'delta2')) {
+    c.ligne(xr - r - 14, yr + 3, xr + r + 14, yr + 3, { couleur: 'cyan', largeur: 2.2, pointille: [9, 6] });
+    c.texte('Δ_2', xr + r - 6, yr + 40, { couleur: 'cyan', taille: pt ? 30 : 24, gras: true });
+    c.repere('delta2', xr - r - 16, yr - 8, 2 * r + 32, 52, 'Δ₂ : un diamètre, axe de symétrie');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'G')) {
+    c.direct(() => P.G(c.ctx, xr, yr + 3, 6));
+    c.ligne(xr - 6, yr - 4, xr - 40, yr - 56, { couleur: 'rose', largeur: 1.6 });
+    c.texte('G', xr - 46, yr - 60, { couleur: 'rose', taille: pt ? 30 : 26, gras: true, align: 'right' });
+    c.repere('G', xr - 70, yr - 84, 80, 92, 'G, l’intersection de Δ₁ et Δ₂');
+  }
+  panneau(c, S, sc, sx + 4, 336, sw, [
+    { m: 'G', t: 'Δ_1 et Δ_2 se coupent en G', c: 'rose', g: true, r: 'l_G' },
+    { m: 'mru', t: 'G : le seul point toujours en MRU', c: 'jaune', g: true, r: 'l_mru', conclusion: true },
+  ], { dy: 42, taille: 21, px: sx + 4, py: 372, pw: L - 40 });
+}
+
+/* ── vue corps ── */
+const MCo = { sphere: .5, cylindre: 3, disque: 5.5, barre: 8 };
+const CORPS = [
+  { m: 'sphere', nom: 'sphère', d: (g, x, y) => P.sphere(g, x, y, 62), ax: [[0, -84, 0, 84], [-84, 0, 84, 0]], lab: [50, -62] },
+  { m: 'cylindre', nom: 'cylindre', d: (g, x, y) => P.cylindre(g, x, y, 46, 130), ax: [[0, -100, 0, 100], [-70, 0, 70, 0]], lab: [58, -32] },
+  { m: 'disque', nom: 'disque', d: (g, x, y) => P.disque(g, x, y, 74), ax: [[0, -70, 0, 70], [-94, 3, 94, 3]], lab: [44, -48] },
+  { m: 'barre', nom: 'barre', d: (g, x, y) => P.barre(g, x - 72, x + 72, y, 22), ax: [[0, -56, 0, 56], [-86, 0, 86, 0]], lab: [36, -34] },
+];
+function dessinerCorps(c, S, sc) {
+  const L = sc.L, pt = sc.petit, cw = (L - 20) / 4, yo = 186;
+  if (S.t <= 0 || S.ecrit(c, 'sphere')) { c.texte(pt ? 'G sur les axes de symétrie' : 'Corps homogènes : G est sur les axes de symétrie', L / 2, 44, { couleur: 'jaune', taille: pt ? 30 : 22, gras: true, align: 'center', max: L - 30 }); c.repere('regle', 20, 18, L - 40, 34, 'G est sur les axes de symétrie'); }
+  CORPS.forEach((o, i) => {
+    if (!(S.t <= 0 || S.a(o.m))) return;
+    const x = 10 + cw * (i + .5), suivant = CORPS[i + 1];
+    if (S.t > 0 && (!suivant || !S.a(suivant.m))) lueur(c, x - cw / 2 + 8, 76, cw - 16, 282, { vive: true });
+    c.direct(() => o.d(c.ctx, x, yo));
+    S.t > 0 && S.ecrit(c, o.m);
+    o.ax.forEach(([a, b, d, e]) => c.ligne(x + a, yo + b, x + d, yo + e, { couleur: 'cyan', largeur: 2, pointille: [8, 6] }));
+    c.direct(() => P.G(c.ctx, x, yo + (o.m === 'disque' ? 3 : 0), 5));
+    c.ligne(x + 4, yo - 4, x + o.lab[0] - 4, yo + o.lab[1] + 4, { couleur: 'rose', largeur: 1.4 });
+    c.texte('G', x + o.lab[0], yo + o.lab[1], { couleur: 'rose', taille: pt ? 30 : 22, gras: true });
+    c.texte(o.nom, x, 338, { couleur: 'blanc', taille: pt ? 30 : 23, gras: true, align: 'center', max: cw - 10 });
+    c.repere(o.m, x - cw / 2 + 8, 76, cw - 16, 282, o.nom + ' : G au centre');
+  });
+}
+
+/* ── vue forces ── */
+const MFo = { systeme: .5, P: 2, R: 4, compense: 6, pseudo: 8 };
+function autoporteurSurTable(c, x, yb, w, h, tx, tw, pied = 90) {
+  let G; c.direct(() => { tableCote(c.ctx, tx, yb, tw, 26, pied); G = P.autoporteurCote(c.ctx, x, yb, w, h); });
+  return G;
+}
+function forcesPR(c, S, sc, x, yb, G, lg, mP, mR) {
+  const pt = sc.petit;
+  if (S.t <= 0 || S.ecrit(c, mP)) {
+    c.direct(() => P.G(c.ctx, G[0], G[1], 4.5));
+    vecteur(c, G[0] - 4, G[1], G[0] - 4, G[1] + lg, { couleur: 'rouge', nom: 'P', nx: G[0] - 40, ny: G[1] + lg - 4, taille: pt ? 30 : 24, point: false });
+    c.repere('P', G[0] - 44, G[1], 50, lg + 4, 'le poids P, en G, vers le bas');
+  }
+  if (S.t <= 0 || S.ecrit(c, mR)) {
+    vecteur(c, x + 4, yb, x + 4, yb - lg, { couleur: 'bleu', nom: 'R', nx: x - 38, ny: yb - lg + 10, taille: pt ? 30 : 24 });
+    c.repere('R', x - 42, yb - lg - 4, 52, lg + 4, 'la réaction R de la table, au contact, vers le haut');
+  }
+}
+function dessinerForces(c, S, sc) {
+  const L = sc.L, pt = sc.petit, x = 250, yb = 288, w = 190, h = 130, lg = 152;
+  const G = autoporteurSurTable(c, x, yb, w, h, 30, 440);
+  c.repere('table', 30, yb, 440, 26, 'la table à coussin d’air, horizontale');
+  if (S.t <= 0 || S.ecrit(c, 'systeme')) {
+    if (S.t > 0 && !S.a('P')) lueur(c, x - w / 2 - 8, yb - h - 14, w + 16, h + 12, { vive: true });
+    c.texte(pt ? '{autoporteur}' : 'système : {l’autoporteur}', 30, 46, { couleur: 'cyan', taille: pt ? 30 : 22, gras: true });
+    c.repere('systeme', x - w / 2 - 8, yb - h - 14, w + 16, h + 12, 'le système : l’autoporteur');
+  }
+  forcesPR(c, S, sc, x, yb, G, lg, 'P', 'R');
+  if (S.t <= 0 || S.ecrit(c, 'compense')) { c.ligne(x, 60, x, 404, { couleur: 'faible', largeur: 1.3, pointille: [8, 7] }); }
+  panneau(c, S, sc, L - 300, 70, 285, [
+    { m: 'P', t: '^P : poids, vers le bas', c: 'rouge' },
+    { m: 'R', t: '^R : réaction, vers le haut', c: 'bleu' },
+    { m: 'compense', t: 'même droite, sens opposés', c: 'blanc' },
+    { m: 'compense', t: '^P + ^R = ^0', c: 'jaune', g: true, taille: 26, r: 'somme' },
+    { m: 'pseudo', t: 'pseudo-isolé', c: 'jaune', g: true, taille: 24, r: 'pseudo' },
+  ], { dy: 50, px: L - 330, py: 60, pw: 320, taille: 21 });
+}
+
+/* ── vue isolé / pseudo-isolé ── */
+const MIs = { sonde: .5, isole: 2.5, autoporteur: 5, pseudo: 7 };
+function dessinerIsole(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t;
+  const fx = 16, fy = 28, fw = Math.round(L * .46), fh = 236, xd = L * .5 + 10;
+  // à gauche : la sonde loin de tout, qui dérive en ligne droite à vitesse constante
+  c.direct(() => espace(c.ctx, fx, fy, fw, fh));
+  const xs = fx + fw * .3 + 10 * clamp(t, 0, 9), ys = fy + fh * .52 - 2 * clamp(t, 0, 9);
+  c.direct(() => sonde(c.ctx, xs, ys, 34));
+  c.repere('sonde', fx, fy, fw, fh, 'la sonde, loin de tout astre');
+  const tl = pt ? 30 : 21, l1 = pt ? 306 : 296, l2 = pt ? 346 : 332, l3 = 368;
+  if (!pt && (S.t <= 0 || S.ecrit(c, 'sonde'))) c.texte('une sonde loin de tout', fx + 4, l1, { couleur: 'blanc', taille: tl, max: fw });
+  if (S.t <= 0 || S.ecrit(c, 'isole')) {
+    c.texte('aucune force : isolé', fx + 4, pt ? l1 : l2, { couleur: 'jaune', taille: tl, gras: true, max: fw });
+    c.texte(pt ? 'n’existe pas en pratique' : 'il n’existe pas en pratique', fx + 4, pt ? l2 + 4 : l3, { couleur: 'blanc', taille: tl, max: fw });
+    c.repere('isole', fx, (pt ? l1 : l2) - 24, fw, 80, 'isolé : soumis à aucune force');
+  }
+  // à droite : l'autoporteur sur la table, P et R
+  if (S.t <= 0 || S.a('autoporteur')) {
+    const x = xd + (L - 20 - xd) / 2, yb = 226, w = 130, h = 84, lg = 104;
+    const G = autoporteurSurTable(c, x, yb, w, h, xd + 10, L - 30 - xd, 50);
+    c.repere('autoporteur', x - w / 2, yb - h - 6, w, h + 6, 'l’autoporteur sur la table');
+    forcesPR(c, S, sc, x, yb, G, lg, 'autoporteur', 'autoporteur');
+    if (S.t <= 0 || S.ecrit(c, 'pseudo')) {
+      if (pt) texteV(c, '^P + ^R = ^0 : pseudo-isolé', xd + 4, l2 + 4, { couleur: 'jaune', taille: 28, gras: true, max: L - xd - 14 });
+      else { texteV(c, '^P + ^R = ^0', xd + 10, l2, { couleur: 'jaune', taille: 24, gras: true }); c.texte('pseudo-isolé', xd + 10, l3, { couleur: 'jaune', taille: 22, gras: true }); }
+      c.repere('pseudo', xd, l2 - 26, L - xd - 10, 70, 'P + R = 0 : pseudo-isolé');
+    }
+  }
+}
+
+/* ── vue énoncé ── */
+const MEn = { repos: .5, mru: 3, enonce: 6 };
+function dessinerEnonce(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t;
+  const y0 = 22, h = 180, w1 = Math.round(L * .3), x2 = w1 + 40, w2 = L - x2 - 16, yc = y0 + h / 2, tl = pt ? 28 : 21;
+  if (S.t <= 0 || S.a('repos')) {
+    c.direct(() => { P.table(c.ctx, 16, y0, w1, h); P.autoporteur(c.ctx, 16 + w1 / 2, yc - 8, 44); P.G(c.ctx, 16 + w1 / 2, yc - 8, 5.5); });
+    S.t > 0 && S.ecrit(c, 'repos');
+    texteV(c, 'au repos : ^v_G = ^0', 20, y0 + h + 34, { couleur: 'vert', taille: tl, gras: true, max: w1 });
+    c.repere('repos', 16, y0, w1, h + 44, 'G au repos : la vitesse de G est nulle');
+  }
+  if (S.t <= 0 || S.a('mru')) {
+    c.direct(() => P.table(c.ctx, x2, y0, w2, h));
+    const xa = x2 + 56, xb = x2 + w2 - 100, u = clamp(t - MEn.mru, 0, 3), x = xa + (xb - xa) * u / 3, nb = Math.floor(u / .5 + 1e-6), d = (xb - xa) / 6;
+    c.direct(() => { for (let k = 0; k <= nb; k++) P.point(c.ctx, xa + k * d, yc - 8, 5); });
+    for (let k = 0; k <= nb; k++) c.fleche(xa + k * d, yc + 48, xa + k * d + d * .7, yc + 48, { couleur: 'vert', largeur: 3, tete: 10, duree: .12 });
+    c.direct(() => { P.autoporteur(c.ctx, x, yc - 8, 38, { alpha: u >= 3 ? .45 : 1 }); P.G(c.ctx, x, yc - 8, 5); });
+    S.t > 0 && S.ecrit(c, 'mru');
+    texteV(c, 'en MRU : ^v_G constant', x2 + 4, y0 + h + 34, { couleur: 'vert', taille: tl, gras: true, max: w2 });
+    c.repere('mru', x2, y0, w2, h + 44, 'G en mouvement rectiligne uniforme : vitesse constante, flèches vertes égales');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'enonce')) {
+    const ls = pt ? ['Isolé ou pseudo-isolé :', 'G au repos ou en MRU'] : ['Dans un référentiel galiléen, si un solide est isolé ou', 'pseudo-isolé, son centre d’inertie G est soit au repos,', 'soit en mouvement rectiligne uniforme.'];
+    const dy = pt ? 44 : 40, ya = pt ? 300 : 294;
+    ls.forEach((s, i) => c.texte(s, 20, ya + i * dy, { couleur: 'jaune', taille: pt ? 30 : 24, gras: true, max: L - 40 }));
+    c.repere('enonce', 14, ya - 26, L - 28, ls.length * dy + 6, 'l’énoncé du principe d’inertie');
+  }
+}
+
+/* ── les vues ── */
+window.Mvt.vues('tc_mi_inertie', {
+  curling: { titre: 'Le palet de curling', moments: MC, fin: 11.5, dessiner: dessinerCurling,
+    motifs: { lance: 'on lance le palet', glisse: 'le palet glisse', positions: 'les positions toutes les 0,5 s', forces: 'P et R se compensent', question: 'la question' },
+    accueil: 'Un palet de curling sur la glace.', fini: 'Distances égales en durées égales ; P⃗ + R⃗ = 0⃗.',
+    voir: S => ['Un palet de granit (poignée rouge) sur une glace bleutée.', S.a('lance') && 'On lance le palet vers la droite.', S.a('glisse') && 'Le palet glisse en ligne droite ; un point jaune marque sa position toutes les 0,5 s.', S.a('positions') && 'Dix positions ; les neuf intervalles égaux s’allument un à un (1 à 9) : distances égales.', S.a('forces') && 'Sur le palet : P⃗ rouge vers le bas (en G), R⃗ bleue vers le haut (au contact) ; P⃗ + R⃗ = 0⃗.', S.a('question') && 'Question écrite : pourquoi garde-t-il sa vitesse ?'].filter(Boolean).join(' '),
+    texte: 'Un palet de curling glisse sur la glace en ligne droite ; ses positions toutes les 0,5 s sont à distances égales : mouvement rectiligne uniforme. Il est soumis à son poids P et à la réaction R de la glace, qui se compensent : P + R = 0.' },
+  rotation: { titre: 'L’autoporteur lancé en tournant', moments: MRo, fin: 11, dessiner: dessinerRotation,
+    motifs: { lance: 'on lance l’autoporteur en le faisant tourner', trace: 'les éclateurs marquent les points', A: 'la trace de A', B: 'la trace de B' },
+    accueil: 'Un autoporteur, deux éclateurs : A au centre, B au bord.', fini: 'A : points alignés à pas égaux ; B : des boucles.',
+    voir: S => ['Table à coussin d’air vue de dessus, avec sa feuille.', S.a('lance') && 'L’autoporteur est lancé vers la droite en tournant sur lui-même.', S.a('trace') && 'Toutes les τ, A (centre) marque un point jaune, B (bord) un point orange (un trait orange léger relie ceux de B).', S.a('A') && ('Les points jaunes de A sont allumés : ils sont alignés et également espacés.' + (S.conclusions ? ' Écrit : « A : points alignés, à pas égaux ».' : ' Rien n’est écrit.')), S.a('B') && ('Les points orange de B sont allumés : ils font des boucles.' + (S.conclusions ? ' Écrit : « B : des boucles ».' : ' Rien n’est écrit.'))].filter(Boolean).join(' '),
+    texte: 'Un autoporteur lancé en tournant sur lui-même : l’éclateur central A marque des points alignés et équidistants (mouvement rectiligne uniforme) ; l’éclateur B, au bord, marque une courbe à boucles.' },
+  axes: { titre: 'Le centre d’inertie : deux lancers', moments: MAx, fin: 10, dessiner: dessinerAxes,
+    motifs: { delta1: 'le lancer 1 et l’axe Δ₁', delta2: 'le lancer 2 et l’axe Δ₂', G: 'G, intersection de Δ₁ et Δ₂', mru: 'G seul toujours en MRU' },
+    accueil: 'Le même disque lancé deux fois.', fini: 'Δ₁ et Δ₂ se coupent en G ; G seul est toujours en MRU.',
+    voir: S => ['À droite, un disque homogène en perspective.', S.a('delta1') && 'Lancer 1, disque posé sur une face : il tourne, un seul point (rose) avance en ligne droite à pas égaux ; Δ₁, l’axe perpendiculaire aux faces, tracé sur le disque.', S.a('delta2') && 'Lancer 2, disque posé sur la tranche : même chose ; Δ₂, un diamètre, tracé sur le disque.', S.a('G') && 'G, point rose, à l’intersection de Δ₁ et Δ₂.', S.a('mru') && 'Les deux rangées roses sont allumées : G seul toujours en MRU.'].filter(Boolean).join(' '),
+    texte: 'Lancé en tournant, un seul point du disque est en mouvement rectiligne uniforme : il est sur l’axe de symétrie Δ₁ (lancer 1), puis sur Δ₂ (lancer 2). Δ₁ et Δ₂ se coupent en G, le centre d’inertie.' },
+  corps: { titre: 'Le centre d’inertie des corps symétriques', moments: MCo, fin: 10, dessiner: dessinerCorps,
+    motifs: { sphere: 'la sphère', cylindre: 'le cylindre', disque: 'le disque', barre: 'la barre' },
+    accueil: 'Quatre corps homogènes.', fini: 'Corps homogènes : G au centre, sur les axes de symétrie.',
+    voir: S => ['Écrit : corps homogènes, G sur les axes de symétrie.', S.a('sphere') && 'Sphère : deux axes de symétrie, G au centre.', S.a('cylindre') && 'Cylindre : son axe et l’axe du milieu, G au centre.', S.a('disque') && 'Disque : axe perpendiculaire et un diamètre, G au centre.', S.a('barre') && 'Barre : axe de la barre et médiatrice, G au milieu.'].filter(Boolean).join(' '),
+    texte: 'Pour un corps homogène qui a des axes de symétrie, G est sur ces axes : au centre de la sphère, du cylindre, du disque, au milieu de la barre.' },
+  translation: { titre: 'L’autoporteur en translation', moments: MTr, fin: 8, dessiner: dessinerTranslation,
+    motifs: { lance: 'on lance l’autoporteur sans le faire tourner', trace: 'les points de A et de B', mru: 'A, B et G en MRU' },
+    accueil: 'L’autoporteur lancé sans le faire tourner.', fini: 'A (= G) et B : points alignés à pas égaux.',
+    voir: S => ['Table à coussin d’air vue de dessus, avec sa feuille.', S.a('lance') && 'L’autoporteur est lancé vers la droite sans tourner (B reste en haut).', S.a('trace') && 'A (centre, là où est G) laisse une rangée de points jaunes, B (bord) une rangée orange, parallèle.', S.a('mru') && ('Les deux rangées sont allumées : points alignés, également espacés.' + (S.conclusions ? ' Écrit : « A, B et G : mouvement rectiligne uniforme ».' : ''))].filter(Boolean).join(' '),
+    texte: 'Lancé sans rotation, l’autoporteur est en translation : A (au centre, en G) et B marquent des points alignés à pas égaux ; A, B et G sont en mouvement rectiligne uniforme.' },
+  forces: { titre: 'Les forces sur l’autoporteur', moments: MFo, fin: 10, dessiner: dessinerForces,
+    motifs: { systeme: 'le système', P: 'le poids', R: 'la réaction', compense: 'P + R = 0', pseudo: 'pseudo-isolé' },
+    accueil: 'L’autoporteur posé sur la table, vu de côté.', fini: 'P⃗ + R⃗ = 0⃗ : l’autoporteur est pseudo-isolé.',
+    voir: S => ['Autoporteur vu de côté sur la table à coussin d’air.', S.a('systeme') && 'Système : l’autoporteur (allumé).', S.a('P') && 'P⃗ rouge, en G, vers le bas.', S.a('R') && 'R⃗ bleue, au contact, vers le haut, même longueur.', S.a('compense') && 'Même droite verticale ; P⃗ + R⃗ = 0⃗.', S.a('pseudo') && 'Écrit : pseudo-isolé.'].filter(Boolean).join(' '),
+    texte: 'L’autoporteur est soumis à son poids P (vertical, vers le bas, en G) et à la réaction R de la table (verticale, vers le haut). Sur coussin d’air, pas de frottement : P + R = 0, il est pseudo-isolé.' },
+  isole: { titre: 'Isolé ou pseudo-isolé', moments: MIs, fin: 9, dessiner: dessinerIsole,
+    motifs: { sonde: 'la sonde loin de tout', isole: 'isolé', autoporteur: 'l’autoporteur', pseudo: 'pseudo-isolé' },
+    accueil: 'Une sonde dans l’espace, un autoporteur sur la table.', fini: 'Isolé : aucune force ; pseudo-isolé : forces qui se compensent.',
+    voir: S => ['À gauche, une sonde spatiale dérive dans l’espace, loin de tout astre.', S.a('isole') && 'Écrit : aucune force, isolé ; n’existe pas en pratique.', S.a('autoporteur') && 'À droite, un autoporteur sur la table : P⃗ rouge vers le bas, R⃗ bleue vers le haut.', S.a('pseudo') && 'Écrit : P⃗ + R⃗ = 0⃗, pseudo-isolé.'].filter(Boolean).join(' '),
+    texte: 'Un système isolé n’est soumis à aucune force (une sonde loin de tout : cela n’existe pas en pratique). Un système pseudo-isolé est soumis à des forces qui se compensent (l’autoporteur : P + R = 0).' },
+  enonce: { titre: 'Le principe d’inertie', moments: MEn, fin: 9, dessiner: dessinerEnonce,
+    motifs: { repos: 'G au repos', mru: 'G en mouvement rectiligne uniforme', enonce: 'l’énoncé' },
+    accueil: 'Deux cas pour G.', fini: 'Isolé ou pseudo-isolé : G au repos ou en mouvement rectiligne uniforme.',
+    voir: S => [S.a('repos') && 'À gauche, un autoporteur immobile : v⃗_G = 0⃗.', S.a('mru') && 'À droite, un autoporteur qui avance : points à pas égaux, flèches vertes égales, v⃗_G constant.', S.a('enonce') && 'Énoncé écrit : dans un référentiel galiléen, si un solide est isolé ou pseudo-isolé, son centre d’inertie G est soit au repos, soit en mouvement rectiligne uniforme.'].filter(Boolean).join(' ') || 'Tableau vide.',
+    texte: 'Principe d’inertie : dans un référentiel galiléen, si un solide est isolé ou pseudo-isolé, son centre d’inertie G est soit au repos, soit en mouvement rectiligne uniforme.' },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -43,7 +43,7 @@ COMPETENCES = [
         rv('C4_r3', 'La trajectoire d’un point est la même dans tous les référentiels.', 'شوف هاد السؤال: la trajectoire ديال نقطة هي نفسها ف كاع les référentiels. vrai ou faux؟', 1)]},
     {'id': 'C5', 'label': 'Calculer une vitesse moyenne et une vitesse instantanée, convertir m/s et km/h', 'dit': 'la vitesse moyenne et la vitesse instantanée', 'rappels': [
         rq('C5_r1', '10 m/s en km/h, c’est…', 'شوف هاد السؤال: dix mètres par seconde، شحال ب kilomètre par heure؟', ['36 km/h', '2,8 km/h', '100 km/h'], 0),
-        rl('C5_r2', 'Écris la relation de la vitesse instantanée v_i sur un enregistrement.', 'شوف هاد السؤال: كتب la relation ديال la vitesse instantanée v i ف واحد l’enregistrement.', 'v_i = M_{i−1}M_{i+1}/(2τ)'),
+        rl('C5_r2', 'Écris la relation de la vitesse instantanée v_i sur un enregistrement.', 'شوف هاد السؤال: كتب la relation ديال la vitesse instantanée v i ف واحد l’enregistrement.', 'v_i = Mᵢ₋₁Mᵢ₊₁/(2τ)'),
         rq('C5_r3', 'Un coureur parcourt 100 m en 20 s. Sa vitesse moyenne est…', 'شوف هاد السؤال: واحد العداء قطع cent mètres ف vingt secondes. شحال هي la vitesse moyenne ديالو؟', ['5 m/s', '2 000 m/s', '0,2 m/s'], 0)]},
     {'id': 'C6', 'label': 'Représenter le vecteur vitesse et exploiter un mouvement rectiligne uniforme (équation horaire)', 'dit': 'le vecteur vitesse et le mouvement rectiligne uniforme', 'rappels': [
         rv('C6_r1', 'Le vecteur vitesse en un point est tangent à la trajectoire et orienté dans le sens du mouvement.', 'شوف هاد السؤال: le vecteur vitesse tangent ل la trajectoire، و ف le sens du mouvement. vrai ou faux؟', 0),
@@ -162,9 +162,9 @@ SEANCES = [
          ('Cahier fermé : que représente τ sur un enregistrement ?', 'La durée constante entre deux points voisins.', 'C5'),
          qcm('τ = 40 ms : la durée entre M₀ et M₃ est…', ['80 ms', '120 ms', '160 ms'], 1)),
     bloc('mi_b9', 'La vitesse instantanée', ['mi_e4_instant', 'mi_e5_comparer', 'mi_e6_eleve'],
-         ['7. La vitesse instantanée', 'Formule : v_i = M_{i−1}M_{i+1}/(2τ)',
-          'Méthode : 1) les voisins M_{i−1} et M_{i+1} ; 2) leur distance en m ; 3) la durée 2τ en s ; 4) le calcul avec l’unité.'],
-         ('Cahier fermé : écris la relation de la vitesse instantanée.', 'v_i = M_{i−1}M_{i+1}/(2τ)', 'C5'),
+         ['7. La vitesse instantanée', 'Formule : v_i = Mᵢ₋₁Mᵢ₊₁/(2τ)',
+          'Méthode : 1) les voisins Mᵢ₋₁ et Mᵢ₊₁ ; 2) leur distance en m ; 3) la durée 2τ en s ; 4) le calcul avec l’unité.'],
+         ('Cahier fermé : écris la relation de la vitesse instantanée.', 'v_i = Mᵢ₋₁Mᵢ₊₁/(2τ)', 'C5'),
          qcm('M₁M₃ = 4 cm et τ = 40 ms : v₂ vaut…', ['0,5 m/s', '1 m/s', '0,1 m/s'], 0)),
   ]},
   {'id': 'mi_s4', 'titre': 'Séance 4 — Le vecteur vitesse et le mouvement rectiligne uniforme', 'blocs': [
@@ -224,7 +224,7 @@ SEANCES = [
   ]},
   {'id': 'mi_s7', 'titre': 'Séance 7 — Retenir et réviser', 'blocs': [
     bloc('mi_b19', 'Ce qu’il faut retenir', ['mi_b1_bilan', 'mi_b2_carte'],
-         ['Bilan : les formules à savoir', '| v_m = d/Δt | v_i = M_{i−1}M_{i+1}/(2τ) | x(t) = v_x·t + x₀ |', '| ω = v/R | T = 2π/ω | f = 1/T |',
+         ['Bilan : les formules à savoir', '| v_m = d/Δt | v_i = Mᵢ₋₁Mᵢ₊₁/(2τ) | x(t) = v_x·t + x₀ |', '| ω = v/R | T = 2π/ω | f = 1/T |',
           'Principe d’inertie : ΣF⃗ = 0⃗ ⇔ v⃗_G constant (référentiel galiléen).'],
          ('Cahier fermé : écris l’équation horaire du MRU et la relation ω = v/R.', 'x(t) = v_x·t + x₀ ; ω = v/R.', 'C6'),
          qcm('Un solide pseudo-isolé, dans un référentiel galiléen, a son centre d’inertie…', ['accéléré', 'au repos ou en MRU', 'en MCU'], 1)),
