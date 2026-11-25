@@ -71,7 +71,7 @@ function dessinerIsotopes(c, S, sc) {
 
 /* ── ions ── */
 function dessinerIons(c, S, sc) {
-  const L = sc.L, pt = sc.petit, xa = L * .25, xb = L * .75, cy = 220, R = pt ? 125 : 118;
+  const L = sc.L, pt = sc.petit, xa = L * .25, xb = L * .75, cy = pt ? 220 : 205, R = pt ? 125 : 112;
   const t = tps(), M = MOMENTS;
   const kNa = avant(S, 'na', 1), kCl = avant(S, 'cl', 1), uPerd = S.t <= 0 ? 1 : avant(S, 'perd', 2), uGagne = S.t <= 0 ? 1 : avant(S, 'gagne', 2);
   c.direct(() => {
@@ -79,6 +79,7 @@ function dessinerIons(c, S, sc) {
     if (kNa > 0) {
       g.save(); g.globalAlpha = kNa;
       P.nuage(g, xa, cy, R, { points: 140 }); P.noyau(g, xa, cy, 11, 12, { r: 5.5 });
+      if (S.t <= 0 || S.a('cation')) P.charge_ion(g, xa, cy, R + 2, 1, { alpha: S.t <= 0 ? 1 : S.k('cation', .8) });   // la charge de l’ion (lexique)
       const el = P.placesNuage(xa, cy, R, 11, { t: S.t > 0 ? t * .3 : 0, graine: 41 });
       el.forEach((q, i) => {
         if (i === 0 && uPerd > 0) { const x9 = xa + R * 1.25, y9 = cy - R * .9; P.electron(g, q.x + (x9 - q.x) * A.doux(uPerd), q.y + (y9 - q.y) * A.doux(uPerd), 8, { alpha: 1 - .5 * uPerd }); }
@@ -89,6 +90,7 @@ function dessinerIons(c, S, sc) {
     if (kCl > 0) {
       g.save(); g.globalAlpha = kCl;
       P.nuage(g, xb, cy, R, { points: 140 }); P.noyau(g, xb, cy, 17, 18, { r: 4.6 });
+      if (S.t <= 0 || S.a('anion')) P.charge_ion(g, xb, cy, R + 2, -1, { alpha: S.t <= 0 ? 1 : S.k('anion', .8) });
       const el = P.placesNuage(xb, cy, R, 18, { t: S.t > 0 ? t * .3 : 0, graine: 43 });
       el.forEach((q, i) => {
         if (i === 17) { if (uGagne > 0) { const x0 = xb + R * .2, y0 = 30; P.halo(g, x0 + (q.x - x0) * A.doux(uGagne), y0 + (q.y - y0) * A.doux(uGagne), 12, true); P.electron(g, x0 + (q.x - x0) * A.doux(uGagne), y0 + (q.y - y0) * A.doux(uGagne), 8); } }
@@ -119,17 +121,17 @@ function dessinerIons(c, S, sc) {
 
 /* ── l’élément oxygène ── */
 function dessinerElement(c, S, sc) {
-  const L = sc.L, pt = sc.petit, xs = [L * .18, L * .5, L * .82], cy = pt ? 240 : 225, R = pt ? 92 : 86;
+  const L = sc.L, pt = sc.petit, xs = [L * .18, L * .5, L * .82], cy = pt ? 240 : 238, R = pt ? 92 : Math.min(105, L * .14);
   const ent = [['o16', '16', 8, 8, ''], ['o17', '17', 9, 8, ''], ['ion', '16', 8, 10, '2−']];
   const kz = avant(S, 'z', 1);
   ent.forEach(([nom, AA, NN, ne, q], i) => {
     const k = avant(S, nom, 1); if (k <= 0) return;
-    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = k; P.nuage(g, xs[i], cy, R, { points: 90 }); P.noyau(g, xs[i], cy, 8, NN, { r: 3.6 }); P.placesNuage(xs[i], cy, R, ne, { graine: 51 + i, t: S.t > 0 ? tps() * .3 : 0 }).forEach(p => P.electron(g, p.x, p.y, 7)); g.restore(); });
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = k; P.nuage(g, xs[i], cy, R, { points: 90 }); P.noyau(g, xs[i], cy, 8, NN, { r: pt ? 3.6 : 5 }); P.placesNuage(xs[i], cy, R, ne, { graine: 51 + i, t: S.t > 0 ? tps() * .3 : 0 }).forEach(p => P.electron(g, p.x, p.y, pt ? 7 : 9)); if (q && (S.t <= 0 || S.a('ion'))) P.charge_ion(g, xs[i], cy, R + 4, -2, { texte: false }); g.restore(); });
     const ny = pt ? 96 : 88;
     A.notation(c, AA, '8', 'O', xs[i] - 4, ny, { taille: pt ? 56 : 50, q: q || undefined });
     if (S.t <= 0 || S.a('z')) A.lueur(c, xs[i] - 32, ny - 18, 28, 32, { vive: true, couleur: '244, 114, 182' });
     c.repere(nom, xs[i] - R, ny - 50, 2 * R, cy + R - ny + 50, ['l’atome oxygène 16', 'l’atome oxygène 17', 'l’ion oxyde'][i]);
-    if (!pt) c.texte(['8 électrons', '8 électrons', '10 électrons'][i], xs[i], cy + R + 26, { couleur: 'cyan', taille: 18, align: 'center' });
+    if (!pt) c.texte(['8 électrons', '8 électrons', '10 électrons'][i], xs[i], cy + R + 28, { couleur: 'cyan', taille: 21, align: 'center' });
   });
   if (S.t > 0) sc.sale = true;
   if ((S.t <= 0 || S.ecrit(c, 'z')) && !pt) c.texte('même Z = 8', L / 2, 30, { couleur: 'rose', taille: 22, align: 'center', gras: true });
@@ -144,7 +146,7 @@ function dessinerElement(c, S, sc) {
 /* ── conservation : sulfate de cuivre + soude ── */
 function dessinerConservation(c, S, sc) {
   const L = sc.L, pt = sc.petit, C = window.Lexique.chimie, M = MOMENTS;
-  const B = { x: pt ? L * .22 : L * .2, y: 150, w: pt ? 200 : 190, h: 210 };
+  const B = pt ? { x: L * .22, y: 150, w: 200, h: 210 } : { x: L * .47 - 300, y: 130, w: 260, h: 255 };
   const kS = S.t <= 0 ? 1 : Math.max(0, Math.min(1, (S.t - (M.soude - 2)) / (M.precipite - M.soude + 2)));   // la soude versée
   const kP = S.t <= 0 ? 1 : Math.max(0, Math.min(1, (S.t - (M.precipite - 2.5)) / 4));                        // le précipité qui se forme et tombe
   const bleu = C.SOLUTIONS.cuivre, clair = [140, 190, 235, .45];

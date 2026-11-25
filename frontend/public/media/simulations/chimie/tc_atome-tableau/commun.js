@@ -217,27 +217,12 @@
     ctx.fillText(s, x, y + 1); ctx.restore();
   }
   /* ── Les particules (lexique commun) ── */
-  /** Le PROTON : bille rose marquée « + » ; o.numero : son numéro (on compte en allumant) écrit à la place du « + ». */
-  P.proton = (ctx, x, y, r = 9, o = {}) => {
-    const L = Lx();
-    if (L.proton) L.proton(ctx, x, y, { r, texte: false, alpha: o.alpha ?? 1 }); else boule(ctx, x, y, r, COUL.proton, o.alpha ?? 1);
-    if (o.texte !== false && r >= 6) inscrire(ctx, o.numero != null ? String(o.numero) : '+', x, y, Math.max(10, r * (o.numero != null ? 1.15 : 1.45)), '#3b0a24', o.alpha ?? 1);
-  };
-  /** Le NEUTRON : bille grise ; o.numero écrit dessus quand on le compte. */
-  P.neutron = (ctx, x, y, r = 9, o = {}) => {
-    const L = Lx();
-    if (L.neutron) L.neutron(ctx, x, y, { r, alpha: o.alpha ?? 1 }); else boule(ctx, x, y, r, COUL.neutron, o.alpha ?? 1);
-    if (o.numero != null && r >= 6) inscrire(ctx, String(o.numero), x, y, Math.max(10, r * 1.15), '#111827', o.alpha ?? 1);
-  };
-  /** L'ÉLECTRON : petite bille bleu ciel « e− » (o.numero : son numéro écrit dessus). */
-  P.electron = (ctx, x, y, r = 7, o = {}) => {
-    const L = Lx();
-    if (o.numero != null) {
-      if (L.electron) L.electron(ctx, x, y, { r, texte: false, alpha: o.alpha ?? 1 }); else boule(ctx, x, y, r, COUL.electron, o.alpha ?? 1);
-      inscrire(ctx, String(o.numero), x, y, Math.max(10, r * 1.2), '#06283d', o.alpha ?? 1); return;
-    }
-    if (L.electron) L.electron(ctx, x, y, { r, texte: o.texte, alpha: o.alpha ?? 1 }); else boule(ctx, x, y, r, COUL.electron, o.alpha ?? 1);
-  };
+  /** Le PROTON (lexique) : bille rose marquée « + » ; o.numero : son numéro (on compte en allumant) à la place du « + ». */
+  P.proton = (ctx, x, y, r = 9, o = {}) => Lx().proton(ctx, x, y, { r, alpha: o.alpha ?? 1, texte: o.texte !== false, nom: o.numero != null ? String(o.numero) : '+', taille: Math.max(10, r * (o.numero != null ? 1.15 : 1.45)) });
+  /** Le NEUTRON (lexique) : bille grise ; o.numero écrit dessus quand on le compte. */
+  P.neutron = (ctx, x, y, r = 9, o = {}) => Lx().neutron(ctx, x, y, { r, alpha: o.alpha ?? 1, nom: o.numero != null ? String(o.numero) : undefined, taille: Math.max(10, r * 1.15) });
+  /** L'ÉLECTRON (lexique) : petite bille bleu ciel « e− » (o.numero : son numéro écrit dessus). */
+  P.electron = (ctx, x, y, r = 7, o = {}) => Lx().electron(ctx, x, y, { r, alpha: o.alpha ?? 1, texte: o.numero != null ? true : o.texte, nom: o.numero != null ? String(o.numero) : undefined, taille: o.numero != null ? Math.max(10, r * 1.2) : undefined });
   /** La particule ALPHA (chargée +) : petite bille orange qui brille. */
   P.alpha = (ctx, x, y, r = 5, a = 1) => {
     ctx.save(); ctx.globalAlpha *= a; ctx.shadowColor = 'rgba(251,146,60,.95)'; ctx.shadowBlur = 10; boule(ctx, x, y, r, COUL.alpha); ctx.restore();
@@ -250,75 +235,20 @@
   /** Une sphère pleine de Dalton (couleur c). */
   P.sphere = (ctx, x, y, r, c, a = 1) => P.ombre(ctx, () => boule(ctx, x, y, r, c, a), 6);
 
-  /**
-   * Positions des nucléons d'un noyau de Z protons et N neutrons : un amas serré (spirale de tournesol), protons et
-   * neutrons mêlés de façon fixe. Renvoie [{x, y, t: 'p' | 'n', k}] (k : rang parmi les protons ou les neutrons, 1…).
-   */
-  function nucleons(cx, cy, Z, N, r) {
-    const n = Z + N, out = [], ordre = [];
-    let p = 0, q = 0;
-    for (let i = 0; i < n; i++) {
-      const prendP = q >= N || (p < Z && (p + .5) / Z <= (q + .5) / N);
-      if (prendP) { ordre.push('p'); p++; } else { ordre.push('n'); q++; }
-    }
-    let kp = 0, kn = 0;
-    for (let i = 0; i < n; i++) {
-      const rr = n === 1 ? 0 : r * 1.9 * Math.sqrt(i + .35) * .55, a = i * 2.39996;
-      const t = ordre[i]; out.push({ x: cx + rr * Math.cos(a), y: cy + rr * Math.sin(a), t, k: t === 'p' ? ++kp : ++kn });
-    }
-    return out;
-  }
+  /* Le noyau, le nuage, les couches K L M : dessinés PAR le lexique commun (shared/lexique/lexique.js, fiche
+   * docs/lexique-visuel/atome.md, 25 novembre 2026) ; ces noms gardent la signature des pages du cours. */
+  const nucleons = (cx, cy, Z, N, r) => Lx().nucleons(cx, cy, Z, N, r);
   P.nucleons = nucleons;
-  /**
-   * Le NOYAU : amas de Z protons (rose « + ») et N neutrons (gris), halo rose doux. o.r rayon d'une bille ;
-   * o.numeros : { p: n1, n: n2 } — les n1 premiers protons et n2 premiers neutrons portent leur numéro et s'allument ;
-   * o.pale : 'p' | 'n' (cette famille est pâlie). Renvoie { pos, R } (R : rayon de l'amas).
-   */
-  P.noyau = (ctx, cx, cy, Z, N, o = {}) => {
-    const r = o.r ?? 9, pos = nucleons(cx, cy, Z, N, r), a = o.alpha ?? 1;
-    const R = pos.reduce((m, q) => Math.max(m, Math.hypot(q.x - cx, q.y - cy)), 0) + r;
-    ctx.save(); ctx.globalAlpha *= a;
-    const g = ctx.createRadialGradient(cx, cy, R * .3, cx, cy, R * 1.6); g.addColorStop(0, 'rgba(244,114,182,.28)'); g.addColorStop(1, 'rgba(244,114,182,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.6, 0, TAU); ctx.fill(); ctx.restore();
-    const nums = o.numeros || {};
-    [...pos].sort((u, v) => u.y - v.y).forEach(q => {
-      const lit = q.t === 'p' ? q.k <= (nums.p || 0) : q.k <= (nums.n || 0);
-      const al = a * (o.pale === q.t ? .22 : 1);
-      if (lit && al > .3) P.halo(ctx, q.x, q.y, r * 1.3, q.k === (q.t === 'p' ? nums.p : nums.n));
-      if (q.t === 'p') P.proton(ctx, q.x, q.y, r, { alpha: al, numero: lit ? q.k : null, texte: r >= 6 });
-      else P.neutron(ctx, q.x, q.y, r, { alpha: al, numero: lit ? q.k : null });
-    });
-    return { pos, R };
-  };
-  /** Le NUAGE électronique : une brume bleu ciel, plus dense près du noyau (o.alpha, o.graine, o.points). */
-  P.nuage = (ctx, cx, cy, R, o = {}) => {
-    const r = graine(o.graine || 9), a = o.alpha ?? 1;
-    ctx.save(); ctx.globalAlpha *= a;
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R); g.addColorStop(0, 'rgba(96,200,250,.32)'); g.addColorStop(.6, 'rgba(96,200,250,.13)'); g.addColorStop(1, 'rgba(96,200,250,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(165,225,255,.85)';
-    const n = o.points ?? 260;
-    for (let i = 0; i < n; i++) { const u = r(), d = R * Math.pow(u, .75) * .98, an = r() * TAU, rr = .9 + r() * 1.3; ctx.globalAlpha = a * (1 - d / R) * .9; ctx.beginPath(); ctx.arc(cx + d * Math.cos(an), cy + d * Math.sin(an), rr, 0, TAU); ctx.fill(); }
-    ctx.restore();
-  };
-  /** Une COUCHE électronique (anneau lumineux fin) de rayon R ; o.alpha, o.vive (allumée). */
-  P.couche = (ctx, cx, cy, R, o = {}) => {
-    ctx.save(); ctx.globalAlpha *= o.alpha ?? 1;
-    ctx.strokeStyle = o.vive ? 'rgba(250,204,21,.95)' : 'rgba(186,230,253,.6)'; ctx.lineWidth = o.vive ? 3 : 2;
-    if (o.vive) { ctx.shadowColor = 'rgba(250,204,21,.8)'; ctx.shadowBlur = 12; }
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke(); ctx.restore();
-  };
-  /** Les places des électrons d'une couche de capacité `cap` (2 : en haut et en bas ; 8 : 4 paires aux points cardinaux). */
-  P.places = (cx, cy, R, cap) => {
-    const out = [];
-    for (let i = 0; i < cap; i++) {
-      let a;
-      if (cap <= 2) a = -Math.PI / 2 + i * Math.PI;
-      else { const paire = [0, 2, 1, 3][Math.floor(i / 2) % 4], cote = i % 2 ? 1 : -1; a = -Math.PI / 2 + paire * Math.PI / 2 + cote * Math.min(.32, 24 / R); }
-      out.push({ x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) });
-    }
-    return out;
-  };
+  /** Le NOYAU (lexique) : o.r, o.numeros {p, n}, o.pale, o.alpha. Renvoie { pos, R }. */
+  P.noyau = (ctx, cx, cy, Z, N, o = {}) => Lx().noyau(ctx, cx, cy, Z, N, o);
+  /** Le NUAGE électronique (lexique). */
+  P.nuage = (ctx, cx, cy, R, o = {}) => Lx().nuage(ctx, cx, cy, R, o);
+  /** Une COUCHE électronique K, L ou M (lexique) ; o.vive : allumée. */
+  P.couche = (ctx, cx, cy, R, o = {}) => Lx().couche(ctx, cx, cy, R, o);
+  /** Les places des électrons d'une couche (lexique). */
+  P.places = (cx, cy, R, cap) => Lx().placesCouche(cx, cy, R, cap);
+  /** La charge d'un ion (lexique) : anneau rose (cation) ou bleu ciel (anion). */
+  P.charge_ion = (ctx, cx, cy, R, q, o = {}) => Lx().charge(ctx, cx, cy, R, q, o);
   /** Feuille d'or vue de profil (mince, dorée, reflets). */
   P.feuilleOr = (ctx, x, y, w, h, a = 1) => {
     ctx.save(); ctx.globalAlpha *= a;
@@ -433,7 +363,7 @@
     ctx.restore();
   };
   /** Allumer une bille : halo jaune doux autour de (x, y), rayon r ; vive : la dernière allumée, plus brillante. */
-  P.halo = (ctx, x, y, r, vive = false) => { ctx.save(); ctx.shadowColor = 'rgba(250,204,21,.95)'; ctx.shadowBlur = vive ? 18 : 10; ctx.fillStyle = `rgba(250,204,21,${vive ? .45 : .28})`; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.restore(); };
+  P.halo = (ctx, x, y, r, vive = false) => Lx().allume(ctx, x, y, r, vive);
 
   /**
    * L'écriture ᴬ_Z X à la craie : X en grand à (x, y) (ligne de base), A en haut à gauche, Z en bas à gauche, la charge
@@ -453,7 +383,7 @@
   /** Les atomes du cours (Z ≤ 18) : symbole, nom. */
   const ELEMENTS = { 1: ['H', 'hydrogène'], 2: ['He', 'hélium'], 3: ['Li', 'lithium'], 6: ['C', 'carbone'], 7: ['N', 'azote'], 8: ['O', 'oxygène'], 10: ['Ne', 'néon'], 11: ['Na', 'sodium'], 12: ['Mg', 'magnésium'], 13: ['Al', 'aluminium'], 16: ['S', 'soufre'], 17: ['Cl', 'chlore'], 18: ['Ar', 'argon'] };
   /** La répartition de n électrons (Z ≤ 18) : [K, L, M] (couches vides à la fin retirées). */
-  function repartition(n) { const k = Math.min(2, n), l = Math.max(0, Math.min(8, n - 2)), m = Math.max(0, n - 10); return [k, l, m].filter((v, i) => v > 0 || i === 0); }
+  const repartition = n => Lx().repartition(n);
   const EXP = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
   const exposant = n => String(n).split('').map(ch => EXP[ch] || ch).join('');
   /** « (K)²(L)⁶ » en exposants Unicode. */
@@ -465,50 +395,18 @@
    * Places FIXES de n électrons dans le nuage de rayon R autour de (cx, cy), entre .42·R et .88·R ; t (s) les fait
    * tourner lentement (le nuage vit). Toujours les mêmes places pour un même (n, graine) : un électron compté garde sa place.
    */
-  P.placesNuage = (cx, cy, R, n, o = {}) => {
-    const r = graine(o.graine || 21), out = [], t = o.t || 0;
-    for (let i = 0; i < n; i++) {
-      const a0 = i / Math.max(1, n) * TAU + (r() - .5) * .5, d = R * (.42 + .46 * r()), w = (.18 + .1 * r()) * (i % 2 ? 1 : -1);
-      out.push({ x: cx + d * Math.cos(a0 + w * t), y: cy + d * Math.sin(a0 + w * t) * .92 });
-    }
-    return out;
-  };
+  P.placesNuage = (cx, cy, R, n, o = {}) => Lx().placesNuage(cx, cy, R, n, o);
   /**
    * L'ATOME entier : nuage bleu ciel, noyau (Z protons, N neutrons) au centre, n électrons (défaut Z) dans le nuage.
    * o : R (nuage), rn (bille du noyau), re (électron), t (rotation), ne (nombre d'électrons), litE (k premiers
    * électrons allumés et numérotés), numeros / pale (noyau), alphaE. Renvoie { noyau, elec }.
    */
-  P.atome = (ctx, cx, cy, Z, N, o = {}) => {
-    const R = o.R || 120, n = o.ne ?? Z;
-    P.nuage(ctx, cx, cy, R, { points: o.points ?? Math.round(R * 1.3), graine: o.graine || 9, alpha: o.alphaNuage ?? 1 });
-    const noyau = P.noyau(ctx, cx, cy, Z, N, { r: o.rn ?? 4, numeros: o.numeros, pale: o.pale, alpha: o.alphaNoyau ?? 1 });
-    const elec = P.placesNuage(cx, cy, R, n, { t: o.t || 0, graine: o.graineE || 21 });
-    const lit = o.litE || 0;
-    elec.forEach((q, i) => {
-      if (i < lit) P.halo(ctx, q.x, q.y, (o.re || 8) * 1.5, i === lit - 1);
-      P.electron(ctx, q.x, q.y, o.re || 8, { numero: i < lit ? i + 1 : null, alpha: o.alphaE ?? 1 });
-    });
-    return { noyau, elec };
-  };
+  P.atome = (ctx, cx, cy, Z, N, o = {}) => { const r = Lx().atomeModele(ctx, cx, cy, Z, N, o); return { noyau: r.noyau, elec: r.elec }; };
   /**
    * Un noyau qu'on COMPTE : mode 'tous' (nucléons, dans l'ordre des places), 'p' (protons), 'n' (neutrons) ; k = nombre
    * déjà allumé (chacun garde son numéro et sa lueur, le dernier plus vif) ; la famille non comptée est pâlie si o.palir.
    */
-  P.noyauCompte = (ctx, cx, cy, Z, N, r, mode, k, o = {}) => {
-    const pos = nucleons(cx, cy, Z, N, r), a = o.alpha ?? 1;
-    const R = pos.reduce((m, q) => Math.max(m, Math.hypot(q.x - cx, q.y - cy)), 0) + r;
-    ctx.save(); ctx.globalAlpha *= a;
-    const g = ctx.createRadialGradient(cx, cy, R * .3, cx, cy, R * 1.6); g.addColorStop(0, 'rgba(244,114,182,.28)'); g.addColorStop(1, 'rgba(244,114,182,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.6, 0, TAU); ctx.fill(); ctx.restore();
-    const rang = q => mode === 'tous' ? pos.indexOf(q) + 1 : (q.t === mode ? q.k : 0);
-    [...pos].sort((u, v) => u.y - v.y).forEach(q => {
-      const n = rang(q), lit = n > 0 && n <= k, al = a * (o.palir && mode !== 'tous' && q.t !== mode ? .25 : 1);
-      if (lit) P.halo(ctx, q.x, q.y, r * 1.35, n === Math.floor(k));
-      if (q.t === 'p') P.proton(ctx, q.x, q.y, r, { alpha: al, numero: lit ? n : null });
-      else P.neutron(ctx, q.x, q.y, r, { alpha: al, numero: lit ? n : null });
-    });
-    return { pos, R };
-  };
+  P.noyauCompte = (ctx, cx, cy, Z, N, r, mode, k, o = {}) => Lx().noyau(ctx, cx, cy, Z, N, { r, alpha: o.alpha, compte: { mode, k, palir: o.palir } });
   /** Comptage : nombre allumé à l'instant, n éléments comptés pendant les d secondes qui MÈNENT au moment `nom`. */
   const compte = (S, M, nom, n, d) => (S.t <= 0 || S.t >= M[nom] ? n : Math.max(0, Math.min(n, Math.floor((S.t - (M[nom] - d)) / d * n + 1e-6))));
   /** Durée d'un comptage de n éléments (assez lente pour que l'œil suive, jamais plus de 6 s). */

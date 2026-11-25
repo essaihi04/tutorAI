@@ -110,40 +110,44 @@ function dessinerThomson(c, S, sc) {
   const enPain = S.a('pain');
   if (!enPain || !pt) {
     // le tube de verre, la plaque − à gauche, deux plaques au milieu (+ en haut, − en bas), le faisceau dévié vers le +
-    const x0 = 30, x1 = pt ? L - 30 : L * .55, cy = 210, h = 90;
+    // le tube occupe toute la largeur du tableau ; il se range à gauche quand le pain aux raisins arrive (finitions 25/11)
+    const kp = pt ? 0 : (S.t <= 0 ? 1 : av(S, 'pain', 1.2));
+    const x0 = 30, x1 = pt ? L - 30 : (L - 40) - ((L - 40) - L * .56) * A.doux(kp), cy = pt ? 210 : 200 - 10 * kp, h = pt ? 110 : 150 - 40 * kp;
+    const lp = (x1 - x0) * .14, rE = pt ? 10 : 10 - 2 * kp;
     c.direct(() => {
       const g = c.ctx; g.save();
       const gv = g.createLinearGradient(0, cy - h / 2, 0, cy + h / 2); gv.addColorStop(0, 'rgba(226,240,250,.22)'); gv.addColorStop(.5, 'rgba(226,240,250,.06)'); gv.addColorStop(1, 'rgba(226,240,250,.2)');
       g.fillStyle = gv; g.beginPath(); g.roundRect(x0, cy - h / 2, x1 - x0, h, 40); g.fill(); g.strokeStyle = 'rgba(226,240,250,.7)'; g.lineWidth = 2; g.stroke();
-      g.fillStyle = '#9ca3af'; g.fillRect(x0 + 24, cy - 28, 8, 56);
-      const xm = (x0 + x1) / 2; g.fillStyle = '#f9a8d4'; g.fillRect(xm - 50, cy - 40, 100, 6); g.fillStyle = '#7dd3fc'; g.fillRect(xm - 50, cy + 34, 100, 6);
+      g.fillStyle = '#9ca3af'; g.fillRect(x0 + 24, cy - h * .32, 9, h * .64);
+      const xm = (x0 + x1) / 2; g.fillStyle = '#f9a8d4'; g.fillRect(xm - lp, cy - h * .42, 2 * lp, 7); g.fillStyle = '#7dd3fc'; g.fillRect(xm - lp, cy + h * .42 - 7, 2 * lp, 7);
       g.restore();
       if (S.a('tube') || S.t > 0) {
         const kd = av(S, 'devie', 2.5);
-        for (let i = 0; i < 9; i++) {
-          const u = ((tps * .45 + i / 9) % 1), x = x0 + 40 + u * (x1 - x0 - 70), xr = (x - (xm - 50)) / (x1 - xm + 20);
-          const dy = x > xm - 50 ? -kd * 34 * Math.pow(Math.max(0, xr), 1.4) : 0;
-          if (S.t >= MOMENTS.tube - 1.5) P.electron(g, x, cy + dy, pt ? 9 : 7, { texte: false });
+        const nE = pt ? 9 : 12;
+        for (let i = 0; i < nE; i++) {
+          const u = ((tps * .45 + i / nE) % 1), x = x0 + 44 + u * (x1 - x0 - 80), xr = (x - (xm - lp)) / (x1 - xm + lp);
+          const dy = x > xm - lp ? -kd * h * .3 * Math.pow(Math.max(0, xr), 1.4) : 0;
+          if (S.t >= MOMENTS.tube - 1.5) P.electron(g, x, cy + dy, rE, { texte: rE >= 9 });
         }
       }
     });
     const xm = (x0 + x1) / 2;
     if (S.running || S.pause) sc.sale = true;
     if (S.t <= 0 || S.ecrit(c, 'tube')) {
-      c.texte('−', x0 + 28, cy - 40, { couleur: 'cyan', taille: pt ? 32 : 24, align: 'center', gras: true });
-      c.texte('+', xm, cy - 54, { couleur: 'rose', taille: pt ? 32 : 26, align: 'center', gras: true });
-      if (!pt) c.texte('un tube de verre', (x0 + x1) / 2, cy + h / 2 + 34, { couleur: 'faible', taille: 17, align: 'center' });
+      c.texte('−', x0 + 28, cy - h * .32 - 10, { couleur: 'cyan', taille: pt ? 32 : 30, align: 'center', gras: true });
+      c.texte('+', xm, cy - h * .42 - 12, { couleur: 'rose', taille: pt ? 32 : 32, align: 'center', gras: true });
+      if (!pt) c.texte('un tube de verre', (x0 + x1) / 2, cy + h / 2 + 30, { couleur: 'blanc', taille: 20, align: 'center' });
       c.repere('tube', x0, cy - h / 2, x1 - x0, h, 'le tube');
     }
-    if (S.ecrit(c, 'devie')) { c.texte('attirées par le +', xm + 60, cy - 70, { couleur: 'vert', taille: t, gras: true }); c.repere('devie', xm - 50, cy - 50, x1 - xm + 50, 60, 'les particules attirées par la plaque +'); }
-    if (S.ecrit(c, 'electron') && (!pt || !enPain)) { c.texte('négatives : les électrons (1897)', pt ? L / 2 : (x0 + x1) / 2, pt ? 345 : 340, { couleur: 'cyan', taille: pt ? 28 : 21, align: 'center', gras: true }); c.repere('electron', (x0 + x1) / 2 - 180, 314, 360, 34, 'les électrons'); }
+    if (S.ecrit(c, 'devie')) { c.texte('attirées par le +', pt ? xm + 60 : xm + lp + 14, cy - h / 2 - (pt ? 20 : 14), { couleur: 'rose', taille: pt ? t : 24, gras: true }); c.repere('devie', xm - lp, cy - h / 2, x1 - xm + lp, h / 2, 'les particules attirées par la plaque +'); }
+    if (S.ecrit(c, 'electron') && (!pt || !enPain)) { c.texte('négatives : les électrons (1897)', pt ? L / 2 : (x0 + x1) / 2, pt ? 345 : 370 - 10 * kp, { couleur: 'cyan', taille: pt ? 28 : 28 - 5 * kp, align: 'center', gras: true }); c.repere('electron', (x0 + x1) / 2 - 180, 340, 360, 40, 'les électrons'); }
   }
   if (enPain) {
-    const cx = pt ? L / 2 : L * .8, cy = 205, R = pt ? 110 : 100, k = av(S, 'raisins', 2);
+    const cx = pt ? L / 2 : L * .8, cy = 205, R = pt ? 110 : Math.min(130, L * .14), k = av(S, 'raisins', 2);
     c.direct(() => {
       P.pain(c.ctx, cx, cy, R);
       const pos = [[-.45, -.4], [.3, -.55], [.55, .05], [-.6, .2], [.05, .1], [-.2, .55], [.4, .55], [.15, -.25]];
-      pos.forEach(([u, v], i) => { if (S.t <= 0 || i < k * pos.length) P.electron(c.ctx, cx + u * R, cy + v * R, pt ? 11 : 9); });
+      pos.forEach(([u, v], i) => { if (S.t <= 0 || i < k * pos.length) P.electron(c.ctx, cx + u * R, cy + v * R, pt ? 11 : 11); });
     });
     c.repere('pain', cx - R, cy - R, 2 * R, 2 * R, 'le pain aux raisins de Thomson');
     if (S.ecrit(c, 'pain')) c.texte(pt ? 'matière positive' : 'une boule de matière positive', cx, cy - R - 16, { couleur: 'rose', taille: t, align: 'center', gras: true });
@@ -204,25 +208,25 @@ function dessinerNuage(c, S, sc) {
   // la frise : six modèles, allumés un à un
   const n = FRISE.length, k = S.t <= 0 ? n : Math.min(n, Math.floor(av(S, 'frise_fin', 5) * n + .001) + (S.a('frise') ? 1 : 0));
   const cols = pt ? 3 : 6, w = (L - 40) / cols, h = pt ? 160 : 230;
-  c.fleche(20, pt ? 60 : 110, L - 20, pt ? 60 : 110, { couleur: 'faible', largeur: 2 });
+  c.fleche(20, pt ? 60 : 80, L - 20, pt ? 60 : 80, { couleur: 'blanc', largeur: 2 });
   FRISE.forEach(([mod, qui], i) => {
     if (i >= k) return;
-    const col = i % cols, lig = pt ? (i / cols | 0) : 0, x = 20 + col * w + w / 2, y = pt ? 110 + lig * h : 170;
+    const col = i % cols, lig = pt ? (i / cols | 0) : 0, x = 20 + col * w + w / 2, y = pt ? 110 + lig * h : 185;
     c.direct(() => {
-      const g = c.ctx, r = pt ? 30 : 34;
+      const g = c.ctx, r = pt ? 30 : Math.min(54, w * .38);
       if (i === 0) { P.flamme(g, x, y + r * .8, r * 1.8, 0); }
       else if (i === 1) P.sphere(g, x, y, r, [190, 190, 200]);
-      else if (i === 2) { P.pain(g, x, y, r); [[-.4, -.3], [.35, -.2], [0, .4]].forEach(([u, v]) => P.electron(g, x + u * r, y + v * r, 6, { texte: false })); }
+      else if (i === 2) { P.pain(g, x, y, r); [[-.4, -.3], [.35, -.2], [0, .4]].forEach(([u, v]) => P.electron(g, x + u * r, y + v * r, Math.max(6, r * .15), { texte: false })); }
       else if (i === 3) { P.nuage(g, x, y, r * 1.15, { points: 40, alpha: .7 }); P.noyau(g, x, y, 1, 0, { r: 7 }); }
-      else if (i === 4) { P.couche(g, x, y, r * .6, {}); P.couche(g, x, y, r, {}); P.noyau(g, x, y, 1, 1, { r: 5 }); P.electron(g, x + r, y, 6, { texte: false }); }
+      else if (i === 4) { P.couche(g, x, y, r * .6, {}); P.couche(g, x, y, r, {}); P.noyau(g, x, y, 1, 1, { r: Math.max(5, r * .12) }); P.electron(g, x + r, y, Math.max(6, r * .15), { texte: false }); }
       else { P.nuage(g, x, y, r * 1.2, { points: 90 }); P.noyau(g, x, y, 1, 1, { r: 5 }); }
     });
-    if (i === k - 1 && S.t > 0) lueur(c, x - w / 2 + 6, y - 50, w - 12, pt ? 140 : 140, { vive: true });
-    c.texte(qui, x, y + (pt ? 62 : 64), { couleur: 'jaune', taille: pt ? 26 : 18, align: 'center', gras: true, max: w - 8 });
-    if (!pt) c.texte(mod, x, y + 88, { couleur: 'blanc', taille: 16, align: 'center', max: w - 8 });
-    c.repere('modele_' + (i + 1), x - w / 2 + 6, y - 50, w - 12, 140, qui + ' : ' + mod);
+    if (i === k - 1 && S.t > 0) lueur(c, x - w / 2 + 6, y - (pt ? 50 : 72), w - 12, pt ? 140 : 200, { vive: true });
+    c.texte(qui, x, y + (pt ? 62 : 86), { couleur: 'jaune', taille: pt ? 26 : 22, align: 'center', gras: true, max: w - 8 });
+    if (!pt) c.texte(mod, x, y + 114, { couleur: 'blanc', taille: 18, align: 'center', max: w - 8 });
+    c.repere('modele_' + (i + 1), x - w / 2 + 6, y - 72, w - 12, 200, qui + ' : ' + mod);
   });
-  if (!pt) c.texte('le modèle change à chaque nouvelle expérience', L / 2, 380, { couleur: 'cyan', taille: 20, align: 'center' });
+  if (!pt) c.texte('le modèle change à chaque nouvelle expérience', L / 2, 385, { couleur: 'vert', taille: 24, align: 'center', gras: true });
   c.repere('frise', 20, 90, L - 40, 230, 'la frise des modèles');
 }
 

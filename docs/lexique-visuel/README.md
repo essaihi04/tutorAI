@@ -19,7 +19,7 @@ dans les prochains cours, le glucose doit garder la même forme et les mêmes co
 
 | Module | Objet global | Contenu | Branché sur |
 |---|---|---|---|
-| `lexique.js` | `window.Lexique` | atomes et molécules (glucose, acides pyruvique et lactique, éthanol, CO₂, H₂O, O₂, H₃O⁺, HO⁻), proton, électron, neutron, Ca²⁺, ATP/ADP/Pi, NAD, FAD, CoA, cellule, mitochondrie, membrane, protéine, levure, bécher simple | SVT ch1 (via `peinture.js`) |
+| `lexique.js` | `window.Lexique` | atomes et molécules (glucose, acides pyruvique et lactique, éthanol, CO₂, H₂O, O₂, H₃O⁺, HO⁻), proton, électron, neutron, modèle de l'atome (noyau, nuage, couches K L M, charge d'un ion), Ca²⁺, ATP/ADP/Pi, NAD, FAD, CoA, cellule, mitochondrie, membrane, protéine, levure, bécher simple | SVT ch1 (via `peinture.js`), chimie TC atome |
 | `lexique-physique.js` | `Lexique.physique` | générateur, bornes, condensateur (réaliste, armatures, symbole), résistor, interrupteur, bobine (réaliste, symbole), noyau de fer, lampe, ampèremètre/voltmètre, ohmmètre, oscilloscope, GBF, cordons ; ondes (corde, perle, poignée, micro, écran, trace, front) ; `lumiere.couleurDe(λ)` ; `GRANDEURS` | RC, RL, RLC (15 pages) |
 | `lexique-chimie.js` | `Lexique.chimie` | bécher, bain, goutte, filet, pipette, compte-gouttes, glaçon, pH-mètre et sonde, conductimètre et cellule, bulles ; `SOLUTIONS`, `BBT` ; montage à reflux (`montageReflux`, ballon, réfrigérant à boules, chauffe-ballon, potence, élévateur, tuyau, pierre ponce, vapeur, gouttelette), CCM (plaque, cuve, capillaire, lampe UV, diiode), filtration (entonnoir, flocons), éprouvette, tube, flacon, thermomètre, balance, ions (`ion`, `IONS`) ; `LIQUIDES` | chimie ch9 à ch13 (25 pages), TC synthèse (7 pages) |
 | `lexique-genetique.js` | `window.Molecules` = `Lexique.genetique` | ADN, ARN, bases, nucléotides, ribosome, ARNt, acides aminés, protéine, noyau, cytoplasme, hématie | SVT ch4 (12 pages) |
@@ -73,6 +73,7 @@ Texte écrit SUR un objet clair : sombre et gras (`#0b1f2a`, `Lexique.etiquette`
 | HO⁻ | [ho.md](ho.md) | `ho` |
 | Ca²⁺ | [calcium.md](calcium.md) | `calcium` |
 | Atome (C, H, O, N, P) | ci-dessous | `atome(ctx, x, y, 'C')`, `chaine`, `positionsChaine` |
+| Atome (modèle) : noyau, nuage, couches K L M, ion | [atome.md](atome.md) | `noyau`, `nuage`, `placesNuage`, `couche`, `placesCouche`, `atomeModele`, `charge` |
 | Cellule, hyaloplasme, noyau | [cellule.md](cellule.md) | `cellule` |
 | Mitochondrie, membrane interne, sphère pédonculée | [mitochondrie.md](mitochondrie.md) | `mitochondrie`, `membrane`, `spherePedonculee` |
 | Protéine | [proteine.md](proteine.md) | `proteine` |
