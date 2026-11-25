@@ -1,12 +1,12 @@
 // Construction à part du lien libre du Tronc Commun (https://moalim.online/TCF/).
 // Usage : npx vite build --config vite.tcf.config.ts --outDir <dossier>  (voir scripts/publier_tcf.py)
-// En local : npx vite --config vite.tcf.config.ts  puis /TCF/tcf.html
+// En local : npx vite --config vite.tcf.config.ts  puis /tcf.html (base / en local : les simulations lisent /media/… tel quel)
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig(({ command }) => ({
-  base: '/TCF/',
+  base: command === 'serve' ? '/' : '/TCF/',
   plugins: [react(), tailwindcss()],
   // en local, les médias viennent de public/ ; à la construction, le script de publication les copie un à un
   publicDir: command === 'serve' ? 'public' : false,
