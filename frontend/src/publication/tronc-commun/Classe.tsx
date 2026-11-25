@@ -20,7 +20,7 @@ import { COULEUR_VERDICT, MOT_VERDICT, nomComplet, nomCourt, RapportEleve, Resul
 import { Formule } from '../../components/course/Formule';
 import { pts } from '../../components/exercice/types';
 import { choixDuTexte, lienComplet, lienCourt, octets, QrCode, reduireImage } from '../../components/course/photoTelephone';
-import { Choix, configExamen, corpsCorrection, DonneesPartie, etatDeCorrection, jugerValeur, noterChoix, texteDuSujet, Verdict, type CorrectionTuteur, type Etat } from './Examen';
+import { Choix, configExamen, corpsCorrection, DonneesPartie, etatDeCorrection, noterChoix, noterValeur, texteDuSujet, Verdict, type CorrectionTuteur, type Etat } from './Examen';
 import { Histogramme, histoVide, Triangle } from './Traces';
 import type { PartieExamen, QuestionExamen } from './sujet';
 
@@ -726,7 +726,12 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
       const lu = q.items.map((_, k) => `${q.items.length > 1 ? String.fromCharCode(97 + k) + ') ' : ''}${q.genre === 'qcm' ? lettre(choix[k] as number) : choix[k] ? 'Vrai' : 'Faux'}`).join(' · ');
       return publier({ ...noterChoix(q, choix), choix }, lu, e.mini);
     }
-    if (q.genre === 'valeur') return publier(jugerValeur(q, texte), texte, e.mini);
+    if (q.genre === 'valeur') {
+      // résultat faux ou conclusion demandée : le tuteur note la démarche (25/11/2026)
+      poser({ phase: 'correction', erreur: undefined });
+      return publier(await noterValeur(p, q, texte, corps =>
+        appel<CorrectionTuteur>(`/${code}/corriger`, { method: 'POST', body: JSON.stringify({ ...corps, question: { ...corps.question, photo: !!e.mini } }) })), texte, e.mini);
+    }
     if (trace) {
       // 24/11/2026 : le tracé photographié est lu par l'IA (dessin décrit) puis noté sur les lignes de la correction
       if (!texte) return publier({ fait: true, verdict: 'nonjuge', verdictMur: 'regarder', retour: 'Tracé à regarder ensemble avec la correction.' }, texte, e.mini);

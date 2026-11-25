@@ -103,9 +103,15 @@ export function corpsCorrection(p: PartieExamen, q: Extract<QuestionExamen, { ge
 export type CorrectionTuteur = { correct: boolean | null; partiel?: boolean; parole: string; ecrit: string; note?: number; details?: Detail[] };
 /** la réponse du tuteur → note, verdict, retour (même règle partout) */
 export function etatDeCorrection(q: QuestionExamen, texte: string, r: CorrectionTuteur): Etat {
-  const verdict = r.correct === true ? 'juste' : r.partiel ? 'partiel' : r.correct === false ? 'faux' : 'nonjuge';
-  const note = typeof r.note === 'number' ? r.note : r.correct === true ? q.points : r.partiel ? q.points / 2 : 0;
-  return { fait: true, texte, verdict, note, retour: r.ecrit || r.parole, details: r.details };
+  // 25/11/2026 : le tuteur rend parfois un élément à 0 sans aucune perte (« ✓ » dans son commentaire) : un élément
+  // sans perte expliquée garde ses points, et la note est la somme des éléments
+  const details = r.details?.map(d => (d.obtenu < d.sur && !(d.perte || '').trim() ? { ...d, obtenu: d.sur } : d));
+  const repare = !!details && details.some((d, k) => d.obtenu !== r.details![k].obtenu);
+  const somme = details?.length ? Math.min(q.points, details.reduce((n, d) => n + d.obtenu, 0)) : undefined;
+  const note = repare && somme != null ? somme : typeof r.note === 'number' ? r.note : r.correct === true ? q.points : r.partiel ? q.points / 2 : 0;
+  const verdict = repare ? (note >= q.points ? 'juste' : note > 0 ? 'partiel' : 'faux')
+    : r.correct === true ? 'juste' : r.partiel ? 'partiel' : r.correct === false ? 'faux' : 'nonjuge';
+  return { fait: true, texte, verdict, note, retour: r.ecrit || r.parole, details };
 }
 
 async function corrigerParLeTuteur(p: PartieExamen, q: Extract<QuestionExamen, { genre: 'redaction' }>, reponse: string) {
@@ -150,23 +156,59 @@ export function partieDeLaQuestion(texte: string, id: string): string | null {
   return lignes.slice(reperes[i].ligne, fin).join(String.fromCharCode(10));
 }
 
-/** tous les résultats écrits après un « = » ou un « ≈ » (le premier nombre de chaque membre), dans l'ordre */
+const EXPOSANTS: Record<string, string> = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '-',
+  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+/** une grandeur telle qu'on la compare (« [C₂H₅COOH]éq » → « [c2h5cooh] », « x_max » → « xmax ») */
+export function formeGrandeur(s: string) {
+  return s.toLowerCase().replace(/[⁰-⁹⁺⁻₀-₉¹²³]/g, c => EXPOSANTS[c] ?? c).replace(/[−–]/g, '-').replace(/éq|eq/g, '')
+    .replace(/[_\s{}]/g, '').replace(/’/g, "'");
+}
+
+/** les lignes où l'élève écrit la grandeur demandée à gauche du premier « = » (une ligne qui commence par « = » continue
+ *  la précédente). 25/11/2026 : « [C₂H₅COO⁻]éq = C = 5×10⁻² » était compté juste pour [C₂H₅COOH]éq. */
+export function lignesDeLaGrandeur(partie: string, grandeur: string): string[] {
+  const g = formeGrandeur(grandeur);
+  if (!g) return [];
+  const logiques: string[] = [];
+  for (const l of partie.split(/\r?\n/)) {
+    if (/^\s*[=≈]/.test(l) && logiques.length) logiques[logiques.length - 1] += ' ' + l.trim();
+    else if (l.trim()) logiques.push(l);
+  }
+  return logiques.filter(l => {
+    const gauche = l.split(/[=≈]/)[0];
+    if (gauche === l) return false;
+    const mots = gauche.trim().split(/\s+/).map(formeGrandeur);
+    const dernier = (mots[mots.length - 1] || '').replace(/^\d+[-.]\d+\)?/, '').replace(/^\d+\)/, '');
+    return g.length <= 3 ? dernier === g : formeGrandeur(gauche).includes(g);
+  });
+}
+
+/** les résultats écrits après un « = » ou un « ≈ » : seulement un membre qui est un nombre (avec sa puissance de dix et
+ *  son unité), pas un calcul (« = 2Dλ/a » ne donne pas 2, « = 2 × 2,5 × 4×10⁻³ » ne donne pas 2) ; dans l'ordre */
 export function resultatsEcrits(texte: string): number[] {
-  const membres = texte.split(/[=≈]/).slice(1);
-  const vus = membres.map(m => lireNombre('=' + m.split(/\r?\n/)[0])).filter((v): v is number => v != null);
-  return vus.length ? vus : (() => { const v = lireNombre(texte); return v == null ? [] : [v]; })();
+  const membres = texte.split(/[=≈]/).slice(1).map(m => m.split(/\r?\n/)[0].trim());
+  const tete = /^[-−]?\d+(?:[.,]\d+)?(?:\s*[×x·*]\s*10\s*(?:\^\s*\(?\s*[-−]?\d+(?:[.,]\d+)?\s*\)?|[⁻⁺]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+))?/;
+  // après le nombre : seulement son unité (ni chiffre, ni opération)
+  const resultat = (m: string) => { const t = m.match(tete); return !!t && !/[0-9]|^\s*[×x·*/+^(-]/.test(m.slice(t[0].length)); };
+  const vus = membres.filter(resultat).map(m => lireNombre('=' + m)).filter((v): v is number => v != null);
+  if (vus.length) return vus;
+  const v = lireNombre(texte);
+  return v == null ? [] : [v];
 }
 
 export function jugerValeur(q: Extract<QuestionExamen, { genre: 'valeur' }>, texte: string): Etat {
-  // seule la partie de la copie qui répond à cette question compte ; sans repère, toute la copie
-  const partie = partieDeLaQuestion(texte, q.id) ?? texte;
+  // seule la partie de la copie qui répond à cette question compte ; sans repère, toute la copie ; et dans cette partie,
+  // les lignes de la grandeur demandée quand l'élève l'a écrite
+  const toute = partieDeLaQuestion(texte, q.id) ?? texte;
+  const lignes = lignesDeLaGrandeur(toute, q.grandeur);
+  const partie = lignes.length ? lignes.join(String.fromCharCode(10)) : toute;
   const tol = q.tolerance ?? 0.02;
   const bon = (v: number) => Math.abs(v - q.valeur) <= tol * Math.max(Math.abs(q.valeur), 1e-12);
   const valeurs = resultatsEcrits(partie);
   const juste = valeurs.some(bon);
   // le résultat lu : le bon s'il est écrit, sinon le dernier résultat de la partie
   const lu = juste ? q.valeur : valeurs.length ? valeurs[valeurs.length - 1] : null;
-  const t = partie.toLowerCase().replace(/\s+/g, ' ');
+  const t = toute.toLowerCase().replace(/\s+/g, ' ');
   const unite = q.unites.some(u => t.includes(u.toLowerCase()));
   const sansUnite = juste && !unite && q.points > 0.25;
   // le résultat porte les points ; l'unité vaut 0,25 point quand la question en vaut plus
@@ -178,6 +220,46 @@ export function jugerValeur(q: Extract<QuestionExamen, { genre: 'valeur' }>, tex
   return { fait: true, texte, note, details, verdict: juste ? (sansUnite ? 'partiel' : 'juste') : 'faux',
     retour: juste ? (sansUnite ? 'Le nombre est juste, mais l’unité manque : sur la copie, elle compte.' : 'Le résultat est juste, avec son unité.')
       : lu == null ? 'Je ne trouve pas de résultat chiffré dans ta réponse.' : `Ton résultat (${String(lu).replace('.', ',')}) n’est pas le bon : regarde la correction.` };
+}
+
+/** la demande de correction d'un calcul au tuteur : noté sur les étapes de la correction (relation, application
+ *  numérique, résultat, conclusion) */
+export function corpsValeur(p: PartieExamen, q: Extract<QuestionExamen, { genre: 'valeur' }>, reponse: string) {
+  return {
+    diapo: { title: `${CFG.sujet.niveau} — ${p.titre}`, speech: texteDuSujet(p) },
+    question: { type: 'open', enonce: q.texte, attendu: q.correction.join(' '), matiere: CFG.matiere, bareme: q.points, elements: q.correction },
+    reponse: reponse.slice(0, 4000), tentative: 2, verdict: null,
+  };
+}
+const auQuart = (n: number) => Math.round(n * 4) / 4;
+/** la question demande aussi une conclusion (« Conclure », « En déduire… la nature ») : un nombre juste ne suffit pas */
+export const demandeConclusion = (q: QuestionExamen) => /\bconclu/i.test(q.texte);
+
+/** Un calcul noté comme sur la copie du national (25/11/2026, banc de 51 copies) :
+ *  - résultat juste : la note du résultat ; si la question demande une conclusion, le tuteur la note aussi (elle vaut
+ *    au plus 20 % des points) ;
+ *  - résultat faux : la relation et l'application numérique justes gardent leurs points, notés par le tuteur sur les
+ *    étapes de la correction (jamais plus de 60 % des points sans le bon résultat).
+ *  `corriger` : l'appel au tuteur de la page (évaluation ou mode classe). Sans réponse du tuteur : la note du résultat. */
+export async function noterValeur(p: PartieExamen, q: Extract<QuestionExamen, { genre: 'valeur' }>, texte: string,
+  corriger: (corps: ReturnType<typeof corpsValeur>) => Promise<CorrectionTuteur>): Promise<Etat> {
+  const r = jugerValeur(q, texte);
+  const juste = r.verdict === 'juste' || r.verdict === 'partiel';
+  if (!texte.trim() || (juste && !demandeConclusion(q))) return r;
+  try {
+    const t = etatDeCorrection(q, texte, await corriger(corpsValeur(p, q, texte)));
+    const tuteur = t.note ?? 0;
+    if (juste) {
+      const n = auQuart(Math.min(r.note ?? 0, Math.max(tuteur, (r.note ?? 0) - q.points * 0.2)));
+      return n >= (r.note ?? 0) ? r : { ...t, note: n, verdict: 'partiel', details: t.details ?? r.details };
+    }
+    const n = auQuart(Math.min(tuteur, q.points * 0.6));
+    if (n <= 0) return r;
+    return { ...t, note: n, verdict: 'partiel',
+      retour: `Le résultat n’est pas le bon, mais ta démarche rapporte des points. ${t.retour || ''}`.trim() };
+  } catch {
+    return r;
+  }
 }
 
 export default function Examen() {
@@ -250,7 +332,18 @@ export default function Examen() {
   };
 
   const repondre = async (texte: string) => {
-    if (q.genre === 'valeur') { poser(q.id, jugerValeur(q, texte)); return; }
+    if (q.genre === 'valeur') {
+      const vite = jugerValeur(q, texte);
+      // un résultat juste sans conclusion demandée est noté tout de suite ; sinon le tuteur lit la démarche
+      if ((vite.verdict === 'juste' || vite.verdict === 'partiel') && !demandeConclusion(q)) { poser(q.id, vite); return; }
+      poser(q.id, { texte, verdict: 'lecture', retour: 'Le tuteur lit ta démarche…' });
+      poser(q.id, await noterValeur(p, q, texte, async corps => {
+        const r = await fetch('/api/v1/course-player/answer-reaction', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) });
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json() as Promise<CorrectionTuteur>;
+      }));
+      return;
+    }
     if (q.genre !== 'redaction') return;
     poser(q.id, { texte, verdict: 'lecture', retour: 'Le tuteur lit ta réponse…' });
     try {

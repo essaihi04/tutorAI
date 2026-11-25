@@ -118,8 +118,8 @@ export const EXAMEN = {
           texte: 'Un troisième sol C contient 30 % d’argile, 60 % de sable et 10 % de limon. Dans le triangle des textures, trace les trois lignes (chacune part de sa graduation et est parallèle au bon côté), puis donne la texture du sol C.',
           sol: { argile: 30, limon: 10, sable: 60 }, zone: 'Limon argilo-sableux',
           choix: ['Argile sableuse', 'Limon argilo-sableux', 'Limon sableux', 'Sable limoneux', 'Limon argileux'],
-          correction: ['Argile 30 % : la ligne part de 30 sur l’axe de l’argile, parallèle au côté du sable.', 'Limon 10 % : la ligne part de 10 sur l’axe du limon, parallèle au côté de l’argile.',
-            'Sable 60 % : la ligne part de 60 sur l’axe du sable, parallèle au côté du limon.', 'Les trois lignes se coupent dans le domaine « Limon argilo-sableux » : c’est la texture du sol C.'] },
+          correction: ['Argile 30 % : la ligne part de 30 sur l’axe de l’argile (côté gauche), parallèle au côté du sable, c’est-à-dire à la base du triangle (ligne horizontale).', 'Limon 10 % : la ligne part de 10 sur l’axe du limon (côté droit), parallèle au côté de l’argile, c’est-à-dire au côté gauche du triangle.',
+            'Sable 60 % : la ligne part de 60 sur l’axe du sable (la base), parallèle au côté du limon, c’est-à-dire au côté droit du triangle.', 'Les trois lignes se coupent dans le domaine « Limon argilo-sableux » : c’est la texture du sol C.'] },
       ],
     },
     {
