@@ -14,18 +14,27 @@
  *      point d'enregistrement (point jaune cerclé de sombre), règle graduée, chronomètre, bus, personne, voiture, roue de
  *      vélo et sa valve rouge, ballon, grue, bloc de béton, seau, livre, caisse, boule, haltère, marteau, tige à deux masses,
  *      sphère / cylindre / disque.
- *  - Les couleurs gardent leur sens dans tout le cours (Mvt.COUL) :
- *      vitesse v⃗ : vert · poids P⃗ : rouge · réaction R⃗ : bleu · tension T⃗ : orange · force F⃗ (rappel) : violet ·
- *      vecteur position OM⃗ : rose · vecteurs unitaires i⃗ j⃗ k⃗ : cyan · centre d'inertie G : point rose · éclateur A : rouge ·
- *      éclateur B : orange · points de l'enregistrement : jaune.
+ *  - Les couleurs gardent leur sens dans tout le cours ET dans tous les cours de mécanique : elles sont lues dans le
+ *    lexique (Mvt.COUL ← Lexique.physique.MECANIQUE, Lexique.maths.ROLES, Lexique.physique.ECRITURE ; fiche
+ *    docs/lexique-visuel/mecanique.md) : v⃗ vert · P⃗ rouge · R⃗ bleu · T⃗ orange · F⃗ violet · OM⃗ rose · i⃗ j⃗ cyan ·
+ *    G point rose · points de l'enregistrement jaunes · trajectoire cyan en pointillé · éclateur A rouge, B orange ;
+ *    graphes : courbe cyan, points jaunes, triangle de pente orange ; craie : titres et mots-clés jaune, légendes et
+ *    données blanc, résultats et conclusions vert, pièges rose.
+ *  - Les objets de la mécanique (point d'enregistrement, G, table à coussin d'air, autoporteur, règle, chronomètre)
+ *    sont dessinés par Lexique.physique.mecanique ; Mvt.P les reprend sous le même nom.
  *  - Mvt.vecteur : une flèche épaisse à la craie et son nom surmonté d'une petite flèche (v⃗₃, P⃗, OM⃗).
  */
 (function () {
   'use strict';
   const VW = 760, VH = 420, TAU = Math.PI * 2;
   const TAILLE_MIN = 15, L_MAX = 2.1;
-  const COUL = { v: 'vert', P: 'rouge', R: 'bleu', T: 'orange', F: 'violet', OM: 'rose', u: 'cyan', G: 'rose', A: 'rouge', B: 'orange', pt: 'jaune' };
-  const HEX = { vert: '#4ade80', rouge: '#f87171', bleu: '#60a5fa', orange: '#fb923c', violet: '#c084fc', rose: '#f472b6', cyan: '#22d3ee', jaune: '#facc15', blanc: '#e2e8f0' };
+  /* Les couleurs viennent du lexique (Lexique.physique.MECANIQUE, Lexique.maths.ROLES, Lexique.physique.ECRITURE) :
+   * la page charge lexique-physique.js et lexique-maths.js AVANT ce fichier. */
+  const LP = window.Lexique.physique, ME = LP.MECANIQUE, ROLES = window.Lexique.maths.ROLES, ECR = LP.ECRITURE;
+  const COUL = { v: ME.v, P: ME.P, R: ME.R, T: ME.T, F: ME.F, OM: ME.OM, u: ME.i, G: ME.G, A: ME.eclateurA, B: ME.eclateurB, pt: ME.point,
+    traj: ME.trajectoire, courbe: ROLES.courbe, pointG: ROLES.point, pente: ROLES.tangente, axes: ROLES.axes,
+    titre: ECR.titre, legende: ECR.legende, donnee: ECR.donnee, relation: ECR.relation, res: ECR.resultat, concl: ECR.conclusion, piege: ECR.piege };
+  const HEX = window.Tableau.COULEURS;
 
   /* ── La scène ──────────────────────────────────────────────────────────────────────────────────────────────── */
   function Scene(canvas, dessiner, options = {}) {
@@ -257,9 +266,7 @@
   }
   /** Un vecteur : flèche épaisse de (x1, y1) à (x2, y2), son nom à `o.nom` posé en `o.nx, o.ny` (sinon au bout). */
   function vecteur(c, x1, y1, x2, y2, o = {}) {
-    const coul = o.couleur || 'vert';
-    c.fleche(x1, y1, x2, y2, { couleur: coul, largeur: o.largeur || 3.4, tete: o.tete || 13 });
-    if (o.point !== false) c.direct(() => { const g = c.ctx; g.fillStyle = HEX[coul] || coul; g.beginPath(); g.arc(x1, y1, 3.4, 0, TAU); g.fill(); });
+    const coul = LM.fleche(c, x1, y1, x2, y2, o);
     if (o.nom) nomVecteur(c, o.nom, o.nx ?? x2 + 8, o.ny ?? y2 - 6, { couleur: coul, taille: o.taille || 20, align: o.align });
   }
 
@@ -285,93 +292,18 @@
 
   /* ── Les objets du cours, peints ──────────────────────────────────────────────────────────────────────────── */
   const P = {};
-  P.ombre = (ctx, fn, b = 6) => { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = b; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3; fn(); ctx.restore(); };
-  function boule(ctx, x, y, r, c0, c1, c2) {
-    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
-    g.addColorStop(0, c0); g.addColorStop(.55, c1); g.addColorStop(1, c2);
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
-  }
+  const LM = LP.mecanique;
+  P.ombre = LM.ombre;
+  const boule = LM.boule;
   P.boule = boule;
-  /** Le point d'un enregistrement : jaune cerclé de sombre (se voit sur la feuille et sur le tableau). */
-  P.point = (ctx, x, y, r = 4.5, o = {}) => {
-    ctx.save(); ctx.globalAlpha = o.alpha ?? 1;
-    if (o.halo) { ctx.shadowColor = 'rgba(250,204,21,.9)'; ctx.shadowBlur = 12; }
-    ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.arc(x, y, r + 1.6, 0, TAU); ctx.fill();
-    ctx.shadowBlur = 0; ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
-    ctx.restore();
-  };
-  /** Une étincelle de l'éclateur (petite étoile blanc-bleu). */
-  P.etincelle = (ctx, x, y, r = 10, a = 1) => {
-    ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#e0f2fe'; ctx.lineWidth = 2; ctx.shadowColor = '#7dd3fc'; ctx.shadowBlur = 14;
-    for (let i = 0; i < 8; i++) { const an = i / 8 * TAU; ctx.beginPath(); ctx.moveTo(x + Math.cos(an) * r * .2, y + Math.sin(an) * r * .2); ctx.lineTo(x + Math.cos(an) * r * (i % 2 ? .6 : 1), y + Math.sin(an) * r * (i % 2 ? .6 : 1)); ctx.stroke(); }
-    ctx.restore();
-  };
-  /** La table à coussin d'air vue de dessus : cadre métallique, plateau de verre, feuille d'enregistrement claire. */
-  P.table = (ctx, x, y, w, h, o = {}) => {
-    ctx.save();
-    P.ombre(ctx, () => { const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#94a3b8'); g.addColorStop(.5, '#cbd5e1'); g.addColorStop(1, '#64748b'); ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill(); }, 10);
-    const m = Math.min(14, w * .03), gv = ctx.createLinearGradient(x, y, x + w, y + h); gv.addColorStop(0, '#1e3a5f'); gv.addColorStop(.5, '#2a4f7a'); gv.addColorStop(1, '#16304f');
-    ctx.fillStyle = gv; ctx.beginPath(); ctx.roundRect(x + m, y + m, w - 2 * m, h - 2 * m, 4); ctx.fill();
-    ctx.globalAlpha = .07; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(x + m, y + m); ctx.lineTo(x + w * .45, y + m); ctx.lineTo(x + m, y + h * .7); ctx.fill(); ctx.globalAlpha = 1;
-    if (o.feuille) {
-      const f = o.feuille === true ? { x: x + m + 12, y: y + m + 12, w: w - 2 * m - 24, h: h - 2 * m - 24 } : o.feuille;
-      ctx.fillStyle = 'rgba(253,250,240,.92)'; ctx.fillRect(f.x, f.y, f.w, f.h);
-      ctx.strokeStyle = 'rgba(234,88,12,.18)'; ctx.lineWidth = .6;
-      for (let gx = f.x; gx <= f.x + f.w; gx += 10) { ctx.beginPath(); ctx.moveTo(gx, f.y); ctx.lineTo(gx, f.y + f.h); ctx.stroke(); }
-      for (let gy = f.y; gy <= f.y + f.h; gy += 10) { ctx.beginPath(); ctx.moveTo(f.x, gy); ctx.lineTo(f.x + f.w, gy); ctx.stroke(); }
-    }
-    ctx.restore();
-  };
-  /** L'autoporteur vu de dessus : disque métallique, bord en caoutchouc, éclateur central A (rouge), éclateur B (orange). */
-  P.autoporteur = (ctx, x, y, r, o = {}) => {
-    ctx.save(); ctx.globalAlpha = o.alpha ?? 1;
-    P.ombre(ctx, () => { ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }, 8);
-    const g = ctx.createRadialGradient(x - r * .3, y - r * .35, r * .1, x, y, r * .9); g.addColorStop(0, '#f1f5f9'); g.addColorStop(.5, '#94a3b8'); g.addColorStop(1, '#475569');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * .86, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(30,41,59,.6)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(x, y, r * .55, 0, TAU); ctx.stroke();
-    // le fil de l'éclateur central, qui monte
-    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + r * .4, y - r * .5, x + r * .2, y - r * 1.05); ctx.stroke();
-    boule(ctx, x, y, Math.max(3, r * .16), '#fecaca', '#dc2626', '#7f1d1d');
-    if (o.b) { const a = o.angle || 0, bx = x + Math.cos(a) * r * .7, by = y + Math.sin(a) * r * .7; boule(ctx, bx, by, Math.max(2.6, r * .13), '#fed7aa', '#f97316', '#7c2d12'); }
-    ctx.restore();
-  };
-  /** L'autoporteur vu de côté : cylindre métallique posé sur son coussin d'air ; renvoie le centre d'inertie G. */
-  P.autoporteurCote = (ctx, x, yb, w, h, o = {}) => {
-    ctx.save(); ctx.globalAlpha = o.alpha ?? 1;
-    // coussin d'air (mince couche bleutée) sous la semelle
-    ctx.fillStyle = 'rgba(125,211,252,.35)'; ctx.fillRect(x - w / 2 - 4, yb - 5, w + 8, 5);
-    P.ombre(ctx, () => {
-      const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0); g.addColorStop(0, '#475569'); g.addColorStop(.35, '#e2e8f0'); g.addColorStop(1, '#334155');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - w / 2, yb - 5 - h * .32, w, h * .32, 4); ctx.fill();          // la semelle
-      ctx.beginPath(); ctx.roundRect(x - w * .26, yb - 5 - h, w * .52, h * .7, 5); ctx.fill();                             // le corps
-    }, 8);
-    ctx.fillStyle = '#1f2937'; ctx.fillRect(x - w / 2, yb - 5 - h * .34, w, 3);
-    // l'éclateur sous la semelle
-    boule(ctx, x, yb - 3, 3, '#fecaca', '#dc2626', '#7f1d1d');
-    ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x + w * .1, yb - 5 - h); ctx.quadraticCurveTo(x + w * .3, yb - h * 1.4, x + w * .2, yb - h * 1.75); ctx.stroke();
-    ctx.restore();
-    return [x, yb - 5 - h * .45];
-  };
-  /** Le centre d'inertie G : point rose cerclé. */
-  P.G = (ctx, x, y, r = 5) => { ctx.save(); ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.arc(x, y, r + 1.8, 0, TAU); ctx.fill(); ctx.fillStyle = '#f472b6'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.restore(); };
-  /** Règle graduée en centimètres (plastique transparent jaune). px : longueur d'un cm à l'écran. */
-  P.regle = (ctx, x, y, n, px, o = {}) => {
-    ctx.save(); ctx.globalAlpha = o.alpha ?? .92;
-    const h = o.h || 26, g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(254,240,138,.9)'); g.addColorStop(1, 'rgba(234,179,8,.85)');
-    P.ombre(ctx, () => { ctx.fillStyle = g; ctx.fillRect(x - 8, y, n * px + 16, h); }, 5);
-    ctx.strokeStyle = '#422006'; ctx.fillStyle = '#422006'; ctx.lineWidth = 1; ctx.textAlign = 'center'; ctx.font = `600 ${Math.max(9, Math.min(13, px * .45))}px sans-serif`;
-    for (let i = 0; i <= n * 10; i++) { const xx = x + i * px / 10, l = i % 10 === 0 ? h * .5 : i % 5 === 0 ? h * .35 : h * .2; if (px / 10 < 2.5 && i % 5) continue; ctx.beginPath(); ctx.moveTo(xx, y); ctx.lineTo(xx, y + l); ctx.stroke(); if (i % 10 === 0 && (px > 16 || (i / 10) % 2 === 0)) ctx.fillText(String(i / 10), xx, y + h - 3); }
-    ctx.restore();
-  };
-  /** Le chronomètre (boîtier rond, affichage numérique). */
-  P.chrono = (ctx, x, y, r, texte, o = {}) => {
-    ctx.save(); ctx.globalAlpha = o.alpha ?? 1;
-    ctx.fillStyle = '#64748b'; ctx.fillRect(x - r * .14, y - r * 1.28, r * .28, r * .3);
-    P.ombre(ctx, () => boule(ctx, x, y, r, '#e2e8f0', '#94a3b8', '#334155'), 8);
-    ctx.fillStyle = '#0b1220'; ctx.beginPath(); ctx.roundRect(x - r * .72, y - r * .3, r * 1.44, r * .6, 4); ctx.fill();
-    ctx.fillStyle = '#7dfc8a'; ctx.font = `700 ${Math.round(r * .42)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(texte, x, y + 1);
-    ctx.restore();
-  };
+  P.point = (...a) => LM.point(...a);
+  P.etincelle = (...a) => LM.etincelle(...a);
+  P.table = (...a) => LM.table(...a);
+  P.autoporteur = (...a) => LM.autoporteur(...a);
+  P.autoporteurCote = (...a) => LM.autoporteurCote(...a);
+  P.G = (...a) => LM.G(...a);
+  P.regle = (...a) => LM.regle(...a);
+  P.chrono = (...a) => LM.chrono(...a);
   /** Une personne debout (o.assis : assise ; o.marche : jambes écartées ; o.couleur du haut). Regarde vers o.sens (1 droite). */
   P.personne = (ctx, x, yb, h, o = {}) => {
     const s = o.sens || 1, haut = o.couleur || '#3b82f6';
@@ -530,5 +462,5 @@
     ctx.restore();
   };
 
-  window.Mvt = { Scene, VW, VH, TAU, COUL, HEX, lueur, lignes, sim, vues, param, doux, P, panneau, vecteur, nomVecteur, texteV, graphique, arrondi };
+  window.Mvt = { Scene, VW, VH, TAU, COUL, HEX, ME, ROLES, ECR, lueur, lignes, sim, vues, param, doux, P, panneau, vecteur, nomVecteur, texteV, graphique, arrondi };
 })();
