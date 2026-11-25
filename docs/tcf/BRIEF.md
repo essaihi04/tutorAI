@@ -13,6 +13,8 @@ dossier : ne touche QUE tes fichiers.
   par d'autres sessions cloud sur la même branche). Commite tes fichiers souvent (au moins à chaque grosse étape), puis
   `git fetch origin && git rebase origin/tcf-cours && git push origin HEAD:tcf-cours` ; jamais `--force`, jamais sur
   `main`, aucun déploiement.
+  **Les `.json` sont ignorés par `.gitignore`** : ajoute ton cours et sa liste de voix avec `git add -f` (vérifie avec
+  `git ls-files frontend/src/publication/tcf/cours` qu'ils sont bien suivis).
 - Ton cours : `W/frontend/src/publication/tcf/cours/<id>.json` (CourseDeck, `mode: "concentration"`, `language: "mixed"`,
   `niveau: "tronc_commun_sciences_biof"`, `subject`), et la liste de ses voix `<id>_voix.json` (voir plus bas).
 - Tes simulations : le dossier indiqué dans ta mission. **Une partie est déjà commencée** par un premier agent
