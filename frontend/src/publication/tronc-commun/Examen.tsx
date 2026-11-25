@@ -127,11 +127,46 @@ export function noterChoix(q: Extract<QuestionExamen, { genre: 'qcm' | 'vf' }>, 
     retour: n === q.items.length ? 'Tout est juste.' : `${n} sur ${q.items.length} juste${n > 1 ? 's' : ''} : lis l’explication sous chaque proposition.` };
 }
 
+/** La partie d'une copie qui répond à la question `id` (« 1-1 », « 3-4 », « 2 ») : une photo prend souvent la page
+ *  entière, avec d'autres questions (25/11/2026 : les « 1-1 » justes notés 0 parce que le dernier « = » de la page était
+ *  celui de la 2-1). Repères reconnus en début de ligne : « 1-1) », « 1.1 : », « Q1-1 », « 1) » après « Exercice 1 ».
+ *  `null` quand la copie n'a aucun repère pour cette question. */
+export function partieDeLaQuestion(texte: string, id: string): string | null {
+  const lignes = texte.split(/\r?\n/);
+  const reperes: { ligne: number; id: string }[] = [];
+  let exercice: string | null = null;
+  lignes.forEach((brute, k) => {
+    const l = brute.trim().replace(/^[*•\-–]\s*/, '');
+    const ex = l.match(/^ex(?:ercice|\.)?\s*(\d+)\b/i);
+    if (ex) { exercice = ex[1]; const reste = l.slice(ex[0].length).replace(/^\s*[:)\-–.]?\s*/, ''); if (!reste) return; }
+    const deux = l.match(/^(?:q(?:uestion)?\s*)?(\d+)\s*[-.]\s*(\d+)\s*[)\]:.]?(?=\s|$)/i);
+    if (deux) { reperes.push({ ligne: k, id: `${deux[1]}-${deux[2]}` }); return; }
+    const un = l.match(/^(?:q(?:uestion)?\s*)?(\d+)\s*[)\]:](?=\s|$)/i);
+    if (un) reperes.push({ ligne: k, id: exercice && id.includes('-') ? `${exercice}-${un[1]}` : un[1] });
+  });
+  const i = reperes.findIndex(r => r.id === id);
+  if (i < 0) return null;
+  const fin = i + 1 < reperes.length ? reperes[i + 1].ligne : lignes.length;
+  return lignes.slice(reperes[i].ligne, fin).join(String.fromCharCode(10));
+}
+
+/** tous les résultats écrits après un « = » ou un « ≈ » (le premier nombre de chaque membre), dans l'ordre */
+export function resultatsEcrits(texte: string): number[] {
+  const membres = texte.split(/[=≈]/).slice(1);
+  const vus = membres.map(m => lireNombre('=' + m.split(/\r?\n/)[0])).filter((v): v is number => v != null);
+  return vus.length ? vus : (() => { const v = lireNombre(texte); return v == null ? [] : [v]; })();
+}
+
 export function jugerValeur(q: Extract<QuestionExamen, { genre: 'valeur' }>, texte: string): Etat {
-  const lu = lireNombre(texte);
+  // seule la partie de la copie qui répond à cette question compte ; sans repère, toute la copie
+  const partie = partieDeLaQuestion(texte, q.id) ?? texte;
   const tol = q.tolerance ?? 0.02;
-  const juste = lu != null && Math.abs(lu - q.valeur) <= tol * Math.max(Math.abs(q.valeur), 1e-12);
-  const t = texte.toLowerCase().replace(/\s+/g, ' ');
+  const bon = (v: number) => Math.abs(v - q.valeur) <= tol * Math.max(Math.abs(q.valeur), 1e-12);
+  const valeurs = resultatsEcrits(partie);
+  const juste = valeurs.some(bon);
+  // le résultat lu : le bon s'il est écrit, sinon le dernier résultat de la partie
+  const lu = juste ? q.valeur : valeurs.length ? valeurs[valeurs.length - 1] : null;
+  const t = partie.toLowerCase().replace(/\s+/g, ' ');
   const unite = q.unites.some(u => t.includes(u.toLowerCase()));
   const sansUnite = juste && !unite && q.points > 0.25;
   // le résultat porte les points ; l'unité vaut 0,25 point quand la question en vaut plus

@@ -165,7 +165,7 @@ export const EXAMEN = {
             ['Ranunculus paludosus', 'I'], ['Holcus lanatus', 'I'], ['Anagallis arvensis', 'I']],
           comptes: [5, 2, 1, 2, 3],
           correction: ['Tableau : I → 5 · II → 2 · III → 1 · IV → 2 · V → 3 espèces.', 'Histogramme : en abscisse les indices I à V, en ordonnée le nombre d’espèces ; un rectangle par indice, collés les uns aux autres.',
-            'Courbe : on relie les milieux des sommets des rectangles ; elle a deux sommets (I et V) : elle est bimodale.'] },
+            'Courbe : on relie les milieux des sommets des rectangles (on ne demande pas ici de la qualifier : c’est la question 3-6).'] },
         { id: '3-6', genre: 'redaction', points: 1, texte: 'La courbe de fréquence que tu viens de tracer est bimodale. Que peux-tu en déduire sur le peuplement végétal et sur le milieu de cette station ?',
           attendu: 'Une courbe de fréquence bimodale (ou multimodale) indique que le peuplement est hétérogène ; le milieu n’est pas stable : ses conditions écologiques sont en évolution (positive ou négative).',
           elements: ['Le peuplement (groupement) est hétérogène', 'Le milieu n’est pas stable : ses conditions écologiques évoluent'],
