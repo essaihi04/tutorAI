@@ -20,7 +20,7 @@ import { COULEUR_VERDICT, MOT_VERDICT, nomComplet, nomCourt, RapportEleve, Resul
 import { Formule } from '../../components/course/Formule';
 import { pts } from '../../components/exercice/types';
 import { choixDuTexte, lienComplet, lienCourt, octets, QrCode, reduireImage } from '../../components/course/photoTelephone';
-import { Choix, configExamen, corpsCorrection, DonneesPartie, etatDeCorrection, choixLus, noterChoix, noterValeur, texteDuSujet, Verdict, type CorrectionTuteur, type Etat } from './Examen';
+import { Choix, configExamen, corpsCorrection, decouperParQuestions, DonneesPartie, etatDeCorrection, choixLus, noterChoix, noterValeur, texteDuSujet, Verdict, type CorrectionTuteur, type Etat } from './Examen';
 import { Histogramme, histoVide, Triangle } from './Traces';
 import type { PartieExamen, QuestionExamen } from './sujet';
 
@@ -482,6 +482,8 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
   const [cible, setCible] = useState('');
   const [nouveau, setNouveau] = useState(false);
   const [envoye, setEnvoye] = useState('');
+  /** une seule photo pour toutes les questions de l'exercice (25/11/2026) */
+  const [toutExercice, setToutExercice] = useState(false);
 
   // le QR du téléphone du prof (?c=…&prof=1234) : la clé est demandée tout de suite, puis le jeton quitte l'adresse
   const relierProf = async (jeton: string) => {
@@ -636,11 +638,21 @@ export function TelephoneClasse({ code: initial }: { code: string }) {
           ) : (<>
             {eleveCible && <div className="mb-2 flex items-center gap-2 rounded-lg bg-amber-100 p-2 text-[15px]"><span className="flex-1">Feuille de <b>{eleveCible.prenom} {eleveCible.nom}</b>{repondus.has(eleveCible.id) ? ' (sa réponse sera remplacée)' : ''}</span>
               <button onClick={() => setCible('')} className="rounded border border-slate-500 px-2 text-sm">Changer d’élève</button></div>}
+            {p.questions.length > 1 && (
+              <div className="mb-2 grid grid-cols-2 gap-1 rounded-lg bg-slate-200 p-1 text-[15px] font-semibold">
+                <button onClick={() => setToutExercice(false)} className={`rounded-md px-2 py-1.5 ${!toutExercice ? 'bg-white shadow' : 'text-slate-600'}`}>Question {q.id}</button>
+                <button onClick={() => setToutExercice(true)} className={`rounded-md px-2 py-1.5 ${toutExercice ? 'bg-white shadow' : 'text-slate-600'}`}>📄 Tout l’exercice</button>
+              </div>)}
+            {toutExercice && p.questions.length > 1 ? (
+              <PhotoExercice key={`${cible || 'moi'}:${p.titre}`} code={code} p={p} entetes={entetes} eleve={eleveCible?.id} onLoupe={setLoupe}
+                onFini={(total, sur) => { if (estProf && eleveCible) setEnvoye(`✓ ${eleveCible.prenom} : ${pts(total)} / ${pts(sur)} sur tout l’exercice`); relire(); }} />
+            ) : (
             <PanneauReponse key={`${cible || 'moi'}:${q.id}`} code={code} p={p} q={q} entetes={entetes} eleve={eleveCible?.id}
               e={etats[`${cible || 'moi'}:${q.id}`] || { phase: 'vide', texte: '' }}
               poser={m => setEtats(s => { const k2 = `${cible || 'moi'}:${q.id}`; return { ...s, [k2]: { ...(s[k2] || { phase: 'vide', texte: '' }), ...m } }; })}
               onLoupe={setLoupe}
               onEnvoye={estProf && eleveCible ? r => { setEnvoye(`✓ ${eleveCible.prenom} : ${r.verdictMur === 'regarder' ? 'à regarder ensemble' : `${pts(r.note || 0)} / ${pts(q.points)}`}`); setCible(''); relire(); } : undefined} />
+            )}
           </>)}
         </section>
 
@@ -820,4 +832,159 @@ function PanneauReponse({ code, p, q, entetes, eleve, e, poser, onLoupe, onEnvoy
     </>)}
     {e.erreur && <p className="mt-2 text-sm text-rose-700">{e.erreur}</p>}
   </>);
+}
+
+/** L'énoncé donné à la lecture de la photo (QCM : propositions et choix ; histogramme : les espèces) */
+function enonceLecture(q: QuestionExamen) {
+  return q.genre === 'qcm' || q.genre === 'vf'
+    ? `${q.texte} ${q.items.map((it, k) => `${String.fromCharCode(97 + k)}) ${it.texte}${q.genre === 'qcm' ? ' ' + (it as { choix: string[] }).choix.map((c, m) => `${lettre(m)}. ${c}`).join(' ') : ''}`).join(' ')}`
+    : q.genre === 'histogramme' ? `${q.texte} Espèces et indices : ${q.especes.map(([n, i]) => `${n} ${i}`).join(' ; ')}`
+    : q.texte;
+}
+
+/** La note d'une réponse lue (la même règle que « Envoyer » d'une question seule) ; sans tuteur : à regarder ensemble. */
+async function noterReponse(code: string, p: PartieExamen, q: QuestionExamen, texte: string, choix: (number | boolean | null)[] | undefined,
+  photo: boolean): Promise<Etat & { verdictMur?: VerdictMur }> {
+  const corriger = (corps: { question: object }) =>
+    appel<CorrectionTuteur>(`/${code}/corriger`, { method: 'POST', body: JSON.stringify({ ...corps, question: { ...corps.question, photo } }) });
+  const regarder = { fait: true, verdict: 'nonjuge' as const, verdictMur: 'regarder' as VerdictMur, retour: 'À regarder ensemble avec la correction.' };
+  if (q.genre === 'qcm' || q.genre === 'vf') return { ...noterChoix(q, choix || q.items.map(() => null)), choix: choix || [] };
+  if (!texte.trim()) return { fait: true, texte, note: 0, verdict: 'faux', retour: 'Pas de réponse trouvée sur la feuille pour cette question.' };
+  if (q.genre === 'valeur') return noterValeur(p, q, texte, corriger);
+  try {
+    if (q.genre === 'redaction') return etatDeCorrection(q, texte, await corriger(corpsCorrection(p, q, texte)));
+    return etatDeCorrection(q, texte, await corriger({
+      diapo: { title: `${configExamen().sujet.niveau} — ${p.titre}`, speech: '' },
+      question: { type: 'open', enonce: enonceLecture(q).slice(0, 1500), attendu: q.correction.join(' '), matiere: configExamen().matiere, bareme: q.points, elements: q.correction },
+      reponse: texte.slice(0, 4000), tentative: 2, verdict: null,
+    } as never));
+  } catch {
+    return { ...regarder, texte };
+  }
+}
+
+type ReponseExercice = { texte: string; choix?: (number | boolean | null)[]; resultat?: Etat & { verdictMur?: VerdictMur }; etat: 'attente' | 'correction' | 'envoye' | 'erreur'; erreur?: string };
+
+/** 25/11/2026 : une seule photo de la feuille pour TOUT l'exercice. Lue une fois, découpée entre les questions de
+ *  l'exercice (repères « 1-1) », « 1-2) »…), relue question par question, puis chaque question est notée et envoyée ;
+ *  les retours s'affichent les uns sous les autres, sur la même feuille. */
+function PhotoExercice({ code, p, entetes, eleve, onLoupe, onFini }: { code: string; p: PartieExamen; entetes: Record<string, string>; eleve?: string;
+  onLoupe: (src: string) => void; onFini?: (total: number, sur: number) => void }) {
+  const qs = p.questions;
+  const [phase, setPhase] = useState<'vide' | 'lecture' | 'relire' | 'envoi' | 'fini'>('vide');
+  const [photo, setPhoto] = useState<{ mini: string; nette: string; lu: string } | null>(null);
+  const [rep, setRep] = useState<Record<string, ReponseExercice>>({});
+  const [erreur, setErreur] = useState('');
+  const poser = (id: string, m: Partial<ReponseExercice>) => setRep(s => ({ ...s, [id]: { ...(s[id] || { texte: '', etat: 'attente' }), ...m } }));
+  const de = eleve ? 'sa' : 'ma';
+
+  const lire = async (f: File) => {
+    setPhase('lecture'); setErreur('');
+    try {
+      let mini = await reduireImage(f, 480, 0.6);
+      if (octets(mini) > 110_000) mini = await reduireImage(f, 360, 0.5);
+      // une feuille entière : un peu plus de détails que pour une seule réponse
+      const grande = await reduireImage(f, 1600, 0.82);
+      let nette = octets(grande) <= 390_000 ? grande : await reduireImage(f, 1200, 0.7);
+      if (octets(nette) > 390_000) nette = await reduireImage(f, 900, 0.6);
+      const enonce = qs.map(q => `${q.id}) ${enonceLecture(q)}`).join(' | ');
+      const vocabulaire = [...new Set(qs.flatMap(q => motsDuSujet(p, q).split(' ')))].join(' ').slice(0, 1900);
+      const { texte } = await appel<{ texte: string }>(`/${code}/lire`, { method: 'POST', body: JSON.stringify({
+        image_b64: grande, image_mime: 'image/jpeg', question: '', enonce: `Toutes les questions de l'exercice, chaque réponse commence par son numéro : ${enonce}`.slice(0, 1500),
+        titre: p.titre.slice(0, 300), matiere: configExamen().matiere, niveau: configExamen().sujet.niveau, vocabulaire }) });
+      const parties = decouperParQuestions(texte, qs.map(q => q.id));
+      setRep(Object.fromEntries(qs.map(q => [q.id, {
+        texte: parties[q.id], etat: 'attente' as const,
+        choix: q.genre === 'qcm' || q.genre === 'vf' ? choixLus(q, parties[q.id], choixDuTexte(q.genre, q.items.length, parties[q.id])) : undefined,
+      }])));
+      setPhoto({ mini, nette, lu: texte });
+      setPhase('relire');
+    } catch (err) {
+      setPhase('vide');
+      setErreur((err as Error).message.replace(/^\d+$/, 'La photo n’a pas pu être lue : réessaie, bien éclairée, toute la feuille dans le cadre.'));
+    }
+  };
+
+  const toutEnvoyer = async () => {
+    if (!photo) return;
+    setPhase('envoi');
+    let total = 0, sur = 0;
+    for (const q of qs) {
+      const r = rep[q.id] || { texte: '', etat: 'attente' };
+      const vide = q.genre === 'qcm' || q.genre === 'vf' ? !(r.choix || []).some(c => c !== null && c !== undefined) : !r.texte.trim();
+      if (vide) { poser(q.id, { etat: 'envoye', resultat: { fait: true, note: 0, verdict: 'faux', retour: 'Pas de réponse trouvée sur la feuille : rien n’a été envoyé pour cette question.' } }); sur += q.points; continue; }
+      poser(q.id, { etat: 'correction' });
+      try {
+        const res = await noterReponse(code, p, q, r.texte, r.choix, true);
+        const texteEnvoye = q.genre === 'qcm' || q.genre === 'vf'
+          ? q.items.map((_, k) => `${q.items.length > 1 ? String.fromCharCode(97 + k) + ') ' : ''}${q.genre === 'qcm' ? lettre((r.choix || [])[k] as number) : (r.choix || [])[k] ? 'Vrai' : 'Faux'}`).join(' · ')
+          : r.texte;
+        const { pertes, bien } = detailsEnListes(res);
+        await appel(`/${code}/reponse`, { method: 'POST', body: JSON.stringify({
+          question: q.id, texte: texteEnvoye.slice(0, 4000), note: res.verdictMur === 'regarder' ? null : res.note ?? 0, sur: q.points,
+          verdict: res.verdictMur || res.verdict || 'nonjuge', pertes, bien, retour: (res.retour || '').slice(0, 800), image_b64: photo.mini,
+          photo_b64: octets(photo.nette) <= 390_000 ? photo.nette : null, lu: photo.lu.slice(0, 4000), ...(eleve ? { eleve } : {}) }) }, entetes);
+        poser(q.id, { etat: 'envoye', resultat: res });
+        total += res.verdictMur === 'regarder' ? 0 : res.note ?? 0; sur += q.points;
+      } catch (err) {
+        poser(q.id, { etat: 'erreur', erreur: (err as Error).message.replace(/^\d+$/, 'L’envoi n’est pas passé.') });
+      }
+    }
+    setPhase('fini');
+    onFini?.(total, sur);
+  };
+
+  const recommencer = () => { setPhase('vide'); setPhoto(null); setRep({}); setErreur(''); };
+  const total = qs.reduce((n, q) => n + (rep[q.id]?.resultat?.verdictMur === 'regarder' ? 0 : rep[q.id]?.resultat?.note ?? 0), 0);
+  const surTout = qs.reduce((n, q) => n + q.points, 0);
+
+  return (
+    <div>
+      {(phase === 'vide' || phase === 'lecture') && (
+        <label className={`block cursor-pointer rounded-xl px-4 py-4 text-center text-lg font-bold text-white ${phase === 'lecture' ? 'animate-pulse bg-sky-700' : 'bg-indigo-800 active:bg-indigo-950'}`}>
+          {phase === 'lecture' ? '📷 Lecture de toute la feuille…' : `📷 Photographier ${de} feuille de tout l’exercice (${qs.length} questions)`}
+          <input type="file" accept="image/*" capture="environment" className="hidden" disabled={phase === 'lecture'}
+            onChange={ev => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f) void lire(f); }} />
+        </label>)}
+      {phase === 'vide' && <p className="mt-1 text-xs text-slate-600">Chaque réponse doit commencer par son numéro (1-1, 1-2…) : la feuille est découpée question par question.</p>}
+      {erreur && <p className="mt-2 text-sm text-rose-700">{erreur}</p>}
+
+      {photo && phase !== 'vide' && phase !== 'lecture' && (
+        <div className="mb-2 flex items-start gap-2">
+          <img src={photo.mini} alt="La feuille" className="h-24 w-20 shrink-0 rounded border object-cover" onClick={() => onLoupe(photo.mini)} />
+          <p className="text-sm text-slate-700">{phase === 'relire' ? 'Voici la feuille découpée question par question : corrige si besoin, puis envoie tout.'
+            : phase === 'envoi' ? 'Le tuteur corrige chaque question…' : <>Total de l’exercice : <b className="text-lg">{pts(total)} / {pts(surTout)}</b></>}</p>
+        </div>)}
+
+      {photo && phase !== 'vide' && phase !== 'lecture' && (
+        <ol className="space-y-3">
+          {qs.map(q => {
+            const r = rep[q.id] || { texte: '', etat: 'attente' as const };
+            return (
+              <li key={q.id} className="rounded-lg border border-slate-300 bg-white p-2">
+                <p className="text-[15px] font-semibold">Question {q.id} <span className="font-normal text-slate-500">({pts(q.points)} pt)</span></p>
+                <p className="text-sm text-slate-600"><Formule t={q.texte} /></p>
+                {phase === 'relire' && (q.genre === 'qcm' || q.genre === 'vf'
+                  ? <Choix q={q} etat={{ fait: false, choix: r.choix }} onChoisir={(k, v) => poser(q.id, { choix: (r.choix || q.items.map(() => null)).map((c, m) => (m === k ? v : c)) })} />
+                  : <textarea value={r.texte} onChange={ev => poser(q.id, { texte: ev.target.value })} rows={Math.min(8, Math.max(2, r.texte.split('\n').length + 1))} dir="auto"
+                      placeholder="Rien trouvé pour cette question sur la feuille" className="mt-1 w-full rounded-md border border-slate-400 p-2 text-[17px]" style={{ fontFamily: CRAIE }} />)}
+                {phase !== 'relire' && r.etat === 'correction' && <p className="mt-1 animate-pulse text-sm text-sky-800">Le tuteur corrige…</p>}
+                {phase !== 'relire' && r.etat === 'erreur' && <p className="mt-1 text-sm text-rose-700">{r.erreur}</p>}
+                {phase !== 'relire' && r.resultat && (<>
+                  {r.resultat.verdictMur === 'regarder'
+                    ? <p className="mt-1 rounded-md border-2 border-sky-600 bg-sky-50 p-2 text-sky-900">👀 À regarder ensemble avec la correction.</p>
+                    : <><p className="mt-1 text-lg font-bold">{pts(r.resultat.note || 0)} / {pts(q.points)}</p><Verdict etat={r.resultat} /></>}
+                </>)}
+              </li>);
+          })}
+        </ol>)}
+
+      {phase === 'relire' && (
+        <div className="sticky bottom-0 mt-2 flex flex-wrap gap-2 bg-white/90 py-2">
+          <button onClick={() => void toutEnvoyer()} className="rounded-lg bg-black px-5 py-2 font-semibold text-white">Corriger et envoyer les {qs.length} réponses</button>
+          <button onClick={recommencer} className="rounded-lg border border-slate-400 px-3 py-2 text-sm">Reprendre la photo</button>
+        </div>)}
+      {phase === 'fini' && <button onClick={recommencer} className="mt-2 rounded-lg border border-slate-400 px-3 py-1.5 text-sm">Nouvelle photo de l’exercice</button>}
+    </div>
+  );
 }
