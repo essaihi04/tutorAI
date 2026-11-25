@@ -54,9 +54,17 @@ def main():
             continue
         mp3 = os.path.join(PUBLIC, 'media', 'audio', 'courses', deck, p['type'], nom + '.mp3')
         os.makedirs(os.path.dirname(mp3), exist_ok=True)
+        if os.path.getsize(wav) < 2000:   # WAV vide ou cassé rendu par le lot (25/11/2026 : 332 octets) : à refaire
+            cote[cle] = {'texte': p['texte'], 'fautes': ['WAV invalide : à régénérer']}
+            continue
         if not os.path.isfile(mp3) or os.path.getmtime(mp3) < os.path.getmtime(wav):
-            subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-i', wav, '-ac', '1', '-codec:a', 'libmp3lame',
-                            '-q:a', '5', mp3], check=True)
+            r = subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-i', wav, '-ac', '1', '-codec:a', 'libmp3lame',
+                                '-q:a', '5', mp3])
+            if r.returncode != 0:
+                cote[cle] = {'texte': p['texte'], 'fautes': ['WAV illisible : à régénérer']}
+                if os.path.isfile(mp3):
+                    os.remove(mp3)
+                continue
         poses.append(rel)
     deja = json.load(open(A_ECOUTER, encoding='utf-8')) if os.path.isfile(A_ECOUTER) else {}
     deja = {k: v for k, v in deja.items() if not (k.startswith(deck + '/') and k.split('/', 1)[1] in poses)}
