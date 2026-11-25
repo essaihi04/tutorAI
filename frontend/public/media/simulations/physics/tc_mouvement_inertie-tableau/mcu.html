@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le mouvement circulaire uniforme — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La table à coussin d’air vue de dessus : l’autoporteur relié par un fil à un clou fixe O tourne ; l’éclateur marque un point toutes les τ = 20 ms ; arcs égaux de 2 cm sur un cercle de rayon R = 10 cm ; vitesse angulaire ω, période T et fréquence f"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * Le mouvement circulaire uniforme (diapos mi_c1_circulaire … mi_c5_eleve).
+ * Table à coussin d’air vue de dessus, feuille d’enregistrement ; l’autoporteur est relié par un fil à un clou fixe O.
+ * Valeurs du livre : R = 10 cm, τ = 20 ms, arcs M_iM_{i+1} = 2 cm → v = 1 m/s, ω = 10 rad/s, T ≈ 0,63 s, f ≈ 1,6 Hz.
+ * Au tableau : 1 cm = 14 unités (R = 140) ; un arc de 2 cm = 0,2 rad.
+ *  ?vue=circulaire : les points se marquent sur le cercle ; six arcs égaux s’allument un à un (comptés).
+ *                    Moments : lance 0,5 ; points 1 ; arcs 6 ; conclusion 9 ; fin 11. Repères : O, rayon, arc, trajectoire.
+ *  ?vue=omega      : le rayon balaie Δθ pendant Δt ; ω = Δθ/Δt = v/R = 1/0,10 = 10 rad/s.
+ *                    Moments : rayon 0,5 ; angle 2 ; relation 4 ; calcul 6 ; fin 8. Repères : rayon, angle, relation.
+ *  ?vue=periode    : un tour au chronomètre (T ≈ 0,63 s) ; T = 2π/ω ; f = 1/T (tours par seconde).
+ *                    Moments : tour 0,5 ; T 4,5 ; relationT 6 ; f 8 ; relationf 9,5 ; fin 11. Repères : tour, chrono, T, f.
+ *  ?vue=methode    : v = 0,02/0,02 = 1 m/s ; ω = v/R = 1/0,10 = 10 rad/s ; T = 2π/ω ≈ 0,63 s ; f = 1/T ≈ 1,6 Hz.
+ *                    Moments : donnees 0,5 ; v 2 ; omega 4 ; T 6 ; f 8 ; fin 10. Repères : donnees, v, omega, T, f.
+ *  ?vue=eleve      : arcs de 3 cm, τ = 20 ms, R = 30 cm : v = 1,5 m/s ; ω = 5 rad/s ; T ≈ 1,26 s ; f ≈ 0,8 Hz.
+ *                    Moments : donnees 0,5 ; v 2 ; omega 3,5 ; T 5 ; f 6,5 ; fin 8. conclusions:false cache les résultats.
+ * Sur la feuille claire, l’écriture est à l’encre sombre (la craie blanche ne s’y lirait pas).
+ */
+const { P, TAU } = window.Mvt;
+/** La colonne d’écriture (Mvt.panneau) ; dans le petit cadre, les n dernières lignes empilées selon leur hauteur
+ *  (une fraction prend plus de place qu’une ligne simple). */
+function panneau(c, S, sc, x, y, w, items, o = {}) {
+  if (!sc.petit || (o.petit ?? 1) < 2) return window.Mvt.panneau(c, S, sc, x, y, w, items, o);
+  const tp = o.taillePetit ?? 30, h = it => tp * (/⟦/.test(it.t) ? 2.3 : 1.4);
+  const vus = items.filter(it => (S.t <= 0 || S.a(it.m)) && (!it.conclusion || S.conclusions)).slice(-o.petit);
+  let yy = o.py ?? 40;
+  vus.forEach((it, k) => {
+    if (k && /⟦/.test(it.t)) yy += tp * .45;
+    window.Mvt.panneau(c, S, sc, x, y, w, [it], Object.assign({}, o, { petit: 1, py: yy }));
+    yy += h(it);
+  });
+}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const ENCRE = '#1f2937', ENCRE_B = '#1e3a8a', ENCRE_O = '#c2410c';
+const pos = (O, R, a) => [O[0] + R * Math.cos(a), O[1] - R * Math.sin(a)];
+const fr = v => String(v).replace('.', ',');
+
+/** La table vue de dessus avec sa feuille. */
+function plateau(c, x, y, w, h) {
+  c.direct(() => P.table(c.ctx, x, y, w, h, { feuille: true }));
+  c.repere('table', x, y, w, h, 'la table à coussin d’air, vue de dessus');
+}
+/** Le clou fixe O (tête d’acier) et son nom. */
+function clou(c, O, pt, nom = true) {
+  c.direct(() => { const g = c.ctx; g.fillStyle = '#0f172a'; g.beginPath(); g.arc(O[0], O[1], 9, 0, TAU); g.fill(); P.boule(g, O[0], O[1], 7, '#f8fafc', '#94a3b8', '#334155'); });
+  if (nom) c.direct(() => c.texte('O', O[0] - 14, O[1] + 8, { couleur: ENCRE, taille: pt ? 28 : 22, gras: true, align: 'right' }));
+  c.repere('O', O[0] - 14, O[1] - 14, 28, 28, 'le clou fixe O, centre du cercle');
+}
+/** Le fil tendu de O à l’autoporteur. */
+function fil(c, O, M, a = 1) {
+  c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = a; g.strokeStyle = '#475569'; g.lineWidth = 2; g.beginPath(); g.moveTo(O[0], O[1]); g.lineTo(M[0], M[1]); g.stroke(); g.restore(); });
+}
+/** Un arc du cercle qui s’allume (lueur orange sur la feuille claire), avec son numéro à l’extérieur. */
+function lueurArc(c, O, R, a0, a1, o = {}) {
+  const vive = !!o.vive;
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.lineCap = 'round'; g.shadowColor = 'rgba(234,88,12,.9)'; g.shadowBlur = vive ? 16 : 7;
+    g.strokeStyle = `rgba(234,88,12,${vive ? .8 : .45})`; g.lineWidth = vive ? 9 : 7;
+    g.beginPath(); g.arc(O[0], O[1], R, -a0, -a1, a1 > a0); g.stroke(); g.restore();
+    if (o.numero != null) { const [x, y] = pos(O, R + (o.dr || 25), (a0 + a1) / 2); c.texte(String(o.numero), x, y + 7, { couleur: ENCRE_O, taille: o.taille || 21, gras: true, align: 'center' }); }
+  });
+}
+/** Les points de l’enregistrement sur le cercle, de l’angle a0, tous les da, n points. */
+function points(c, O, R, a0, da, n, r = 5) { for (let i = 0; i < n; i++) { const [x, y] = pos(O, R, a0 + i * da); c.direct(() => P.point(c.ctx, x, y, r)); } }
+/** Le cercle-trajectoire en pointillé (encre). */
+function cercle(c, O, R, o = {}) {
+  c.direct(() => { const g = c.ctx; g.save(); g.setLineDash([7, 7]); g.strokeStyle = o.couleur || 'rgba(15,118,110,.75)'; g.lineWidth = o.largeur || 2; g.beginPath(); g.arc(O[0], O[1], R, 0, TAU); g.stroke(); g.restore(); });
+}
+
+/* ── vue circulaire ── */
+const MC = { lance: .5, points: 1, arcs: 6, conclusion: 9 };
+const NI = 31, DA = .2, A0 = -Math.PI / 2, I0 = 4, PAS_C = (MC.arcs - MC.points - .05) / NI;   // 31 intervalles de 2 cm ≈ un tour
+function dessinerCirculaire(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, O = [210, 210], R = 140;
+  plateau(c, 6, 6, 408, 408);
+  if (S.t <= 0 || S.a('conclusion')) { cercle(c, O, R); c.repere('trajectoire', O[0] - R, O[1] - R, 2 * R, 2 * R, 'la trajectoire : un cercle de centre O'); }
+  const k = S.t <= 0 ? NI : (t < MC.lance ? -2.5 : (t - MC.points) / PAS_C);
+  const kk = clamp(k, -2.5, NI + .3), n = k < 0 ? 0 : Math.min(NI + 1, Math.floor(k + 1e-6) + 1);
+  points(c, O, R, A0, DA, n);
+  if (k >= 0 && k <= NI + .3) { const f = k - Math.floor(k); if (f < .3) { const [x, y] = pos(O, R, A0 + Math.floor(k) * DA); c.direct(() => P.etincelle(c.ctx, x, y, 16, 1 - f / .3)); } }
+  const M = pos(O, R, A0 + kk * DA), fini = k > NI + .3;
+  fil(c, O, M, fini ? .45 : 1);
+  c.direct(() => P.autoporteur(c.ctx, M[0], M[1], 25, { alpha: fini ? .45 : 1 }));
+  c.repere('autoporteur', M[0] - 25, M[1] - 25, 50, 50, 'l’autoporteur, retenu par le fil');
+  clou(c, O, pt);
+  if (n > 0) { const [x, y] = pos(O, R - 40, A0); c.direct(() => c.texte('M_0', x, y + 6, { couleur: ENCRE, taille: pt ? 27 : 19, gras: true, align: 'center' })); }
+  // le rayon (fixe, en encre bleue) vers M0
+  if (S.t <= 0 || S.ecrit(c, 'lance')) {
+    const MR = pos(O, R, A0 + 20 * DA);   // un point en haut à gauche
+    c.ligne(O[0], O[1], MR[0], MR[1], { couleur: ENCRE_B, largeur: 2.2, pointille: [9, 6] });
+    c.texte('R = 10 cm', 162, 150, { couleur: ENCRE_B, taille: pt ? 27 : 20, gras: true });
+    c.repere('rayon', MR[0], MR[1], O[0] - MR[0], O[1] - MR[1] + 40, 'le rayon R = 10 cm');
+  }
+  // les arcs égaux, allumés un à un
+  if (S.a('arcs') || S.t <= 0) for (let i = 0; i < 6; i++) if (t >= MC.arcs + i * .5) lueurArc(c, O, R, A0 + (I0 + i) * DA, A0 + (I0 + i + 1) * DA, { vive: t < MC.arcs + (i + 1) * .5, numero: i + 1, taille: pt ? 27 : 21, dr: pt ? 26 : 24 });
+  if (S.a('arcs') || S.t <= 0) { const a = pos(O, R, A0 + I0 * DA), b = pos(O, R, A0 + (I0 + 6) * DA); c.repere('arc', Math.min(a[0], b[0]) - 10, Math.min(a[1], b[1]) - 10, Math.abs(a[0] - b[0]) + 40, Math.abs(a[1] - b[1]) + 20, 'six arcs égaux de 2 cm, parcourus chacun en τ'); }
+  panneau(c, S, sc, L - 330, 64, 318, [
+    { m: 'lance', t: 'R = 10 cm ; τ = 20 ms', c: 'orange' },
+    { m: 'points', t: 'un point toutes les τ', c: 'blanc' },
+    { m: 'arcs', t: 'arcs égaux : 2 cm', c: 'jaune', g: true, r: 'l_arcs' },
+    { m: 'conclusion', t: 'trajectoire : un cercle', c: 'cyan', g: true, conclusion: true },
+    { m: 'conclusion', t: 'v = 1 m/s, constante', c: 'vert', g: true, conclusion: true },
+    { m: 'conclusion', t: 'mouvement circulaire', c: 'jaune', g: true, taille: 23, conclusion: true, r: 'conclusion' },
+    { m: 'conclusion', t: 'uniforme', c: 'jaune', g: true, taille: 23, conclusion: true },
+  ], { dy: 44, px: L - 334, py: 150, pw: 322, petit: 2, taillePetit: 28, taille: 21 });
+}
+
+/* ── vue omega ── */
+const MO = { rayon: .5, angle: 2, relation: 4, calcul: 6 };
+function dessinerOmega(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, O = [210, 210], R = 140, a0 = -.5, dth = 1;
+  plateau(c, 6, 6, 408, 408);
+  cercle(c, O, R, { couleur: 'rgba(15,118,110,.45)', largeur: 1.6 });
+  const u = S.t <= 0 ? 1 : clamp((t - MO.angle) / 1.5, 0, 1), a = a0 + u * dth;
+  const n = S.t <= 0 || S.a('angle') ? Math.floor(u * 5 + 1e-6) + 1 : 1;
+  points(c, O, R, a0, DA, n);
+  if (S.a('angle') && u < 1) { const f = u * 5 - Math.floor(u * 5); if (f < .35) { const [x, y] = pos(O, R, a0 + Math.floor(u * 5) * DA); c.direct(() => P.etincelle(c.ctx, x, y, 16, 1 - f / .35)); } }
+  const M = pos(O, R, a);
+  fil(c, O, M);
+  c.direct(() => P.autoporteur(c.ctx, M[0], M[1], 25));
+  c.repere('autoporteur', M[0] - 25, M[1] - 25, 50, 50, 'l’autoporteur');
+  clou(c, O, pt);
+  const M0 = pos(O, R, a0), M5 = pos(O, R, a0 + dth), ts = pt ? 27 : 20;
+  c.direct(() => { const [x, y] = pos(O, R + 36, a0 - .1); c.texte('M_0', x, y + 8, { couleur: ENCRE, taille: ts, gras: true, align: 'center' }); });
+  if (S.t <= 0 || S.ecrit(c, 'rayon')) {
+    c.ligne(O[0], O[1], M0[0], M0[1], { couleur: ENCRE_B, largeur: 2.4 });
+    c.texte('R', (O[0] + M0[0]) / 2 + 4, (O[1] + M0[1]) / 2 + (pt ? 32 : 26), { couleur: ENCRE_B, taille: pt ? 28 : 22, gras: true, align: 'center' });
+    c.repere('rayon', O[0], O[1], M0[0] - O[0], M0[1] - O[1] + 30, 'le rayon R = 10 cm');
+  }
+  if ((S.t <= 0 || S.a('angle')) && u >= 1) {
+    if (S.t > 0) c.depuis((S.vu.angle ?? 0) + 1.5);
+    c.ligne(O[0], O[1], M5[0], M5[1], { couleur: ENCRE_B, largeur: 2.4 });
+    c.direct(() => { const [x, y] = pos(O, R + 38, a0 + dth + .14); c.texte('M_5', x, y + 8, { couleur: ENCRE, taille: ts, gras: true, align: 'center' }); });
+    c.courbe(v => pos(O, 54, a0 + v * dth), 24, { couleur: ENCRE_O, largeur: 2.6 });
+    c.texte('Δθ', O[0] + (pt ? 70 : 66), O[1] + 9, { couleur: ENCRE_O, taille: pt ? 28 : 24, gras: true });
+    c.repere('angle', O[0], M5[1], R, M0[1] - M5[1], 'l’angle Δθ balayé par le rayon pendant Δt');
+  }
+  panneau(c, S, sc, L - 330, 70, 318, [
+    { m: 'rayon', t: 'R = 10 cm = 0,10 m', c: 'orange' },
+    { m: 'rayon', t: 'v = 1 m/s', c: 'orange' },
+    { m: 'angle', t: 'pendant Δt, le rayon', c: 'blanc' },
+    { m: 'angle', t: 'tourne de l’angle Δθ', c: 'blanc' },
+    { m: 'relation', t: 'ω = ⟦Δθ|Δt⟧ = ⟦v|R⟧', c: 'jaune', g: true, taille: 24, r: 'relation' },
+    { m: 'calcul', t: 'ω = ⟦1|0,10⟧ = 10 rad/s', c: 'vert', g: true, taille: 24, r: 'calcul', conclusion: true },
+  ], { dy: 44, px: L - 334, py: 130, pw: 322, petit: 2, taillePetit: 28, taille: 21 });
+}
+
+/* ── vue periode ── */
+const MP = { tour: .5, T: 4.5, relationT: 6, f: 8, relationf: 9.5 };
+const T_PHYS = 2 * Math.PI / 10;   // 0,628 s
+function dessinerPeriode(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, O = [210, 210], R = 140, a0 = -Math.PI / 2;
+  plateau(c, 6, 6, 408, 408);
+  cercle(c, O, R, { couleur: 'rgba(15,118,110,.4)', largeur: 1.6 });
+  // l’angle de l’autoporteur et le temps du chronomètre (en secondes réelles)
+  let ang = a0, chrono = 0, tours = 0;
+  if (S.t > 0 && t < MP.f) { const u = clamp((t - MP.tour) / (MP.T - MP.tour), 0, 1); ang = a0 + u * TAU; chrono = u * T_PHYS; tours = u; }
+  else { const u = S.t <= 0 ? 1 : clamp((t - MP.f) / 1.5, 0, 1); chrono = u * 1; tours = chrono / T_PHYS; ang = a0 + tours * TAU; }
+  // la trace du tour (encre orange) pendant le premier tour
+  if (S.t <= 0 || S.a('tour')) {
+    const u1 = S.t > 0 && t < MP.f ? clamp((t - MP.tour) / (MP.T - MP.tour), 0, 1) : 1;
+    if (u1 > .005) c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = 'rgba(234,88,12,.55)'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.arc(O[0], O[1], R, -a0, -(a0 + u1 * TAU), true); g.stroke(); g.restore(); });
+    c.repere('tour', O[0] - R, O[1] - R, 2 * R, 2 * R, 'un tour complet : Δθ = 2π rad');
+  }
+  const M = pos(O, R, ang);
+  fil(c, O, M);
+  c.direct(() => P.autoporteur(c.ctx, M[0], M[1], 25));
+  c.repere('autoporteur', M[0] - 25, M[1] - 25, 50, 50, 'l’autoporteur');
+  clou(c, O, pt);
+  c.direct(() => c.texte('départ', O[0] + 34, O[1] + R + (pt ? 32 : 30), { couleur: ENCRE, taille: pt ? 26 : 18, gras: true }));
+  // le chronomètre
+  const cx = L - 255, cy = 80, cr = pt ? 50 : 46, lecture = fr(chrono.toFixed(2)) + ' s';
+  c.direct(() => P.chrono(c.ctx, cx, cy, cr, lecture));
+  c.repere('chrono', cx - cr, cy - cr * 1.3, 2 * cr, cr * 2.3, 'le chronomètre : ' + lecture);
+  const ft = pt ? 28 : 22;
+  if (pt) c.direct(() => c.texte(lecture, cx + cr + 14, cy + 2, { couleur: 'vert', taille: 28, gras: true }));
+  if (S.t <= 0 || S.a('T')) {
+    if (S.t > 0 && S.t < MP.f) Mvt.lueur(c, cx - cr - 6, cy - cr - 6, 2 * cr + 12, 2 * cr + 12, { vive: S.t < MP.relationT, r: cr });
+    if (!pt && (S.t > 0 && S.t < MP.f)) c.direct(() => c.texte('T', cx + cr + 16, cy + 8, { couleur: 'jaune', taille: 30, gras: true }));
+  }
+  // les tours comptés pendant 1 s
+  if (S.t <= 0 || S.a('f')) {
+    const ok1 = tours >= 1 - 1e-6, fin = chrono >= 1 - 1e-6, x = pt ? cx + cr + 14 : cx + cr + 16, y1 = pt ? cy + 40 : cy - 12;
+    if (ok1 && !fin && S.t > 0) Mvt.lueur(c, x - 6, y1 - ft, pt ? 120 : 100, ft + 10, { vive: true });
+    if (ok1) c.direct(() => c.texte(fin ? fr(tours.toFixed(1)) + ' tour' : '1 tour', x, y1, { couleur: 'jaune', taille: ft, gras: true }));
+    if (!pt && fin) c.direct(() => c.texte('en 1 s', x, y1 + 28, { couleur: 'jaune', taille: 20 }));
+  }
+  panneau(c, S, sc, L - 330, 168, 318, [
+    { m: 'tour', t: 'un tour : Δθ = 2π rad', c: 'orange' },
+    { m: 'T', t: 'T ≈ 0,63 s : durée d’un tour', c: 'jaune', g: true, r: 'T' },
+    { m: 'relationT', t: 'T = ⟦2π|ω⟧ = ⟦2π|10⟧ ≈ 0,63 s', taille: 23, c: 'jaune', g: true, r: 'relationT' },
+    { m: 'f', t: 'f : nombre de tours en 1 s', c: 'cyan', g: true, r: 'f' },
+    { m: 'relationf', t: 'f = ⟦1|T⟧ = ⟦1|0,63⟧ ≈ 1,6 Hz', taille: 23, c: 'cyan', g: true, r: 'relationf', conclusion: true },
+  ], { dy: 38, px: L - 334, py: 200, pw: 322, petit: 2, taillePetit: 28, taille: 20 });
+}
+
+/* ── vues methode et eleve : la méthode v → ω → T → f ── */
+function figureMethode(c, S, sc, o) {
+  const pt = sc.petit, O = [176, 210], R = 120;
+  plateau(c, 6, 36, 340, 348);
+  cercle(c, O, R, { couleur: 'rgba(15,118,110,.45)', largeur: 1.6 });
+  const da = o.da, a0 = -1.0, n = Math.round(2.2 / da) + 1;
+  points(c, O, R, a0, da, n, o.r);
+  const aF = a0 + (n - 1) * da + da * .6, M = pos(O, R, aF);
+  fil(c, O, M, .55);
+  c.direct(() => P.autoporteur(c.ctx, M[0], M[1], 22, { alpha: .55 }));
+  clou(c, O, pt);
+  // le rayon, vers le point d’angle +0,8 rad environ (au-dessus)
+  const aR = Math.PI + .5, MR = pos(O, R, aR), ts = pt ? 27 : 20;
+  c.ligne(O[0], O[1], MR[0], MR[1], { couleur: ENCRE_B, largeur: 2.2, pointille: [9, 6], duree: .05 });
+  c.direct(() => c.texte(o.rayon, O[0] - 56, O[1] + (pt ? 100 : 75), { couleur: ENCRE_B, taille: ts, gras: true, align: 'center' }));
+  c.repere('rayon', MR[0], O[1], O[0] - MR[0], MR[1] - O[1] + 30, 'le rayon ' + o.rayon);
+  // l’arc choisi M_iM_{i+1}, en bas à droite
+  const i0 = Math.round(.4 / da), aa = a0 + i0 * da, ab = aa + da, [lx, ly] = pos(O, R - (pt ? 46 : 40), (aa + ab) / 2);
+  const allumeArc = S.t <= 0 || S.a('donnees');
+  if (allumeArc) {
+    lueurArc(c, O, R, aa, ab, { vive: S.t > 0 && S.a('v') && !S.a('omega') });
+    c.direct(() => c.texte(o.arc, lx + 2, ly + 8, { couleur: ENCRE_O, taille: ts, gras: true, align: 'center' }));
+  }
+  c.repere('arc', lx - 34, ly - 30, 68, 50, 'l’arc M_iM_{i+1} = ' + o.arc + ', parcouru en τ');
+  if (S.t > 0 && S.a('omega') && !S.a('T')) Mvt.lueur(c, MR[0] - 8, O[1] - 8, O[0] - MR[0] + 16, MR[1] - O[1] + 16, { vive: true, couleur: '96, 165, 250' });
+  if (S.t > 0 && S.a('T')) c.direct(() => { const g = c.ctx; g.save(); g.shadowColor = 'rgba(234,88,12,.8)'; g.shadowBlur = S.a('f') ? 6 : 14; g.strokeStyle = `rgba(234,88,12,${S.a('f') ? .35 : .6})`; g.lineWidth = 5; g.beginPath(); g.arc(O[0], O[1], R, 0, TAU); g.stroke(); g.restore(); });
+}
+const MMe = { donnees: .5, v: 2, omega: 4, T: 6, f: 8 };
+function dessinerMethode(c, S, sc) {
+  const L = sc.L;
+  figureMethode(c, S, sc, { da: .2, r: 5, rayon: 'R = 10 cm', arc: '2 cm' });
+  panneau(c, S, sc, L - 400, 58, 392, [
+    { m: 'donnees', t: 'M_{i}M_{i+1} = 2 cm = 0,02 m', c: 'orange', r: 'donnees' },
+    { m: 'donnees', t: 'τ = 20 ms = 0,02 s ; R = 0,10 m', c: 'orange' },
+    { m: 'v', t: 'v = ⟦M_{i}M_{i+1}|τ⟧ = ⟦0,02|0,02⟧ = 1 m/s', taille: 23, c: 'vert', g: true, r: 'v' },
+    { m: 'omega', t: 'ω = ⟦v|R⟧ = ⟦1|0,10⟧ = 10 rad/s', taille: 23, c: 'jaune', g: true, r: 'omega' },
+    { m: 'T', t: 'T = ⟦2π|ω⟧ = ⟦2π|10⟧ ≈ 0,63 s', taille: 23, c: 'jaune', g: true, r: 'T' },
+    { m: 'f', t: 'f = ⟦1|T⟧ = ⟦1|0,63⟧ ≈ 1,6 Hz', taille: 23, c: 'cyan', g: true, r: 'f' },
+  ], { dy: 42, px: L - 404, py: 150, pw: 396, petit: 2, taillePetit: 28, taille: 21 });
+}
+const MEl = { donnees: .5, v: 2, omega: 3.5, T: 5, f: 6.5 };
+function dessinerEleve(c, S, sc) {
+  const L = sc.L, ok = S.conclusions;
+  figureMethode(c, S, sc, { da: .1, r: 3.8, rayon: 'R = 30 cm', arc: '3 cm' });
+  panneau(c, S, sc, L - 400, 58, 392, [
+    { m: 'donnees', t: 'M_{i}M_{i+1} = 3 cm ; τ = 20 ms', c: 'orange', r: 'donnees' },
+    { m: 'donnees', t: 'R = 30 cm', c: 'orange' },
+    ok ? { m: 'v', t: 'v = ⟦M_{i}M_{i+1}|τ⟧ = ⟦0,03|0,02⟧ = 1,5 m/s', taille: 23, c: 'vert', g: true, r: 'v' } : { m: 'v', t: 'v = ?', c: 'vert', g: true, r: 'v' },
+    ok ? { m: 'omega', t: 'ω = ⟦v|R⟧ = ⟦1,5|0,30⟧ = 5 rad/s', taille: 23, c: 'jaune', g: true, r: 'omega' } : { m: 'omega', t: 'ω = ?', c: 'jaune', g: true, r: 'omega' },
+    ok ? { m: 'T', t: 'T = ⟦2π|ω⟧ = ⟦2π|5⟧ ≈ 1,26 s', taille: 23, c: 'jaune', g: true, r: 'T' } : { m: 'T', t: 'T = ?', c: 'jaune', g: true, r: 'T' },
+    ok ? { m: 'f', t: 'f = ⟦1|T⟧ = ⟦1|1,26⟧ ≈ 0,8 Hz', taille: 23, c: 'cyan', g: true, r: 'f' } : { m: 'f', t: 'f = ?', c: 'cyan', g: true, r: 'f' },
+  ], { dy: 42, px: L - 404, py: 150, pw: 396, petit: 2, taillePetit: 28, taille: 21 });
+}
+
+window.Mvt.vues('tc_mi_mcu', {
+  circulaire: { titre: 'Le mouvement circulaire uniforme', moments: MC, fin: 11, dessiner: dessinerCirculaire,
+    motifs: { lance: 'on lance l’autoporteur', points: 'un point toutes les τ sur le cercle', arcs: 'les arcs égaux comptés', conclusion: 'cercle et vitesse constante : MCU' },
+    accueil: 'L’autoporteur est retenu par un fil à un clou O.', fini: 'Trajectoire circulaire, arcs égaux de 2 cm en durées égales : mouvement circulaire uniforme, v = 1 m/s.',
+    voir: S => ['Table à coussin d’air vue de dessus ; autoporteur relié par un fil au clou fixe O.', S.a('lance') && 'Rayon R = 10 cm tracé de O à M0.', S.a('points') && 'L’autoporteur tourne autour de O ; un point jaune toutes les τ = 20 ms sur un cercle.', S.a('arcs') && 'Six arcs entre points voisins allumés un à un (1 à 6) : 2 cm chacun.', S.a('conclusion') && S.conclusions && 'Cercle en pointillé : trajectoire circulaire ; v = 1 m/s constante : mouvement circulaire uniforme.'].filter(Boolean).join(' '),
+    texte: 'Autoporteur relié par un fil à un point fixe O : il décrit un cercle de rayon R = 10 cm. Les points (toutes les τ = 20 ms) sont séparés par des arcs égaux de 2 cm : la vitesse est constante, v = 0,02/0,02 = 1 m/s. Trajectoire circulaire + vitesse constante : mouvement circulaire uniforme.' },
+  omega: { titre: 'La vitesse angulaire ω', moments: MO, fin: 8, dessiner: dessinerOmega,
+    motifs: { rayon: 'le rayon R', angle: 'l’angle Δθ balayé', relation: 'ω = Δθ/Δt = v/R', calcul: 'ω = 10 rad/s' },
+    accueil: 'Le rayon OM tourne avec l’autoporteur.', fini: 'ω = Δθ/Δt = v/R = 1/0,10 = 10 rad/s.',
+    voir: S => ['Autoporteur sur le cercle (R = 10 cm), fil vers O.', S.a('rayon') && 'Rayon OM0 tracé, R = 10 cm = 0,10 m ; v = 1 m/s.', S.a('angle') && 'L’autoporteur va de M0 à M5 ; second rayon OM5 ; l’angle Δθ entre les deux rayons est marqué.', S.a('relation') && 'ω = Δθ/Δt = v/R.', S.a('calcul') && S.conclusions && 'ω = 1/0,10 = 10 rad/s.'].filter(Boolean).join(' '),
+    texte: 'La vitesse angulaire est l’angle balayé par le rayon par seconde : ω = Δθ/Δt (rad/s) ; elle est liée à la vitesse par ω = v/R. Ici ω = 1/0,10 = 10 rad/s.' },
+  periode: { titre: 'La période et la fréquence', moments: MP, fin: 11, dessiner: dessinerPeriode,
+    motifs: { tour: 'un tour complet', T: 'T ≈ 0,63 s au chronomètre', relationT: 'T = 2π/ω', f: 'les tours en une seconde', relationf: 'f = 1/T' },
+    accueil: 'Un tour complet, chronométré.', fini: 'T = 2π/ω ≈ 0,63 s ; f = 1/T ≈ 1,6 Hz.',
+    voir: S => {
+      const u = S.t < MP.f ? Math.min(1, Math.max(0, (S.t - MP.tour) / (MP.T - MP.tour))) * T_PHYS : Math.min(1, (S.t - MP.f) / 1.5);
+      return ['Autoporteur sur le cercle, fil vers O ; chronomètre ' + fr(Math.max(0, u).toFixed(2)) + ' s.', S.a('tour') && 'L’autoporteur fait un tour complet (trace orange).', S.a('T') && 'Chronomètre arrêté à 0,63 s : la période T.', S.a('relationT') && 'T = 2π/ω = 2π/10 ≈ 0,63 s.', S.a('f') && 'Nouveau chronométrage pendant 1 s : 1 tour allumé, puis 1,6 tour.', S.a('relationf') && S.conclusions && 'f = 1/T = 1/0,63 ≈ 1,6 Hz.'].filter(Boolean).join(' ');
+    },
+    texte: 'La période T est la durée d’un tour : T = 2π/ω ≈ 0,63 s. La fréquence f est le nombre de tours par seconde : f = 1/T ≈ 1,6 Hz (hertz).' },
+  methode: { titre: 'Méthode : v, ω, T et f', moments: MMe, fin: 10, dessiner: dessinerMethode,
+    motifs: { donnees: 'les données', v: 'la vitesse v', omega: 'la vitesse angulaire ω', T: 'la période T', f: 'la fréquence f' },
+    accueil: 'Arcs de 2 cm, τ = 20 ms, R = 10 cm.', fini: 'v = 1 m/s ; ω = 10 rad/s ; T ≈ 0,63 s ; f ≈ 1,6 Hz.',
+    voir: S => ['Enregistrement circulaire sur la table, R = 10 cm.', S.a('donnees') && 'Données : arc M_iM_{i+1} = 2 cm = 0,02 m (allumé), τ = 0,02 s, R = 0,10 m.', S.a('v') && 'v = 0,02/0,02 = 1 m/s.', S.a('omega') && 'Rayon allumé ; ω = v/R = 1/0,10 = 10 rad/s.', S.a('T') && 'Cercle allumé ; T = 2π/ω ≈ 0,63 s.', S.a('f') && 'f = 1/T ≈ 1,6 Hz.'].filter(Boolean).join(' '),
+    texte: 'Méthode : v = M_iM_{i+1}/τ = 0,02/0,02 = 1 m/s ; ω = v/R = 1/0,10 = 10 rad/s ; T = 2π/ω ≈ 0,63 s ; f = 1/T ≈ 1,6 Hz.' },
+  eleve: { titre: 'À toi : un mouvement circulaire', moments: MEl, fin: 8, dessiner: dessinerEleve,
+    motifs: { donnees: 'les données', v: 'la vitesse v', omega: 'la vitesse angulaire ω', T: 'la période T', f: 'la fréquence f' },
+    accueil: 'Arcs de 3 cm, τ = 20 ms, R = 30 cm : v, ω, T, f ?', fini: 'v = 1,5 m/s ; ω = 5 rad/s ; T ≈ 1,26 s ; f ≈ 0,8 Hz.',
+    voir: S => ['Enregistrement circulaire, R = 30 cm ; arcs de 3 cm ; τ = 20 ms.', S.a('v') && (S.conclusions ? 'v = 0,03/0,02 = 1,5 m/s.' : 'v = ? (caché)'), S.a('omega') && (S.conclusions ? 'ω = 1,5/0,30 = 5 rad/s.' : 'ω = ? (caché)'), S.a('T') && (S.conclusions ? 'T = 2π/5 ≈ 1,26 s.' : 'T = ? (caché)'), S.a('f') && (S.conclusions ? 'f = 1/1,26 ≈ 0,8 Hz.' : 'f = ? (caché)')].filter(Boolean).join(' '),
+    texte: 'Exercice : arcs de 3 cm, τ = 20 ms, R = 30 cm. v = 0,03/0,02 = 1,5 m/s ; ω = 1,5/0,30 = 5 rad/s ; T = 2π/5 ≈ 1,26 s ; f = 1/1,26 ≈ 0,8 Hz.' },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

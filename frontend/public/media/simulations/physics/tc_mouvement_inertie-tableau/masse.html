@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le centre de masse — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/physics/tc_mouvement_inertie-tableau/mvt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le centre de masse : une haltère à deux masses égales tient en équilibre sur un doigt en C ; la relation barycentrique OG = (m₁·OG₁ + m₂·OG₂)/(m₁ + m₂) ; le centre de masse d’un marteau ; une tige à deux masses"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/physics/tc_mouvement_inertie-tableau/commun.js"></script>
+<script>
+/*
+ * Le centre de masse (diapos mi_g1_haltere … mi_g4_eleve).
+ *  ?vue=haltere  : deux masses égales en A₁ et A₂ ; C au milieu ; CA⃗₁ + CA⃗₂ = 0⃗ ; posée sur un doigt en C, l’haltère tient.
+ *                  Moments : haltere 0,5 ; masses 2 ; C 4 ; vecteurs 6 ; equilibre 8 ; fin 10. Repères : A1, A2, C, vecteurs.
+ *  ?vue=relation : OG⃗ = (m₁·OG⃗₁ + m₂·OG⃗₂)/(m₁ + m₂), O quelconque ; tige à deux masses inégales (m₂ = 3 m₁) : G près de
+ *                  la plus lourde. Moments : systeme 0,5 ; O 2 ; relation 4 ; G 6 ; fin 8. Repères : O, G1, G2, G.
+ *  ?vue=marteau  : (méthode) manche m₁ = 100 g (centre G₁), tête m₂ = 400 g (centre G₂), G₁G₂ = 25 cm ; O en G₁ :
+ *                  G₁G⃗ = m₂·G₁G⃗₂/(m₁ + m₂) → G₁G = 400/500 × 25 = 20 cm (au tableau : 1 cm = 7 unités).
+ *                  Moments : marteau 0,5 ; G1G2 2 ; O 4 ; relation 6 ; calcul 8 ; G 10 ; fin 12. Repères : G1, G2, G, calcul.
+ *  ?vue=eleve    : tige légère, m₁ = 200 g en A, m₂ = 600 g en B, AB = 40 cm ; O en A : AG = 600/800 × 40 = 30 cm
+ *                  (1 cm = 8 unités). Moments : systeme 0,5 ; relation 2 ; calcul 4 ; G 6 ; fin 8.
+ *                  conclusions:false cache le calcul et G.
+ * Écriture des vecteurs : « [[G_{1}G]] » = G₁G surmonté d’une flèche sur toute sa longueur (indices entre accolades).
+ */
+const { P, vecteur, doux, TAU } = window.Mvt;
+const VEC = /(\[\[[^\]]+\]\])/;
+
+/* ── écrire avec des vecteurs (flèche sur tout le nom) et des fractions ── */
+function largP(c, p, t, gras) { return p.includes('⟦') ? c.largeurTexte(p, t) : c._largeur(p, t, gras); }
+function largV(c, s, t, gras) { return String(s).split(VEC).filter(Boolean).reduce((w, p) => w + (p.startsWith('[[') ? c._largeur(p.slice(2, -2), t, gras) : largP(c, p, t, gras)), 0); }
+function ecrireV(c, s, x, y, o = {}) {
+  s = String(s); let t = o.taille || 20;
+  if (o.plancher !== false && c.echelle && c.tailleMin) t = Math.max(t, c.tailleMin / c.echelle);
+  let tot = largV(c, s, t, o.gras);
+  if (o.max && tot > o.max) { t = Math.max(10, t * o.max / tot); tot = largV(c, s, t, o.gras); }
+  let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
+  for (const p of s.split(VEC).filter(Boolean)) {
+    const v = p.startsWith('[['), txt = v ? p.slice(2, -2) : p, w = v ? c._largeur(txt, t, o.gras) : largP(c, p, t, o.gras);
+    c.texte(txt, px, y, Object.assign({}, o, { taille: t, align: 'left', max: 0, plancher: false }));
+    if (v) { const ya = y - t * .95; c.fleche(px + t * .04, ya, px + Math.max(w, t * .5), ya, { couleur: o.couleur || 'blanc', largeur: Math.max(1.4, t * .07), tete: Math.max(4, t * .22), duree: .06 }); }
+    px += w;
+  }
+  return tot;
+}
+/** Une relation « g ⟦n|d⟧ a » dont le numérateur porte des vecteurs. */
+function fracV(c, f, x, y, o = {}) {
+  let t = o.taille || 20; const fl = c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0; t = Math.max(t, fl); let tf = Math.max(t * .85, fl);
+  const mes = () => { const wg = largV(c, f.g, t, o.gras), wn = largV(c, f.n, tf, o.gras), wd = largV(c, f.d, tf, o.gras), wa = f.a ? largV(c, f.a, t, o.gras) : 0, wf = Math.max(wn, wd) + t * .4; return { wg, wn, wd, wa, wf, tot: wg + wf + wa }; };
+  let m = mes(); if (o.max && m.tot > o.max) { const r = o.max / m.tot; t *= r; tf *= r; m = mes(); }
+  let px = o.align === 'center' ? x - m.tot / 2 : x;
+  const st = { couleur: o.couleur, gras: o.gras, plancher: false };
+  ecrireV(c, f.g, px, y, Object.assign({}, st, { taille: t })); px += m.wg;
+  const yb = y - t * .32, xc = px + m.wf / 2;
+  ecrireV(c, f.n, xc - m.wn / 2, yb - tf * .35, Object.assign({}, st, { taille: tf }));
+  c.trait([[px + t * .12, yb], [px + m.wf - t * .12, yb]], { couleur: o.couleur || 'blanc', largeur: Math.max(1.3, t * .085), tremble: .25, duree: .12 });
+  ecrireV(c, f.d, xc - m.wd / 2, yb + tf * 1.0, Object.assign({}, st, { taille: tf }));
+  if (f.a) ecrireV(c, f.a, px + m.wf, y, Object.assign({}, st, { taille: t }));
+}
+/** La colonne d’écriture (une ligne par moment) ; `fv` : relation à fraction vectorielle ; `cache` : ligne montrée
+ *  seulement quand les résultats sont cachés ; petit cadre : les n dernières lignes, en grand. */
+function colonne(c, S, sc, x, y, w, items, o = {}) {
+  const dy = o.dy ?? 42, taille = o.taille ?? 20;
+  const vis = it => (!it.conclusion || S.conclusions) && (!it.cache || !S.conclusions);
+  const haut = (it, d) => (it.fv ? d * 1.95 : /⟦/.test(it.t || '') ? d * 1.6 : d);
+  const lab = it => it.lab || (it.t ? it.t.replace(/[⟦⟧[\]{}_]/g, '').replace('|', '/') : 'la relation');
+  const dess = (it, xx, yy, d, t, max) => {
+    const base = yy + (it.fv ? d * .85 : /⟦/.test(it.t || '') ? d * .5 : 0);
+    if (it.fv) fracV(c, it.fv, xx, base, { couleur: it.c || 'blanc', taille: t, gras: it.g, max });
+    else ecrireV(c, it.t, xx, base, { couleur: it.c || 'blanc', taille: t, gras: it.g, max });
+    if (it.r) c.repere(it.r, xx - 4, yy - t, max + 8, haut(it, d) - 4, lab(it));
+  };
+  if (sc.petit) {
+    const tp = o.taillePetit ?? 28, n = o.petit ?? 2, d = tp * 1.35;
+    const vus = items.filter(it => vis(it) && (S.t <= 0 || S.a(it.m))).slice(-n);
+    let yy = o.py ?? 150;
+    vus.forEach(it => { if (S.t > 0) S.ecrit(c, it.m); dess(it.tp ? Object.assign({}, it, { t: it.tp }) : it, o.px ?? x, yy, d, tp, o.pw ?? w); yy += haut(it, d); });
+    return;
+  }
+  let yy = y;
+  items.forEach(it => {
+    if (!vis(it)) return;
+    const h = haut(it, dy);
+    if (S.t > 0 && !S.ecrit(c, it.m)) { yy += h; return; }
+    dess(it, x, yy, dy, it.taille || taille, w); yy += h;
+  });
+}
+const pointilles = (c, x1, y1, x2, y2) => c.ligne(x1, y1, x2, y2, { couleur: 'faible', largeur: 1.3, pointille: [6, 6], duree: .1 });
+/** Un doigt (et la main) qui monte par en dessous ; le bout touche (x, ytop). */
+function doigt(c, x, ytop, L) {
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.beginPath(); g.rect(0, 0, L, 420); g.clip();
+    P.ombre(g, () => {
+      const gr = g.createLinearGradient(x - 40, 0, x + 40, 0); gr.addColorStop(0, '#b97a56'); gr.addColorStop(.45, '#f1c7a5'); gr.addColorStop(1, '#a86b48');
+      g.fillStyle = gr; g.beginPath(); g.roundRect(x - 12, ytop, 24, 100, 12); g.fill();
+      g.beginPath(); g.roundRect(x - 42, ytop + 84, 84, 90, 26); g.fill();
+    }, 6);
+    g.fillStyle = 'rgba(255,236,225,.85)'; g.beginPath(); g.roundRect(x - 7, ytop + 4, 14, 15, 6); g.fill();
+    g.strokeStyle = 'rgba(120,70,45,.5)'; g.lineWidth = 1.2; for (const k of [40, 62]) { g.beginPath(); g.moveTo(x - 8, ytop + k); g.lineTo(x + 8, ytop + k); g.stroke(); }
+    g.restore();
+  });
+}
+const pointG = (c, x, y) => c.direct(() => P.G(c.ctx, x, y, 5.5));
+const pointB = (c, x, y) => c.direct(() => { const g = c.ctx; g.fillStyle = '#0f172a'; g.beginPath(); g.arc(x, y, 6, 0, TAU); g.fill(); g.fillStyle = '#f8fafc'; g.beginPath(); g.arc(x, y, 4, 0, TAU); g.fill(); });
+
+/* ── vue haltère ── */
+const MH = { haltere: .5, masses: 2, C: 4, vecteurs: 6, equilibre: 8 };
+function dessinerHaltere(c, S, sc) {
+  const L = sc.L, pt = sc.petit, t = S.t <= 0 ? 99 : S.t, yb = 205, A1 = 75, A2 = 375, C = 225, ts = pt ? 28 : 22;
+  let phi = 0, yd = null;
+  if (S.t <= 0 || S.a('equilibre')) {
+    const u = S.t <= 0 ? 9 : t - MH.equilibre; yd = 430 - (430 - (yb + 7)) * doux(u / .8);
+    if (u > .8) phi = .05 * Math.exp(-(u - .8) * 2.2) * Math.sin((u - .8) * 9);
+  }
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.translate(C, yb); g.rotate(phi); g.translate(-C, -yb);
+    P.barre(g, 30, 420, yb, 13);
+    for (const x of [A1 + 31, A2 - 31]) { g.fillStyle = '#475569'; g.beginPath(); g.roundRect(x - 4, yb - 15, 8, 30, 2); g.fill(); }
+    P.masse(g, A1, yb, 25, 124); P.masse(g, A2, yb, 25, 124);
+    g.restore();
+  });
+  c.repere('haltere', 30, yb - 62, 390, 124, 'l’haltère : une barre et deux masses égales');
+  if (yd != null) doigt(c, C, yd, L);
+  c.direct(() => { c.texte('A_{1}', A1, yb + 92, { couleur: 'blanc', taille: ts, gras: true, align: 'center' }); c.texte('A_{2}', A2, yb + 92, { couleur: 'blanc', taille: ts, gras: true, align: 'center' }); });
+  c.repere('A1', A1 - 28, yb - 64, 56, 128, 'la masse en A1'); c.repere('A2', A2 - 28, yb - 64, 56, 128, 'la masse en A2');
+  if (S.t <= 0 || S.ecrit(c, 'masses')) {
+    if (S.t > 0 && !S.a('C')) { Mvt.lueur(c, A1 - 32, yb - 70, 64, 140, { vive: true }); Mvt.lueur(c, A2 - 32, yb - 70, 64, 140, { vive: true }); }
+    c.texte('m', A1, yb + (pt ? 126 : 120), { couleur: 'jaune', taille: ts, gras: true, align: 'center' });
+    c.texte('m', A2, yb + (pt ? 126 : 120), { couleur: 'jaune', taille: ts, gras: true, align: 'center' });
+  }
+  if (S.t <= 0 || S.ecrit(c, 'C')) {
+    pointG(c, C, yb);
+    c.texte('C', C - 18, yb + 40, { couleur: 'rose', taille: pt ? 30 : 24, gras: true, align: 'right' });
+    c.repere('C', C - 14, yb - 14, 28, 28, 'C, le milieu de A1A2');
+    pointilles(c, A1, yb - 64, A1, 112); pointilles(c, A2, yb - 64, A2, 112); pointilles(c, C, yb - 8, C, 112);
+    c.cote(A1, 118, C, 118, 'd', { couleur: 'jaune', taille: ts });
+    c.cote(C, 118, A2, 118, 'd', { couleur: 'jaune', taille: ts });
+  }
+  if (S.t <= 0 || S.ecrit(c, 'vecteurs')) {
+    pointilles(c, C, 112, C, 66);
+    vecteur(c, C, 66, A1 + 2, 66, { couleur: 'rose' });
+    vecteur(c, C, 66, A2 - 2, 66, { couleur: 'rose' });
+    ecrireV(c, '[[CA_{1}]]', (C + A1) / 2, 50, { couleur: 'rose', taille: ts, gras: true, align: 'center' });
+    ecrireV(c, '[[CA_{2}]]', (C + A2) / 2, 50, { couleur: 'rose', taille: ts, gras: true, align: 'center' });
+    c.repere('vecteurs', A1, 22, A2 - A1, 56, 'les vecteurs CA1 et CA2 : opposés');
+  }
+  if (S.t <= 0 || S.a('equilibre')) c.repere('doigt', C - 42, yb + 7, 84, 420 - yb - 7, 'le doigt sous C : l’haltère tient en équilibre');
+  colonne(c, S, sc, L - 325, 64, 312, [
+    { m: 'haltere', t: 'une barre et deux masses', c: 'blanc' },
+    { m: 'masses', t: 'm_{1} = m_{2} = m', c: 'jaune', g: true },
+    { m: 'C', t: 'C milieu de [A_{1}A_{2}]', c: 'rose', g: true },
+    { m: 'C', t: 'CA_{1} = CA_{2} = d', c: 'jaune' },
+    { m: 'vecteurs', t: '[[CA_{1}]] + [[CA_{2}]] = [[0]]', c: 'rose', g: true, taille: 24, r: 'l_vecteurs', lab: 'CA1 + CA2 = 0' },
+    { m: 'equilibre', t: 'posée sur un doigt en C,', c: 'blanc' },
+    { m: 'equilibre', t: 'l’haltère reste en équilibre', c: 'blanc' },
+    { m: 'equilibre', t: 'C : le centre de masse', c: 'jaune', g: true, r: 'l_equilibre', conclusion: true },
+  ], { dy: 42, px: L - 330, py: 150, pw: 320, petit: 2, taillePetit: 28 });
+}
+
+/* ── vue relation ── */
+const MR = { systeme: .5, O: 2, relation: 4, G: 6 };
+function dessinerRelation(c, S, sc) {
+  const L = sc.L, pt = sc.petit, y = 150, G1 = 80, G2 = 360, G = 290, O = [250, 360], ts = pt ? 28 : 22;
+  c.direct(() => { const g = c.ctx; P.barre(g, 50, 400, y, 7); P.masse(g, G1, y, 15, 48); P.masse(g, G2, y, 28, 104); });
+  c.repere('tige', 50, y - 52, 350, 104, 'une tige à deux masses inégales');
+  pointB(c, G1, y); pointB(c, G2, y);
+  c.direct(() => { c.texte('G_{1}', G1, y - 34, { couleur: 'blanc', taille: ts, gras: true, align: 'center' }); c.texte('G_{2}', G2, y - 62, { couleur: 'blanc', taille: ts, gras: true, align: 'center' }); });
+  c.repere('G1', G1 - 18, y - 30, 36, 60, 'G1, centre de la petite masse m1'); c.repere('G2', G2 - 30, y - 54, 60, 108, 'G2, centre de la grosse masse m2');
+  if (S.t <= 0 || S.ecrit(c, 'systeme')) {
+    c.texte('m_{1}', G1, y + 58, { couleur: 'jaune', taille: ts, gras: true, align: 'center' });
+    c.texte('m_{2}', G2, y + 84, { couleur: 'jaune', taille: ts, gras: true, align: 'center' });
+  }
+  if (S.t <= 0 || S.ecrit(c, 'O')) {
+    c.point(O[0], O[1], 6, 'blanc'); c.texte('O', O[0] + 4, O[1] + (pt ? 36 : 30), { couleur: 'blanc', taille: pt ? 30 : 24, gras: true, align: 'center' });
+    c.repere('O', O[0] - 14, O[1] - 14, 28, 28, 'O, un point quelconque');
+    vecteur(c, O[0], O[1], G1 + 3, y + 4, { couleur: 'blanc', largeur: 2.6, tete: 11, point: false });
+    vecteur(c, O[0], O[1], G2 - 2, y + 5, { couleur: 'blanc', largeur: 2.6, tete: 11, point: false });
+    ecrireV(c, '[[OG_{1}]]', 150, 262, { couleur: 'blanc', taille: ts, gras: true, align: 'right' });
+    ecrireV(c, '[[OG_{2}]]', 326, 262, { couleur: 'blanc', taille: ts, gras: true });
+  }
+  if (S.t <= 0 || S.ecrit(c, 'G')) {
+    vecteur(c, O[0], O[1], G, y + 6, { couleur: 'rose', largeur: 3.2, tete: 13, point: false });
+    pointG(c, G, y);
+    c.texte('G', G, y - 22, { couleur: 'rose', taille: pt ? 30 : 24, gras: true, align: 'center' });
+    ecrireV(c, '[[OG]]', 262, 210, { couleur: 'rose', taille: ts, gras: true, align: 'right' });
+    c.repere('G', G - 14, y - 14, 28, 28, 'G, plus près de la masse la plus lourde');
+  }
+  colonne(c, S, sc, L - 330, 64, 318, [
+    { m: 'systeme', t: 'm_{1} en G_{1} ; m_{2} en G_{2}', c: 'jaune' },
+    { m: 'systeme', t: 'ici m_{2} = 3 m_{1}', c: 'jaune' },
+    { m: 'O', t: 'O : un point quelconque', c: 'blanc' },
+    { m: 'relation', fv: { g: '[[OG]] = ', n: 'm_{1}·[[OG_{1}]] + m_{2}·[[OG_{2}]]', d: 'm_{1} + m_{2}' }, c: 'rose', g: true, taille: 25, r: 'relation', lab: 'OG = (m1·OG1 + m2·OG2)/(m1 + m2)' },
+    { m: 'G', t: 'G est plus près de G_{2},', c: 'jaune', g: true, conclusion: true },
+    { m: 'G', t: 'la masse la plus lourde', c: 'jaune', g: true, r: 'l_G', conclusion: true },
+  ], { dy: 44, px: L - 336, py: 150, pw: 326, petit: 2, taillePetit: 28 });
+}
+
+/* ── vue marteau (méthode) ── */
+const MM = { marteau: .5, G1G2: 2, O: 4, relation: 6, calcul: 8, G: 10 };
+function dessinerMarteau(c, S, sc) {
+  const L = sc.L, pt = sc.petit, y = 150, K = 7, G1 = 205, G2 = G1 + 25 * K, x1 = 2 * G1 - G2, G = G1 + 20 * K, ts = pt ? 27 : 21;
+  c.direct(() => P.marteau(c.ctx, x1, G2, y, 18, [54, 120]));
+  c.repere('marteau', x1, y - 60, G2 + 27 - x1, 120, 'le marteau : manche en bois, tête en acier');
+  if (S.t <= 0 || S.ecrit(c, 'marteau')) {
+    c.texte('manche : m_{1} = 100 g', x1, 100, { couleur: 'jaune', taille: ts, gras: true });
+    c.texte('tête : m_{2} = 400 g', G2 + 30, 72, { couleur: 'jaune', taille: ts, gras: true, align: 'right' });
+  }
+  pointB(c, G1, y); pointB(c, G2, y);
+  c.direct(() => { c.texte('G_{1}', G1, y - 18, { couleur: 'blanc', taille: ts, gras: true, align: 'center' }); c.texte('G_{2}', G2 + 10, y + 88, { couleur: 'blanc', taille: ts, gras: true }); });
+  c.repere('G1', G1 - 14, y - 14, 28, 28, 'G1, centre du manche'); c.repere('G2', G2 - 14, y - 14, 28, 28, 'G2, centre de la tête');
+  if (S.t <= 0 || S.ecrit(c, 'G1G2')) {
+    pointilles(c, G1, y + 10, G1, 272); pointilles(c, G2, y + 62, G2, 272);
+    c.cote(G1, 270, G2, 270, '25 cm', { couleur: 'cyan', taille: ts });
+    c.repere('G1G2', G1, 245, G2 - G1, 32, 'G1G2 = 25 cm');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'O')) c.texte('O = G_{1}', G1 - 10, y + 44, { couleur: 'orange', taille: ts, gras: true, align: 'right' });
+  const voirG = S.t <= 0 || S.a('G');
+  if (voirG) {
+    if (S.t > 0) S.ecrit(c, 'G');
+    pointilles(c, G, y + 10, G, 322);
+    c.cote(G1, 320, G, 320, '20 cm', { couleur: 'rose', taille: ts });
+    pointG(c, G, y);
+    c.texte('G', G - 4, y - 18, { couleur: 'rose', taille: pt ? 30 : 24, gras: true, align: 'center' });
+    if (S.t > 0 && S.t < MM.G + 1.5) Mvt.lueur(c, G - 14, y - 14, 28, 28, { vive: true });
+    c.repere('G', G - 14, y - 14, 28, 28, 'G, à 20 cm de G1, près de la tête');
+  }
+  colonne(c, S, sc, L - 325, 60, 314, [
+    { m: 'marteau', t: 'm_{1} = 100 g ; m_{2} = 400 g', c: 'jaune' },
+    { m: 'G1G2', t: 'G_{1}G_{2} = 25 cm', c: 'cyan' },
+    { m: 'O', t: 'O = G_{1} : [[G_{1}G_{1}]] = [[0]]', c: 'orange', g: true },
+    { m: 'relation', fv: { g: '[[G_{1}G]] = ', n: 'm_{2}·[[G_{1}G_{2}]]', d: 'm_{1} + m_{2}' }, c: 'blanc', g: true, taille: 25, r: 'relation', lab: 'G1G = m2·G1G2/(m1 + m2)' },
+    { m: 'calcul', fv: { g: 'G_{1}G = ', n: '400', d: '100 + 400', a: ' × 25 = 20 cm' }, lab: 'G1G = 400/(100 + 400) × 25 = 20 cm', c: 'vert', g: true, taille: 23, r: 'calcul' },
+    { m: 'G', t: 'G est à 20 cm de G_{1},', c: 'rose', g: true },
+    { m: 'G', t: 'près de la tête', c: 'rose', g: true, r: 'l_G' },
+  ], { dy: 42, px: L - 336, py: 150, pw: 330, petit: 2, taillePetit: 27 });
+}
+
+/* ── vue élève ── */
+const MEl = { systeme: .5, relation: 2, calcul: 4, G: 6 };
+function dessinerEleve(c, S, sc) {
+  const L = sc.L, pt = sc.petit, ok = S.conclusions, y = 170, K = 8, A = 50, B = A + 40 * K, G = A + 30 * K, ts = pt ? 27 : 21;
+  c.direct(() => { const g = c.ctx; P.barre(g, A - 18, B + 18, y, 6); P.masse(g, A, y, 15, 48); P.masse(g, B, y, 26, 96); });
+  c.repere('tige', A - 18, y - 48, B - A + 36, 96, 'la tige légère et ses deux masses');
+  pointB(c, A, y); pointB(c, B, y);
+  c.direct(() => { c.texte('A', A, y + 50, { couleur: 'blanc', taille: ts, gras: true, align: 'center' }); c.texte('B', B, y + 76, { couleur: 'blanc', taille: ts, gras: true, align: 'center' }); });
+  c.repere('A', A - 16, y - 24, 32, 48, 'A, la masse m1 = 200 g'); c.repere('B', B - 28, y - 48, 56, 96, 'B, la masse m2 = 600 g');
+  if (S.t <= 0 || S.ecrit(c, 'systeme')) {
+    c.texte('m_{1} = 200 g', A - 20, y - 40, { couleur: 'jaune', taille: ts, gras: true });
+    c.texte('m_{2} = 600 g', B + 10, y - 62, { couleur: 'jaune', taille: ts, gras: true, align: 'center' });
+    pointilles(c, A, y + 58, A, 282); pointilles(c, B, y + 84, B, 282);
+    c.cote(A, 280, B, 280, '40 cm', { couleur: 'cyan', taille: ts });
+    c.repere('AB', A, 255, B - A, 32, 'AB = 40 cm');
+  }
+  if (ok && (S.t <= 0 || S.ecrit(c, 'G'))) {
+    pointilles(c, G, y + 8, G, 322);
+    c.cote(A, 320, G, 320, '30 cm', { couleur: 'rose', taille: ts });
+    pointG(c, G, y);
+    c.texte('G', G, y - 18, { couleur: 'rose', taille: pt ? 30 : 24, gras: true, align: 'center' });
+    c.repere('G', G - 14, y - 14, 28, 28, 'G, à 30 cm de A');
+  }
+  colonne(c, S, sc, L - 325, 64, 314, [
+    { m: 'systeme', t: 'm_{1} = 200 g en A', c: 'jaune' },
+    { m: 'systeme', t: 'm_{2} = 600 g en B ; AB = 40 cm', c: 'jaune' },
+    { m: 'relation', t: 'O = A :', c: 'orange', g: true },
+    { m: 'relation', fv: { g: '[[AG]] = ', n: 'm_{2}·[[AB]]', d: 'm_{1} + m_{2}' }, c: 'blanc', g: true, taille: 25, r: 'relation', lab: 'AG = m2·AB/(m1 + m2)' },
+    { m: 'calcul', fv: { g: 'AG = ', n: '600', d: '200 + 600', a: ' × 40 = 30 cm' }, lab: 'AG = 600/(200 + 600) × 40 = 30 cm', c: 'vert', g: true, taille: 23, r: 'calcul', conclusion: true },
+    { m: 'calcul', t: 'AG = ?', c: 'vert', g: true, r: 'calcul', cache: true },
+    { m: 'G', t: 'G est à 30 cm de A, près de B', c: 'rose', g: true, r: 'l_G', conclusion: true },
+  ], { dy: 42, px: L - 336, py: 150, pw: 330, petit: 2, taillePetit: 27 });
+}
+
+window.Mvt.vues('tc_mi_masse', {
+  haltere: { titre: 'Le centre de masse d’une haltère', moments: MH, fin: 10, dessiner: dessinerHaltere,
+    motifs: { haltere: 'l’haltère', masses: 'deux masses égales', C: 'le milieu C', vecteurs: 'CA1 + CA2 = 0', equilibre: 'l’équilibre sur un doigt en C' },
+    accueil: 'Une haltère : une barre et deux masses égales.', fini: 'CA⃗₁ + CA⃗₂ = 0⃗ : posée sur un doigt en C, l’haltère tient ; C est son centre de masse.',
+    voir: S => ['Une haltère horizontale : barre métallique, deux masses de laiton en A1 et A2.', S.a('masses') && 'Les deux masses allumées : m1 = m2 = m.', S.a('C') && 'Point C au milieu de la barre ; CA1 = CA2 = d.', S.a('vecteurs') && 'Flèches roses CA1 (vers la gauche) et CA2 (vers la droite), opposées : CA1 + CA2 = 0.', S.a('equilibre') && 'Un doigt sous C : l’haltère oscille à peine puis tient en équilibre.', S.a('equilibre') && S.conclusions && 'C est le centre de masse.'].filter(Boolean).join(' '),
+    texte: 'Deux masses égales en A1 et A2 : le centre de masse C est le milieu de [A1A2], CA1 + CA2 = 0 (vecteurs). Posée sur un doigt en C, l’haltère tient en équilibre.' },
+  relation: { titre: 'La relation barycentrique', moments: MR, fin: 8, dessiner: dessinerRelation,
+    motifs: { systeme: 'deux masses inégales', O: 'un point O quelconque', relation: 'la relation barycentrique', G: 'G près de la plus lourde' },
+    accueil: 'Une tige avec deux masses inégales.', fini: 'OG = (m1·OG1 + m2·OG2)/(m1 + m2) : G est plus près de la masse la plus lourde.',
+    voir: S => ['Une tige horizontale : petite masse m1 en G1 à gauche, grosse masse m2 = 3 m1 en G2 à droite.', S.a('O') && 'Point O sous la tige ; vecteurs OG1 et OG2 (blancs).', S.a('relation') && 'OG = (m1·OG1 + m2·OG2)/(m1 + m2).', S.a('G') && 'Vecteur OG rose ; G (point rose) sur la tige, aux trois quarts de G1G2, près de G2.'].filter(Boolean).join(' '),
+    texte: 'Relation barycentrique : pour tout point O, OG = (m1·OG1 + m2·OG2)/(m1 + m2) (vecteurs). G est sur le segment G1G2, plus près de la masse la plus lourde.' },
+  marteau: { titre: 'Méthode : le centre de masse d’un marteau', moments: MM, fin: 12, dessiner: dessinerMarteau,
+    motifs: { marteau: 'le marteau et ses masses', G1G2: 'G1G2 = 25 cm', O: 'on prend O = G1', relation: 'la relation', calcul: 'le calcul', G: 'G placé' },
+    accueil: 'Un marteau : manche de 100 g, tête de 400 g.', fini: 'G1G = 400/500 × 25 = 20 cm : G est près de la tête.',
+    voir: S => ['Un marteau horizontal : manche en bois (centre G1), tête en acier (centre G2).', S.a('marteau') && 'm1 = 100 g (manche), m2 = 400 g (tête).', S.a('G1G2') && 'Cote G1G2 = 25 cm.', S.a('O') && 'O = G1 : G1G1 = 0.', S.a('relation') && 'G1G = m2·G1G2/(m1 + m2).', S.a('calcul') && 'G1G = 400/(100 + 400) × 25 = 20 cm.', S.a('G') && 'G (point rose) sur le manche à 20 cm de G1, tout près de la tête ; cote G1G = 20 cm.'].filter(Boolean).join(' '),
+    texte: 'Méthode : on choisit O = G1, la relation devient G1G = m2·G1G2/(m1 + m2) ; G1G = 400/500 × 25 = 20 cm.' },
+  eleve: { titre: 'À toi : une tige à deux masses', moments: MEl, fin: 8, dessiner: dessinerEleve,
+    motifs: { systeme: 'les données', relation: 'O = A et la relation', calcul: 'le calcul de AG', G: 'G placé' },
+    accueil: 'm1 = 200 g en A, m2 = 600 g en B, AB = 40 cm : où est G ?', fini: 'AG = 600/800 × 40 = 30 cm.',
+    voir: S => ['Tige légère : masse m1 = 200 g en A (gauche), m2 = 600 g en B (droite), AB = 40 cm.', S.a('relation') && 'O = A : AG = m2·AB/(m1 + m2).', S.a('calcul') && (S.conclusions ? 'AG = 600/800 × 40 = 30 cm.' : 'AG = ? (caché)'), S.a('G') && (S.conclusions ? 'G (point rose) à 30 cm de A, près de B.' : 'G pas encore placé (caché).')].filter(Boolean).join(' '),
+    texte: 'Exercice : m1 = 200 g en A, m2 = 600 g en B, AB = 40 cm. Avec O = A : AG = m2·AB/(m1 + m2) = 600/800 × 40 = 30 cm.' },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
