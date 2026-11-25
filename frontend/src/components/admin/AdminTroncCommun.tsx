@@ -276,7 +276,7 @@ export default function AdminTroncCommun() {
                     <td className="px-2 py-2 text-gray-400">{vu ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</td>
                     <td className="px-3 py-2 font-medium">{e.nom}{e.test && <Etiquette>test</Etiquette>}{e.doublon_de && <Etiquette>doublon</Etiquette>}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{e.classe}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{n ? <><b>{pts(Math.round(n.n * 10) / 10)} / 20</b> <span className="text-xs text-gray-500">{n.fini ? 'terminée' : `${n.faites}/20 q.`}</span></> : <span className="text-gray-400">pas commencée</span>}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{n ? <><b>{pts(Math.round(n.n * 10) / 10)} / 20</b> <span className="text-xs text-gray-500">{n.fini ? 'terminée' : `${n.faites}/20 q.`}{(e.examen_en_cours.tentative || 1) > 1 ? ` · ${e.examen_en_cours.tentative}ᵉ copie` : ''}</span></> : <span className="text-gray-400">pas commencée</span>}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{minutes(tempsCours(e))} · {minutes(e.temps.examen || 0)}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{e.pere} · <a href={`tel:${e.telephone}`} className="text-blue-700" onClick={x => x.stopPropagation()}>{e.telephone}</a></td>
                     <td className="px-3 py-2 whitespace-nowrap text-gray-500">{date(e.derniere)}</td>

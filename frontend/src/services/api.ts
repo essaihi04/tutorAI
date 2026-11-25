@@ -590,7 +590,7 @@ export interface EleveTroncCommun {
   temps: Record<string, number>;
   progression: Record<string, { vues: number; total: number }>;
   reponses_cours: { total: number; justes: number; fausses: number };
-  examen_en_cours: { note: number; sur: number; faites: number; questions: Record<string, QuestionExamenTC>; debut?: string | null };
+  examen_en_cours: { note: number; sur: number; faites: number; questions: Record<string, QuestionExamenTC>; debut?: string | null; tentative?: number };
   examens: { note: number; sur: number; date: string; debut?: string | null; questions: Record<string, QuestionExamenTC> }[];
   lacunes: string[];
 }
@@ -607,7 +607,7 @@ export const listClasses = () => adminApi.get<{ seances: SeanceClasse[] }>('/cla
 export const photoClasse = (uid: string, rid: string) => adminApi.get<Blob>(`/classes/${uid}/photo/${rid}`, { responseType: 'blob' });
 
 // ─── 2ᵉ Bac PC : fiches des élèves du lien libre /2bacpcf et leur suivi (23 novembre 2026) ──────
-export interface Examen2BacPCF { nom: string; note: number; sur_fait: number; sur: number; faites: number; fini: boolean;
+export interface Examen2BacPCF { nom: string; note: number; sur_fait: number; sur: number; faites: number; fini: boolean; tentative?: number;
   debut?: string | null; date?: string | null; questions: Record<string, QuestionExamenTC> }
 export interface Eleve2BacPCF {
   id: string; nom: string; classe: string; pere: string; telephone: string; date: string; derniere: string;

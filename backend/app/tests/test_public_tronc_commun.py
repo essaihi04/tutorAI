@@ -115,3 +115,17 @@ def test_classe_ouverture_tests_doublons(client):
     assert b[a]["classe"] == "TCSF 12" and not b[a]["test"] and not b[a]["doublon_de"]
     assert sum(1 for e in b.values() if e["doublon_de"] == a) == 1
     assert sum(1 for e in b.values() if e["test"]) == 1
+
+
+def test_refaire_l_evaluation_tronc_commun(monkeypatch, tmp_path):
+    """25/11/2026 : l'évaluation terminée se refait ; la dernière tentative écrase l'ancienne."""
+    monkeypatch.setattr(tc, "SUIVI", tmp_path / "suivi.jsonl")
+    ev = lambda **k: tc.Evenement(**k)
+    tc._ecrire(tc.SUIVI, {"type": "examen_question", "cours": "examen", "question_id": "1", "note": 1, "sur": 2, "eleve": "e"})
+    tc._ecrire(tc.SUIVI, {"type": "examen_fin", "cours": "examen", "eleve": "e"})
+    assert tc._deja("e", ev(type="examen_question", cours="examen", question_id="1"))
+    tc._ecrire(tc.SUIVI, {"type": "examen_reprise", "cours": "examen", "eleve": "e"})
+    assert not tc._deja("e", ev(type="examen_question", cours="examen", question_id="1"))
+    assert not tc._deja("e", ev(type="examen_fin", cours="examen"))
+    debut, fini, qs = tc.etat_tentative(tc.tentative(tc._lire(tc.SUIVI), "e", "examen"))
+    assert debut and not fini and qs == {}

@@ -83,15 +83,13 @@ async def inscription(body: tc.Inscription, request: Request):
 
 
 def _deja(eleve: str, body: tc.Evenement) -> bool:
-    """Une seule réponse compte : premier début, première fin et première réponse à chaque question, examen par examen ;
-    la première réponse à chaque question d'un cours."""
+    """Une seule réponse compte dans chaque tentative d'un examen (refaire l'examen en ouvre une nouvelle qui écrase
+    l'ancienne, 25/11/2026) ; la première réponse à chaque question d'un cours."""
+    if body.type.startswith("examen"):
+        return tc.deja_dans_tentative(tc._lire(SUIVI), eleve, body)
     for ev in tc._lire(SUIVI):
         if ev.get("eleve") != eleve or ev.get("type") != body.type or ev.get("cours", "") != body.cours:
             continue
-        if body.type in ("examen_debut", "examen_fin"):
-            return True
-        if body.type == "examen_question" and ev.get("question_id") == body.question_id:
-            return True
         if body.type == "reponse_cours" and ev.get("slide_id") == body.slide_id and ev.get("enonce", "") == body.enonce:
             return True
     return False
@@ -121,16 +119,7 @@ async def mon_examen(request: Request, cours: str = Query(default="examen_tcf"),
     tc._autoriser("suivi", e["id"], request)
     if cours not in EXAMENS:
         raise HTTPException(404, "Examen inconnu")
-    questions, debut, fini = {}, False, False
-    for ev in tc._lire(SUIVI):
-        if ev.get("eleve") != e["id"] or ev.get("cours") != cours:
-            continue
-        if ev.get("type") == "examen_debut":
-            debut = True
-        elif ev.get("type") == "examen_question":
-            questions.setdefault(ev.get("question_id", "?"), ev.get("etat") or {"fait": True, "note": ev.get("note", 0)})
-        elif ev.get("type") == "examen_fin":
-            fini = True
+    debut, fini, questions = tc.etat_tentative(tc.tentative(tc._lire(SUIVI), e["id"], cours))
     return {"debut": debut, "fini": fini, "questions": questions, "ouvert": True}
 
 
@@ -163,7 +152,7 @@ def bilan() -> list[dict]:
     examens (questions rendues, note, éléments du barème perdus) et ses lacunes. Tests et doublons signalés."""
     eleves = lire_eleves()
     par: dict[str, dict] = {i: {**{k: v for k, v in e.items() if k != "cle"}, "temps": defaultdict(int), "diapos": defaultdict(set),
-                                "reponses_cours": {}, "ex": {x: {"questions": {}, "debut": None, "fin": None} for x in EXAMENS},
+                                "reponses_cours": {}, "ex": {x: {"questions": {}, "debut": None, "fin": None, "tentative": 1} for x in EXAMENS},
                                 "derniere": e.get("date", "")}
                             for i, e in eleves.items()}
     for ev in tc._lire(SUIVI):
@@ -181,7 +170,9 @@ def bilan() -> list[dict]:
                                            {k: ev.get(k) for k in ("cours", "slide_id", "titre", "enonce", "reponse", "correct", "date")})
         elif cours in EXAMENS:
             x = b["ex"][cours]
-            if t == "examen_debut":
+            if t == "examen_reprise":   # l'élève refait l'examen : la nouvelle tentative écrase l'ancienne (25/11/2026)
+                x.update(questions={}, debut=ev.get("date"), fin=None, tentative=x["tentative"] + 1)
+            elif t == "examen_debut":
                 x["debut"] = x["debut"] or ev.get("date")
             elif t == "examen_question":
                 x["questions"].setdefault(ev.get("question_id", "?"), {
@@ -200,7 +191,8 @@ def bilan() -> list[dict]:
             examens[cle] = {"nom": nom, "note": sum(q.get("note") or 0 for q in qs.values()),
                             "sur_fait": sum(q.get("sur") or 0 for q in qs.values()), "sur": TOTAL_EXAMEN,
                             "faites": len(qs), "fini": bool(x["fin"]), "debut": x["debut"],
-                            "date": (x["fin"] or {}).get("date"), "questions": qs}
+                            "date": (x["fin"] or {}).get("date"), "questions": qs,
+                            "tentative": x["tentative"]}
             lacunes += [f"{nom} Q{qid} : {p}" for qid, q in sorted(qs.items()) for p in (q.get("pertes") or [])]
         lacunes += [f"Cours — {r.get('titre') or r.get('slide_id')} : {r.get('enonce', '')[:120]}" for r in fausses[-15:]]
         classe = classe_normale(b.get("classe", ""))

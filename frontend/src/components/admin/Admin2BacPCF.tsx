@@ -263,7 +263,7 @@ export default function Admin2BacPCF({ lien = LIEN_2BAC }: { lien?: LienSuivi })
                     <td className="px-3 py-2 font-medium">{e.nom}{e.test && <Etiquette>test</Etiquette>}{e.doublon_de && <Etiquette>doublon</Etiquette>}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{e.classe}</td>
                     {EXAMENS.map(x => { const n = noteSur20(e, x.cle); return (
-                      <td key={x.cle} className="px-3 py-2 whitespace-nowrap">{n ? <><b>{pts(n.n)} / 20</b> <span className="text-xs text-gray-500">{n.fini ? 'terminé' : `${n.faites}/${x.questions.length} q.`}</span></> : <span className="text-gray-400">—</span>}</td>); })}
+                      <td key={x.cle} className="px-3 py-2 whitespace-nowrap">{n ? <><b>{pts(n.n)} / 20</b> <span className="text-xs text-gray-500">{n.fini ? 'terminé' : `${n.faites}/${x.questions.length} q.`}{(e.examens[x.cle]?.tentative || 1) > 1 ? ` · ${e.examens[x.cle]?.tentative}ᵉ copie` : ''}</span></> : <span className="text-gray-400">—</span>}</td>); })}
                     <td className="px-3 py-2 whitespace-nowrap">{minutes(tempsCours(e))} · {minutes(EXAMENS.reduce((s, x) => s + (e.temps[x.cle] || 0), 0))}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{e.pere} · <a href={`tel:${e.telephone}`} className="text-blue-700" onClick={x => x.stopPropagation()}>{e.telephone}</a></td>
                     <td className="px-3 py-2 whitespace-nowrap text-gray-500">{date(e.derniere)}</td>

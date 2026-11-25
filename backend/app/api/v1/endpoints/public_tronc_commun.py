@@ -144,8 +144,9 @@ async def inscription(body: Inscription, request: Request):
 
 
 class Evenement(BaseModel):
-    #: temps (secondes passées sur un cours ou l'évaluation), diapo (vue), reponse_cours, examen_question, examen_fin
-    type: str = Field(..., pattern="^(temps|diapo|reponse_cours|examen_debut|examen_question|examen_fin)$")
+    #: temps (secondes passées sur un cours ou l'évaluation), diapo (vue), reponse_cours, examen_question, examen_fin,
+    #: examen_reprise (l'élève refait l'évaluation : une nouvelle tentative remplace l'ancienne)
+    type: str = Field(..., pattern="^(temps|diapo|reponse_cours|examen_debut|examen_question|examen_fin|examen_reprise)$")
     cours: str = Field(default="", max_length=60)
     secondes: int = Field(default=0, ge=0, le=600)
     slide_id: str = Field(default="", max_length=120)
@@ -165,16 +166,51 @@ class Evenement(BaseModel):
     etat: dict = Field(default_factory=dict)
 
 
-def _deja(eleve: str, body: "Evenement") -> bool:
-    """Une seule réponse compte (23/11/2026) : la première question rendue de l'évaluation, le premier début et la
-    première fin, la première réponse à chaque question d'un cours."""
-    for ev in _lire(SUIVI):
-        if ev.get("eleve") != eleve or ev.get("type") != body.type:
+def tentative(suivi: list[dict], eleve: str, cours: str) -> list[dict]:
+    """Les événements de la DERNIÈRE tentative de cet élève à cet examen (25/11/2026, demande de l'utilisateur :
+    « reprendre l'examen malgré marqué comme terminé, le faire et refaire, enregistrer chaque fois la dernière version et
+    écraser l'ancienne dans l'espace admin ») : tout ce qui suit son dernier `examen_reprise` (lui compris : il vaut un
+    début). Sans reprise : toute l'histoire. Tous les niveaux (/tronc-commun, /2bacpcf, /TCF) passent par ici."""
+    evs = [ev for ev in suivi if ev.get("eleve") == eleve and str(ev.get("type", "")).startswith("examen")
+           and (ev.get("cours") or "examen") == cours]
+    k = max((i for i, ev in enumerate(evs) if ev.get("type") == "examen_reprise"), default=0)
+    return evs[k:]
+
+
+def deja_dans_tentative(suivi: list[dict], eleve: str, body: "Evenement") -> bool:
+    """Une seule réponse par question DANS une tentative : le premier début, la première fin, la première réponse."""
+    for ev in tentative(suivi, eleve, body.cours or "examen"):
+        if ev.get("type") != body.type:
             continue
         if body.type in ("examen_debut", "examen_fin"):
             return True
         if body.type == "examen_question" and ev.get("question_id") == body.question_id:
             return True
+    return False
+
+
+def etat_tentative(evs: list[dict]) -> tuple[bool, bool, dict]:
+    """(commencé, fini, questions rendues avec leur état affiché) d'une tentative."""
+    questions, debut, fini = {}, False, False
+    for ev in evs:
+        t = ev.get("type")
+        if t in ("examen_debut", "examen_reprise"):
+            debut = True
+        elif t == "examen_question":
+            questions.setdefault(ev.get("question_id", "?"), ev.get("etat") or {"fait": True, "note": ev.get("note", 0)})
+        elif t == "examen_fin":
+            fini = True
+    return debut, fini, questions
+
+
+def _deja(eleve: str, body: "Evenement") -> bool:
+    """Une seule réponse compte (23/11/2026) dans chaque tentative de l'évaluation (refaire l'évaluation en ouvre une
+    nouvelle, 25/11/2026) ; la première réponse à chaque question d'un cours."""
+    if body.type.startswith("examen"):
+        return deja_dans_tentative(_lire(SUIVI), eleve, body)
+    for ev in _lire(SUIVI):
+        if ev.get("eleve") != eleve or ev.get("type") != body.type:
+            continue
         if body.type == "reponse_cours" and ev.get("cours") == body.cours and ev.get("slide_id") == body.slide_id                 and ev.get("enonce", "") == body.enonce:
             return True
     return False
@@ -200,16 +236,7 @@ async def mon_examen(request: Request, x_eleve: str | None = Header(default=None
     """Les questions de l'évaluation déjà rendues par cet élève (la page les remontre, verrouillées), et s'il a fini."""
     e = _eleve(x_eleve)
     _autoriser("suivi", e["id"], request)
-    questions, debut, fini = {}, False, False
-    for ev in _lire(SUIVI):
-        if ev.get("eleve") != e["id"]:
-            continue
-        if ev.get("type") == "examen_debut":
-            debut = True
-        elif ev.get("type") == "examen_question":
-            questions.setdefault(ev.get("question_id", "?"), ev.get("etat") or {"fait": True, "note": ev.get("note", 0)})
-        elif ev.get("type") == "examen_fin":
-            fini = True
+    debut, fini, questions = etat_tentative(tentative(_lire(SUIVI), e["id"], "examen"))
     prog = progression(e["id"])
     return {"debut": debut, "fini": fini, "questions": questions, "progression": prog,
             "ouvert": examen_ouvert(prog, bool(questions)), "seuil": SEUIL_OUVERTURE}
@@ -241,7 +268,9 @@ def a_retravailler_de(suivi: list[dict], eleve: str, examens, cours_connus) -> d
         if ev.get("eleve") != eleve:
             continue
         c = ev.get("cours", "")
-        if ev.get("type") == "examen_question" and c in examens:
+        if ev.get("type") == "examen_reprise" and c in examens:   # refaite : seule la dernière tentative compte
+            questions = {k: v for k, v in questions.items() if k[0] != c}
+        elif ev.get("type") == "examen_question" and c in examens:
             questions.setdefault((c, ev.get("question_id", "")), {
                 "examen": c, "id": ev.get("question_id", ""), "note": ev.get("note") or 0, "sur": ev.get("sur") or 0,
                 "pertes": ev.get("pertes") or [], "enonce": ev.get("enonce", "")})
@@ -311,7 +340,7 @@ def bilan() -> list[dict]:
     sans numéro comme « prof », ou nom contenant « test ») et les doublons (même nom inscrit deux fois) sont signalés."""
     eleves = lire_eleves()
     par: dict[str, dict] = {i: {**{k: v for k, v in e.items() if k != "cle"}, "temps": defaultdict(int), "diapos": defaultdict(set),
-                                "reponses_cours": {}, "questions": {}, "debut": None, "fin": None, "derniere": e.get("date", "")}
+                                "reponses_cours": {}, "questions": {}, "debut": None, "fin": None, "tentative": 1, "derniere": e.get("date", "")}
                             for i, e in eleves.items()}
     for ev in _lire(SUIVI):
         b = par.get(ev.get("eleve", ""))
@@ -326,6 +355,8 @@ def bilan() -> list[dict]:
         elif t == "reponse_cours":
             b["reponses_cours"].setdefault((cours, ev.get("slide_id"), ev.get("enonce", "")),
                                            {k: ev.get(k) for k in ("cours", "slide_id", "titre", "enonce", "reponse", "correct", "date")})
+        elif t == "examen_reprise":   # l'élève refait l'évaluation : la nouvelle tentative écrase l'ancienne
+            b.update(questions={}, debut=ev.get("date"), fin=None, tentative=b["tentative"] + 1)
         elif t == "examen_debut":
             b["debut"] = b["debut"] or ev.get("date")
         elif t == "examen_question":
@@ -348,7 +379,8 @@ def bilan() -> list[dict]:
         if nom_cle and not test and not doublon:
             vus[nom_cle] = b["id"]
         prog = {c: {"vues": len(b["diapos"].get(c, ())), "total": TOTAUX[c]} for c in COURS}
-        examens = [{"note": note, "sur": TOTAL_EXAMEN, "date": b["fin"]["date"], "debut": b["debut"], "questions": qs}] if b["fin"] else []
+        examens = [{"note": note, "sur": TOTAL_EXAMEN, "date": b["fin"]["date"], "debut": b["debut"], "questions": qs,
+                     "tentative": b["tentative"]}] if b["fin"] else []
         out.append({
             **{k: b.get(k, "") for k in ("id", "nom", "pere", "telephone", "date", "derniere")},
             "classe": classe, "classe_ecrite": b.get("classe", ""), "test": test, "doublon_de": doublon,
@@ -356,7 +388,7 @@ def bilan() -> list[dict]:
             "progression": prog,
             "reponses_cours": {"total": len(rep), "justes": sum(1 for r in rep if r.get("correct") is True), "fausses": len(fausses)},
             "examen_en_cours": {"note": note, "sur": sum(q.get("sur") or 0 for q in qs.values()), "faites": len(qs), "questions": qs,
-                                "debut": b["debut"]},
+                                "debut": b["debut"], "tentative": b["tentative"]},
             "examens": examens, "lacunes": lacunes[:40],
         })
     # un doublon montre aussi qui il double (le plus ancien garde la ligne principale)

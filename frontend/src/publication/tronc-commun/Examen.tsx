@@ -275,7 +275,22 @@ export default function Examen() {
     else poser(q.id, { choix: c });
   });
 
-  if (!commence) return <Accueil etat={repris} acces={acces} onCommencer={() => setCommence(true)} />;
+  // Refaire l'évaluation (25/11/2026, tous les niveaux) : même terminée, l'élève recommence de zéro ; sa nouvelle copie
+  // remplace l'ancienne (note comprise) dans l'espace admin. Le serveur ne garde que la dernière tentative.
+  const refaire = async () => {
+    if (!window.confirm('Refaire l’évaluation : tu recommences de zéro, et ta nouvelle copie remplacera l’ancienne (note comprise). Continuer ?')) return;
+    jouer(undefined);
+    if (CFG.suivi) await suivre({ type: 'examen_reprise', cours: CFG.cle || 'examen' });
+    envoyes.current = {};
+    dejaFait.current = {};
+    setEtats({});
+    setI(0);
+    setSujetVu(true);
+    setRepris('neuf');
+    setCommence(true);
+  };
+
+  if (!commence) return <Accueil etat={repris} acces={acces} onCommencer={() => setCommence(true)} onRefaire={refaire} />;
 
   // « Terminer l'évaluation » : les questions sans réponse comptent 0, verrouillées, puis le bilan
   const terminer = () => {
@@ -427,7 +442,7 @@ export default function Examen() {
                 {i < CFG.questions.length - 1 && <button onClick={() => setI(i + 1)} className={etat.fait ? 'ml-auto rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white' : `ml-auto ${BTN}`}>{etat.fait ? 'Question suivante →' : 'Passer →'}</button>}
               </div>
 
-              {fini && <Bilan note={note} parPartie={parPartie} etats={etats} />}
+              {fini && <Bilan note={note} parPartie={parPartie} etats={etats} onRefaire={refaire} />}
             </div>
           </div>
         </section>
@@ -514,7 +529,7 @@ export function Verdict({ etat }: { etat: Etat }) {
   );
 }
 
-function Bilan({ note, parPartie, etats }: { note: number; parPartie: { pa: PartieExamen; sur: number; note: number }[]; etats: Record<string, Etat> }) {
+function Bilan({ note, parPartie, etats, onRefaire }: { note: number; parPartie: { pa: PartieExamen; sur: number; note: number }[]; etats: Record<string, Etat>; onRefaire: () => void }) {
   const aRevoir = CFG.questions.filter(x => (etats[x.q.id]?.note || 0) < x.q.points);
   return (
     <div className="mt-5 border-2 border-black p-3 sm:p-4">
@@ -534,13 +549,14 @@ function Bilan({ note, parPartie, etats }: { note: number; parPartie: { pa: Part
       ) : <p className="mt-2 text-[15px] text-emerald-800">Tout est juste : tu es prêt pour l’évaluation.</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         <a href="./" className={BTN}>Revoir les cours</a>
+        <button onClick={onRefaire} className="rounded-md bg-black px-3 py-1.5 font-semibold text-white">↻ Refaire l’évaluation</button>
       </div>
     </div>
   );
 }
 
 const NOMS_COURS: Record<string, string> = { tc_svt_revision: 'Révision avec le tuteur', tc_svt_sortie_ecologique: 'La sortie écologique', tc_svt_facteurs_edaphiques: 'Les facteurs édaphiques' };
-function Accueil({ onCommencer, etat, acces }: { onCommencer: () => void; etat: 'attente' | 'neuf' | 'suite' | 'fini'; acces: { ouvert: boolean; progression?: Progression; seuil?: number } }) {
+function Accueil({ onCommencer, onRefaire, etat, acces }: { onCommencer: () => void; onRefaire: () => void; etat: 'attente' | 'neuf' | 'suite' | 'fini'; acces: { ouvert: boolean; progression?: Progression; seuil?: number } }) {
   return (
     <div className="min-h-[100dvh] bg-[#d6d6d0] p-3 text-black sm:p-6" style={{ fontFamily: 'system-ui, sans-serif' }}>
       <div className="mx-auto max-w-3xl bg-white p-4 shadow-md ring-1 ring-black/10 sm:p-6">
@@ -561,7 +577,7 @@ function Accueil({ onCommencer, etat, acces }: { onCommencer: () => void; etat: 
               <td className="w-24 border border-slate-400 px-2 py-1 text-center text-slate-600">≈ {pa.minutes} min</td></tr>))}</tbody>
         </table>
         <p className="mt-3 text-[14px] text-slate-600">Programme : {CFG.sujet.programme}. Pas de chronomètre : la durée est un repère.</p>
-        {CFG.suivi && <p className="mt-3 rounded-md border border-amber-500 bg-amber-50 p-2 text-[14px] text-amber-900">Attention : chaque réponse est enregistrée une seule fois. Une question rendue ne peut plus être changée.</p>}
+        {CFG.suivi && <p className="mt-3 rounded-md border border-amber-500 bg-amber-50 p-2 text-[14px] text-amber-900">Attention : chaque réponse est enregistrée une seule fois. Une question rendue ne peut plus être changée. Une fois l’évaluation terminée, tu peux la refaire : seule ta dernière copie compte.</p>}
         {!acces.ouvert && etat !== 'attente' && (
           <div className="mt-3 rounded-md border border-sky-700 bg-sky-50 p-3 text-[15px] text-sky-950">
             <p className="font-semibold">L’évaluation s’ouvre quand tu as suivi la révision, ou un des deux cours (au moins {Math.round((acces.seuil || 0.8) * 100)} % des diapositives).</p>
@@ -575,6 +591,8 @@ function Accueil({ onCommencer, etat, acces }: { onCommencer: () => void; etat: 
           </div>)}
         <button disabled={etat === 'attente' || !acces.ouvert} onClick={onCommencer} className="mt-4 rounded-md bg-black px-5 py-2 font-semibold text-white disabled:opacity-40">
           {etat === 'attente' ? 'Chargement…' : etat === 'fini' ? 'Voir mes résultats' : etat === 'suite' ? 'Continuer l’évaluation' : 'Commencer l’évaluation'}</button>
+        {etat === 'fini' && (
+          <button onClick={onRefaire} className="ml-2 mt-4 rounded-md border border-black bg-white px-5 py-2 font-semibold text-black hover:bg-slate-100">↻ Refaire l’évaluation</button>)}
       </div>
     </div>
   );

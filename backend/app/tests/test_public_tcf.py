@@ -45,3 +45,22 @@ def test_cours_et_evaluations(client):
 
 def test_suivi_sans_fiche_refuse(client):
     assert client.post(f"{U}/suivi", json={"type": "temps", "cours": "tc_chim_synthese", "secondes": 30}).status_code == 401
+
+
+def test_refaire_l_examen_ecrase_l_ancienne_copie(client):
+    """25/11/2026 : un examen terminé se refait ; seule la dernière tentative compte (page, admin, à retravailler)."""
+    H = {"X-Eleve": client.post(f"{U}/inscription", json=FICHE).json()["eleve_id"]}
+    q = {"type": "examen_question", "cours": "examen_tcf", "question_id": "1", "note": 1, "sur": 3, "pertes": ["Unité"]}
+    client.post(f"{U}/suivi", headers=H, json=q)
+    client.post(f"{U}/suivi", headers=H, json={"type": "examen_fin", "cours": "examen_tcf", "note": 1, "sur": 20})
+    assert client.get(f"{U}/examen", headers=H).json()["fini"] is True
+    assert client.post(f"{U}/suivi", headers=H, json={"type": "examen_reprise", "cours": "examen_tcf"}).json()["deja"] is False
+    m = client.get(f"{U}/examen", headers=H).json()
+    assert m["fini"] is False and m["questions"] == {} and m["debut"] is True
+    # la même question se rend de nouveau, une seule fois dans cette tentative
+    assert client.post(f"{U}/suivi", headers=H, json={**q, "note": 3, "pertes": []}).json()["deja"] is False
+    assert client.post(f"{U}/suivi", headers=H, json={**q, "note": 0}).json()["deja"] is True
+    client.post(f"{U}/suivi", headers=H, json={"type": "examen_fin", "cours": "examen_tcf", "note": 3, "sur": 20})
+    x = tcf.bilan()[0]["examens"]["examen_tcf"]
+    assert x["note"] == 3 and x["fini"] is True and x["tentative"] == 2 and x["questions"]["1"]["note"] == 3
+    assert client.get(f"{U}/a-retravailler", headers=H).json()["questions"] == []

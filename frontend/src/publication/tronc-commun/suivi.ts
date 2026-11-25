@@ -36,7 +36,7 @@ export async function inscrire(fiche: { nom: string; prenom: string; classe: str
 }
 
 export type EvenementSuivi = {
-  type: 'temps' | 'diapo' | 'reponse_cours' | 'examen_debut' | 'examen_question' | 'examen_fin';
+  type: 'temps' | 'diapo' | 'reponse_cours' | 'examen_debut' | 'examen_question' | 'examen_fin' | 'examen_reprise';
   cours?: string; secondes?: number; slide_id?: string; titre?: string; position?: number; total?: number;
   enonce?: string; reponse?: string; correct?: boolean | null; question_id?: string; partie?: string;
   note?: number; sur?: number; verdict?: string; pertes?: string[];
@@ -71,13 +71,13 @@ export async function maReprise(cours: string): Promise<Reprise | null> {
 }
 
 /** Envoie un événement de suivi (jamais bloquant : hors ligne, il se perd). */
-export function suivre(ev: EvenementSuivi) {
+export function suivre(ev: EvenementSuivi): Promise<void> {
   const e = eleveEnregistre();
-  if (!e) return;
+  if (!e) return Promise.resolve();
   if (ev.type === 'diapo' && ev.cours && ev.slide_id) noterReprise(ev.cours, ev.slide_id, ev.position, ev.total);
   const corps = { ...ev, enonce: ev.enonce?.slice(0, 500), reponse: ev.reponse?.slice(0, 800), titre: ev.titre?.slice(0, 300),
     pertes: ev.pertes?.slice(0, 12).map(p => p.slice(0, 200)) };
-  void fetchBrut(`${API}/suivi`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Eleve': e.id }, body: JSON.stringify(corps) })
+  return fetchBrut(`${API}/suivi`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Eleve': e.id }, body: JSON.stringify(corps) })
     .then(r => { if (r.status === 401) garderEleve(null); })
     .catch(() => { /* hors ligne */ });
 }
