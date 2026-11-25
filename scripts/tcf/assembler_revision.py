@@ -43,7 +43,8 @@ def lignes_cahier(s):
     c = (s.get('concentration') or {}).get('cahier')
     if not c:
         return []
-    return [x if isinstance(x, (str, dict)) else str(x) for x in (c if isinstance(c, list) else [c])]
+    # le lecteur lit `bloc.cahier[i].texte` : une chaîne nue s'affichait vide (25/11/2026)
+    return [x if isinstance(x, dict) else {'texte': str(x)} for x in (c if isinstance(c, list) else [c])]
 
 
 def assembler():
@@ -73,11 +74,25 @@ def assembler():
                 blocs.append(courant); courant = []
         if courant:
             blocs.append(courant)
-        seances.append({'id': f'rv_seance_{pre}', 'titre': titre, 'blocs': [{
-            'id': f'rv_{pre}_bloc{k + 1}', 'titre': b[0]['title'], 'slide_ids': [s['id'] for s in b],
-            'cahier': [l for s in b for l in lignes_cahier(s)],
-            'cahier_figures': [f for s in b for f in ((s.get('concentration') or {}).get('cahier_figures') or [])][:2],
-        } for k, b in enumerate(blocs)]})
+        # Le cahier d'un bloc = le cahier COMPLET des blocs du cours d'où viennent ses diapos (titres, méthode, « Attention »),
+        # chacun une seule fois dans la révision. (25/11/2026 : les traces d'une ligne par diapo faisaient passer le lecteur
+        # en « une ligne sous chaque titre de diapo » et la page ne montrait que le titre, signalé par l'utilisateur.)
+        source = {i: b for se in c.get('seances', []) for b in se.get('blocs', []) for i in b['slide_ids']}
+        deja = set()
+        rblocs = []
+        for k, b in enumerate(blocs):
+            srcs = []
+            for s in b:
+                sb = source.get(s['id'])
+                if sb and sb['id'] not in deja:
+                    deja.add(sb['id']); srcs.append(sb)
+            if not srcs:   # son bloc source est déjà écrit plus haut : on le redonne (jamais une page réduite à un titre)
+                srcs = [x for x in {source[s['id']]['id']: source[s['id']] for s in b if s['id'] in source}.values()]
+            cahier = [l for sb in srcs for l in sb.get('cahier', [])] or [l for s in b for l in lignes_cahier(s)]
+            figures = [f for sb in srcs for f in (sb.get('cahier_figures') or [])][:2]
+            rblocs.append({'id': f'rv_{pre}_bloc{k + 1}', 'titre': b[0]['title'], 'slide_ids': [s['id'] for s in b],
+                           'cahier': cahier, 'cahier_figures': figures})
+        seances.append({'id': f'rv_seance_{pre}', 'titre': titre, 'blocs': rblocs})
         gardees = set(ids)
         for comp in c.get('competences', []):
             sl = [i for i in comp.get('slide_ids', []) if i in gardees]
