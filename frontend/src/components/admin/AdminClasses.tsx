@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Download } from 'lucide-react';
 import { listClasses, photoClasse, type ReponseClasse, type SeanceClasse } from '../../services/api';
 
-const SUJETS: Record<string, string> = { tc: 'Tronc Commun SVT', examen_physique: '2ᵉ Bac · physique', examen_chimie: '2ᵉ Bac · chimie' };
+const SUJETS: Record<string, string> = { tc: 'Tronc Commun SVT', examen_physique: '2ᵉ Bac · physique', examen_chimie: '2ᵉ Bac · chimie', examen_tcf: 'Tronc Commun physique-chimie' };
 const COULEUR: Record<string, string> = { juste: '#1c7c54', partiel: '#d68a12', faux: '#d03b3b', regarder: '#2a78d6', nonjuge: '#8a8f98' };
 const MOT: Record<string, string> = { juste: 'Juste', partiel: 'En partie', faux: 'Faux', regarder: 'À regarder', nonjuge: 'Non jugé' };
 const nb = (x: number) => (Math.round(x * 100) / 100).toString().replace('.', ',');
