@@ -106,6 +106,8 @@ export interface Demonstration {
   lignes: LigneDemonstration[];
   /** La piste de `parole` (voix du cours), si elle est déjà calculée. */
   audio?: string;
+  /** (26/11/2026) [caractère de `parole`, seconde de `audio`] : où la voix dit chaque phrase (`scripts/reperes_voix.py`). */
+  reperes?: [number, number][];
   /**
    * `false` : la démonstration garde son tableau à part même quand la diapositive a une figure. Par défaut (18 novembre
    * 2026, simulations-au-tableau règle 17), une diapositive avec une simulation ou une image joue la démonstration SUR

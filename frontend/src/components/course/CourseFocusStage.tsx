@@ -292,6 +292,20 @@ type TableauProf = {
 /** Durée du vol du tuteur jusqu'au bouton (s), mesurée : la commande arrive ~0,9 s après le geste. */
 const AVANCE_COMMANDE = 0.9;
 
+/** (25-26/11/2026) Les repères d'une piste [caractère, seconde] : la seconde où la voix dit le caractère `i`. */
+function secondeDuCaractere(reperes: [number, number][], i: number): number {
+  const k = Math.max(0, reperes.findIndex((_, j) => j === reperes.length - 1 || reperes[j + 1][0] > i));
+  const [c0, s0] = reperes[k], [c1, s1] = reperes[Math.min(k + 1, reperes.length - 1)];
+  return c1 > c0 ? s0 + ((i - c0) / (c1 - c0)) * (s1 - s0) : s0;
+}
+/** … et le caractère que la voix dit à la seconde `t` (démonstrations : les lignes et leur éclairage suivent la voix). */
+function caractereALaSeconde(reperes: [number, number][], t: number): number {
+  if (t <= reperes[0][1]) return reperes[0][0];
+  const k = reperes.findIndex((_, j) => j === reperes.length - 1 || reperes[j + 1][1] > t);
+  const [c0, s0] = reperes[k], [c1, s1] = reperes[Math.min(k + 1, reperes.length - 1)];
+  return s1 > s0 ? c0 + ((t - s0) / (s1 - s0)) * (c1 - c0) : c1;
+}
+
 /** Le retour d'UNE option de la question sur le résultat : écrit sous l'option, dit quand l'élève la choisit. */
 type Retour = { ecrit: string; parole: string };
 type QuestionSim = {
@@ -578,12 +592,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const instant = useCallback((mot: string) => {
     const i = parole.indexOf(mot);
     if (i < 0 || !duree) return 0;
-    if (reperes) {
-      const k = Math.max(0, reperes.findIndex((_, j) => j === reperes.length - 1 || reperes[j + 1][0] > i));
-      const [c0, s0] = reperes[k], [c1, s1] = reperes[Math.min(k + 1, reperes.length - 1)];
-      const s = c1 > c0 ? s0 + ((i - c0) / (c1 - c0)) * (s1 - s0) : s0;
-      return Math.max(0, Math.min(s, duree) - 0.15);
-    }
+    if (reperes) return Math.max(0, Math.min(secondeDuCaractere(reperes, i), duree) - 0.15);
     return Math.max(0, (i / Math.max(1, parole.length)) * duree - 0.3);
   }, [parole, duree, reperes]);
 
@@ -717,9 +726,13 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const parTuteur = useCallback((command: string, parameters: Record<string, unknown> = {}) => {
     if (!tuteur3D) { envoyerASim(command, parameters); return; }
     // Un geste à la fois : deux commandes dans la même seconde, la seconde attend que la main soit arrivée.
+    // (26/11/2026, « l'éclairage jaune : vérifier quand il parle et allume ») Un éclairage (`highlight`) n'appuie sur
+    // rien : il suit le geste d'avant de 0,3 s au lieu d'une seconde, sinon l'éclairage d'un mot qui lance aussi une
+    // étape arrivait 0,6 s APRÈS la voix (mesuré sur at_h6_interpretation).
     const maintenant = performance.now();
-    const quand = Math.max(maintenant, prochainGeste.current);
-    prochainGeste.current = quand + 1000;
+    const eclairage = command === 'highlight';
+    const quand = Math.max(maintenant, prochainGeste.current - (eclairage ? 700 : 0));
+    prochainGeste.current = Math.max(prochainGeste.current, quand + (eclairage ? 300 : 1000));
     const partir = () => {
       sequence.current += 1;
       setLabControl({ sequence: sequence.current, command, message: { type: 'simulation_control', command, parameters } });
@@ -1681,6 +1694,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       void direMorceaux(prete?.urls || preparerTextes(textes), encore, () => finir()).then(dit => { if (dit) mode = 'morceaux'; else sansVoix(); });
     }
     const position = () => {
+      // avec les repères de la piste (26/11/2026) : le caractère que la voix dit vraiment, sinon la règle de trois
+      if (mode === 'piste' && voix && d.reperes && d.reperes.length >= 2) return caractereALaSeconde(d.reperes, voix.currentTime);
       if (mode === 'piste' && voix) return Number.isFinite(voix.duration) && voix.duration > 0 ? (voix.currentTime / voix.duration) * n : 0;
       if (mode === 'morceaux') {
         const p = progressionMorceaux();
@@ -1776,8 +1791,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     if (!m || !duree) return null;
     const i = parole.indexOf(m);
     if (i < 0) return null;
+    if (reperes) return Math.max(0, Math.min(secondeDuCaractere(reperes, i + m.length), duree) - 0.15);
     return Math.max(0, ((i + m.length) / Math.max(1, parole.length)) * duree - 0.15);
-  }, [observation?.apres_mot, parole, duree]);
+  }, [observation?.apres_mot, parole, duree, reperes]);
   /** Un retour dit jusqu'au bout : la piste préparée, sinon la voix en direct ; sans voix, le temps de le lire. */
   const direRetour = useCallback(async (r?: { parole?: string; ecrit?: string; audio?: string }) => {
     if (!r) { await attendre(1500); return; }

@@ -113,6 +113,21 @@ def main():
                     print(s['id'], 'reprises', [round(r, 2) for r in reprises])
                     for c, t in rep:
                         print(f'  {t:6.2f} s  car {c:4d}  « {texte[c:c + 40]} »')
+        # (26/11/2026, « l'éclairage jaune : vérifier quand il parle et allume ») la démonstration d'une question :
+        # ses lignes s'écrivent, et allument leur cible sur la figure, au mot `mot` de `parole` — même repérage.
+        for a in d['activities']:
+            for s in a['slides']:
+                dm = (s.get('question') or {}).get('demonstration')
+                if not isinstance(dm, dict):
+                    continue
+                texte = (dm.get('parole') or '').strip()
+                mp3 = os.path.join(public, (dm.get('audio') or '').split('?')[0].lstrip('/'))
+                if not texte or not dm.get('audio') or not os.path.isfile(mp3):
+                    dm.pop('reperes', None)
+                    continue
+                t0, t1, reprises, _ = pauses(mp3)
+                dm['reperes'] = [list(x) for x in apparier(texte, t0, t1, reprises)]
+                n += 1
         with open(f, 'w', encoding='utf-8') as o:
             json.dump(d, o, ensure_ascii=False, indent=indent)
             o.write('\n')
