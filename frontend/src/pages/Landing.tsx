@@ -117,6 +117,15 @@ export default function Landing() {
           .lp-tuteur { left: -26px; bottom: -226px; transform: none; }
           .lp-bulle { left: 178px; top: 96px; max-width: 360px; font-size: 1.15rem; }
         }
+        /* Téléphone en paysage (~724 × 350) : le tableau tient dans la hauteur de l'écran, le tuteur et sa bulle
+           se mettent à sa droite au lieu de dessous ; tout se voit d'un coup, sans défiler. */
+        @media (max-height: 500px) and (orientation: landscape) and (max-width: 1023px) {
+          .lp-plateau { max-width: calc((100svh - 140px) * 1.7778 + 20px); }
+          .lp-tableau-zone { margin-bottom: 3rem; }
+          /* au-dessus du bouton flottant du calendrier, en bas à droite de l'écran */
+          .lp-tuteur { left: auto; right: 12px; bottom: 44px; transform: scale(.5); transform-origin: 100% 100%; }
+          .lp-bulle { left: auto; right: 0; top: auto; bottom: 100%; max-width: 520px; font-size: 1.9rem; border-radius: 16px 14px 4px 16px; }
+        }
         @media (prefers-reduced-motion: reduce) {
           .lp-monte, .lp-defile, .lp-trait::after { animation: none; }
           .lp-trait::after { clip-path: none; }
@@ -296,7 +305,7 @@ function HeroSection() {
         </div>
 
         {/* LE TABLEAU VIVANT */}
-        <div className="lp-monte relative mb-40 lg:mb-56 lg:pl-14 lg:col-start-2 lg:row-start-1 lg:row-span-2" style={{ animationDelay: '.15s' }}>
+        <div className="lp-monte lp-tableau-zone relative mb-40 lg:mb-56 lg:pl-14 lg:col-start-2 lg:row-start-1 lg:row-span-2" style={{ animationDelay: '.15s' }}>
           <TableauVivant extraits={EXTRAITS} couleurs={COULEURS} />
           <p className="craie absolute right-1 -bottom-9 text-white/45 text-base rotate-[-2deg]">
             ↑ pas une vidéo : le vrai cours, la vraie voix

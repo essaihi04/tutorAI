@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Pause, Play, SkipForward, Volume2, VolumeX } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pause, Play, SkipForward, Volume2 } from 'lucide-react';
 import '../session/AIAvatar.css';
 import type { ProfessorMood } from '../session/Professor3D';
 import type { ProfessorGestureKind } from '../../services/professorEmotion';
@@ -31,8 +31,11 @@ export interface Extrait {
   cours: string;
   titre: string;
   src: string;
-  audio: string;
+  /** Sans piste (la feuille du sujet, montrée avant sa correction) : la diapositive se joue sur l'horloge. */
+  audio: string | null;
   duree: number;
+  /** Un examen : son titre et son année, écrits en haut du tableau, dès la feuille du sujet. */
+  entete?: { titre: string; sujet: string };
   demarrer: string | null;
   commandes: { t: number; commande: string; parametres: Record<string, unknown> }[];
   /** Les instants où le tuteur montre quelque chose au tableau. */
@@ -125,6 +128,13 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
   const cadre = useRef<HTMLIFrameElement | null>(null);
   const voix = useRef<HTMLAudioElement>(null);
   const e = extraits[i];
+  /** Les onglets : une matière, ses extraits consécutifs dans la liste. */
+  const onglets = useMemo(() => extraits.reduce<{ nom: string; debut: number; nombre: number }[]>((acc, d, n) => {
+    const der = acc[acc.length - 1];
+    if (der && der.nom === d.onglet) der.nombre++;
+    else acc.push({ nom: d.onglet, debut: n, nombre: 1 });
+    return acc;
+  }, []), [extraits]);
   const couleur = couleurs[e.matiere] || '#facc15';
   const bienvenue = accueil >= 0;
   const joue = visible && !pause && pret && !bienvenue;
@@ -165,9 +175,9 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
     if (!a) return;
     // Lecture refusée par le navigateur (pas de geste) : on continue en muet. Une lecture seulement interrompue par
     // une pause (AbortError, au changement de diapositive) n'est pas un refus.
-    if (son && joue) a.play().catch((err: DOMException) => { if (err?.name === 'NotAllowedError') setSon(false); });
+    if (son && joue && e.audio) a.play().catch((err: DOMException) => { if (err?.name === 'NotAllowedError') setSon(false); });
     else a.pause();
-  }, [son, joue, i, tour]);
+  }, [son, joue, i, tour, e.audio]);
 
   const suivant = useCallback(() => { setI(n => (n + 1) % extraits.length); setTour(n => n + 1); }, [extraits.length]);
   useEffect(() => {
@@ -176,7 +186,7 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
     let dernier = -1;
     const battre = setInterval(() => {
       const a = voix.current;
-      const maintenant = son && a ? (a.ended ? e.duree + (horloge.current += PAS) : a.currentTime) : (horloge.current += PAS);
+      const maintenant = son && a && e.audio ? (a.ended ? e.duree + (horloge.current += PAS) : a.currentTime) : (horloge.current += PAS);
       while (envoyees.current < e.commandes.length && e.commandes[envoyees.current].t <= maintenant) {
         const c = e.commandes[envoyees.current++];
         envoyer(c.commande, c.parametres);
@@ -187,11 +197,14 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
     return () => clearInterval(battre);
   }, [joue, son, e, envoyer, suivant]);
 
-  const choisir = (n: number) => { setI(n); setTour(k => k + 1); setPause(false); setAccueil(-1); };
+  /** Le geste de l'élève (un clic) autorise la piste : sans lui, le navigateur refuse de lancer le son. */
+  const autoriserSon = () => { const a = voix.current; if (a) { a.play().catch(() => {}); a.pause(); a.currentTime = 0; } };
+  /** Choisir une matière : son extrait part du début, avec la voix (le clic sur l'onglet vaut geste). */
+  const choisir = (n: number) => { autoriserSon(); setSon(true); setI(n); setTour(k => k + 1); setPause(false); setAccueil(-1); };
   /** Donner la voix : le geste de l'élève autorise le son ; la diapositive repart du début avec elle. */
   const basculerSon = () => {
     const a = voix.current;
-    if (!son && a) { a.play().catch(() => {}); a.pause(); a.currentTime = 0; }   // le geste autorise la piste
+    if (!son && a) autoriserSon();
     setSon(s => !s); setAccueil(-1); setPause(false); setTour(k => k + 1);
   };
 
@@ -211,22 +224,36 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
 
   const phrase = [...e.sous_titres].reverse().find(s => s.t <= t)?.texte ?? e.sous_titres[0]?.texte ?? '';
   const avance = Math.min(1, t / e.duree);
+  /** La feuille d'un examen s'ouvre sur son titre seul, le temps de le lire (s). */
+  const titreSeul = !!e.entete && !e.audio && t < 2.4;
 
   return (
-    <div ref={zone} className="relative">
-      <audio ref={voix} src={e.audio} preload={son ? 'auto' : 'none'} />
+    <div ref={zone} className="lp-scene relative">
+      <div className="lp-plateau">
+      <audio ref={voix} src={e.audio ?? undefined} preload={son ? 'auto' : 'none'} />
 
-      {/* Les extraits : des étiquettes à la craie */}
-      <div className="flex items-end gap-1 sm:gap-1.5 pl-2 sm:pl-5" role="tablist" aria-label="Extrait de cours">
-        {extraits.map((d, n) => (
-          <button key={d.id} role="tab" aria-selected={n === i} onClick={() => choisir(n)}
-            className="craie relative px-2.5 sm:px-3.5 pt-1.5 pb-1 rounded-t-xl text-[15px] sm:text-lg leading-none transition-all"
-            style={n === i
-              ? { background: '#5b4028', color: couleurs[d.matiere], boxShadow: `inset 0 2px 0 ${couleurs[d.matiere]}` }
-              : { background: 'rgba(91,64,40,.45)', color: 'rgba(226,232,240,.6)' }}>
-            {d.onglet}
-          </button>
-        ))}
+      {/* Les matières : des étiquettes à la craie ; chacune a ses extraits, joués l'un après l'autre (un point par extrait) */}
+      <div className="flex items-end gap-1 sm:gap-1.5 pl-2 sm:pl-5" role="tablist" aria-label="Matière">
+        {onglets.map(o => {
+          const actif = o.nom === e.onglet;
+          const c = couleurs[extraits[o.debut].matiere];
+          return (
+            <button key={o.nom} role="tab" aria-selected={actif} onClick={() => choisir(o.debut)}
+              className="craie relative px-2.5 sm:px-3.5 pt-1.5 pb-1 rounded-t-xl text-[15px] sm:text-lg leading-none transition-all"
+              style={actif
+                ? { background: '#5b4028', color: c, boxShadow: `inset 0 2px 0 ${c}` }
+                : { background: 'rgba(91,64,40,.45)', color: 'rgba(226,232,240,.6)' }}>
+              {o.nom}
+              {actif && o.nombre > 1 && (
+                <span className="flex justify-center gap-1 mt-0.5" aria-hidden>
+                  {Array.from({ length: o.nombre }, (_, k) => (
+                    <span key={k} className="w-1 h-1 rounded-full" style={{ background: o.debut + k === i ? c : 'rgba(226,232,240,.35)' }} />
+                  ))}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Le tableau : cadre en bois, ardoise verte, gouttière à craies */}
@@ -243,6 +270,19 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
               {e.cours} <span className="text-white/55 font-normal hidden sm:inline">· {e.titre}</span>
             </span>
           </div>
+
+          {/* Un examen : d'abord son titre et son année, seuls sur le tableau, puis en bandeau au-dessus de la feuille */}
+          {e.entete && (titreSeul ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 sm:gap-2 bg-[#0f1d18]/95 text-center px-4 pb-[16%] pointer-events-none">
+              <div className="craie text-xl sm:text-2xl xl:text-4xl leading-none" style={{ color: couleur }}>{e.entete.titre}</div>
+              <div className="craie text-[15px] sm:text-lg xl:text-2xl leading-tight text-white/85">{e.entete.sujet}</div>
+            </div>
+          ) : (
+            <div className="absolute left-2 top-2 max-w-[calc(100%-6.5rem)] px-2.5 py-1 rounded-lg bg-[#0f1d18]/90 shadow-lg pointer-events-none">
+              <div className="craie text-sm sm:text-lg leading-none truncate" style={{ color: couleur }}>{e.entete.titre}</div>
+              <div className="text-[10px] sm:text-xs leading-tight text-white/75 truncate">{e.entete.sujet}</div>
+            </div>
+          ))}
 
           {/* Les commandes */}
           <div className="absolute right-2 top-2 flex items-center gap-1.5">
@@ -266,7 +306,7 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
           {!son && (
             <button onClick={basculerSon}
               className="lp-ecoute absolute left-1/2 -translate-x-1/2 bottom-9 sm:bottom-11 inline-flex items-center gap-2 pl-3 pr-4 py-2 rounded-full bg-yellow-300 text-black font-bold text-sm whitespace-nowrap shadow-xl hover:bg-yellow-200 transition-colors">
-              <VolumeX className="w-4 h-4" /> Écouter Moalim expliquer
+              <Play className="w-4 h-4 fill-current" /> Écouter Moalim expliquer
             </button>
           )}
         </div>
@@ -277,6 +317,8 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
         </div>
         <span className="absolute bottom-[3px] right-10 h-2 w-9 rounded-sm bg-slate-100 rotate-[-3deg] shadow" />
         <span className="absolute bottom-[3px] right-24 h-2 w-6 rounded-sm bg-yellow-300 rotate-[4deg] shadow" />
+      </div>
+
       </div>
 
       {/* Le tuteur, debout sous le tableau : sa bulle porte ce qu'il dit (en français, la voix est en darija) */}
