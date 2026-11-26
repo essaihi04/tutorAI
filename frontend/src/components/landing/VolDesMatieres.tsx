@@ -51,8 +51,8 @@ const VOIX_VOL = [
   { fichier: 'fin_vol', de: .985, a: 1.001 },
 ] as const;
 const VOIX_URL = (f: string) => `/media/audio/landing/${f}.mp3`;
-/** La phrase de la fin, dite par Moalim (frontend/public/media/audio/landing/fin_vol.mp3, voix Bodi, lot Kaggle). */
-const FIN_DARIJA = 'هادشي ماشي حلم، هادا هو البرنامج ديالك. غادي نقطعوه مع بعض، درس بدرس، وأنا معاك فكل خطوة. يالاه نبداو!';
+/** Un mot clé de la phrase de fin : sa couleur et son tour (styles .lp-mot de la landing). */
+const MOT = (c: string, n: number) => ({ ['--mot' as string]: c, ['--attente' as string]: `${.4 + n * .8}s` }) as React.CSSProperties;
 const DEPART = 20, ARRIVEE = -561, DEBUT_ZOOM = -486;
 /** Hauteur de la section, en hauteurs d'écran : le temps du vol. */
 const ECRANS = 12;
@@ -841,9 +841,18 @@ export default function VolDesMatieres() {
         {/* Le réveil : Moalim le dit en darija, la phrase est écrite en dessous en français */}
         <audio ref={voix} preload="auto" />
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 transition-opacity duration-700 bg-[radial-gradient(ellipse_at_center,rgba(10,20,16,.93)_0%,rgba(10,20,16,.82)_60%,rgba(10,20,16,.6)_100%)]" style={{ opacity: fin ? 1 : 0, pointerEvents: fin ? 'auto' : 'none' }}>
-          <p dir="rtl" className="font-brand text-2xl sm:text-4xl [@media(max-height:500px)]:text-xl text-cyan-200 mb-3 [@media(max-height:500px)]:mb-1 leading-snug max-w-3xl">{FIN_DARIJA}</p>
-          <h2 className="craie text-5xl sm:text-7xl [@media(max-height:500px)]:text-4xl text-white leading-[.95]">Ce n'est pas un rêve.<br /><span className="text-yellow-300">C'est ton programme.</span></h2>
-          <p className="text-white/75 mt-4 [@media(max-height:500px)]:mt-2 max-w-md">Et on va le traverser ensemble, notion après notion ↓</p>
+          {/* En darija seulement (26 novembre 2026) ; les mots clés s'allument et se soulignent comme dans « le mot de Moalim » */}
+          <div dir="rtl" className={`font-brand font-bold text-white max-w-4xl ${fin ? 'lp-mots-vus' : ''}`}>
+            <p className="text-4xl sm:text-6xl [@media(max-height:500px)]:text-3xl leading-[1.35]">
+              هادشي ماشي حلم، هادا هو <span className="lp-mot" style={MOT('#fde047', 0)}>البرنامج ديالك</span>.
+            </p>
+            <p className="mt-3 [@media(max-height:500px)]:mt-1 text-2xl sm:text-4xl [@media(max-height:500px)]:text-xl leading-[1.5] text-white/90">
+              غادي نقطعوه <span className="lp-mot" style={MOT('#6ee7b7', 1)}>مع بعض</span>، درس بدرس، وأنا معاك فكل خطوة.
+            </p>
+            <p className="mt-3 [@media(max-height:500px)]:mt-1 text-3xl sm:text-5xl [@media(max-height:500px)]:text-2xl leading-[1.4]">
+              <span className="lp-mot" style={MOT('#fde047', 2)}>يالاه نبداو!</span> ↓
+            </p>
+          </div>
           {refusee && (
             <button onClick={ecouter} className="mt-4 [@media(max-height:500px)]:mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-300 text-black font-bold text-sm hover:bg-yellow-200 transition-colors">
               ▶ Écouter Moalim
