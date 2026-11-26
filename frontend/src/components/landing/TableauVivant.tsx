@@ -1,5 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pause, Play, SkipForward, Volume2 } from 'lucide-react';
+import { BookOpen, GraduationCap, MessageCircle, Pause, Play, SkipForward, TrendingUp, Trophy, Volume2 } from 'lucide-react';
+import { observeAvatarMedia } from '../../services/avatarAudio';
+import { audioUnlock } from '../../services/audioUnlock';
+import voixLanding from './voix_landing.json';
 import '../session/AIAvatar.css';
 import type { ProfessorMood } from '../session/Professor3D';
 import type { ProfessorGestureKind } from '../../services/professorEmotion';
@@ -113,6 +116,19 @@ const BIENVENUE = [
   { poids: .19, duree: 4.2, texte: <>Je suis avec toi à la maison, à toute heure. Toi et moi, on va décrocher le bac avec mention !</> },
 ];
 const VOIX_BIENVENUE = '/media/audio/landing/bienvenue.mp3';
+/** L'instant où la voix commence chaque partie (s) : relevé sur la piste (scripts/extraits_landing.py, repères). */
+const DEBUTS_BIENVENUE: number[] = voixLanding.bienvenue.debuts;
+/**
+ * Ce que le tuteur écrit au tableau pendant la bienvenue : une ligne par partie, écrite à la craie quand la voix la
+ * dit, puis allumée (jaune, son dessin qui se trace) tant qu'il en parle ; les lignes déjà dites restent, cochées.
+ */
+const TABLEAU_BIENVENUE = [
+  { Icone: GraduationCap, texte: 'Un prof du bac marocain, pas ChatGPT' },
+  { Icone: BookOpen, texte: 'Tous les cours + chaque question du national, pas à pas' },
+  { Icone: MessageCircle, texte: 'Mode libre : pose toutes tes questions' },
+  { Icone: TrendingUp, texte: 'Je connais ton niveau : on progresse ensemble' },
+  { Icone: Trophy, texte: 'Toi + moi → le bac avec mention' },
+];
 /** Silence laissé après la voix avant la diapositive suivante (s). */
 const RESPIRATION = 1.6;
 /** Le tuteur garde le bras tendu ce temps-là après chaque pointage (s). */
@@ -194,10 +210,23 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
   const suivreAccueil = () => {
     const a = voixAccueil.current;
     if (!a || !isFinite(a.duration) || accueil < 0) return;
-    let u = a.currentTime / a.duration, k = 0;
-    while (k < BIENVENUE.length - 1 && u > BIENVENUE[k].poids) { u -= BIENVENUE[k].poids; k++; }
+    // la partie que la voix dit maintenant (repères de la piste ; à défaut, les parts de durée `poids`)
+    const tt = a.currentTime + 0.1;
+    let k = 0;
+    if (DEBUTS_BIENVENUE.length === BIENVENUE.length && Math.abs(voixLanding.bienvenue.duree - a.duration) < 1.5) {
+      while (k < BIENVENUE.length - 1 && tt >= DEBUTS_BIENVENUE[k + 1]) k++;
+    } else {
+      let u = tt / a.duration;
+      while (k < BIENVENUE.length - 1 && u > BIENVENUE[k].poids) { u -= BIENVENUE[k].poids; k++; }
+    }
     if (k !== accueil) setAccueil(k);
   };
+
+  // ── Les lèvres du tuteur suivent la voix : les deux pistes passent par le bus d'analyse de l'avatar ──
+  useEffect(() => {
+    if (voix.current) observeAvatarMedia(voix.current);
+    if (voixAccueil.current) observeAvatarMedia(voixAccueil.current);
+  }, []);
 
   // ── La voix : elle suit lecture et pause ; sans le son, une horloge la remplace ──
   useEffect(() => {
@@ -228,7 +257,7 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
   }, [joue, son, e, envoyer, suivant]);
 
   /** Le geste de l'élève (un clic) autorise la piste : sans lui, le navigateur refuse de lancer le son. */
-  const autoriserSon = () => { const a = voix.current; if (a) { a.play().catch(() => {}); a.pause(); a.currentTime = 0; } };
+  const autoriserSon = () => { void audioUnlock.ensureRunning(); const a = voix.current; if (a) { a.play().catch(() => {}); a.pause(); a.currentTime = 0; } };
   /** Choisir une matière : son extrait part du début, avec la voix (le clic sur l'onglet vaut geste). */
   const choisir = (n: number) => { autoriserSon(); setSon(true); setI(n); setTour(k => k + 1); setPause(false); setAccueil(-1); };
   /** Donner la voix : le geste de l'élève autorise le son ; la diapositive repart du début avec elle. */
@@ -243,13 +272,23 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
 
   // ── Le tuteur : il parle pendant la voix et montre le tableau aux instants de pointage ──
   const parle = joue && t < e.duree;
-  const pointe = parle && e.pointes.concat(e.commandes.map(c => c.t)).some(p => t >= p && t < p + TENUE_POINTAGE);
+  // Pendant la bienvenue, il montre la ligne qu'il vient d'écrire, le temps de la tenue.
+  const [montreLigne, setMontreLigne] = useState(false);
+  useEffect(() => {
+    if (accueil < 0 || !visible) { setMontreLigne(false); return; }
+    setMontreLigne(true);
+    const f = setTimeout(() => setMontreLigne(false), TENUE_POINTAGE * 1000);
+    return () => clearTimeout(f);
+  }, [accueil, visible]);
+  const lignes = useRef<(HTMLDivElement | null)[]>([]);
+  const pointe = montreLigne || (parle && e.pointes.concat(e.commandes.map(c => c.t)).some(p => t >= p && t < p + TENUE_POINTAGE));
   const [cible, setCible] = useState<{ x: number; y: number } | null>(null);
   useEffect(() => {
     if (!pointe) { setCible(null); return; }
-    const r = tableau.current?.getBoundingClientRect();
-    if (r) setCible({ x: r.left + r.width * 0.5, y: r.top + r.height * 0.5 });
-  }, [pointe]);
+    const ligne = montreLigne && accueil >= 0 ? lignes.current[accueil]?.getBoundingClientRect() : null;
+    const r = ligne ?? tableau.current?.getBoundingClientRect();
+    if (r) setCible(ligne ? { x: r.left + 24, y: r.top + r.height / 2 } : { x: r.left + r.width * 0.5, y: r.top + r.height * 0.5 });
+  }, [pointe, montreLigne, accueil]);
   const mood: ProfessorMood = bienvenue || parle ? 'speaking' : 'idle';
   const [sans3D, setSans3D] = useState(false);
   const rien = useCallback(() => {}, []);
@@ -263,6 +302,23 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
   return (
     <div ref={zone} className="lp-scene relative">
       <div className="lp-plateau">
+      <style>{`
+        /* la ligne s'écrit de gauche à droite, comme une craie */
+        .lp-ecrit { clip-path: inset(0 100% 0 0); animation: lp-ecrire 1.3s cubic-bezier(.5,.1,.3,1) forwards; }
+        @keyframes lp-ecrire { to { clip-path: inset(0 0 0 0); } }
+        /* la ligne dite maintenant : elle s'allume, un trait de craie se dessine dessous */
+        .lp-ligne--allumee .lp-ecrit { text-shadow: 0 0 16px rgba(253,224,71,.55); position: relative; }
+        .lp-ligne--allumee .lp-ecrit::after { content: ''; position: absolute; left: 0; right: 0; bottom: -.08em; height: .09em;
+          border-radius: 99px; background: currentColor; clip-path: inset(0 100% 0 0); animation: lp-ecrire 1s 1.1s forwards; }
+        /* son dessin se trace, puis respire */
+        .lp-dessine svg * { stroke-dasharray: 80; stroke-dashoffset: 80; animation: lp-tracer-icone 1.1s ease forwards; }
+        .lp-dessine { animation: lp-respire 1.6s 1.2s ease-in-out infinite; }
+        @keyframes lp-tracer-icone { to { stroke-dashoffset: 0; } }
+        @keyframes lp-respire { 0%,100% { transform: scale(1); } 50% { transform: scale(1.14); } }
+        @media (prefers-reduced-motion: reduce) {
+          .lp-ecrit, .lp-dessine, .lp-dessine svg *, .lp-ligne--allumee .lp-ecrit::after { animation: none; clip-path: none; stroke-dashoffset: 0; }
+        }
+      `}</style>
       <audio ref={voix} src={e.audio ?? undefined} preload={son ? 'auto' : 'none'} />
       <audio ref={voixAccueil} src={VOIX_BIENVENUE} preload="auto" onTimeUpdate={suivreAccueil} onEnded={() => setAccueil(-1)} onError={() => setAccueil(-1)} />
 
@@ -305,8 +361,26 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
             </span>
           </div>
 
+          {/* La bienvenue écrite au tableau, au fil de la voix */}
+          {bienvenue && (
+            <div className="absolute inset-0 flex flex-col justify-center gap-[3.2%] px-[6%] py-[4%] pointer-events-none"
+              style={{ background: 'radial-gradient(ellipse at 50% 35%,#13241e 0,#0f1d18 55%,#0a1410 100%)', containerType: 'inline-size' }}>
+              <div className="craie leading-none text-cyan-300" style={{ fontSize: 'clamp(15px, 3.8cqw, 32px)' }}>— Moalim, ton prof du bac —</div>
+              {TABLEAU_BIENVENUE.map((l, k) => k <= accueil && (
+                <div key={k} ref={el => { lignes.current[k] = el; }}
+                  className={`lp-ligne flex items-center gap-[2.2%] craie leading-tight transition-colors duration-500 ${k === accueil ? 'lp-ligne--allumee' : ''}`}
+                  style={{ fontSize: 'clamp(15px, 4.5cqw, 36px)', color: k === accueil ? '#fde047' : 'rgba(226,232,240,.78)' }}>
+                  <span className={`shrink-0 inline-flex items-center justify-center ${k === accueil ? 'lp-dessine' : ''}`} style={{ width: '1.25em', height: '1.25em' }}>
+                    {k === accueil ? <l.Icone className="w-full h-full" strokeWidth={2.2} /> : <span className="text-emerald-300">✓</span>}
+                  </span>
+                  <span className="lp-ecrit">{l.texte}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Un examen : d'abord son titre et son année, seuls sur le tableau, puis en bandeau au-dessus de la feuille */}
-          {e.entete && (titreSeul ? (
+          {e.entete && !bienvenue && (titreSeul ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 sm:gap-2 bg-[#0f1d18]/95 text-center px-4 pb-[16%] pointer-events-none">
               <div className="craie text-xl sm:text-2xl xl:text-4xl leading-none" style={{ color: couleur }}>{e.entete.titre}</div>
               <div className="craie text-[15px] sm:text-lg xl:text-2xl leading-tight text-white/85">{e.entete.sujet}</div>

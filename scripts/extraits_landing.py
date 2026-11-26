@@ -24,10 +24,57 @@ import sys
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parent.parent
+
+
+def _module_reperes():
+    """scripts/reperes_voix.py (pauses de la voix <-> fins de phrase), pris sur le disque ou dans origin/main."""
+    import types
+    f = RACINE / 'scripts' / 'reperes_voix.py'
+    src = f.read_text(encoding='utf-8') if f.exists() else subprocess.run(
+        ['git', 'show', 'origin/main:scripts/reperes_voix.py'], cwd=RACINE, capture_output=True).stdout.decode('utf-8')
+    m = types.ModuleType('reperes_voix')
+    exec(compile(src, 'reperes_voix.py', 'exec'), m.__dict__)
+    return m
+
+
+RV = None
+
+
+def seconde_du_caractere(reperes, i):
+    """Comme CourseFocusStage.secondeDuCaractere : interpolation entre les deux repères qui entourent le caractère."""
+    k = 0
+    while k < len(reperes) - 1 and reperes[k + 1][0] <= i:
+        k += 1
+    c0, s0 = reperes[k]
+    c1, s1 = reperes[min(k + 1, len(reperes) - 1)]
+    return s0 + (i - c0) / (c1 - c0) * (s1 - s0) if c1 > c0 else s0
+
+
+def fichier_mp3(url: str) -> str:
+    """Un chemin local vers la piste (sur le disque, ou extraite du commit --ref dans un fichier temporaire)."""
+    import tempfile
+    chemin = 'frontend/public/' + url.split('?')[0].lstrip('/')
+    if not REF or (RACINE / chemin).exists() and subprocess.run(
+            ['git', 'cat-file', '-e', f'{REF}:{chemin}'], cwd=RACINE, capture_output=True).returncode:
+        return str(RACINE / chemin)          # pas encore dans le commit : la piste du disque
+    octets = subprocess.run(['git', 'show', f'{REF}:{chemin}'], cwd=RACINE, capture_output=True).stdout
+    t = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+    t.write(octets); t.close()
+    return t.name
+
+
+def reperes_piste(url: str, texte: str, connus=None):
+    """Les repères [[caractère, seconde]] de la piste : ceux du cours s'ils valent pour cette piste, sinon calculés."""
+    global RV
+    if connus and len(connus) >= 2:
+        return [list(x) for x in connus]
+    RV = RV or _module_reperes()
+    t0, t1, reprises, _ = RV.pauses(fichier_mp3(url))
+    return [list(x) for x in RV.apparier(texte, t0, t1, reprises)]
 COURS = RACINE / 'backend' / 'data' / 'courses'
 PUBLIC = RACINE / 'frontend' / 'public'
 SORTIE = RACINE / 'frontend' / 'src' / 'components' / 'landing' / 'extraits.json'
-AVANCE_COMMANDE = 0.9
+AVANCE_COMMANDE = 0.25   # + les 0,15 s de l'instant : 0,4 s d'avance, le temps que la main atteigne le bouton
 
 # (cours, diapositive, onglet, matière pour la couleur, ce que l'extrait montre du tuteur[, options])
 # Deux extraits par matière (26 novembre 2026). Options : `feuille` = la diapositive d'énoncé jouée juste avant
@@ -113,9 +160,16 @@ def extrait(cours: dict, ident: str, onglet: str, matiere: str, capacite: str) -
     duree = piste['duration_ms'] / 1000
     parole = d['speech_text']['mixed'].strip()
 
+    # (26/11/2026, « synchroniser finement ») l'instant d'un mot vient des repères de la piste — où la voix dit
+    # vraiment chaque phrase —, comme dans le lecteur de cours ; la diapo ne prend plus que 0,15 s d'avance (0,4 s
+    # pour une commande) au lieu de la règle de trois qui avançait de 1,5 à 2 s.
+    m = d['audio']['mixed']
+    connus = m.get('reperes') if m.get('reperes_duree') and abs(m['reperes_duree'] - duree) < 0.3 else None
+    reperes = reperes_piste(piste['url'], parole, connus)
+
     def instant(mot: str) -> float:
         i = parole.find(mot)
-        return 0.0 if i < 0 else max(0.0, i / max(1, len(parole)) * duree - 0.3)
+        return 0.0 if i < 0 else max(0.0, min(seconde_du_caractere(reperes, i), duree) - 0.15)
 
     conc = d.get('concentration', {})
     commandes, pointes = [], []
@@ -126,12 +180,15 @@ def extrait(cours: dict, ident: str, onglet: str, matiere: str, capacite: str) -
         elif p.get('repere') or p.get('cible'):
             pointes.append(round(instant(p['mot']), 2))
 
-    # Sous-titres : les phrases du texte français, réparties selon leur place dans le texte.
+    # Sous-titres : les phrases du texte français. Même nombre de phrases que le texte dit : la k-ième part quand la
+    # voix dit la k-ième phrase ; sinon, à la même proportion du texte dit, placée par les repères.
     fr = d['speech_text']['fr'].strip()
     phrases = [x.strip() for x in re.split(r'(?<=[.!?…])\s+', fr) if x.strip()]
+    debuts_dits = [0] + [mt.end() for mt in re.finditer(r'[.!?؟…]+\s+', parole) if mt.end() < len(parole)]
     sous_titres, place = [], 0
-    for ph in phrases:
-        sous_titres.append({'t': round(place / max(1, len(fr)) * duree, 2), 'texte': ph})
+    for k, ph in enumerate(phrases):
+        c = debuts_dits[k] if len(debuts_dits) == len(phrases) else place / max(1, len(fr)) * len(parole)
+        sous_titres.append({'t': round(min(seconde_du_caractere(reperes, c), duree), 2), 'texte': ph})
         place += len(ph) + 1
 
     return {
@@ -143,6 +200,25 @@ def extrait(cours: dict, ident: str, onglet: str, matiere: str, capacite: str) -
     }
 
 
+# La bienvenue du tableau (media/audio/landing/bienvenue.mp3) : le texte dit et le début de chacune de ses parties
+# (une bulle et une ligne écrite au tableau par partie) — chaque partie s'allume quand la voix la dit.
+BIENVENUE = ('مرحبا بيك! أنا Moalim. ماشي ChatGPT: أنا أستاذ متخصص فالباك المغربي. كنشرح ليك بالدارجة بحال شي أستاذ '
+             'حقيقي، خطوة بخطوة: الدروس كاملين، وكل سؤال من الامتحانات الوطنية كنصححوه مع بعض. وفي le mode libre، '
+             'سولني على أي حاجة وغادي نجاوبك. أنا كنفهمك، وكنفهم المستوى ديالك، وغادي نبقاو نتحسنو مع بعض. أنا معاك '
+             'فالدار، فأي وقت. أنا وياك، غادي نجيبو الباك ب mention!')
+BIENVENUE_PARTIES = ['مرحبا بيك', 'كنشرح ليك', 'وفي le mode libre', 'أنا كنفهمك', 'أنا معاك']
+VOIX_LANDING = RACINE / 'frontend' / 'src' / 'components' / 'landing' / 'voix_landing.json'
+
+
+def voix_landing() -> dict:
+    global RV
+    RV = RV or _module_reperes()
+    t0, t1, reprises, total = RV.pauses(fichier_mp3('/media/audio/landing/bienvenue.mp3'))
+    reperes = [list(x) for x in RV.apparier(BIENVENUE, t0, t1, reprises)]
+    debuts = [round(seconde_du_caractere(reperes, BIENVENUE.find(m)), 2) for m in BIENVENUE_PARTIES]
+    return {'bienvenue': {'duree': round(total, 2), 'debuts': debuts}}
+
+
 def main() -> None:
     global REF
     analyse = argparse.ArgumentParser(description='Les extraits de la landing, relevés dans les cours.')
@@ -152,6 +228,7 @@ def main() -> None:
     REF = options.ref
     extraits = [e for c in CHOIX for e in extraits_de(*c)]
     options.sortie.write_bytes((json.dumps(extraits, ensure_ascii=False, indent=1) + '\n').encode('utf-8'))
+    VOIX_LANDING.write_bytes((json.dumps(voix_landing(), ensure_ascii=False, indent=1) + chr(10)).encode('utf-8'))
     total = sum(e['duree'] for e in extraits)
     sys.stdout.reconfigure(encoding='utf-8')
     for e in extraits:
