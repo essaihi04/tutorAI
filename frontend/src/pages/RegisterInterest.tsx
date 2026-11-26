@@ -8,6 +8,7 @@ import {
 import { submitRegistrationRequest } from '../services/api';
 import MoalimShell, { MoalimLogo } from '../components/MoalimShell';
 
+import { BAC_YEAR } from '../config/bac';
 const WHATSAPP_NUMBER = '212641998700';
 const WHATSAPP_DISPLAY = '+212 641 998 700';
 
@@ -68,7 +69,7 @@ export default function RegisterInterest() {
         ville: form.ville.trim(),
         niveau: '2BAC-PCF',
         promo_code: form.promo_code.trim() ? form.promo_code.trim().toUpperCase() : undefined,
-        message: form.pack ? 'Pack BAC 2026 + Concours grandes écoles — 149 DH' : undefined,
+        message: form.pack ? `Pack BAC ${BAC_YEAR} + Concours grandes écoles — 149 DH` : undefined,
       });
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -101,7 +102,7 @@ export default function RegisterInterest() {
         <div className="space-y-6 lg:sticky lg:top-8 anim-fade-up">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full glass text-xs">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-amber-200 font-semibold">BAC 2026 — inscription prioritaire</span>
+            <span className="text-amber-200 font-semibold">BAC {BAC_YEAR} — inscription prioritaire</span>
           </div>
 
           <h1 className="text-4xl lg:text-5xl font-black leading-[1.05] tracking-tight">
@@ -200,7 +201,7 @@ export default function RegisterInterest() {
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <Package className="w-4 h-4 text-emerald-300" />
-                <span className="font-bold text-white text-sm">Je veux le Pack BAC 2026 + Concours des grandes écoles</span>
+                <span className="font-bold text-white text-sm">Je veux le Pack BAC {BAC_YEAR} + Concours des grandes écoles</span>
                 <span className="text-[10px] font-bold text-rose-400">*</span>
               </div>
               <div className="flex items-center gap-2 mt-1.5">

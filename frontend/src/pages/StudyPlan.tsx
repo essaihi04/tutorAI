@@ -5,6 +5,7 @@ import { useCoachingStore } from '../stores/coachingStore';
 import { ArrowLeft, Clock, CheckCircle, Play, Timer, BookOpen, TrendingUp, Loader2, GraduationCap, RefreshCw, Target, FileText, ChevronLeft, ChevronRight, X as XIcon, CalendarDays } from 'lucide-react';
 import MobileBottomNav from '../components/MobileBottomNav';
 
+import { BAC_YEAR } from '../config/bac';
 // ════════════════════════════════════════════════════════════════
 // Calendar helpers
 // ════════════════════════════════════════════════════════════════
@@ -537,7 +538,7 @@ export default function StudyPlan() {
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="text-base font-bold text-white font-brand truncate">Mon Programme</h1>
-            <p className="text-[10px] text-white/50">Sciences Physiques BIOF — BAC 2026</p>
+            <p className="text-[10px] text-white/50">Sciences Physiques BIOF — BAC {BAC_YEAR}</p>
           </div>
           <button
             onClick={() => setShowRegenerateDialog(true)}
@@ -597,7 +598,7 @@ export default function StudyPlan() {
             <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-xl p-2.5 text-white shadow-sm">
               <div className="flex items-center gap-1 mb-0.5">
                 <Target className="w-3 h-3 opacity-80" />
-                <span className="text-[9px] font-bold uppercase tracking-wider opacity-90">BAC 2026</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider opacity-90">BAC {BAC_YEAR}</span>
               </div>
               <div className="flex items-baseline gap-1">
                 <span className="text-lg font-black leading-none">{countdown?.days_remaining || 0}</span>
