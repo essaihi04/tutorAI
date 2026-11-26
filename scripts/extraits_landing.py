@@ -213,7 +213,8 @@ VOIX_LANDING = RACINE / 'frontend' / 'src' / 'components' / 'landing' / 'voix_la
 def voix_landing() -> dict:
     global RV
     RV = RV or _module_reperes()
-    t0, t1, reprises, total = RV.pauses(fichier_mp3('/media/audio/landing/bienvenue.mp3'))
+    # la piste du disque : c'est elle qu'on publie avec ces instants (une voix refaite n'est pas encore dans --ref)
+    t0, t1, reprises, total = RV.pauses(str(PUBLIC / 'media' / 'audio' / 'landing' / 'bienvenue.mp3'))
     reperes = [list(x) for x in RV.apparier(BIENVENUE, t0, t1, reprises)]
     debuts = [round(seconde_du_caractere(reperes, BIENVENUE.find(m)), 2) for m in BIENVENUE_PARTIES]
     return {'bienvenue': {'duree': round(total, 2), 'debuts': debuts}}
