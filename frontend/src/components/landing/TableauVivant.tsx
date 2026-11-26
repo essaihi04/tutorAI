@@ -37,6 +37,8 @@ export interface Extrait {
   /** Sans piste (la feuille du sujet, montrée avant sa correction) : la diapositive se joue sur l'horloge. */
   audio: string | null;
   duree: number;
+  /** La feuille du sujet d'un examen (montrée avant sa correction, avec ou sans voix). */
+  feuille?: boolean;
   /** Un examen : son titre et son année, écrits en haut du tableau, dès la feuille du sujet. */
   entete?: { titre: string; sujet: string };
   demarrer: string | null;
@@ -297,7 +299,7 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
   const phrase = [...e.sous_titres].reverse().find(s => s.t <= t)?.texte ?? e.sous_titres[0]?.texte ?? '';
   const avance = Math.min(1, t / e.duree);
   /** La feuille d'un examen s'ouvre sur son titre seul, le temps de le lire (s). */
-  const titreSeul = !!e.entete && !e.audio && t < 2.4;
+  const titreSeul = !!e.entete && !!e.feuille && t < 2.4;
 
   return (
     <div ref={zone} className="lp-scene relative">

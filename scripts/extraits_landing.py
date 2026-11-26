@@ -124,20 +124,47 @@ def publie(url: str) -> bool:
     return subprocess.run(['git', 'cat-file', '-e', f'{REF}:{chemin}'], cwd=RACINE, capture_output=True).returncode == 0
 
 
+# La voix brève de la feuille (26/11/2026, « il reste silencieux, veuillez mettre un bref speech ») : quand la piste
+# existe, la feuille parle ; sinon elle reste muette, sur l'horloge.
+FEUILLE_VOIX = '/media/audio/landing/feuille_national.mp3'
+FEUILLE_PAROLE = ('قبل كلشي، كنقراو le sujet ديال le national deux mille vingt-deux، session de rattrapage، بحال اللي طاح '
+                  'فالباك. ومن بعد، كنصححوه سؤال بسؤال.')
+FEUILLE_SOUS_TITRES = ["D'abord, on lit le sujet du national 2022, session de rattrapage, tel qu'il est tombé au bac.",
+                       'Puis on le corrige, question par question.']
+
+
+def duree_mp3(chemin: str) -> float:
+    r = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', chemin],
+                       capture_output=True, text=True)
+    return float(r.stdout.strip() or 0)
+
+
 def feuille(cours: dict, ident: str, onglet: str, matiere: str, entete: dict) -> dict:
-    """La feuille du sujet, telle qu'au bac, montrée en silence avant l'explication : on lit d'abord l'énoncé."""
+    """La feuille du sujet, telle qu'au bac, avant l'explication : on lit d'abord l'énoncé (avec sa voix brève)."""
+    global RV
     d = diapositive(cours, ident)
     if not publie(d['visual']['url']):
         raise SystemExit(f"fichier absent : {d['visual']['url']}")
     # Pas de `highlight` : la feuille ferait défiler jusqu'à la question (scrollIntoView), et la landing avec elle.
     commandes = [{'t': 0.3, 'commande': 'start', 'parametres': {}}]
+    audio, duree = None, DUREE_FEUILLE
+    sous_titres = [{'t': 0, 'texte': "D'abord, on lit le sujet, tel qu'il est tombé au bac."},
+                   {'t': 4.5, 'texte': 'Puis on le corrige, question par question.'}]
+    mp3 = PUBLIC / FEUILLE_VOIX.lstrip('/')
+    if mp3.exists():
+        audio, duree = FEUILLE_VOIX, round(max(DUREE_FEUILLE, duree_mp3(str(mp3)) + 0.6), 2)
+        RV = RV or _module_reperes()
+        t0, t1, reprises, _ = RV.pauses(str(mp3))
+        reperes = [list(x) for x in RV.apparier(FEUILLE_PAROLE, t0, t1, reprises)]
+        deuxieme = FEUILLE_PAROLE.index('ومن بعد')
+        sous_titres = [{'t': 0, 'texte': FEUILLE_SOUS_TITRES[0]},
+                       {'t': round(seconde_du_caractere(reperes, deuxieme), 2), 'texte': FEUILLE_SOUS_TITRES[1]}]
     return {
-        'id': ident, 'onglet': onglet, 'matiere': matiere, 'capacite': "D'abord, le sujet",
+        'id': ident, 'onglet': onglet, 'matiere': matiere, 'capacite': "D'abord, le sujet", 'feuille': True,
         'cours': cours['title'], 'titre': d['title'], 'entete': entete,
-        'src': d['visual']['url'], 'audio': None, 'duree': DUREE_FEUILLE,
+        'src': d['visual']['url'], 'audio': audio, 'duree': duree,
         'demarrer': d.get('concentration', {}).get('demarrer'), 'commandes': commandes, 'pointes': [3.0],
-        'sous_titres': [{'t': 0, 'texte': "D'abord, on lit le sujet, tel qu'il est tombé au bac."},
-                        {'t': 4.5, 'texte': 'Puis on le corrige, question par question.'}],
+        'sous_titres': sous_titres,
     }
 
 
