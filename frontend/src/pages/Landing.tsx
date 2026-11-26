@@ -6,7 +6,7 @@ import MoalimChatbot from '../components/MoalimChatbot';
 import TableauVivant, { CadreAnimation, useVisible, type Extrait } from '../components/landing/TableauVivant';
 import extraits from '../components/landing/extraits.json';
 
-/** Le survol 3D charge three.js : seulement quand la page est là, jamais avant le hero. */
+/** Le survol 3D (three.js) ouvre la page ; il est chargé à part pour ne pas alourdir le reste. */
 const VolDesMatieres = lazy(() => import('../components/landing/VolDesMatieres'));
 import { ANNEE_SCOLAIRE, BAC_YEAR, joursAvantBac } from '../config/bac';
 import {
@@ -170,10 +170,11 @@ export default function Landing() {
         </div>
       </nav>
 
+      {/* D'abord le survol 3D des matières, puis le tableau vivant (26 novembre 2026) */}
+      <Suspense fallback={<div className="h-screen" aria-hidden />}><VolDesMatieres /></Suspense>
       <HeroSection />
       <PromesseSection />
       <BandeMatieres />
-      <Suspense fallback={null}><VolDesMatieres /></Suspense>
       <CapacitesSection />
       <AnimationsSection />
       <ExamensSection />
@@ -218,7 +219,7 @@ function useJours() {
 function HeroSection() {
   const jours = useJours();
   return (
-    <section className="relative pt-28 pb-10 sm:pt-36 z-10">
+    <section id="accueil" className="relative pt-24 pb-10 sm:pt-28 z-10 scroll-mt-4">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 grid lg:grid-cols-[.86fr_1.14fr] gap-x-8 gap-y-7 items-start">
         {/* TEXTE — sur téléphone : texte, puis le tableau, puis les filières et les outils */}
         <div className="lp-monte lg:pt-6 lg:col-start-1 lg:row-start-1">

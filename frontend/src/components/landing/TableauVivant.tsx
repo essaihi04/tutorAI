@@ -99,14 +99,20 @@ export function useVisible<T extends HTMLElement>(seuil = 0.25) {
 }
 
 /**
- * Le mot de bienvenue du tuteur, avant le premier extrait : il met en confiance (26 novembre 2026, « je veux
- * commencer avec vous dès le zéro, c'est le temps de travailler, on va comprendre ensemble, je vais répondre à vos
- * questions »). Deux bulles, chacune le temps de la lire.
+ * Le mot de bienvenue du tuteur, avant le premier extrait : il présente la plateforme et met en confiance
+ * (26 novembre 2026 : pas ChatGPT, un prof spécialisé dans le bac marocain, en darija, les cours et chaque question des
+ * nationaux pas à pas, le mode libre, « je te comprends et je connais ton niveau », « toi et moi, le bac avec mention »).
+ * Avec le son, la voix (media/audio/landing/bienvenue.mp3, voix Bodi) mène et les bulles la suivent (`poids` : part de
+ * la piste) ; sans le son, chaque bulle reste le temps de la lire (`duree`).
  */
 const BIENVENUE = [
-  { duree: 2.8, texte: <><span className="font-brand" dir="rtl">مرحبا بيك</span> 👋 Bienvenue ! Moi, c'est Moalim.</> },
-  { duree: 4.2, texte: <>On commence de zéro, ensemble. Et je réponds à toutes tes questions.</> },
+  { poids: .17, duree: 4, texte: <><span className="font-brand" dir="rtl">مرحبا بيك</span> 👋 Moi, c'est Moalim. Pas ChatGPT : un prof spécialisé dans le bac marocain.</> },
+  { poids: .33, duree: 5, texte: <>Je t'explique en darija, pas à pas, comme un vrai prof : tous les cours, et chaque question des examens nationaux.</> },
+  { poids: .14, duree: 3.6, texte: <>En mode libre, pose-moi n'importe quelle question : je te réponds.</> },
+  { poids: .17, duree: 3.6, texte: <>Je te comprends, je connais ton niveau, et on progresse ensemble.</> },
+  { poids: .19, duree: 4.2, texte: <>Je suis avec toi à la maison, à toute heure. Toi et moi, on va décrocher le bac avec mention !</> },
 ];
+const VOIX_BIENVENUE = '/media/audio/landing/bienvenue.mp3';
 /** Silence laissé après la voix avant la diapositive suivante (s). */
 const RESPIRATION = 1.6;
 /** Le tuteur garde le bras tendu ce temps-là après chaque pointage (s). */
@@ -165,9 +171,33 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
   useEffect(() => {
     if (!visible || accueil < 0) return;
     const a = accueil === 0 ? setTimeout(() => setGesture({ kind: 'wave', key: Date.now() }), 250) : undefined;
-    const b = setTimeout(() => setAccueil(n => (n + 1 < BIENVENUE.length ? n + 1 : -1)), BIENVENUE[accueil].duree * 1000);
+    // avec le son, c'est la voix qui fait avancer les bulles (plus bas)
+    const b = son ? undefined : setTimeout(() => setAccueil(n => (n + 1 < BIENVENUE.length ? n + 1 : -1)), BIENVENUE[accueil].duree * 1000);
     return () => { clearTimeout(a); clearTimeout(b); };
-  }, [visible, accueil]);
+  }, [visible, accueil, son]);
+  // L'élève a déjà fait un geste sur la page (la visite guidée du survol…) : le tableau parle tout de suite.
+  const vuUneFois = useRef(false);
+  useEffect(() => {
+    if (!visible || vuUneFois.current) return;
+    vuUneFois.current = true;
+    if ((navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive) setSon(true);
+  }, [visible]);
+  // La voix de la bienvenue : elle mène les bulles, puis laisse la place au premier extrait.
+  const voixAccueil = useRef<HTMLAudioElement>(null);
+  const enAccueil = accueil >= 0;
+  useEffect(() => {
+    const a = voixAccueil.current;
+    if (!a) return;
+    if (visible && son && enAccueil && !pause) a.play().catch((err: DOMException) => { if (err?.name === 'NotAllowedError') setSon(false); });
+    else a.pause();
+  }, [visible, son, enAccueil, pause]);
+  const suivreAccueil = () => {
+    const a = voixAccueil.current;
+    if (!a || !isFinite(a.duration) || accueil < 0) return;
+    let u = a.currentTime / a.duration, k = 0;
+    while (k < BIENVENUE.length - 1 && u > BIENVENUE[k].poids) { u -= BIENVENUE[k].poids; k++; }
+    if (k !== accueil) setAccueil(k);
+  };
 
   // ── La voix : elle suit lecture et pause ; sans le son, une horloge la remplace ──
   useEffect(() => {
@@ -205,7 +235,10 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
   const basculerSon = () => {
     const a = voix.current;
     if (!son && a) autoriserSon();
-    setSon(s => !s); setAccueil(-1); setPause(false); setTour(k => k + 1);
+    // Donner la voix pendant la bienvenue : elle repart du début, dite cette fois ; couper la voix la saute.
+    const garder = !son && accueil >= 0;
+    if (garder && voixAccueil.current) { voixAccueil.current.currentTime = 0; setAccueil(0); } else setAccueil(-1);
+    setSon(s => !s); setPause(false); setTour(k => k + 1);
   };
 
   // ── Le tuteur : il parle pendant la voix et montre le tableau aux instants de pointage ──
@@ -231,6 +264,7 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
     <div ref={zone} className="lp-scene relative">
       <div className="lp-plateau">
       <audio ref={voix} src={e.audio ?? undefined} preload={son ? 'auto' : 'none'} />
+      <audio ref={voixAccueil} src={VOIX_BIENVENUE} preload="auto" onTimeUpdate={suivreAccueil} onEnded={() => setAccueil(-1)} onError={() => setAccueil(-1)} />
 
       {/* Les matières : des étiquettes à la craie ; chacune a ses extraits, joués l'un après l'autre (un point par extrait) */}
       <div className="flex items-end gap-1 sm:gap-1.5 pl-2 sm:pl-5" role="tablist" aria-label="Matière">
