@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useRef, forwardRef } from 'react';
 import html2canvas from 'html2canvas';
 import LatexRenderer from '../components/LatexRenderer';
 import BacCountdown from '../components/BacCountdown';
+import { BAC_DATE, BAC_YEAR } from '../config/bac';
 import {
   CheckCircle, XCircle, RotateCcw, Zap,
   ChevronDown, ChevronUp, Calendar, Share2,
@@ -45,7 +46,6 @@ interface Results {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const BAC_DATE = new Date('2026-06-04T08:00:00');
 function getDaysLeft() {
   return Math.max(0, Math.ceil((BAC_DATE.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 }
@@ -195,7 +195,7 @@ function BacShareModal({ onClose, ...cardProps }: ShareModalProps) {
       if (!blob) return;
       const file = new File([blob], fileName, { type: 'image/png' });
       const nav: any = navigator;
-      const shareData = { title: 'Moalim — Résultat BAC 2026', text: shareTextNoUrl, url: DIAG_URL, files: [file] };
+      const shareData = { title: `Moalim — Résultat BAC ${BAC_YEAR}`, text: shareTextNoUrl, url: DIAG_URL, files: [file] };
       if (nav.canShare && nav.canShare({ files: [file] })) {
         await nav.share(shareData); onClose();
       } else {
@@ -226,7 +226,7 @@ function BacShareModal({ onClose, ...cardProps }: ShareModalProps) {
           <div>
             <h3 className="text-sm font-bold text-white">Partager mes résultats</h3>
             <p className="text-[10px] text-white/40 mt-0.5">
-              BAC 2026 · {cardProps.avg.toFixed(2)}/20 · Mention {cardProps.mentionFr}
+              BAC {BAC_YEAR} · {cardProps.avg.toFixed(2)}/20 · Mention {cardProps.mentionFr}
             </p>
           </div>
           <button onClick={onClose} className="p-1 text-white/50 hover:text-white hover:bg-white/10 rounded-lg transition-colors">

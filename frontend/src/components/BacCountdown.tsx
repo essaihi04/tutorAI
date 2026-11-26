@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
-// BAC National exam date — June 4, 2026 at 08:00 local time
-const BAC_DATE = new Date('2026-06-04T08:00:00');
+import { BAC_DATE } from '../config/bac';
+// La date du bac vit dans config/bac.ts (une seule source pour toute l'application).
 
 export function useBacCountdown() {
   const [timeLeft, setTimeLeft] = useState(calcTimeLeft());

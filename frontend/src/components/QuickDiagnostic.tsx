@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { track, EVENTS } from '../lib/analytics';
 
+import { BAC_YEAR } from '../config/bac';
 /* ════════════════════════════════════════════════════════════
    QUICK DIAGNOSTIC — démo anonyme sans inscription
    3 questions QCM par filière (SVT ou PC) → score + reco + CTA
@@ -174,7 +175,7 @@ export default function QuickDiagnostic() {
           </div>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight mb-4">
             Teste ton niveau{' '}
-            <span className="gradient-text">BAC 2026</span> en 30 secondes
+            <span className="gradient-text">BAC {BAC_YEAR}</span> en 30 secondes
           </h2>
           <p className="text-white/60 text-base sm:text-lg max-w-2xl mx-auto">
             3 questions du niveau examen national. Découvre ce qui te bloque encore et reçois une recommandation personnalisée — le tout sans créer de compte.

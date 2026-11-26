@@ -2,15 +2,17 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, X, Bell, ArrowRight, Clock } from 'lucide-react';
 import { getConcoursCatalog } from '../services/api';
+import { BAC_YEAR } from '../config/bac';
 
 /**
  * Floating popup that surfaces upcoming concours dates on the landing page.
- * - Auto-opens on the first visit (localStorage flag)
+ * - Auto-opens on the first visit (localStorage flag), unless `autoOpen={false}` : sur la landing, rien ne doit
+ *   recouvrir le tableau vivant du hero (26 novembre 2026)
  * - Re-openable via a floating button at the bottom-right
  * - Pulls live data from /concours/catalog (calendar_2025 + per-concours
  *   registration periods)
  */
-export default function ConcoursCalendarPopup() {
+export default function ConcoursCalendarPopup({ autoOpen = true }: { autoOpen?: boolean }) {
   const [open, setOpen] = useState(false);
   const [catalog, setCatalog] = useState<any>(null);
 
@@ -20,7 +22,7 @@ export default function ConcoursCalendarPopup() {
       .catch(() => null);
 
     const seen = localStorage.getItem('moalim_calendar_seen');
-    if (!seen) {
+    if (!seen && autoOpen) {
       const t = setTimeout(() => setOpen(true), 1500);
       return () => clearTimeout(t);
     }
@@ -71,7 +73,7 @@ export default function ConcoursCalendarPopup() {
                 </div>
                 <div>
                   <div className="text-[11px] uppercase tracking-widest opacity-80">À ne pas manquer</div>
-                  <h3 className="text-xl font-bold">Calendrier des concours {catalog?.year || '2026'}</h3>
+                  <h3 className="text-xl font-bold">Calendrier des concours {catalog?.year || BAC_YEAR}</h3>
                 </div>
               </div>
             </div>

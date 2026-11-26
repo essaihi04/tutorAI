@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getBacDiagnosticQuestions, submitBacDiagnostic } from '../services/api';
 import LatexRenderer from '../components/LatexRenderer';
 import BacCountdown from '../components/BacCountdown';
+import { BAC_YEAR } from '../config/bac';
 import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, Brain,
   Check, HelpCircle, Zap, Trophy,
@@ -106,7 +107,7 @@ export default function DiagnosticBac() {
           {/* Countdown banner */}
           <div className="mb-6 bg-red-500/10 border border-red-400/25 rounded-2xl p-4">
             <p className="text-center text-red-200 text-xs font-bold mb-3 uppercase tracking-widest">
-              🔥 Temps restant avant l'Examen National BAC 2026
+              🔥 Temps restant avant l'Examen National BAC {BAC_YEAR}
             </p>
             <BacCountdown size="lg" />
             <p className="text-center text-white/30 text-[10px] mt-2">4 Juin 2026 · 08h00</p>
