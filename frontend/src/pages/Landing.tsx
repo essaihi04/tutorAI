@@ -1,8 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import ConcoursCalendarPopup from '../components/ConcoursCalendarPopup';
-import MoalimChatbot from '../components/MoalimChatbot';
 import TableauVivant, { CadreAnimation, useVisible, type Extrait } from '../components/landing/TableauVivant';
 import extraits from '../components/landing/extraits.json';
 
@@ -12,7 +10,7 @@ import { ANNEE_SCOLAIRE, BAC_YEAR, joursAvantBac } from '../config/bac';
 import {
   Brain, Trophy, ArrowRight, Check, Star, GraduationCap, MessageCircle, ChevronDown, Zap,
   Clock, Target, BookOpen, FlaskConical, Calculator, PenLine, BarChart3, Award, Users, Globe,
-  Quote, Atom, Flame, School, Leaf, Sprout, HeartHandshake, Mic, Pencil, NotebookPen, Sigma, TrendingUp, Bell, Compass,
+  Quote, Atom, Leaf, Sprout, HeartHandshake, Mic, Pencil, NotebookPen, Sigma, TrendingUp, Bell,
 } from 'lucide-react';
 
 /* ──────────────────────────────────────────────────────────────
@@ -48,8 +46,6 @@ export default function Landing() {
 
   return (
     <div className="lp min-h-screen text-slate-200 overflow-x-clip relative">
-      <ConcoursCalendarPopup autoOpen={false} />
-      <MoalimChatbot />
       <style>{`
         .lp {
           --ardoise: #0a1410; --ardoise-2: #0f1d18; --craie: #e2e8f0;
@@ -131,7 +127,6 @@ export default function Landing() {
         @media (max-height: 500px) and (orientation: landscape) and (max-width: 1023px) {
           .lp-plateau { max-width: calc((100svh - 140px) * 1.7778 + 20px); }
           .lp-tableau-zone { margin-bottom: 3rem; }
-          /* au-dessus du bouton flottant du calendrier, en bas à droite de l'écran */
           .lp-tuteur { left: auto; right: 12px; bottom: 44px; transform: scale(.5); transform-origin: 100% 100%; }
           .lp-bulle { left: auto; right: 0; top: auto; bottom: 100%; max-width: 520px; font-size: 1.9rem; border-radius: 16px 14px 4px 16px; }
         }
@@ -194,7 +189,6 @@ export default function Landing() {
       <StatsSection />
       <TestimonialsSection />
       <SubjectsSection />
-      <ConcoursPrepSoonSection />
       <FAQSection />
       <FinalCTASection />
       <Footer />
@@ -289,29 +283,6 @@ function HeroSection() {
             <ArrowRight className="w-3.5 h-3.5 text-white/40 group-hover:translate-x-1 transition-transform" />
           </a>
 
-          {/* Outils gratuits : deux portes d'entrée, sans voler la vedette au bouton principal */}
-          <div className="grid sm:grid-cols-2 gap-2.5 max-w-xl">
-            <Link to="/bac-diagnostic" className="lp-carte group flex items-center gap-3 px-3.5 py-3">
-              <div className="w-9 h-9 rounded-xl bg-rose-400/20 flex items-center justify-center shrink-0">
-                <Flame className="w-4 h-4 text-rose-300" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-white leading-tight">Test diagnostic bac</div>
-                <div className="text-[11px] text-white/55">Ta note estimée sur 20 · gratuit</div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-white/30 ml-auto group-hover:translate-x-1 transition-transform" />
-            </Link>
-            <Link to="/orientation" className="lp-carte group flex items-center gap-3 px-3.5 py-3">
-              <div className="w-9 h-9 rounded-xl bg-cyan-400/20 flex items-center justify-center shrink-0">
-                <Compass className="w-4 h-4 text-cyan-300" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-white leading-tight">Orientation post-bac</div>
-                <div className="text-[11px] text-white/55">Tes chances ENSA, ENCG, médecine…</div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-white/30 ml-auto group-hover:translate-x-1 transition-transform" />
-            </Link>
-          </div>
         </div>
 
         {/* LE TABLEAU VIVANT */}
@@ -640,13 +611,13 @@ function FeaturesSection() {
         <SectionHeader
           eyebrow="4 façons d'apprendre"
           title={<>Choisis ton <span className="craie text-yellow-300">mode</span> selon ton objectif</>}
-          subtitle="Du cours expliqué au tableau jusqu'aux concours des grandes écoles, Moalim s'adapte à ton niveau et à ton rythme."
+          subtitle="Du cours expliqué au tableau jusqu'aux sujets du national, Moalim s'adapte à ton niveau et à ton rythme."
         />
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-14">
           <FeatureCard c={MATIERE.maths} icon={Brain} tag="Mode Coaching"
-            title="Teste ton niveau et progresse"
-            desc="L'IA repère tes lacunes, construit un planning selon ton niveau et le temps qu'il reste avant le bac, et suit ta progression jour après jour."
-            features={['Diagnostic de niveau initial', `Planning calé sur juin ${BAC_YEAR}`, 'Lacunes ciblées, reprises plus tard']} />
+            title="Un planning jusqu'au bac"
+            desc="Le tuteur repère tes lacunes pendant les cours, construit un planning selon le temps qu'il reste avant le bac, et suit ta progression jour après jour."
+            features={[`Planning calé sur juin ${BAC_YEAR}`, 'Lacunes repérées en cours', 'Reprises au bon moment']} />
           <FeatureCard c={MATIERE.physique} icon={MessageCircle} tag="Mode Libre"
             title="Pose tes questions à n'importe quel moment"
             desc="Une formule à comprendre, une notion qui bloque ? Demande, il répond au tableau avec un exemple concret."
@@ -655,10 +626,10 @@ function FeaturesSection() {
             title="60 examens réels du bac, corrigés en direct"
             desc="Les sujets nationaux (sessions normale et rattrapage). Correction et explication immédiates, question par question."
             features={['60 sujets officiels', 'Correction + méthode', 'Bilan chapitre par chapitre']} />
-          <FeatureCard c={MATIERE.svt} icon={School} tag="Mode Concours"
-            title="Prépare les concours des grandes écoles"
-            desc="Exercices et annales des concours marocains (ENSA, ENSAM, ENCG, médecine, CPGE…), chaque question expliquée."
-            features={['Annales par concours', 'Explication interactive', 'Coaching stratégique']} />
+          <FeatureCard c={MATIERE.svt} icon={Pencil} tag="Mode Cours"
+            title="Le cours expliqué au tableau"
+            desc="Chaque chapitre du programme, en darija, pas à pas : il dessine, anime, te fait manipuler et vérifie que tu as compris avant d'avancer."
+            features={['Tout le programme PC et SVT', 'Simulations et manips', 'Cahier de cours à garder']} />
         </div>
       </div>
     </section>
@@ -867,7 +838,7 @@ function DashboardMock() {
 function HowItWorksSection() {
   const steps = [
     { n: '1', icon: GraduationCap, title: 'Crée ton compte', desc: 'Inscription en 30 secondes, choisis ta filière et tes matières.' },
-    { n: '2', icon: Target, title: 'Diagnostic', desc: "Le tuteur évalue ton niveau pour partir de là où tu en es vraiment." },
+    { n: '2', icon: Target, title: 'On part de zéro', desc: "Chaque prérequis est réexpliqué : tu avances seulement quand c'est clair." },
     { n: '3', icon: Pencil, title: 'Cours au tableau', desc: "Il t'explique, te fait manipuler, te pose des questions et corrige en direct." },
     { n: '4', icon: Trophy, title: 'Sujets du national', desc: 'Tu t\'entraînes sur les vrais sujets jusqu\'à viser ta mention.' },
   ];
@@ -993,7 +964,7 @@ function TestimonialsSection() {
     { name: 'Salma K.', school: 'Lycée Al Khansaa — Fès', subject: '2BAC PC BIOF', score: 'Maths 16.5/20', c: MATIERE.maths,
       quote: "Je peux poser n'importe quelle question, même en darija, et l'IA répond avec des schémas. C'est comme avoir un prof particulier disponible 24h/24." },
     { name: 'Anas E.', school: 'Lycée Ibn Sina — Marrakech', subject: '2BAC PC BIOF', score: 'Moyenne 15.9/20', c: MATIERE.svt,
-      quote: "L'orientation après chaque examen me dit exactement quel chapitre revoir. J'ai arrêté de réviser dans le vide, je cible mes points faibles." },
+      quote: "Le bilan après chaque examen me dit exactement quel chapitre revoir. J'ai arrêté de réviser dans le vide, je cible mes points faibles." },
     { name: 'Nada R.', school: 'Lycée Al Farabi — Tanger', subject: '2BAC PC BIOF', score: 'Physique 17.1/20', c: '#c084fc',
       quote: "Les explications sur les ondes lumineuses sont claires, avec des schémas dessinés en direct sur le tableau. Même la diffraction devient évidente." },
     { name: 'Hamza T.', school: 'Lycée Hassan II — Agadir', subject: '2BAC PC BIOF', score: 'Maths 18.5/20', c: MATIERE.chimie,
@@ -1081,67 +1052,6 @@ function SubjectsSection() {
               </ul>
             </div>
           ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════
-   CONCOURS — bientôt
-   ════════════════════════════════════════════════════════════ */
-function ConcoursPrepSoonSection() {
-  const concours = [
-    { name: 'ENSA', desc: 'Écoles Nationales des Sciences Appliquées', icon: '⚙️' },
-    { name: 'ENSAM', desc: "Arts et Métiers — ingénierie d'excellence", icon: '🔧' },
-    { name: 'ENCG · TAFEM', desc: 'Écoles Nationales de Commerce et de Gestion', icon: '📊' },
-    { name: 'Médecine · FMP', desc: 'Concours des facultés de médecine', icon: '⚕️' },
-    { name: 'Architecture', desc: "Écoles Nationales d'Architecture", icon: '🏛️' },
-    { name: 'CPGE', desc: 'Classes préparatoires aux grandes écoles', icon: '🎯' },
-  ];
-  return (
-    <section className="relative z-10 py-20 sm:py-28">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid lg:grid-cols-[1fr_1.2fr] gap-10 lg:gap-14 items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-yellow-300/40 bg-yellow-300/10 mb-5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-300 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-300" />
-              </span>
-              <span className="craie text-lg leading-none text-yellow-200">après le bac · bientôt</span>
-            </div>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.08] tracking-tight mb-5 text-white">
-              On ne s'arrête pas au bac.
-              <br />
-              <span className="craie text-yellow-300">La prépa concours arrive.</span>
-            </h2>
-            <p className="text-base text-white/65 leading-relaxed mb-6">
-              Le tuteur connaît déjà ton profil, tes lacunes et tes forces : il prolonge la préparation
-              vers les concours des grandes écoles marocaines, sans repartir de zéro.
-            </p>
-            <ul className="space-y-2.5 mb-7">
-              {['Annales par concours, corrigées et commentées', 'QCM qui ciblent tes points faibles',
-                'Simulations chronométrées au format du jour J', 'Un plan de préparation selon ton bac et ton concours'].map(b => (
-                <li key={b} className="flex items-start gap-2 text-sm text-white/75">
-                  <Check className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
-            <Link to="/orientation" className="lp-btn-2 px-5 py-3 text-sm">
-              <Compass className="w-4 h-4" /> Calculer mes chances aux concours
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-            {concours.map(c => (
-              <div key={c.name} className="lp-carte lp-leve p-4 sm:p-5">
-                <div className="text-2xl mb-2">{c.icon}</div>
-                <h3 className="font-black text-white text-sm sm:text-base leading-tight mb-1">{c.name}</h3>
-                <p className="text-xs text-white/55 leading-snug">{c.desc}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </section>
@@ -1255,8 +1165,6 @@ function Footer() {
           <div>
             <div className="text-sm font-bold mb-3 text-white/80">Ressources</div>
             <ul className="space-y-2 text-xs text-white/50">
-              <li><Link to="/bac-diagnostic" className="hover:text-white">Test diagnostic bac</Link></li>
-              <li><Link to="/orientation" className="hover:text-white">Orientation post-bac</Link></li>
               <li><a href="/blog/" className="hover:text-white">Blog</a></li>
               <li><a href="#faq" className="hover:text-white">FAQ</a></li>
               <li><a href="/about.html" className="hover:text-white">À propos</a></li>
