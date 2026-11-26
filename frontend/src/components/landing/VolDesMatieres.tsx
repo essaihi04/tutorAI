@@ -824,6 +824,16 @@ export default function VolDesMatieres() {
     a.src = VOIX_URL(VOIX_VOL[segment].fichier);
     a.play().then(() => setRefusee(false)).catch(err => { if (err?.name === 'NotAllowedError') setRefusee(true); });
   }, [segment]);
+  // Une seule voix à la fois : quand le survol quitte l'écran (on descend vers le tableau), sa voix se tait.
+  useEffect(() => {
+    const sec = section.current;
+    if (!sec || typeof IntersectionObserver === 'undefined') return;
+    const obs = new IntersectionObserver(([e]) => {
+      if (e.intersectionRect.height < innerHeight * .5) { voix.current?.pause(); enCours.current = -2; }
+    }, { threshold: Array.from({ length: 11 }, (_, k) => k / 10) });
+    obs.observe(sec);
+    return () => obs.disconnect();
+  }, []);
   /** Rejouer la piste du moment (le geste de l'élève autorise le son). */
   const ecouter = () => { const a = voix.current; if (a) { a.currentTime = 0; a.play().then(() => setRefusee(false)).catch(() => {}); } };
 
