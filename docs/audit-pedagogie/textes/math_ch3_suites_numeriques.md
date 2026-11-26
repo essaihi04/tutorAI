@@ -88,9 +88,9 @@ QUESTION : On sait que 2 < 5. On multiplie les deux membres par −3 : quelle in
 ### Diapo 21 `su_enonce_2016r` — National 2016 R : l’énoncé, tel qu’à l’examen
 VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille seize, la session de rattrapage, tel qu'il est à l'examen. Exercice un, trois points. On considère la suite u n, définie par : u zéro égale deux, et u indice n plus un, égale un seizième u indice n, plus quinze seizièmes. Un a : montrer par récurrence, que u indice n est plus grand que un. Maintenant, comprenons cette question.
 
-### Diapo 22 `su_r3_heredite_affine` — Hérédité affine : on fait à l'inégalité ce que la formule fait à uₙ
-VOIX (fr) : Comment passer de u indice n à u indice n plus un ? Regarde l'exemple du national. u indice n plus un égale un seizième u indice n plus quinze seizièmes : u indice n apparaît une seule fois. On part de l'hypothèse, u indice n plus grand que un. La formule multiplie par un seizième : on multiplie l'inégalité par un seizième, qui est positif, donc le sens ne change pas. Puis la formule ajoute quinze seizièmes : on les ajoute des deux côtés. On arrive à u indice n plus un plus grand que un. On fait à l'inégalité ce que la formule fait à u indice n, dans l'ordre.
-ÉCRAN : uₙ apparaît une seule fois dans la relation. | On part de l'hypothèse et on applique les opérations de la formule, dans l'ordre. | Multiplier par un nombre positif garde le sens de l'inégalité.
+### Diapo 22 `su_r3_heredite_affine` — National 2016 R, exercice 1 : question 1-a, l'hérédité affine
+VOIX (fr) : Comment passer de u indice n à u indice n plus un ? Question un a du national deux mille seize, rattrapage : l'hérédité. u indice n plus un égale un seizième u indice n plus quinze seizièmes : u indice n apparaît une seule fois. On part de l'hypothèse, u indice n plus grand que un. La formule multiplie par un seizième : on multiplie l'inégalité par un seizième, qui est positif, donc le sens ne change pas. Puis la formule ajoute quinze seizièmes : on les ajoute des deux côtés. On arrive à u indice n plus un plus grand que un. On fait à l'inégalité ce que la formule fait à u indice n, dans l'ordre.
+ÉCRAN : 1-a : uₙ₊₁ = (1/16)uₙ + 15/16 : uₙ apparaît une seule fois. | On part de l'hypothèse et on applique les opérations de la formule, dans l'ordre. | Multiplier par un nombre positif garde le sens de l'inégalité.
 
 ### Diapo 23 `su_z4_difference` — Rappel : comparer avec le signe de la différence
 VOIX (fr) : Pour comparer a et b, on calcule a moins b. a égale cinq, b égale deux : a moins b égale trois, positif, donc a est plus grand que b. a égale un, b égale quatre : a moins b égale moins trois, négatif, donc a est plus petit que b. Autrement : a moins b, c'est le chemin de b vers a, avec son signe ; positif, a est à droite de b. Dans ce chapitre : pour montrer que u indice n plus un est plus grand que un, on étudie le signe de u indice n plus un moins un. Je relis : a est plus grand que b si et seulement si a moins b est positif.
@@ -124,9 +124,9 @@ VOIX (fr) : Une petite question qui fait perdre des points. Si tu as trouvé u i
 ### Diapo 30 `su_enonce_2023r` — National 2023 R : l’énoncé, tel qu’à l’examen
 VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt-trois, la session de rattrapage, tel qu'il est à l'examen. Exercice un, trois points. On considère la suite u n, définie par u zéro égale zéro, et u indice n plus un, égale u indice n moins deux, sur deux u indice n plus cinq. Un : montrer que pour tout n, u indice n est plus grand que moins un. Maintenant, comprenons cette question.
 
-### Diapo 31 `su_r8_national` — À toi : une récurrence du national
-VOIX (fr) : À toi, avec un exercice du national. u zéro égale zéro, et u indice n plus un égale u indice n moins deux, sur deux u indice n plus cinq. On demande de montrer que pour tout n, u indice n est plus grand que moins un. u indice n apparaît deux fois : on étudie le signe de u indice n plus un plus un. Et on écrit les trois titres : Initialisation, Hérédité, Conclusion. Prends ton cahier et rédige. Puis réponds : dans l'hérédité, u indice n plus un plus un égale quoi ?
-ÉCRAN : National 2023 R : u₀ = 0, uₙ₊₁ = (uₙ − 2)/(2uₙ + 5). | Montrer que pour tout n ∈ ℕ, uₙ > −1. | uₙ apparaît deux fois : signe de uₙ₊₁ + 1. | Initialisation · Hérédité · Conclusion.
+### Diapo 31 `su_r8_national` — National 2023 R, exercice 1 : question 1 (à toi)
+VOIX (fr) : À toi, avec la question un du national deux mille vingt-trois, rattrapage. u zéro égale zéro, et u indice n plus un égale u indice n moins deux, sur deux u indice n plus cinq. On demande de montrer que pour tout n, u indice n est plus grand que moins un. u indice n apparaît deux fois : on étudie le signe de u indice n plus un plus un. Et on écrit les trois titres : Initialisation, Hérédité, Conclusion. Prends ton cahier et rédige. Puis réponds : dans l'hérédité, u indice n plus un plus un égale quoi ?
+ÉCRAN : National 2023 R : u₀ = 0, uₙ₊₁ = (uₙ − 2)/(2uₙ + 5). | Question 1 : montrer que pour tout n ∈ ℕ, uₙ > −1. | uₙ apparaît deux fois : signe de uₙ₊₁ + 1. | Initialisation · Hérédité · Conclusion.
 QUESTION : Dans l'hérédité, uₙ₊₁ + 1 = ? OPTIONS : ['(uₙ − 1)/(2uₙ + 5)', '3(uₙ + 1)/(2uₙ + 5)', '3(uₙ + 1)/(uₙ + 5)']
 ## III. Majorée, minorée, bornée ; sens de variation
 
@@ -147,9 +147,9 @@ EXERCICE : Pour montrer qu'une suite est décroissante, il faut : OPTIONS : ['ca
 ### Diapo 35 `su_enonce_2016r_p2` — National 2016 R : la suite de l’énoncé
 VOIX (fr) : Même exercice du national deux mille seize : la suite u n, avec u indice n plus un, égale un seizième u indice n, plus quinze seizièmes. Voici la suite de l'énoncé. Un b : vérifier que u indice n plus un, moins u indice n, égale moins quinze seizièmes, fois u indice n moins un, puis montrer que la suite est décroissante. Maintenant, comprenons cette question.
 
-### Diapo 36 `su_m2_difference` — Outil 1 : le signe de uₙ₊₁ − uₙ
-VOIX (fr) : Premier outil pour le sens de variation : le signe de u indice n plus un moins u indice n. Sur l'exemple du national : on remplace u indice n plus un par la formule et on soustrait u indice n. On factorise : moins quinze seizièmes, fois u indice n moins un. Et le signe ? On l'a déjà : la récurrence a montré u indice n plus grand que un, donc u indice n moins un est positif. Avec le moins devant, la différence est négative : la suite est décroissante.
-ÉCRAN : On calcule uₙ₊₁ − uₙ, on le factorise. | On lit son signe avec ce qu'on a prouvé par récurrence. | uₙ₊₁ − uₙ ≥ 0 : croissante ; ≤ 0 : décroissante.
+### Diapo 36 `su_m2_difference` — National 2016 R, exercice 1 : question 1-b, le signe de uₙ₊₁ − uₙ
+VOIX (fr) : Premier outil pour le sens de variation : le signe de u indice n plus un moins u indice n. Question un b du national deux mille seize, rattrapage : on remplace u indice n plus un par la formule et on soustrait u indice n. On factorise : moins quinze seizièmes, fois u indice n moins un. Et le signe ? On l'a déjà : la récurrence a montré u indice n plus grand que un, donc u indice n moins un est positif. Avec le moins devant, la différence est négative : la suite est décroissante.
+ÉCRAN : 1-b : uₙ₊₁ − uₙ = −(15/16)(uₙ − 1) : on calcule, on factorise. | On lit son signe avec ce qu'on a prouvé par récurrence. | uₙ₊₁ − uₙ ≥ 0 : croissante ; ≤ 0 : décroissante.
 
 ### Diapo 37 `su_m3_egalite_donnee` — Outil 1 avec une égalité donnée
 VOIX (fr) : Au national, l'énoncé fait souvent le calcul pour toi. Ici on te donne : u indice n plus un moins u indice n égale, u indice n moins un, fois deux moins u indice n, sur un plus u indice n. Il reste à lire le signe. On sait déjà, par la récurrence, que u indice n est entre deux et quatre. Alors on écrit un signe sous chaque facteur, puis le signe du tout.
@@ -168,31 +168,31 @@ VOIX (fr) : Avec u indice n plus un égale un quart u indice n plus douze, on ca
 ### Diapo 40 `su_enonce_2016r_p3` — National 2016 R : la suite de l’énoncé
 VOIX (fr) : Même exercice du national deux mille seize : la suite u n, avec u zéro égale deux, et u indice n plus un, égale un seizième u indice n, plus quinze seizièmes. Voici la suite de l'énoncé. Deux : soit v n la suite, telle que v indice n, égale u indice n moins un. a : montrer que v n est géométrique, de raison un seizième, puis écrire v indice n en fonction de n. Maintenant, comprenons cette question.
 
-### Diapo 41 `su_x2_geometrique` — Montrer que vₙ est géométrique
-VOIX (fr) : Comment montrer que v indice n est géométrique ? On écrit la cible en haut : v indice n plus un égale q fois v indice n. Puis on part de la définition au rang n plus un : v indice n plus un égale u indice n plus un moins un. On remplace u indice n plus un par la relation de l'énoncé. On simplifie, on factorise, et on voit apparaître v indice n : un seizième fois v indice n. On ne calcule pas le quotient : on vise q fois v indice n.
-ÉCRAN : La cible : vₙ₊₁ = q × vₙ. | On écrit vₙ₊₁ avec la définition, on remplace uₙ₊₁ par la relation. | On simplifie jusqu'à voir vₙ, sans calculer de quotient.
+### Diapo 41 `su_x2_geometrique` — National 2016 R, exercice 1 : question 2-a, vₙ est géométrique
+VOIX (fr) : Question deux a du national deux mille seize, rattrapage : comment montrer que v indice n est géométrique ? On écrit la cible en haut : v indice n plus un égale q fois v indice n. Puis on part de la définition au rang n plus un : v indice n plus un égale u indice n plus un moins un. On remplace u indice n plus un par la relation de l'énoncé. On simplifie, on factorise, et on voit apparaître v indice n : un seizième fois v indice n. On ne calcule pas le quotient : on vise q fois v indice n. Puis v zéro égale u zéro moins un, égale un : donc v indice n égale un seizième puissance n.
+ÉCRAN : 2-a : la cible : vₙ₊₁ = q × vₙ. | On écrit vₙ₊₁ avec la définition, on remplace uₙ₊₁ par la relation. | On simplifie jusqu'à voir vₙ, sans calculer de quotient.
 
 ### Diapo 42 `su_enonce_2016n` — National 2016 N : l’énoncé, tel qu’à l’examen
 VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille seize, la session normale, tel qu'il est à l'examen. Exercice un, deux points et demi. On considère la suite u n, définie par u zéro égale deux, et u indice n plus un, égale trois plus u indice n, sur cinq moins u indice n. Deux : soit v n la suite définie par, v indice n égale u indice n moins un, sur trois moins u indice n. a : montrer que v n est géométrique, de raison un demi, puis en déduire, que v indice n égale un demi puissance n. b : montrer que u indice n égale, un plus trois v indice n, sur un plus v indice n, puis écrire u indice n en fonction de n. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 43 `su_x3_fraction` — Une suite auxiliaire en fraction
-VOIX (fr) : Au national deux mille seize, v indice n est une fraction : u indice n moins un, sur trois moins u indice n. Et u indice n plus un égale trois plus u indice n, sur cinq moins u indice n. On écrit v indice n plus un avec la définition. On remplace u indice n plus un en haut et en bas. Chaque morceau se met au même dénominateur : cinq moins u indice n. Et la règle en orange : a sur b, divisé par c sur b, égale a sur c. Les dénominateurs se simplifient. On vise un demi fois v indice n. Après simplification, v indice n plus un égale quoi ?
-ÉCRAN : On remplace uₙ₊₁ en haut et en bas. | On met chaque morceau au même dénominateur 5 − uₙ. | (a/b)/(c/b) = a/c : les dénominateurs se simplifient.
+### Diapo 43 `su_x3_fraction` — National 2016 N, exercice 1 : question 2-a, une suite auxiliaire en fraction
+VOIX (fr) : Question deux a du national deux mille seize, session normale : v indice n est une fraction : u indice n moins un, sur trois moins u indice n. Et u indice n plus un égale trois plus u indice n, sur cinq moins u indice n. On écrit v indice n plus un avec la définition. On remplace u indice n plus un en haut et en bas. Chaque morceau se met au même dénominateur : cinq moins u indice n. Et la règle en orange : a sur b, divisé par c sur b, égale a sur c. Les dénominateurs se simplifient. On vise un demi fois v indice n. Après simplification, v indice n plus un égale quoi ?
+ÉCRAN : 2-a : on remplace uₙ₊₁ en haut et en bas. | On met chaque morceau au même dénominateur 5 − uₙ. | (a/b)/(c/b) = a/c : les dénominateurs se simplifient.
 QUESTION : Après simplification, vₙ₊₁ = ? OPTIONS : ['(8uₙ − 8)/(12 − 4uₙ), soit 2vₙ', '(uₙ − 1)/(3 − uₙ) = vₙ', '(2uₙ − 2)/(12 − 4uₙ) = (1/2)vₙ']
 
 ### Diapo 44 `su_x4_retour` — De vₙ à uₙ : le cas simple
 VOIX (fr) : On revient à u indice n. Le cas simple : v indice n égale u indice n moins seize. On ajoute seize des deux côtés : u indice n égale v indice n plus seize. Et comme v indice n égale un quart puissance n, u indice n égale seize plus un quart puissance n. C'est la formule qu'on cherchait.
 ÉCRAN : D'abord v₀, puis vₙ = v₀·qⁿ. | vₙ = uₙ − 16 : uₙ = vₙ + 16 = 16 + (¼)ⁿ.
 
-### Diapo 45 `su_x4b_fraction` — Revenir à uₙ quand vₙ est une fraction
-VOIX (fr) : Et si v indice n est une fraction de u indice n ? Par exemple v indice n égale u indice n moins un, sur trois moins u indice n. Produit en croix, puis tous les u indice n du même côté, on factorise u indice n et on divise : u indice n égale un plus trois v indice n, sur un plus v indice n. Il reste à remplacer v indice n par sa formule en fonction de n.
-ÉCRAN : Produit en croix : vₙ(3 − uₙ) = uₙ − 1. | Tous les uₙ du même côté, puis on factorise uₙ. | uₙ = (1 + 3vₙ)/(1 + vₙ).
+### Diapo 45 `su_x4b_fraction` — National 2016 N, exercice 1 : question 2-b, revenir à uₙ
+VOIX (fr) : Question deux b du national deux mille seize : revenir à u indice n quand v indice n est une fraction. Ici v indice n égale u indice n moins un, sur trois moins u indice n. Produit en croix, puis tous les u indice n du même côté, on factorise u indice n et on divise : u indice n égale un plus trois v indice n, sur un plus v indice n. Il reste à remplacer v indice n par un demi puissance n : u indice n égale un plus trois fois un demi puissance n, sur un plus un demi puissance n.
+ÉCRAN : 2-b : produit en croix : vₙ(3 − uₙ) = uₙ − 1. | Tous les uₙ du même côté, puis on factorise uₙ. | uₙ = (1 + 3vₙ)/(1 + vₙ) = (1 + 3(½)ⁿ)/(1 + (½)ⁿ).
 
 ### Diapo 46 `su_enonce_2021n` — National 2021 R : l’énoncé, tel qu’à l’examen
 VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt et un, la session de rattrapage, tel qu'il est à l'examen. Exercice un, quatre points. Soit u n la suite définie par, u zéro égale un tiers, et u indice n plus un, égale un plus u indice n, sur trois moins u indice n. Trois a : on pose v indice n, égale un sur, un moins u indice n. Montrer que v n est une suite arithmétique, et déterminer sa raison, et son premier terme. Maintenant, comprenons cette question.
 
-### Diapo 47 `su_x5_arithmetique` — Suite auxiliaire arithmétique
-VOIX (fr) : La suite auxiliaire n'est pas toujours géométrique. Deux natures, deux calculs. Arithmétique : on calcule la différence v indice n plus un moins v indice n, et on trouve une constante r. Géométrique : on trouve v indice n plus un égale q fois v indice n. Au national deux mille vingt et un, v indice n égale un sur un moins u indice n, et le calcul donne une différence égale à un demi. Donc arithmétique, de raison un demi : v indice n égale v zéro plus n r. v indice n plus un moins v indice n égale un demi et v zéro égale trois demis : écris v indice n.
+### Diapo 47 `su_x5_arithmetique` — National 2021 R, exercice 1 : question 3-a, une suite auxiliaire arithmétique
+VOIX (fr) : La suite auxiliaire n'est pas toujours géométrique. Deux natures, deux calculs. Arithmétique : on calcule la différence v indice n plus un moins v indice n, et on trouve une constante r. Géométrique : on trouve v indice n plus un égale q fois v indice n. Question trois a du national deux mille vingt et un, rattrapage : v indice n égale un sur un moins u indice n, et le calcul donne une différence égale à un demi. Donc arithmétique, de raison un demi : v indice n égale v zéro plus n r. v indice n plus un moins v indice n égale un demi et v zéro égale trois demis : écris v indice n.
 ÉCRAN : Arithmétique : vₙ₊₁ − vₙ = r (constante). | Géométrique : vₙ₊₁ = q × vₙ. | Arithmétique : vₙ = v₀ + nr.
 ## V. Limites d'une suite
 
@@ -262,24 +262,24 @@ QUESTION : 0 < uₙ ≤ 1/n pour tout n ≥ 1 : lim uₙ = ? OPTIONS : ['On ne p
 ### Diapo 62 `su_enonce_2020n` — National 2020 N : l’énoncé, tel qu’à l’examen
 VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt, la session normale, tel qu'il est à l'examen. Exercice un, quatre points. Soit u n la suite définie par, u zéro égale trois demis, et u indice n plus un, égale deux u indice n, sur deux u indice n plus cinq. Trois a : montrer que u indice n plus un, est entre zéro, et deux cinquièmes de u indice n, puis en déduire que u indice n, est plus petit que trois demis, fois deux cinquièmes puissance n. b : calculer la limite de u n. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 63 `su_c5_deux_cinquiemes` — Chaque terme est au plus les 2/5 du précédent
-VOIX (fr) : Au national deux mille vingt : u indice n plus un égale deux u indice n, sur deux u indice n plus cinq, avec u indice n positif. On veut montrer que chaque terme est au plus les deux cinquièmes du précédent. Première méthode : minorer le dénominateur. Deux u indice n plus cinq est plus grand que cinq, donc un sur, deux u indice n plus cinq, est plus petit que un cinquième. Deuxième méthode : le signe de u indice n plus un moins deux cinquièmes u indice n.
-ÉCRAN : National 2020 : uₙ₊₁ = 2uₙ/(2uₙ + 5) et uₙ > 0. | Minorer le dénominateur : 2uₙ + 5 ≥ 5. | Ou étudier le signe de uₙ₊₁ − (2/5)uₙ.
+### Diapo 63 `su_c5_deux_cinquiemes` — National 2020 N, exercice 1 : question 3-a, 0 < uₙ₊₁ ≤ (2/5)uₙ
+VOIX (fr) : Question trois a du national deux mille vingt, session normale : u indice n plus un égale deux u indice n, sur deux u indice n plus cinq, avec u indice n positif. On veut montrer que chaque terme est au plus les deux cinquièmes du précédent. Première méthode : minorer le dénominateur. Deux u indice n plus cinq est plus grand que cinq, donc un sur, deux u indice n plus cinq, est plus petit que un cinquième. Deuxième méthode : le signe de u indice n plus un moins deux cinquièmes u indice n.
+ÉCRAN : 3-a (2020 N) : uₙ₊₁ = 2uₙ/(2uₙ + 5) et uₙ > 0. | Minorer le dénominateur : 2uₙ + 5 ≥ 5. | Ou étudier le signe de uₙ₊₁ − (2/5)uₙ.
 
-### Diapo 64 `su_c6_recurrence_kn` — En déduire uₙ ≤ (3/2)(2/5)ⁿ : une récurrence courte
-VOIX (fr) : Comment passer de chaque terme au plus les deux cinquièmes du précédent, à une formule au rang n ? Regarde : u un inférieur ou égal à deux cinquièmes u zéro. Puis u deux inférieur ou égal à deux cinquièmes u un. Et ce u un, on le remplace par ce qu'on sait déjà de lui : on recolle. On obtient deux cinquièmes au carré, u zéro. Puis au cube pour u trois. Au rang n : deux cinquièmes puissance n, u zéro, c'est-à-dire trois demis fois deux cinquièmes puissance n. Mais cette image n'est pas une preuve : la preuve propre est une récurrence.
+### Diapo 64 `su_c6_recurrence_kn` — National 2020 N, exercice 1 : question 3-a (suite), en déduire uₙ ≤ (3/2)(2/5)ⁿ
+VOIX (fr) : Question trois a, deuxième partie : en déduire. Comment passer de chaque terme au plus les deux cinquièmes du précédent, à une formule au rang n ? Regarde : u un inférieur ou égal à deux cinquièmes u zéro. Puis u deux inférieur ou égal à deux cinquièmes u un. Et ce u un, on le remplace par ce qu'on sait déjà de lui : on recolle. On obtient deux cinquièmes au carré, u zéro. Puis au cube pour u trois. Au rang n : deux cinquièmes puissance n, u zéro, c'est-à-dire trois demis fois deux cinquièmes puissance n. Mais cette image n'est pas une preuve : la preuve propre est une récurrence.
 ÉCRAN : On recolle : u₁ ≤ (2/5)u₀, u₂ ≤ (2/5)²u₀… (l'image). | La preuve propre : une récurrence courte. | « En déduire » après uₙ₊₁ ≤ k·uₙ, c'est une récurrence.
 
-### Diapo 65 `su_c7_conclure` — Conclure par comparaison
-VOIX (fr) : On a l'encadrement : zéro plus petit que u indice n, inférieur ou égal à trois demis fois deux cinquièmes puissance n. Regarde les deux bornes. En haut, en orange : car deux cinquièmes est strictement entre moins un et un, la limite de deux cinquièmes puissance n égale zéro. En bas, en vert : zéro. Les deux bornes vont vers zéro, les flèches se resserrent : d'après le critère de comparaison, la limite de u indice n égale zéro.
-ÉCRAN : La borne du haut : comme −1 < 2/5 < 1, lim_{n→+∞} (3/2)(2/5)ⁿ = 0. | La borne du bas : 0. | Les deux bornes tendent vers 0 : d'après le critère de comparaison, lim_{n→+∞} uₙ = 0.
+### Diapo 65 `su_c7_conclure` — National 2020 N, exercice 1 : question 3-b, la limite par comparaison
+VOIX (fr) : Question trois b : calculer la limite de u indice n. On a l'encadrement : zéro plus petit que u indice n, inférieur ou égal à trois demis fois deux cinquièmes puissance n. Regarde les deux bornes. En haut, en orange : car deux cinquièmes est strictement entre moins un et un, la limite de deux cinquièmes puissance n égale zéro. En bas, en vert : zéro. Les deux bornes vont vers zéro, les flèches se resserrent : d'après le critère de comparaison, la limite de u indice n égale zéro.
+ÉCRAN : La borne du haut : comme −1 < 2/5 < 1, lim_{n→+∞} (3/2)(2/5)ⁿ = 0. | La borne du bas : 0. | 3-b : les deux bornes tendent vers 0 : d'après le critère de comparaison, lim_{n→+∞} uₙ = 0.
 
 ### Diapo 66 `su_enonce_2025r` — National 2025 R : l’énoncé, tel qu’à l’examen
 VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt-cinq, la session de rattrapage, tel qu'il est à l'examen. Exercice un, trois points. On considère la suite u n définie par, u zéro égale trois demis, et u indice n plus un, égale trois u indice n plus deux, sur deux plus u indice n. Deux d : déduire que deux moins u indice n, est plus petit que un demi, fois deux septièmes puissance n. e : déterminer la limite de la suite. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 67 `su_c8_ecart` — L'écart à la limite se resserre
-VOIX (fr) : Une autre forme du critère, au national deux mille vingt-cinq. La droite jaune, c'est la limite deux. Les points montent sous elle. Pour chaque n, le trait orange montre l'écart permis, deux moins u indice n : il est de plus en plus petit. Car un demi fois deux septièmes puissance n tend vers zéro. Si l'écart à deux tend vers zéro, la suite tend vers deux. Zéro plus petit que deux moins u indice n, inférieur ou égal à un demi fois deux septièmes puissance n : calcule la limite de u indice n.
-ÉCRAN : L'écart 2 − uₙ est coincé entre 0 et (1/2)(2/7)ⁿ. | Comme −1 < 2/7 < 1, la borne tend vers 0. | Donc 2 − uₙ → 0 : lim_{n→+∞} uₙ = 2.
+### Diapo 67 `su_c8_ecart` — National 2025 R, exercice 1 : question 2-e, l'écart à la limite se resserre
+VOIX (fr) : Question deux e du national deux mille vingt-cinq, rattrapage : une autre forme du critère. La droite jaune, c'est la limite deux. Les points montent sous elle. Pour chaque n, le trait orange montre l'écart permis, deux moins u indice n : il est de plus en plus petit. Car un demi fois deux septièmes puissance n tend vers zéro. Si l'écart à deux tend vers zéro, la suite tend vers deux. Zéro plus petit que deux moins u indice n, inférieur ou égal à un demi fois deux septièmes puissance n : calcule la limite de u indice n.
+ÉCRAN : 2-d (donné) : l'écart 2 − uₙ est coincé entre 0 et (1/2)(2/7)ⁿ. | Comme −1 < 2/7 < 1, la borne tend vers 0. | 2-e : donc 2 − uₙ → 0 : lim_{n→+∞} uₙ = 2.
 QUESTION : 0 < 2 − uₙ ≤ (1/2)(2/7)ⁿ : lim uₙ = ? OPTIONS : ['2', '0', '2/7']
 ## VII. La suite uₙ₊₁ = f(uₙ)
 
@@ -326,9 +326,9 @@ VOIX (fr) : Une question de problème : à partir de quel rang la suite dépasse
 ### Diapo 77 `su_enonce_2022r` — National 2022 R : l’énoncé, tel qu’à l’examen
 VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt-deux, la session de rattrapage, tel qu'il est à l'examen. Exercice un, deux points et demi. Soit u n la suite définie par, u zéro égale deux, et u indice n plus un, égale racine de deux sur deux, u indice n, plus, deux moins racine de deux, sur deux. Deux c : calculer la somme S, égale u zéro, plus u un, plus u deux, jusqu’à u deux mille vingt et un. Maintenant, comprenons cette question.
 
-### Diapo 78 `su_p2_somme_mixte` — La somme d'une suite qui n'est pas géométrique
-VOIX (fr) : Au national deux mille vingt-deux : u indice n égale un plus v indice n, avec v géométrique. La somme des u n'est pas géométrique. Regarde la colonne : chaque terme est un plus v. On sépare. Les un, entourés en vert : il y en a autant que de termes, deux mille vingt-deux. Les v, réunis par l'accolade jaune : c'est une somme géométrique. Donc la somme égale deux mille vingt-deux, plus la somme des v.
-ÉCRAN : On sépare : les 1, et les vₖ. | Autant de 1 que de termes : n − p + 1. | Les vₖ forment une somme géométrique.
+### Diapo 78 `su_p2_somme_mixte` — National 2022 R, exercice 1 : question 2-c, la somme S
+VOIX (fr) : Question deux c du national deux mille vingt-deux, rattrapage : u indice n égale un plus v indice n, avec v géométrique. La somme des u n'est pas géométrique. Regarde la colonne : chaque terme est un plus v. On sépare. Les un, entourés en vert : il y en a autant que de termes, deux mille vingt-deux. Les v, réunis par l'accolade jaune : c'est une somme géométrique. Donc la somme égale deux mille vingt-deux, plus la somme des v. Avec v zéro égale un et la raison racine de deux sur deux : S égale deux mille vingt-deux, plus, un moins racine de deux sur deux puissance deux mille vingt-deux, sur un moins racine de deux sur deux.
+ÉCRAN : 2-c (2022 R) : uₖ = 1 + vₖ : on sépare les 1 et les vₖ. | Autant de 1 que de termes : n − p + 1. | Les vₖ forment une somme géométrique.
 
 ### Diapo 79 `su_p3_limite_somme` — La limite d'une somme
 VOIX (fr) : Une somme de plus en plus longue peut avoir une limite finie. Exemple : w zéro égale un, raison un demi. S indice n, c'est w zéro plus jusqu'à w indice n, avec n plus un termes. La formule : un fois, un moins un demi puissance n plus un, sur un moins un demi. Car un demi est strictement entre moins un et un, la puissance tend vers zéro. Donc la limite de S indice n égale un sur un moins un demi, deux. On étudie toujours la limite de la somme S indice n. Raison un tiers et w zéro égale un : quelle est la limite de S indice n ?
@@ -337,37 +337,37 @@ QUESTION : (wₙ) géométrique de raison 1/3, w₀ = 1, Sₙ = w₀ + … + w�
 ### Diapo 80 `su_enonce_2024n` — National 2024 N : l’énoncé, tel qu’à l’examen
 VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt-quatre, la session normale, tel qu'il est à l'examen. Exercice un, trois points. On considère la suite u n, définie par, u zéro égale quatre, et u indice n plus un, égale quatre u indice n moins deux, sur un plus u indice n. Un b : montrer par récurrence, que u indice n est entre deux et quatre. Deux a : montrer que u indice n plus un moins u indice n, égale u indice n moins un, fois deux moins u indice n, sur un plus u indice n. b : montrer que la suite est décroissante, et en déduire qu’elle est convergente. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 81 `su_e1_complet` — National 2024, question 1 : l'encadrement par récurrence
-VOIX (fr) : Un exercice du national deux mille vingt-quatre, joué question par question. u zéro égale quatre, et u indice n plus un égale quatre u indice n moins deux, sur u indice n plus un. Question un : montrer par récurrence que u indice n est entre deux et quatre. Initialisation : u zéro égale quatre, il est entre deux et quatre. Hérédité : on suppose deux inférieur ou égal à u indice n, inférieur ou égal à quatre. On calcule u indice n plus un moins deux : on trouve deux fois, u indice n moins deux, sur u indice n plus un. Question : quel est le signe de cette différence ?
-ÉCRAN : National 2024 : u₀ = 4, uₙ₊₁ = (4uₙ − 2)/(uₙ + 1). | 1. Montrer par récurrence que 2 ≤ uₙ ≤ 4. | Hérédité : uₙ₊₁ − 2 = 2(uₙ − 2)/(uₙ + 1) : son signe ?
+### Diapo 81 `su_e1_complet` — National 2024 N, exercice 1 : question 1-b, l'encadrement par récurrence
+VOIX (fr) : Un exercice du national deux mille vingt-quatre, joué question par question. u zéro égale quatre, et u indice n plus un égale quatre u indice n moins deux, sur u indice n plus un. Question un b : montrer par récurrence que u indice n est entre deux et quatre. Initialisation : u zéro égale quatre, il est entre deux et quatre. Hérédité : on suppose deux inférieur ou égal à u indice n, inférieur ou égal à quatre. On calcule u indice n plus un moins deux : on trouve deux fois, u indice n moins deux, sur u indice n plus un. Question : quel est le signe de cette différence ?
+ÉCRAN : National 2024 N : u₀ = 4, uₙ₊₁ = (4uₙ − 2)/(1 + uₙ). | 1-b : montrer par récurrence que 2 ≤ uₙ ≤ 4. | Hérédité : uₙ₊₁ − 2 = 2(uₙ − 2)/(1 + uₙ) : son signe ?
 QUESTION : Si 2 ≤ uₙ ≤ 4, le signe de uₙ₊₁ − 2 = 2(uₙ − 2)/(uₙ + 1) est : OPTIONS : ['négatif', 'positif ou nul', 'on ne peut pas savoir']
 
-### Diapo 82 `su_e1_q2` — National 2024, question 2 : le sens de variation
-VOIX (fr) : Question deux : le sens de variation. On calcule u indice n plus un moins u indice n. On met au même dénominateur, et on factorise le haut : on trouve moins, u indice n moins un, fois u indice n moins deux, sur u indice n plus un. On sait que u indice n est entre deux et quatre. Question : la suite est-elle croissante ou décroissante ?
-ÉCRAN : uₙ₊₁ − uₙ = −(uₙ − 1)(uₙ − 2)/(uₙ + 1). | Avec 2 ≤ uₙ ≤ 4 (question 1) : croissante ou décroissante ?
+### Diapo 82 `su_e1_q2` — National 2024 N, exercice 1 : questions 2-a et 2-b, le sens de variation
+VOIX (fr) : Question deux a : montrer l'égalité donnée. On calcule u indice n plus un moins u indice n. Au même dénominateur, on trouve moins u indice n au carré, plus trois u indice n, moins deux, sur un plus u indice n. Et c'est bien u indice n moins un, fois deux moins u indice n, sur un plus u indice n. Question deux b : le sens de variation. On sait, par la question un b, que u indice n est entre deux et quatre. Question : la suite est-elle croissante ou décroissante ?
+ÉCRAN : 2-a : uₙ₊₁ − uₙ = (−uₙ² + 3uₙ − 2)/(1 + uₙ) = (uₙ − 1)(2 − uₙ)/(1 + uₙ). | 2-b : avec 2 ≤ uₙ ≤ 4 (1-b) : croissante ou décroissante ?
 QUESTION : uₙ₊₁ − uₙ = −(uₙ − 1)(uₙ − 2)/(uₙ + 1) et 2 ≤ uₙ ≤ 4. La suite (uₙ) est : OPTIONS : ['croissante', 'décroissante', 'ni croissante ni décroissante']
 
-### Diapo 83 `su_e1_q3` — National 2024, question 3 : la convergence
-VOIX (fr) : Question trois : la suite est-elle convergente ? Regarde les termes de notre suite sur le repère. Ils descendent : c'est la question deux, la suite est décroissante. Et la droite verte, y égale deux : tous les points restent au-dessus. C'est la question un : u indice n est plus grand que deux, la suite est minorée par deux. Question : que peut-on dire de la suite ?
-ÉCRAN : Question 1 : uₙ ≥ 2 (minorée). | Question 2 : décroissante. | Donc ?
+### Diapo 83 `su_e1_q3` — National 2024 N, exercice 1 : question 2-b (fin), la convergence
+VOIX (fr) : Question deux b, la fin : en déduire que la suite est convergente. Regarde les termes de notre suite sur le repère. Ils descendent : on vient de le montrer, la suite est décroissante. Et la droite verte, y égale deux : tous les points restent au-dessus. C'est la question un b : u indice n est plus grand que deux, la suite est minorée par deux. Question : que peut-on dire de la suite ?
+ÉCRAN : 1-b : uₙ ≥ 2 (minorée). | 2-b : décroissante. | 2-b, fin : donc ?
 QUESTION : (uₙ) est décroissante et minorée par 2. Donc : OPTIONS : ['(uₙ) est convergente', 'lim uₙ = −∞', 'on ne peut rien dire']
 
 ### Diapo 84 `su_enonce_2024n_p2` — National 2024 N : la suite de l’énoncé
 VOIX (fr) : Même exercice du national deux mille vingt-quatre : la suite u n, avec u zéro égale quatre, et u indice n plus un, égale quatre u indice n moins deux, sur un plus u indice n. Voici la suite de l'énoncé. Trois : soit v n la suite définie par, v indice n égale deux moins u indice n, sur un moins u indice n. a : montrer que v n est une suite géométrique, de raison deux tiers. b : montrer que u indice n égale un, plus un sur, un moins deux tiers, puissance n plus un. c : calculer la limite de la suite. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 85 `su_e1_q4` — National 2024, question 4 : la suite auxiliaire
-VOIX (fr) : Question quatre : la suite auxiliaire. On pose v indice n égale u indice n moins deux, sur u indice n moins un. L'énoncé donne deux relations : u indice n plus un moins deux égale deux fois, u indice n moins deux, sur u indice n plus un. Et u indice n plus un moins un égale trois fois, u indice n moins un, sur u indice n plus un. Question : v indice n plus un égale quoi ?
-ÉCRAN : vₙ = (uₙ − 2)/(uₙ − 1). | Données : uₙ₊₁ − 2 = 2(uₙ − 2)/(uₙ + 1) ; uₙ₊₁ − 1 = 3(uₙ − 1)/(uₙ + 1). | vₙ₊₁ = ?
+### Diapo 85 `su_e1_q4` — National 2024 N, exercice 1 : question 3-a, la suite auxiliaire
+VOIX (fr) : Question trois a : la suite auxiliaire. L'énoncé pose v indice n égale deux moins u indice n, sur un moins u indice n. On remplace u indice n plus un par sa formule, au même dénominateur : deux moins u indice n plus un égale deux fois, deux moins u indice n, sur un plus u indice n. Et un moins u indice n plus un égale trois fois, un moins u indice n, sur un plus u indice n. Question : v indice n plus un égale quoi ?
+ÉCRAN : 3-a : vₙ = (2 − uₙ)/(1 − uₙ). | On calcule : 2 − uₙ₊₁ = 2(2 − uₙ)/(1 + uₙ) ; 1 − uₙ₊₁ = 3(1 − uₙ)/(1 + uₙ). | vₙ₊₁ = ?
 QUESTION : Question 4 : vₙ₊₁ = ? (avec uₙ₊₁ − 2 = 2(uₙ − 2)/(uₙ + 1) et uₙ₊₁ − 1 = 3(uₙ − 1)/(uₙ + 1)) OPTIONS : ['(2/3)vₙ', '(3/2)vₙ', 'vₙ + 2/3']
 
-### Diapo 86 `su_e1_q5a` — National 2024, question 5 : vₙ, puis uₙ en fonction de n
-VOIX (fr) : Question cinq, première partie : v indice n, puis u indice n, en fonction de n. v zéro égale u zéro moins deux, sur u zéro moins un : quatre moins deux, sur quatre moins un, deux tiers. La suite v est géométrique de raison deux tiers. Donc v indice n égale v zéro fois deux tiers puissance n : deux tiers puissance n plus un. Maintenant, il faut revenir à u indice n. On part de v indice n égale u indice n moins deux, sur u indice n moins un. Question : u indice n égale quoi ?
-ÉCRAN : vₙ = (uₙ − 2)/(uₙ − 1), (vₙ) géométrique de raison 2/3 (question 4). | v₀ = (4 − 2)/(4 − 1) = 2/3 ; vₙ = v₀ × (2/3)ⁿ = (2/3)ⁿ⁺¹. | On isole uₙ : uₙ = ?
+### Diapo 86 `su_e1_q5a` — National 2024 N, exercice 1 : question 3-b, uₙ en fonction de n
+VOIX (fr) : Question trois b : montrer la formule de u indice n. D'abord v indice n : v zéro égale deux moins u zéro, sur un moins u zéro : deux moins quatre, sur un moins quatre, deux tiers. La suite v est géométrique de raison deux tiers. Donc v indice n égale v zéro fois deux tiers puissance n : deux tiers puissance n plus un. Maintenant, il faut revenir à u indice n. On part de v indice n égale deux moins u indice n, sur un moins u indice n. Question : u indice n égale quoi ?
+ÉCRAN : 3-b : vₙ = (2 − uₙ)/(1 − uₙ), (vₙ) géométrique de raison 2/3 (3-a). | v₀ = (2 − 4)/(1 − 4) = 2/3 ; vₙ = v₀ × (2/3)ⁿ = (2/3)ⁿ⁺¹. | On isole uₙ : uₙ = ?
 QUESTION : vₙ = (uₙ − 2)/(uₙ − 1). On isole uₙ : uₙ = ? OPTIONS : ['(2 − vₙ)/(1 − vₙ)', '(1 − vₙ)/(2 − vₙ)', '(2 + vₙ)/(1 + vₙ)']
 
-### Diapo 87 `su_e1_q5` — National 2024, question 5 : la limite par qⁿ
-VOIX (fr) : Question cinq, deuxième partie : la limite. On a trouvé u indice n égale deux moins v indice n, sur un moins v indice n. Et v indice n égale deux tiers puissance n plus un : regarde ses points, ils descendent vers l'axe. La raison deux tiers est strictement entre moins un et un. Question : quelle est la limite de u indice n ?
-ÉCRAN : uₙ = (2 − vₙ)/(1 − vₙ) et vₙ = (2/3)ⁿ⁺¹. | −1 < 2/3 < 1. | lim uₙ = ?
+### Diapo 87 `su_e1_q5` — National 2024 N, exercice 1 : question 3-c, la limite
+VOIX (fr) : Question trois c : la limite. On a trouvé u indice n égale un, plus un sur, un moins v indice n. Et v indice n égale deux tiers puissance n plus un : regarde ses points, ils descendent vers l'axe. La raison deux tiers est strictement entre moins un et un. Question : quelle est la limite de u indice n ?
+ÉCRAN : 3-c : uₙ = 1 + 1/(1 − vₙ) et vₙ = (2/3)ⁿ⁺¹. | −1 < 2/3 < 1. | lim uₙ = ?
 QUESTION : Question 5 : lim uₙ = ? OPTIONS : ['1', '4', '2']
 ## IX. Bilan du chapitre
 

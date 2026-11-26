@@ -214,6 +214,7 @@ VOIX (fr) : Maintenant les deux brins se rapprochent : A est toujours en face de
 VOIX (fr) : Un exercice : écrire le brin complémentaire. Voici le brin : cinq prime, A T C G G A, trois prime. En face de A, on met T. En face de T, A. En face de C, G. En face de G, C. Et attention aux extrémités : le brin complémentaire commence par trois prime. Donc : trois prime, T A G C C T, cinq prime. Deux règles : on échange les bases, et on inverse les extrémités. Quel est le brin complémentaire de cinq prime, T T A G C, trois prime ?
 ÉCRAN : En face de A : T ; en face de T : A ; en face de C : G ; en face de G : C. | Le brin complémentaire est antiparallèle : ses extrémités sont inversées. | 5' ATCGGA 3' → brin complémentaire : 3' TAGCCT 5'.
 QUESTION : Le brin complémentaire de 5' TTAGC 3' est… OPTIONS : ["3' AATCG 5'", "5' AATCG 3'", "3' TTAGC 5'"]
+EXERCICE : Écris le brin complémentaire : glisse le nucléotide d'ADN en face de chaque base. OPTIONS : None
 
 ### Diapo 48 `ig_s5b_legender` — À toi de légender l'ADN
 VOIX (fr) : Au bac, on peut te demander de légender un schéma de l'ADN. À toi maintenant : voici un fragment d'ADN à deux brins, sans ses légendes. À droite, cinq étiquettes : acide phosphorique, désoxyribose, base azotée, nucléotide et liaisons hydrogène. Glisse chacune au bout de son trait : quand elle est bien placée, elle devient verte. Un conseil : le cadre jaune entoure un nucléotide entier.
@@ -264,6 +265,7 @@ QUESTION : Un œil de réplication s'agrandit… OPTIONS : ["dans un seul sens, 
 ### Diapo 58 `ig_r10_polymerase` — L'ADN polymérase pose les nucléotides
 VOIX (fr) : L'ADN polymérase prend les nucléotides libres, et place en face de chaque base la base complémentaire : en face de A, T ; en face de C, G. Et le brin nouveau s'allonge toujours de cinq prime vers trois prime. En orange le brin nouveau, en bleu le brin ancien.
 ÉCRAN : L'ADN polymérase prend des nucléotides libres. | Elle place en face de chaque base la base complémentaire : A–T, C–G. | Le brin nouveau s'allonge toujours de 5' vers 3'.
+EXERCICE : L'ADN polymérase assemble le brin nouveau : glisse chaque nucléotide en face du brin ancien. OPTIONS : None
 
 ### Diapo 59 `ig_r11_deux_molecules` — Deux molécules identiques
 VOIX (fr) : Les yeux grandissent jusqu'à se rencontrer : ils fusionnent. On obtient deux molécules, chacune avec un brin ancien et un brin nouveau. Et la même séquence que la molécule mère. Ce sont les deux chromatides du chromosome.
@@ -282,32 +284,32 @@ QUESTION : Une cellule qui entrerait en mitose sans phase S donnerait… OPTIONS
 ### Diapo 62 `ig_x1a_enonce` — National 2024 R : l'énoncé, comme à l'examen
 VOIX (fr) : Lisons la question comme elle est venue à l'examen : le national deux mille vingt-quatre, session de rattrapage, première partie. Regarde la feuille. Deux : pour chacune des propositions numérotées de un à quatre, il y a une seule suggestion correcte. Recopier sur votre feuille de rédaction les couples, puis adresser à chaque numéro, la lettre qui correspond à la suggestion correcte. Dans ce cours, on prend la proposition deux. Deux : au cours de la phase G un de l'interphase, chaque chromosome est : a, monochromatidien condensé. b, monochromatidien non condensé. c, bichromatidien non condensé. d, bichromatidien condensé. Monochromatidien veut dire une chromatide, bichromatidien deux chromatides. Ensuite, on l'explique pas à pas.
 
-### Diapo 63 `ig_x1_restitution` — Restitution : un QCM à toi d'abord
-VOIX (fr) : Comme dans la première partie de l'examen : un QCM. Lis la question jusqu'au dernier mot : au cours de la phase G1, chaque chromosome est… Quatre propositions. Prends ton temps : pour chacune, dis-toi si elle est juste ou fausse, et pourquoi. Puis choisis.
+### Diapo 63 `ig_x1_restitution` — National 2024 R, question II-2 : un QCM à toi d'abord
+VOIX (fr) : Le national deux mille vingt-quatre, rattrapage, question deux romain, proposition deux : un QCM, comme dans la première partie de l'examen. Lis la question jusqu'au dernier mot : au cours de la phase G1, chaque chromosome est… Quatre propositions. Prends ton temps : pour chacune, dis-toi si elle est juste ou fausse, et pourquoi. Puis choisis.
 ÉCRAN : Pour chaque proposition : juste ou fausse, et pourquoi. | Puis une seule réponse.
 QUESTION : Au cours de la phase G1, chaque chromosome est : OPTIONS : ['à une chromatide et condensé', 'à une chromatide et non condensé', 'à deux chromatides et non condensé', 'à deux chromatides et condensé']
 
-### Diapo 64 `ig_x1b_corrige` — Le corrigé : un leurre après l'autre
-VOIX (fr) : Maintenant comme la première partie de l'épreuve. Lis la question jusqu'au dernier mot : pendant la phase G1, chaque chromosome est… A : condensé ? Non, condensé c'est pendant la mitose. C : deux chromatides ? Non, c'est après la phase S. D : non plus. Donc B : à une chromatide et non condensé. Chaque leurre s'élimine avec sa raison.
-ÉCRAN : a) condensé : c'est en mitose. | c) deux chromatides : après la phase S. | d) deux chromatides et condensé : prophase ou métaphase. | Réponse : b) à une chromatide et non condensé.
+### Diapo 64 `ig_x1b_corrige` — National 2024 R, question II-2 : le corrigé, un leurre après l'autre
+VOIX (fr) : Le corrigé de la question deux romain, proposition deux. Lis la question jusqu'au dernier mot : pendant la phase G1, chaque chromosome est… A : condensé ? Non, condensé c'est pendant la mitose. C : deux chromatides ? Non, c'est après la phase S. D : non plus. Donc B : à une chromatide et non condensé. On écrit le couple deux, b. Chaque leurre s'élimine avec sa raison.
+ÉCRAN : a) condensé : c'est en mitose. | c) deux chromatides : après la phase S. | d) deux chromatides et condensé : prophase ou métaphase. | II-2 : (2, b) — à une chromatide et non condensé.
 
 ### Diapo 65 `ig_x1c0_enonce` — National 2018 R : l'énoncé, comme à l'examen
 VOIX (fr) : Une autre question comme à l'examen : le national deux mille dix-huit, session de rattrapage, première partie. Regarde la feuille. Quatre : pour chacune des propositions numérotées de un à quatre, une seule suggestion est correcte. Recopiez les couples, et écrivez pour chaque couple la lettre correspondante à la suggestion correcte. On prend la proposition deux. Deux : durant la métaphase de la mitose, chaque chromosome est formé : a, d'une seule chromatide constituée de deux brins d'ADN. b, de deux chromatides constituée chacune d'un brin d'ADN. c, de deux chromatides constituée chacune de deux brins d'ADN. d, de deux chromatides, l'une constituée d'un seul brin d'ADN, et l'autre de deux brins d'ADN. Ensuite, on l'explique pas à pas.
 
-### Diapo 66 `ig_x1c_metaphase` — QCM du national 2018 R : le chromosome en métaphase
-VOIX (fr) : Un autre QCM, du national 2018. Durant la métaphase de la mitose, chaque chromosome est formé… Attention : deux mots comptent, chromatide et brin d'ADN. Réponds à chacun séparément : combien de chromatides ? Et combien de brins dans chaque chromatide ? Puis choisis.
+### Diapo 66 `ig_x1c_metaphase` — National 2018 R, question IV-2 : le chromosome en métaphase
+VOIX (fr) : Un autre QCM, du national deux mille dix-huit, rattrapage : question quatre romain, proposition deux. Durant la métaphase de la mitose, chaque chromosome est formé… Attention : deux mots comptent, chromatide et brin d'ADN. Réponds à chacun séparément : combien de chromatides ? Et combien de brins dans chaque chromatide ? Puis choisis.
 ÉCRAN : Combien de chromatides en métaphase ? | Combien de brins d'ADN dans chaque chromatide ?
 QUESTION : Durant la métaphase de la mitose, chaque chromosome est formé : OPTIONS : ["d'une seule chromatide constituée de deux brins d'ADN.", "de deux chromatides constituées chacune d'un brin d'ADN.", "de deux chromatides constituées chacune de deux brins d'ADN.", "de deux chromatides, l'une constituée d'un seul brin d'ADN et l'autre de deux brins d'ADN."]
 
-### Diapo 67 `ig_x1d_corrige_metaphase` — Le corrigé du QCM 2018 R
-VOIX (fr) : On corrige proposition par proposition. a : une seule chromatide ? Non : une chromatide, c'est en G1 ou en anaphase. b : un seul brin ? Non : une molécule d'ADN a toujours deux brins. d : une chromatide d'un brin, l'autre de deux ? Non : les deux chromatides sont identiques. Donc c : deux chromatides, et chaque chromatide a deux brins d'ADN, car la réplication a eu lieu en phase S.
-ÉCRAN : a) une seule chromatide : en G1 ou en anaphase. | b) un seul brin : jamais, l'ADN a deux brins. | d) les deux chromatides sont identiques. | Réponse : c) deux chromatides de deux brins d'ADN chacune.
+### Diapo 67 `ig_x1d_corrige_metaphase` — National 2018 R, question IV-2 : le corrigé
+VOIX (fr) : Le corrigé de la question quatre romain, proposition deux. On corrige proposition par proposition. a : une seule chromatide ? Non : une chromatide, c'est en G1 ou en anaphase. b : un seul brin ? Non : une molécule d'ADN a toujours deux brins. d : une chromatide d'un brin, l'autre de deux ? Non : les deux chromatides sont identiques. Donc c : deux chromatides, et chaque chromatide a deux brins d'ADN, car la réplication a eu lieu en phase S. On écrit le couple deux, c.
+ÉCRAN : a) une seule chromatide : en G1 ou en anaphase. | b) un seul brin : jamais, l'ADN a deux brins. | d) les deux chromatides sont identiques. | IV-2 : (2, c) — deux chromatides de deux brins d'ADN chacune.
 
 ### Diapo 68 `ig_x1e0_enonce` — National 2024 N : l'énoncé, comme à l'examen
 VOIX (fr) : Lisons la question comme à l'examen : le national deux mille vingt-quatre, session normale. Regarde la feuille. Quatre : recopier les couples un, deux, trois et quatre, et adresser à chaque numéro de l'ensemble A, la lettre correspondante dans l'ensemble B. L'ensemble A : un, ADN polymérase. Deux, centromère. Trois, nucléosome. Quatre, ribosome. L'ensemble B : a, complexe formé par l'association histones, ADN. b, complexe moléculaire participant à la synthèse des protéines. c, complexe protéique assurant la synthèse de l'ARN m. d, structure reliant les deux chromatides du même chromosome. e, enzyme qui intervient dans la réplication de l'ADN. Dans ce cours, on travaille les trois premiers ; le ribosome viendra au chapitre suivant. Ensuite, on l'explique pas à pas.
 
-### Diapo 69 `ig_x1e_associer` — Associer, comme au national 2024 N
-VOIX (fr) : Encore une question comme dans la première partie de l'examen, du national deux mille vingt-quatre : associer. À gauche, l'ensemble A. Le premier : l'ADN polymérase, ici sur une fourche de réplication. Le deuxième : le centromère, sur ce chromosome à deux chromatides. Le troisième : le nucléosome. À droite, l'ensemble B : trois propositions, a, d et e. Lis chaque proposition jusqu'au dernier mot. À toi : relie chaque numéro à sa lettre.
+### Diapo 69 `ig_x1e_associer` — National 2024 N, question IV : associer
+VOIX (fr) : Encore une question de la première partie : le national deux mille vingt-quatre, session normale, question quatre romain : associer. À gauche, l'ensemble A. Le premier : l'ADN polymérase, ici sur une fourche de réplication. Le deuxième : le centromère, sur ce chromosome à deux chromatides. Le troisième : le nucléosome. À droite, l'ensemble B : trois propositions, a, d et e. Lis chaque proposition jusqu'au dernier mot. À toi : relie chaque numéro à sa lettre.
 ÉCRAN : 1. ADN polymérase ; 2. Centromère ; 3. Nucléosome. | a, d, e : lis chaque proposition jusqu'au dernier mot.
 QUESTION : Recopier les couples (1, ...), (2, ...), (3, ...) et adresser à chaque numéro de l'ensemble A la lettre correspondante dans l'ensemble B. (2024 N) OPTIONS : None
 
@@ -322,25 +324,25 @@ VOIX (fr) : La description est écrite. Deuxième consigne : expliquer, c'est-à
 QUESTION : D'après la courbe, le passage de 2q à q s'explique par… OPTIONS : ["la destruction de la moitié de l'ADN en phase S, ce qui ramène la cellule de 2q à q", "la perte de la moitié de l'ADN en G2, juste avant la séparation des chromatides", 'la séparation des chromatides en anaphase, puis la division en deux cellules filles']
 
 ### Diapo 72 `ig_x3_enonce` — National 2017 R : l'énoncé, comme à l'examen
-VOIX (fr) : Lisons l'exercice comme il est venu à l'examen : le national deux mille dix-sept, session de rattrapage, l'exercice deux. Regarde le document un. Transfert d'une plantule de fève d'un milieu normal à un milieu radioactif, pendant un cycle cellulaire. Transfert de cette plantule à un milieu non radioactif, pendant un cycle cellulaire. Thymidine radioactive, thymidine non radioactive, et radioactivité. Observation des chromosomes métaphasiques des cellules de la racine : premier cycle cellulaire, deuxième cycle cellulaire. La question un, sur un point cinq : expliquez les résultats de l'expérience du document un, en justifiant votre réponse, à l'aide d'un schéma adéquat du phénomène biologique mis en évidence. Ensuite, on l'explique pas à pas.
+VOIX (fr) : Lisons l'exercice comme il est venu à l'examen : le national deux mille dix-sept, session de rattrapage, l'exercice deux. Pour étudier certains aspects de la transmission et d'expression de l'information génétique, on propose les données suivantes. Au cours de chaque cycle cellulaire, la cellule subit un ensemble de phénomènes biologiques qui interviennent dans le maintien de l'information génétique lors de sa transmission d'une cellule à une autre. Pour mettre en évidence un de ces phénomènes ainsi que son importance, on propose l'expérience présentée par le document un. Remarque : la thymidine, T, est utilisée dans la synthèse d'ADN. Regarde le document un. Transfert d'une plantule de fève d'un milieu normal à un milieu radioactif, pendant un cycle cellulaire. Transfert de cette plantule à un milieu non radioactif, pendant un cycle cellulaire. Thymidine radioactive, thymidine non radioactive, et radioactivité. Observation des chromosomes métaphasiques des cellules de la racine : premier cycle cellulaire, deuxième cycle cellulaire. La question un, sur un point cinq : expliquez les résultats de l'expérience du document un, en justifiant votre réponse, à l'aide d'un schéma adéquat du phénomène biologique mis en évidence. Ensuite, on l'explique pas à pas.
 
-### Diapo 73 `ig_x3_thymidine_doc` — National 2017 R : d'abord le document
-VOIX (fr) : Un exercice du national 2017. On lit le document pas à pas. Des cellules de racine de fève, dans un milieu à thymidine radioactive, pendant un cycle. Ensuite, le chromosome en métaphase : les deux chromatides sont marquées, couvertes de grains noirs. Puis on transfère la plantule dans un milieu normal, pour un deuxième cycle. Regarde le chromosome en métaphase maintenant. Première consigne : décrire. Que vois-tu ?
-ÉCRAN : 1re consigne : décrire les résultats.
+### Diapo 73 `ig_x3_thymidine_doc` — National 2017 R, exercice 2 : question 1, d'abord le document
+VOIX (fr) : Le national deux mille dix-sept, rattrapage, exercice deux. On lit le document pas à pas. Des cellules de racine de fève, dans un milieu à thymidine radioactive, pendant un cycle. Ensuite, le chromosome en métaphase : les deux chromatides sont marquées, couvertes de grains noirs. Puis on transfère la plantule dans un milieu normal, pour un deuxième cycle. Regarde le chromosome en métaphase maintenant. La question un demande d'expliquer ces résultats, avec un schéma. D'abord, décrire : que vois-tu ?
+ÉCRAN : 1 : expliquez les résultats (avec un schéma) ; d'abord, décrire ce qu'on voit.
 QUESTION : Après le 2e cycle en milieu normal, le chromosome métaphasique a : OPTIONS : ['ses deux chromatides marquées, chacune couverte de grains noirs', 'une chromatide marquée et une chromatide non marquée', 'aucune chromatide marquée : les deux sont sans grains noirs']
 
-### Diapo 74 `ig_x3b_cycle1` — Expliquer le 1er cycle
-VOIX (fr) : Deuxième consigne : expliquer. Commençons par le premier cycle. La thymidine radioactive n'entre que dans l'ADN, pendant la réplication. Pourquoi les deux chromatides sont-elles marquées ? Pense à l'ADN de chaque chromatide : un brin ancien, et un brin nouveau.
+### Diapo 74 `ig_x3b_cycle1` — National 2017 R, exercice 2 : question 1, expliquer le 1er cycle
+VOIX (fr) : Question un : expliquer. Commençons par le premier cycle. La thymidine radioactive n'entre que dans l'ADN, pendant la réplication. Pourquoi les deux chromatides sont-elles marquées ? Pense à l'ADN de chaque chromatide : un brin ancien, et un brin nouveau.
 ÉCRAN : La thymidine radioactive n'entre que dans l'ADN, à la réplication.
 QUESTION : Après le 1er cycle, les deux chromatides sont marquées parce que : OPTIONS : ["chaque molécule d'ADN garde un brin ancien et reçoit un brin nouveau radioactif : chaque chromatide a un brin radioactif", 'la thymidine radioactive se fixe sur les protéines du chromosome : les protéines de chaque chromatide deviennent radioactives', "une molécule d'ADN fille est faite de deux brins nouveaux radioactifs, l'autre garde les deux brins anciens non radioactifs"]
 
-### Diapo 75 `ig_x3c_cycle2` — Expliquer le 2e cycle
-VOIX (fr) : Maintenant le deuxième cycle, dans un milieu normal, sans radioactivité. Regarde le résultat : une chromatide marquée sur deux. Pourquoi ? Suis chaque brin : que lui arrive-t-il à la deuxième réplication ?
+### Diapo 75 `ig_x3c_cycle2` — National 2017 R, exercice 2 : question 1, expliquer le 2e cycle
+VOIX (fr) : Toujours la question un : maintenant le deuxième cycle, dans un milieu normal, sans radioactivité. Regarde le résultat : une chromatide marquée sur deux. Pourquoi ? Suis chaque brin : que lui arrive-t-il à la deuxième réplication ?
 ÉCRAN : Milieu normal : le brin nouveau n'est pas radioactif.
 QUESTION : Après le 2e cycle en milieu normal, une seule chromatide sur deux est marquée parce que : OPTIONS : ["la radioactivité s'affaiblit avec le temps : elle disparaît de la moitié de l'ADN pendant le 2e cycle, l'autre moitié la garde", "chaque brin sert de modèle à un brin nouveau non radioactif : une molécule garde le brin radioactif, l'autre n'en a aucun", 'le brin radioactif est détruit pendant la mitose : des brins nouveaux non radioactifs le remplacent dans chaque molécule']
 
-### Diapo 76 `ig_x3d_schema` — Le schéma demandé, puis la conclusion
-VOIX (fr) : Le barème demande aussi un schéma. Le voici : chaque molécule a deux brins. Bleu : brin ancien. Rouge : brin radioactif. Blanc : brin nouveau non radioactif. Premier cycle : deux molécules, chacune un brin bleu et un brin rouge. Deuxième cycle : une molécule bleue et blanche, et une molécule blanche et rouge. Maintenant la conclusion : ces résultats montrent que la réplication est… ?
+### Diapo 76 `ig_x3d_schema` — National 2017 R, exercice 2 : question 1, le schéma demandé puis la conclusion
+VOIX (fr) : La question un demande aussi un schéma. Le voici : chaque molécule a deux brins. Bleu : brin ancien. Rouge : brin radioactif. Blanc : brin nouveau non radioactif. Premier cycle : deux molécules, chacune un brin bleu et un brin rouge. Deuxième cycle : une molécule bleue et blanche, et une molécule blanche et rouge. Maintenant la conclusion : ces résultats montrent que la réplication est… ?
 ÉCRAN : bleu : brin ancien ; rouge : brin radioactif ; blanc : brin nouveau non radioactif
 QUESTION : Ces résultats montrent que la réplication de l'ADN est : OPTIONS : ['conservative', 'semi-conservative', 'dispersive']
 ## Bilan du chapitre

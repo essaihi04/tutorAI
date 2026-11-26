@@ -1,28 +1,28 @@
 | Cours | Diapos | Questions dans les 6 premières | Formules dites non écrites | Passages ≥ 60 mots sans geste | Notions clés | redites | annoncées (phrases ≠) | Premier mot le plus fréquent | Diapos qui suivent avec le même premier mot | Débuts de voix répétés | Tournures recopiées ≥ 5 diapos |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | math_ch1_limites_continuite | 79 | 1 | 74 | 4 | 30 | 12 | 0 (0) | « دابا » 14 % | 7 | — | 4 |
-| math_ch2_derivation_etude_fonctions | 85 | 1 | 66 | 3 | 29 | 8 | 0 (0) | « دابا » 16 % | 3 | — | 0 |
-| math_ch3_suites_numeriques | 90 | 1 | 60 | 3 | 28 | 4 | 0 (0) | « دابا » 20 % | 11 | « دابا غادي » ×9 | 6 |
+| math_ch2_derivation_etude_fonctions | 85 | 1 | 75 | 3 | 29 | 8 | 0 (0) | « دابا » 16 % | 3 | — | 0 |
+| math_ch3_suites_numeriques | 90 | 1 | 65 | 4 | 24 | 4 | 0 (0) | « دابا » 20 % | 13 | « دابا غادي » ×9, « السؤال deux » ×7 | 6 |
 | math_ch4_primitives | 60 | 2 | 64 | 7 | 35 | 10 | 0 (0) | « شوف » 15 % | 3 | — | 3 |
-| math_ch5_fonctions_ln | 86 | 1 | 73 | 5 | 40 | 9 | 0 (0) | « دابا » 22 % | 9 | « نفس le » ×5, « la courbe » ×4 | 5 |
-| math_ch6_nombres_complexes | 78 | 1 | 82 | 9 | 39 | 16 | 0 (0) | « شوف » 31 % | 13 | « شوف النقطة » ×10, « دابا غادي » ×7 | 4 |
-| phys_ch10_cinetique | 85 | 1 | 80 | 9 | 35 | 13 | 0 (0) | « دابا » 33 % | 13 | « دابا غادي » ×11, « نفس التمرين » ×9 | 6 |
-| phys_ch11_transformations_deux_sens | 56 | 2 | 55 | 4 | 19 | 11 | 0 (0) | « دابا » 39 % | 7 | « دابا غادي » ×5, « شوف هاد » ×4 | 6 |
-| phys_ch12_etat_equilibre | 58 | 3 | 67 | 5 | 17 | 8 | 0 (0) | « دابا » 40 % | 11 | « دابا غادي » ×7, « le national » ×6 | 6 |
-| phys_ch13_acides_bases | 78 | 1 | 95 | 9 | 31 | 13 | 0 (0) | « دابا » 26 % | 7 | « دابا غادي » ×9, « le national » ×6 | 6 |
-| phys_ch1_waves_exemple | 52 | 1 | 39 | 0 | 30 | 12 | 1 (1) | « دابا » 48 % | 13 | « دابا غادي » ×12, « تمرين ديال » ×7 | 5 |
-| phys_ch2_ondes_periodiques | 65 | 1 | 42 | 1 | 34 | 7 | 0 (0) | « دابا » 31 % | 4 | « دابا غادي » ×8 | 1 |
-| phys_ch3_ondes_lumineuses | 68 | 2 | 53 | 1 | 31 | 8 | 0 (0) | « دابا » 16 % | 3 | « دابا غادي » ×7 | 6 |
-| phys_ch4_radioactivite | 87 | 1 | 91 | 2 | 38 | 10 | 0 (0) | « دابا » 23 % | 6 | « دابا غادي » ×13, « تمرين من » ×4 | 6 |
-| phys_ch5_energie_nucleaire | 59 | 2 | 69 | 8 | 23 | 9 | 0 (0) | « دابا » 27 % | 3 | « دابا غادي » ×10 | 6 |
-| phys_ch6_dipole_RC | 86 | 2 | 89 | 5 | 37 | 12 | 0 (0) | « دابا » 23 % | 11 | « نفس التمرين » ×9, « قبل ما » ×8 | 6 |
-| phys_ch7_dipole_RL | 90 | 1 | 143 | 7 | 32 | 10 | 0 (0) | « دابا » 23 % | 16 | « نفس التمرين » ×11, « قبل ما » ×8 | 6 |
-| phys_ch8_circuit_RLC | 93 | 2 | 177 | 20 | 31 | 9 | 0 (0) | « دابا » 25 % | 15 | « نفس التمرين » ×18, « دابا غادي » ×6 | 6 |
+| math_ch5_fonctions_ln | 86 | 1 | 72 | 6 | 38 | 9 | 0 (0) | « دابا » 20 % | 11 | « نفس le » ×5, « la courbe » ×4 | 5 |
+| math_ch6_nombres_complexes | 78 | 1 | 90 | 11 | 35 | 16 | 0 (0) | « شوف » 29 % | 12 | « شوف النقطة » ×10, « دابا غادي » ×7 | 4 |
+| phys_ch10_cinetique | 85 | 1 | 80 | 9 | 34 | 13 | 0 (0) | « دابا » 33 % | 13 | « دابا غادي » ×11, « نفس التمرين » ×9 | 6 |
+| phys_ch11_transformations_deux_sens | 56 | 2 | 56 | 4 | 19 | 11 | 0 (0) | « دابا » 39 % | 8 | « دابا غادي » ×5, « شوف هاد » ×4 | 6 |
+| phys_ch12_etat_equilibre | 58 | 3 | 69 | 6 | 17 | 8 | 0 (0) | « دابا » 40 % | 11 | « دابا غادي » ×7, « le national » ×6 | 6 |
+| phys_ch13_acides_bases | 78 | 1 | 97 | 11 | 31 | 13 | 0 (0) | « دابا » 26 % | 7 | « دابا غادي » ×9, « le national » ×7 | 6 |
+| phys_ch1_waves_exemple | 52 | 1 | 41 | 0 | 30 | 12 | 1 (1) | « دابا » 48 % | 13 | « دابا غادي » ×12, « تمرين ديال » ×7 | 5 |
+| phys_ch2_ondes_periodiques | 65 | 1 | 45 | 1 | 34 | 7 | 0 (0) | « دابا » 31 % | 4 | « دابا غادي » ×8 | 1 |
+| phys_ch3_ondes_lumineuses | 68 | 2 | 51 | 1 | 30 | 8 | 0 (0) | « دابا » 16 % | 3 | « دابا غادي » ×7 | 6 |
+| phys_ch4_radioactivite | 87 | 1 | 88 | 5 | 35 | 10 | 0 (0) | « دابا » 22 % | 9 | « دابا غادي » ×13, « تمرين من » ×4 | 6 |
+| phys_ch5_energie_nucleaire | 59 | 2 | 73 | 9 | 23 | 9 | 0 (0) | « دابا » 27 % | 3 | « دابا غادي » ×10 | 6 |
+| phys_ch6_dipole_RC | 86 | 2 | 95 | 6 | 34 | 11 | 0 (0) | « دابا » 23 % | 11 | « نفس التمرين » ×9, « قبل ما » ×8 | 6 |
+| phys_ch7_dipole_RL | 90 | 1 | 152 | 7 | 30 | 10 | 0 (0) | « دابا » 23 % | 16 | « نفس التمرين » ×11, « قبل ما » ×8 | 6 |
+| phys_ch8_circuit_RLC | 93 | 2 | 182 | 22 | 29 | 9 | 0 (0) | « دابا » 25 % | 15 | « نفس التمرين » ×18, « دابا غادي » ×6 | 6 |
 | phys_ch9_transformations_lentes_rapides | 57 | 2 | 6 | 2 | 25 | 12 | 0 (0) | « دابا » 19 % | 3 | — | 2 |
-| svt_ch1_reactions_responsables_liberation_energie | 63 | 3 | 4 | 1 | 18 | 6 | 0 (0) | « دابا » 41 % | 8 | « دابا غادي » ×6 | 4 |
-| svt_ch2_role_muscle_strie_squelettique | 72 | 1 | 1 | 4 | 24 | 4 | 0 (0) | « دابا » 19 % | 6 | « دابا غادي » ×5 | 2 |
-| svt_ch3_notion_information_genetique | 79 | 3 | 9 | 1 | 18 | 7 | 0 (0) | « دابا » 32 % | 19 | — | 0 |
-| svt_ch4_relation_gene_proteine | 70 | 2 | 1 | 1 | 30 | 9 | 0 (0) | « دابا » 13 % | 8 | « ف le » ×7, « دابا غادي » ×4 | 0 |
+| svt_ch1_reactions_responsables_liberation_energie | 63 | 3 | 4 | 1 | 15 | 6 | 0 (0) | « دابا » 41 % | 8 | « دابا غادي » ×6 | 4 |
+| svt_ch2_role_muscle_strie_squelettique | 72 | 1 | 1 | 4 | 23 | 4 | 0 (0) | « دابا » 19 % | 6 | « دابا غادي » ×5 | 2 |
+| svt_ch3_notion_information_genetique | 79 | 3 | 9 | 1 | 18 | 7 | 0 (0) | « دابا » 30 % | 18 | — | 0 |
+| svt_ch4_relation_gene_proteine | 70 | 2 | 1 | 1 | 30 | 9 | 0 (0) | « دابا » 13 % | 9 | « ف le » ×7, « دابا غادي » ×4 | 0 |
 | tc_chim_atome | 38 | 3 | 4 | 0 | 23 | 0 | 0 (0) | « دابا » 11 % | 0 | — | 0 |
 | tc_chim_synthese | 38 | 2 | 3 | 0 | 30 | 2 | 0 (0) | « دابا » 32 % | 3 | — | 0 |
 | tc_phys_mouvement_inertie | 59 | 2 | 5 | 0 | 49 | 2 | 0 (0) | « دابا » 46 % | 11 | « دابا la » ×6 | 0 |
@@ -33,10 +33,10 @@
 - Première question de bloc : après la diapo 4 (`lc_s1_b1`)
 - Dit sans être écrit, diapo 3 `lc_l1_chemin` : « شوف la courbe ديال f de x égale x carré moins un, sur x moins un. »
 - Dit sans être écrit, diapo 3 `lc_l1_chemin` : « la limite de f de x, quand x tend vers un, égale هاد العدد. »
-- Dit sans être écrit, diapo 6 `lc_l4_formes` : « zéro sur zéro، l'infini sur l'infini، plus l'infini moins l'infini، وzéro fois l'infini. »
+- Dit sans être écrit, diapo 6 `lc_l4_formes` : « zéro sur zéro، l'infini sur l'infini، plus l'infini moins l'infini، و zéro fois l'infini. »
 - Dit sans être écrit, diapo 7 `lc_l4_formes_b` : « plus l'infini fois moins l'infini، forme indéterminée ولا نتيجة؟ »
 - Dit sans être écrit, diapo 8 `lc_l4c_usuelles` : « x puissance n, quand x tend vers plus l'infini، كتمشي لـ plus l'infini. »
-- 74 mots sans aucun geste, diapo 6 `lc_l4_formes`
+- 73 mots sans aucun geste, diapo 6 `lc_l4_formes`
 - 68 mots sans aucun geste, diapo 57 `lc_r9_valeur_absolue`
 - 68 mots sans aucun geste, diapo 79 `lc_fermeture_cours`
 - Tournure recopiée dans 6 diapos : « f de x égale x carré »
@@ -66,14 +66,14 @@
 - Première question de bloc : après la diapo 4 (`su_n1_b1`)
 - Dit sans être écrit, diapo 4 `su_a2_indice` : « يلا u deux égale cinq، شحال كيساوي u deux plus un، وواش كنعرفو u trois؟ »
 - Dit sans être écrit, diapo 6 `su_a3b_recurrence` : « u indice n plus un égale un quart u indice n plus douze. »
-- Dit sans être écrit, diapo 7 `su_a4_arithmetique` : « u zéro égale deux، u un égale cinq، ومن بعد huit، onze، quatorze. »
+- Dit sans être écrit, diapo 7 `su_a4_arithmetique` : « u zéro égale deux، u un égale cinq، et après huit، onze، quatorze. »
 - Dit sans être écrit, diapo 9 `su_z1_puissances` : « شنو معنى q puissance n؟ »
 - Dit sans être écrit, diapo 9 `su_z1_puissances` : « إذن deux puissance zéro égale un، ماشي zéro. »
-- 71 mots sans aucun geste, diapo 48 `su_l1_converge`
+- 72 mots sans aucun geste, diapo 48 `su_l1_converge`
+- 67 mots sans aucun geste, diapo 52 `su_l4c_quatre_cas`
 - 67 mots sans aucun geste, diapo 61 `su_c4_comparaison`
-- 66 mots sans aucun geste, diapo 52 `su_l4c_quatre_cas`
-- Tournure recopiée dans 14 diapos : « u indice n plus un moins »
-- Tournure recopiée dans 11 diapos : « u indice n plus un égale »
+- Tournure recopiée dans 13 diapos : « u indice n plus un moins »
+- Tournure recopiée dans 12 diapos : « u indice n plus un égale »
 - Tournure recopiée dans 11 diapos : « u indice n plus un, égale »
 - 4 réactions commencent par « شوف، الجواب الصحيح هو A، يعني »
 - 4 réactions commencent par « شوف، الجواب الصحيح هو deux، ماشي »
@@ -98,11 +98,11 @@
 
 - Questions trop tôt : diapo 6 `ln_n2` (question)
 - Première question de bloc : après la diapo 4 (`ln_s0_b1`)
+- Dit sans être écrit, diapo 3 `ln_z1_primitive` : « فـ un égale deux، فـ deux égale quatre. »
 - Dit sans être écrit, diapo 3 `ln_z1_primitive` : « هادي هي la dérivée، F prime de x égale deux x. »
 - Dit sans être écrit, diapo 3 `ln_z1_primitive` : « يعني F prime égale f: »
 - Dit sans être écrit, diapo 4 `ln_z2_puissances` : « كل مرة كننقصو un من la puissance، كنقسمو على deux. »
 - Dit sans être écrit, diapo 4 `ln_z2_puissances` : « إذن x puissance moins un، هي un sur x. »
-- Dit sans être écrit, diapo 4 `ln_z2_puissances` : « x puissance moins un égale un sur x، et racine de x égale x puissance un demi. »
 - 84 mots sans aucun geste, diapo 81 `ln_e6_c`
 - 73 mots sans aucun geste, diapo 55 `ln_p1`
 - 65 mots sans aucun geste, diapo 15 `ln_d1`
@@ -121,8 +121,8 @@
 - Dit sans être écrit, diapo 9 `nc_a6` : « i au carré égale moins un. »
 - Dit sans être écrit, diapo 10 `nc_z5_identites` : « a plus b، fois c plus d، égale a c، plus a d، plus b c، plus b d. »
 - 93 mots sans aucun geste, diapo 34 `nc_m5`
+- 91 mots sans aucun geste, diapo 56 `nc_r4`
 - 79 mots sans aucun geste, diapo 35 `nc_m6`
-- 72 mots sans aucun geste, diapo 20 `nc_p5`
 - Tournure recopiée dans 6 diapos : « دابا غادي نقراو l'énoncé ديال الامتحان »
 - Tournure recopiée dans 6 diapos : « غادي نقراو l'énoncé ديال الامتحان الوطني »
 - Tournure recopiée dans 6 diapos : « نقراو l'énoncé ديال الامتحان الوطني deux »
@@ -152,7 +152,7 @@
 - Dit sans être écrit, diapo 18 `td_a1_tableau` : « l'acide éthanoïque، التركيز ديالو dix puissance moins deux mole par litre، والحجم cent mil »
 - Dit sans être écrit, diapo 20 `td_a3_xf` : « والكمية هي التركيز fois الحجم. »
 - Dit sans être écrit, diapo 20 `td_a3_xf` : « dix puissance moins p H. »
-- 82 mots sans aucun geste, diapo 52 `td_n4_dosage`
+- 86 mots sans aucun geste, diapo 52 `td_n4_dosage`
 - 73 mots sans aucun geste, diapo 50 `td_n3_proportion`
 - 65 mots sans aucun geste, diapo 28 `td_e4_dynamique`
 - Tournure recopiée dans 13 diapos : « la concentration des ions H trois »
@@ -189,7 +189,7 @@
 - 80 mots sans aucun geste, diapo 4 `ab_r1b_eau_ph`
 - Tournure recopiée dans 18 diapos : « la concentration des ions H trois »
 - Tournure recopiée dans 18 diapos : « concentration des ions H trois O »
-- Tournure recopiée dans 17 diapos : « dix puissance moins deux mole par »
+- Tournure recopiée dans 18 diapos : « dix puissance moins deux mole par »
 
 ### phys_ch1_waves_exemple
 
@@ -199,7 +199,7 @@
 - Dit sans être écrit, diapo 13 `wx_r1b_elongation` : « y de M de t, égale y de S de t moins tau, يلا كانت l'onde non amortie. »
 - Dit sans être écrit, diapo 15 `wx_r2b_dates` : « le retard ديال M هو tau égale SM sur v. »
 - Dit sans être écrit, diapo 20 `wx_m1b_lecture` : « les millisecondes كنضربو ف dix puissance moins trois. »
-- Dit sans être écrit, diapo 24 `wx_n1_enonce` : « Ce montage est constitué d'un émetteur E et d'un récepteur R d'ondes sonores, distants de  »
+- Dit sans être écrit, diapo 21 `wx_m2_sonar` : « درتي الطريق deux fois. »
 - Tournure recopiée dans 7 diapos : « دابا غادي نقراو l'énoncé ديال الامتحان »
 - Tournure recopiée dans 7 diapos : « غادي نقراو l'énoncé ديال الامتحان الوطني »
 - Tournure recopiée dans 7 diapos : « نقراو l'énoncé ديال الامتحان الوطني deux »
@@ -216,7 +216,7 @@
 - Dit sans être écrit, diapo 13 `op_t5_convertir` : « micro، يعني dix puissance moins six: »
 - 74 mots sans aucun geste, diapo 13 `op_t5_convertir`
 - Tournure recopiée dans 5 diapos : « la relation: v égale lambda fois »
-- 8 réactions commencent par « شوف، الجواب الصحيح هو B، يعني »
+- 7 réactions commencent par « شوف، الجواب الصحيح هو B، يعني »
 - 6 réactions commencent par « شوف، الجواب الصحيح هو C، يعني »
 - 4 réactions commencent par « شوف، اللي قلتي فيه شي حاجة »
 
@@ -230,9 +230,9 @@
 - Dit sans être écrit, diapo 17 `ol_l4_petit_angle` : « teta égale zéro virgule zéro zéro six cinq radian، شحال كتساوي tangente teta؟ »
 - Dit sans être écrit, diapo 18 `ol_l5_egalite` : « teta égale lambda sur a. »
 - 62 mots sans aucun geste, diapo 45 `ol_n6_cuve`
-- Tournure recopiée dans 8 diapos : « fois dix puissance huit mètres par »
 - Tournure recopiée dans 7 diapos : « L égale deux lambda D sur »
 - Tournure recopiée dans 7 diapos : « égale deux lambda D sur a. »
+- Tournure recopiée dans 7 diapos : « fois dix puissance huit mètres par »
 - 34 réactions commencent par « ما تقلقش، راه غلطة كيديروها بزاف »
 - 28 réactions commencent par « ماشي مشكل، حنا هنا باش نتعلمو. »
 - 5 réactions commencent par « برافو عليك، هادا هو الجواب. شوف، »
@@ -246,6 +246,7 @@
 - Dit sans être écrit, diapo 25 `ra_f3_enonce` : « quatre virgule zéro zéro deux mille six cent trois u ; un u égale neuf cent trente et un v »
 - Dit sans être écrit, diapo 27 `ra_f2_systeme` : « إذن x égale quatre-vingt-deux plus deux y moins quatre-vingt-douze، يعني quatre-vingt-deux »
 - Dit sans être écrit, diapo 27 `ra_f2_systeme` : « x égale six. »
+- 78 mots sans aucun geste, diapo 73 `ra_x2d_2021N`
 - 76 mots sans aucun geste, diapo 36 `ra_l5_loi`
 - 70 mots sans aucun geste, diapo 60 `ra_c4b_rapport`
 - Tournure recopiée dans 8 diapos : « دابا غادي نقراو l'énoncé ديال الامتحان »
@@ -261,9 +262,9 @@
 - Dit sans être écrit, diapo 4 `en_p2_puissances` : « كل مرة كنضربو fois dix، l'exposant كيزيد un. »
 - Dit sans être écrit, diapo 5 `en_m2_einstein` : « E égale m fois c au carré. »
 - Dit sans être écrit, diapo 5 `en_m2_einstein` : « و c هي la célérité ديال الضو فالفراغ، trois fois dix puissance huit mètres par seconde. »
+- 90 mots sans aucun geste, diapo 33 `en_r5_soddy`
 - 80 mots sans aucun geste, diapo 10 `en_m4b_energie_masse`
 - 78 mots sans aucun geste, diapo 17 `en_l2_former`
-- 73 mots sans aucun geste, diapo 5 `en_m2_einstein`
 - Tournure recopiée dans 14 diapos : « neuf cent trente et un virgule »
 - Tournure recopiée dans 10 diapos : « égale neuf cent trente et un »
 - Tournure recopiée dans 9 diapos : « un u égale neuf cent trente »
@@ -277,12 +278,12 @@
 - Dit sans être écrit, diapo 12 `rc_c4_capacite` : « micro ماشي dix puissance moins neuf. »
 - Dit sans être écrit, diapo 12 `rc_c4_capacite` : « q égale C fois u C. »
 - Dit sans être écrit, diapo 15 `rc_c6_relation` : « عندنا i égale dé q sur dé t، و q égale C fois u C. »
-- 94 mots sans aucun geste, diapo 81 `rc_n1_2019`
+- 106 mots sans aucun geste, diapo 81 `rc_n1_2019`
+- 80 mots sans aucun geste, diapo 83 `rc_n2_2021R`
 - 65 mots sans aucun geste, diapo 21 `rc_m2_acquisition`
-- 64 mots sans aucun geste, diapo 36 `rc_s1_derivee`
-- Tournure recopiée dans 14 diapos : « dé u C sur dé t »
+- Tournure recopiée dans 15 diapos : « dé u C sur dé t »
 - Tournure recopiée dans 12 diapos : « C dé u C sur dé »
-- Tournure recopiée dans 11 diapos : « fois un moins exponentielle de moins »
+- Tournure recopiée dans 12 diapos : « fois un moins exponentielle de moins »
 
 ### phys_ch7_dipole_RL
 
@@ -295,9 +296,9 @@
 - Dit sans être écrit, diapo 13 `rl_b7_inductance` : « u b égale L dé i sur dé t. »
 - 81 mots sans aucun geste, diapo 43 `rl_s4_A`
 - 78 mots sans aucun geste, diapo 59 `rl_t2_descente`
-- 77 mots sans aucun geste, diapo 87 `rl_n2_2024N`
-- Tournure recopiée dans 13 diapos : « L dé i sur dé t، »
-- Tournure recopiée dans 12 diapos : « dé i sur dé t، plus »
+- 71 mots sans aucun geste, diapo 14 `rl_b8_reelle`
+- Tournure recopiée dans 14 diapos : « L dé i sur dé t، »
+- Tournure recopiée dans 13 diapos : « dé i sur dé t، plus »
 - Tournure recopiée dans 11 diapos : « bobine d'inductance L et de résistance »
 
 ### phys_ch8_circuit_RLC
@@ -349,7 +350,7 @@
 
 - Questions trop tôt : diapo 4 `ms_s2_secousse` (question)
 - Première question de bloc : après la diapo 4 (`ms_s1_b1`)
-- Dit sans être écrit, diapo 47 `ms_r1_reserve` : « يعني la dépense كبر من la réserve ب تقريبا dix-huit fois. »
+- Dit sans être écrit, diapo 47 `ms_r1_reserve` : « يعني la dépense كبر من la réserve ب environ dix-huit fois. »
 - 95 mots sans aucun geste, diapo 23 `ms_u2_fibre`
 - 74 mots sans aucun geste, diapo 2 `ms_o1_effort`
 - 71 mots sans aucun geste, diapo 17 `ms_f7_fatigue`

@@ -171,8 +171,8 @@ QUESTION : Résous ln(x − 2) ≤ ln(4 − x). OPTIONS : ['S = ]−∞ ; 3]', '
 VOIX (fr) : Cette équation contient ln x au carré, et ln x. On reconnaît le second degré. Première ligne : on pose grand X égale ln x. L'équation devient X carré moins X moins deux égale zéro. Le discriminant vaut neuf. Donc X égale moins un, ou X égale deux. Attention, on cherche x, pas X. On revient : ln x égale moins un, donc x égale un sur e. Et ln x égale deux, donc x égale e carré. Les deux sont positifs, on les garde.
 ÉCRAN : x > 0 ; on pose X = ln x : X² − X − 2 = 0. | Δ = 9 : X = −1 ou X = 2. | On revient à x : ln x = −1 ⇔ x = 1/e ; ln x = 2 ⇔ x = e². | S = {1/e ; e²}.
 
-### Diapo 38 `ln_q5` — Produit nul avec ln (national 2021)
-VOIX (fr) : National 2021 : 2x ln x − 2x = 0 sur ]0 ; +∞[. On factorise : 2x(ln x − 1) = 0. Produit nul : x = 0 ou ln x = 1, c'est-à-dire x = e. Sur l'axe, seuls les x strictement positifs sont permis. Trie toi-même. Question : quelles sont les solutions ?
+### Diapo 38 `ln_q5` — National 2021 N, problème : question 4-a, f(x) = 0 (produit nul avec ln)
+VOIX (fr) : National deux mille vingt et un, question quatre a : 2x ln x − 2x = 0 sur ]0 ; +∞[. On factorise : 2x(ln x − 1) = 0. Produit nul : x = 0 ou ln x = 1, c'est-à-dire x = e. Sur l'axe, seuls les x strictement positifs sont permis. Trie toi-même. Question : quelles sont les solutions ?
 ÉCRAN : On factorise : 2x(ln x − 1) = 0. | Produit nul : x = 0 ou ln x = 1 ⇔ x = 0 ou x = e. | 0 ∉ ]0 ; +∞[ : on le rejette. | S = {e}.
 QUESTION : Résous dans ]0 ; +∞[ : 2x ln x − 2x = 0. OPTIONS : ['S = {e}', 'S = {0 ; e}', 'S = {1}']
 EXERCICE : National 2017 : résous dans ]0 ; +∞[ : (1 − 2/x) ln x = 0. OPTIONS : ['S = {2}', 'S = {1 ; 2}', 'S = {1}']
@@ -242,9 +242,9 @@ EXERCICE : Sur ]2/3 ; +∞[, la dérivée de ln(3x − 2) est : OPTIONS : ['3/(3
 VOIX (fr) : Première ligne : (ln x)² est u² avec u = ln x ; (u²)' = 2u'u, donc ((ln x)²)' = 2 ln x / x. Deuxième ligne : x ln x est un produit : 1 × ln x + x × 1/x = ln x + 1.
 ÉCRAN : (ln x)² est u² avec u = ln x : (u²)' = 2u'u, donc ((ln x)²)' = 2 ln x/x. | x ln x est un produit : (x ln x)' = 1 × ln x + x × 1/x = ln x + 1.
 
-### Diapo 53 `ln_v2_b` — Au national 2019 : dériver terme par terme
-VOIX (fr) : La fonction du national deux mille dix-neuf : f de x égale x plus un demi, moins ln x, plus un demi de ln x au carré. À toi : dérive terme par terme, puis réduis au même dénominateur. Question : combien vaut f prime de x ?
-ÉCRAN : Exemple 2019 N : f(x) = x + ½ − ln x + ½(ln x)² sur ]0 ; +∞[. | À toi : dérive terme par terme, puis réduis au même dénominateur.
+### Diapo 53 `ln_v2_b` — National 2019 N, problème : question 3-b, dériver terme par terme
+VOIX (fr) : Question trois b du national deux mille dix-neuf. La fonction : f de x égale x plus un demi, moins ln x, plus un demi de ln x au carré. À toi : dérive terme par terme, puis réduis au même dénominateur. Question : combien vaut f prime de x ?
+ÉCRAN : 3-b (2019 N) : f(x) = x + ½ − ln x + ½(ln x)² sur ]0 ; +∞[. | À toi : dérive terme par terme, puis réduis au même dénominateur.
 QUESTION : 2019 N : f(x) = x + ½ − ln x + ½(ln x)² sur ]0 ; +∞[. Que vaut f′(x) ? OPTIONS : ['(x + 1 − ln x)/x', '(x − 1 + ln x)/x', '1 − 1/x + 2 ln x']
 
 ### Diapo 54 `ln_v3` — Le signe de f' : celui de ln x, de 1 − ln x
@@ -280,81 +280,81 @@ VOIX (fr) : Au national, le problème commence presque toujours par une partie u
 ### Diapo 60 `ln_enonce_2019n` — National 2019 N : l’énoncé, tel qu’à l’examen
 VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille dix-neuf, la session normale, tel qu'il est à l'examen. Problème, première partie. Soit f la fonction définie sur zéro, plus l’infini, par : f de x égale x plus un demi, moins ln x, plus un demi de ln x au carré. Et C sa courbe, dans un repère orthonormé. Trois a : montrer que x moins un, plus ln x, est négatif avant un, et positif après un. b : montrer que f prime de x, égale x moins un, plus ln x, sur x. c : dresser le tableau de variations de f. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 61 `ln_e3` — Le tableau de variations, puis le minimum
-VOIX (fr) : La fonction du national 2019. Le tableau est prêt, avec le signe de f′ : −, 0 en 1, +. Les flèches : f décroît jusqu'à 1, puis croît. En 1, il y a le minimum. À toi : calcule f de un. Rappelle-toi : ln un égale zéro. Question : combien vaut f de un ?
-ÉCRAN : f(x) = x + ½ − ln x + ½(ln x)² sur ]0 ; +∞[ (national 2019). | f′(x) a le signe de x − 1 + ln x : négatif sur ]0 ; 1[, nul en 1, positif après. | À toi : f(1) = ? (ln 1 = 0)
+### Diapo 61 `ln_e3` — National 2019 N, problème : question 3-c, le tableau de variations
+VOIX (fr) : Question trois c du national deux mille dix-neuf : le tableau de variations. Le tableau est prêt, avec le signe de f′ : −, 0 en 1, +. Les flèches : f décroît jusqu'à 1, puis croît. En 1, il y a le minimum. À toi : calcule f de un. Rappelle-toi : ln un égale zéro. Question : combien vaut f de un ?
+ÉCRAN : f(x) = x + ½ − ln x + ½(ln x)² sur ]0 ; +∞[ (national 2019 N). | 3-a, 3-b : f′(x) = (x − 1 + ln x)/x a le signe de x − 1 + ln x : négatif sur ]0 ; 1[, nul en 1, positif après. | 3-c, à toi : f(1) = ? (ln 1 = 0)
 QUESTION : f(x) = x + ½ − ln x + ½(ln x)² : que vaut le minimum f(1) ? OPTIONS : ['3/2', '1/2', '1']
 
 ### Diapo 62 `ln_enonce_2019n_p2` — National 2019 N : la suite de l’énoncé
 VOIX (fr) : Même problème du national deux mille dix-neuf : la fonction f, avec f de x égale x plus un demi, moins ln x, plus un demi de ln x au carré. Voici d'autres questions de l'énoncé. Un : calculer la limite de f, en zéro à droite, puis interpréter le résultat. Deux a : vérifier que f de x égale, x plus un demi, plus, un demi ln x moins un, fois ln x. b : en déduire la limite en plus l’infini. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 63 `ln_e3_b` — La limite en 0 à droite et son interprétation (2019, 1)
-VOIX (fr) : Revenons au tableau de f : elle décroît jusqu'au minimum trois sur deux, puis elle croît. Il manque les limites aux bornes. D'abord en zéro à droite. Regarde les termes : moins ln x, et un demi ln x au carré. Où vont-ils quand x s'approche de zéro ? Question : que vaut la limite de f de x en zéro à droite, et que veut-elle dire sur la courbe ?
-ÉCRAN : f(x) = x + ½ − ln x + ½(ln x)² ; le tableau : minimum f(1) = 3/2. | En 0⁺ : que deviennent −ln x et ½(ln x)² ? | À toi : la limite, puis la phrase d'interprétation.
+### Diapo 63 `ln_e3_b` — National 2019 N, problème : question 1, la limite en 0 à droite et son interprétation
+VOIX (fr) : Revenons au tableau de f : elle décroît jusqu'au minimum trois sur deux, puis elle croît. Il manque les limites aux bornes. Question un : d'abord en zéro à droite. Regarde les termes : moins ln x, et un demi ln x au carré. Où vont-ils quand x s'approche de zéro ? Question : que vaut la limite de f de x en zéro à droite, et que veut-elle dire sur la courbe ?
+ÉCRAN : f(x) = x + ½ − ln x + ½(ln x)² ; le tableau : minimum f(1) = 3/2. | Question 1 : en 0⁺, que deviennent −ln x et ½(ln x)² ? | À toi : la limite, puis la phrase d'interprétation.
 QUESTION : 2019 N, question 1 : lim_{x→0⁺} f(x) = ? Interprétation géométrique ? OPTIONS : ["−∞ : la droite d'équation x = 0 est asymptote verticale à (C)", "+∞ : la droite d'équation x = 0 est asymptote verticale à (C)", "+∞ : la droite d'équation y = 0 est asymptote horizontale à (C)"]
 
-### Diapo 64 `ln_e3_c` — La limite en +∞ : l'écriture donnée (2019, 2.b)
-VOIX (fr) : En zéro, on a trouvé plus l'infini, et la droite x égale zéro asymptote verticale. Maintenant en plus l'infini. Ici on a une forme indéterminée : moins ln x tend vers moins l'infini, et un demi ln x au carré vers plus l'infini. Le sujet donne une autre écriture : f de x égale x plus un demi, plus, un demi ln x moins un, fois ln x. Regarde où va chaque facteur. Question : que vaut la limite de f de x en plus l'infini ?
-ÉCRAN : En +∞ : −ln x → −∞ et ½(ln x)² → +∞ : forme indéterminée. | Le sujet donne : f(x) = x + ½ + (½ ln x − 1) ln x. | À toi : lim_{x→+∞} f(x) = ?
+### Diapo 64 `ln_e3_c` — National 2019 N, problème : question 2-b, la limite en +∞ par l'écriture donnée
+VOIX (fr) : En zéro, on a trouvé plus l'infini, et la droite x égale zéro asymptote verticale. Question deux b : maintenant en plus l'infini. Ici on a une forme indéterminée : moins ln x tend vers moins l'infini, et un demi ln x au carré vers plus l'infini. Le sujet donne une autre écriture : f de x égale x plus un demi, plus, un demi ln x moins un, fois ln x. Regarde où va chaque facteur. Question : que vaut la limite de f de x en plus l'infini ?
+ÉCRAN : En +∞ : −ln x → −∞ et ½(ln x)² → +∞ : forme indéterminée. | 2-a donne : f(x) = x + ½ + (½ ln x − 1) ln x. | 2-b, à toi : lim_{x→+∞} f(x) = ?
 QUESTION : 2019 N, question 2.b : f(x) = x + ½ + (½ ln x − 1) ln x. lim_{x→+∞} f(x) = ? OPTIONS : ['−∞', '+∞', 'on ne peut pas conclure : forme indéterminée']
 
 ### Diapo 65 `ln_enonce_2019n_p3` — National 2019 N : la suite de l’énoncé
 VOIX (fr) : Même problème du national deux mille dix-neuf : la fonction f, et sa courbe C. Voici la suite de l'énoncé. Quatre a : montrer que f seconde de x, égale deux moins ln x, sur x au carré. b : en déduire que C admet un point d’inflexion. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 66 `ln_e3_d` — Le point d'inflexion (2019, 4.b)
-VOIX (fr) : Question quatre du sujet : on nous donne f seconde de x égale deux moins ln x, sur x au carré. Rappel : un point d'inflexion, c'est là où f seconde s'annule en changeant de signe. x au carré est positif, donc f seconde a le signe de deux moins ln x. Deux moins ln x s'annule quand ln x égale deux, c'est-à-dire x égale e au carré. Avant e au carré, positive ; après e au carré, négative. Donc f seconde s'annule en e au carré en changeant de signe. Il reste les coordonnées. À toi : calcule f de e au carré. Rappelle-toi : ln de e au carré égale deux. Question : quelles sont les coordonnées du point d'inflexion ?
-ÉCRAN : Donné : f″(x) = (2 − ln x)/x² sur ]0 ; +∞[. | x² > 0 : f″(x) a le signe de 2 − ln x ; il s'annule en e² en changeant de signe. | À toi : les coordonnées du point d'inflexion (ln(e²) = 2).
+### Diapo 66 `ln_e3_d` — National 2019 N, problème : question 4-b, le point d'inflexion
+VOIX (fr) : Question quatre b du sujet : la question quatre a donne f seconde de x égale deux moins ln x, sur x au carré. Rappel : un point d'inflexion, c'est là où f seconde s'annule en changeant de signe. x au carré est positif, donc f seconde a le signe de deux moins ln x. Deux moins ln x s'annule quand ln x égale deux, c'est-à-dire x égale e au carré. Avant e au carré, positive ; après e au carré, négative. Donc f seconde s'annule en e au carré en changeant de signe. Il reste les coordonnées. À toi : calcule f de e au carré. Rappelle-toi : ln de e au carré égale deux. Question : quelles sont les coordonnées du point d'inflexion ?
+ÉCRAN : 4-a : f″(x) = (2 − ln x)/x² sur ]0 ; +∞[. | x² > 0 : f″(x) a le signe de 2 − ln x ; il s'annule en e² en changeant de signe. | 4-b, à toi : les coordonnées du point d'inflexion (ln(e²) = 2).
 QUESTION : 2019 N, question 4.b : f″(x) = (2 − ln x)/x². Le point d'inflexion de (C) est : OPTIONS : ['I(2 ; f(2))', 'I(e² ; e² + ½)', 'I(e² ; e² − 3/2)']
 
 ### Diapo 67 `ln_enonce_2019n_p4` — National 2019 N : la suite de l’énoncé
 VOIX (fr) : Même problème du national deux mille dix-neuf : la fonction f, sa courbe C, et la droite delta, y égale x. Voici la suite de l'énoncé. Cinq a : montrer que f de x moins x, égale un demi, de ln x moins un au carré, et déduire la position de C et de delta. b : construire delta et C, dans le même repère. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 68 `ln_e4` — Position par rapport à y = x : le signe de f(x) − x
-VOIX (fr) : Toujours la fonction de deux mille dix-neuf. Voici le repère, et l'asymptote x égale zéro, en pointillés. On trace la droite delta, y égale x. Pour la position, on étudie le signe de f de x moins x. À toi : calcule f de x moins x, et écris-le comme un carré. Question : que vaut f de x moins x ?
-ÉCRAN : Position de (C) par rapport à (Δ) : y = x : on étudie le signe de f(x) − x. | À toi : f(x) − x = ½ − ln x + ½(ln x)², à écrire comme un carré.
+### Diapo 68 `ln_e4` — National 2019 N, problème : question 5-a, le signe de f(x) − x
+VOIX (fr) : Question cinq a, toujours la fonction de deux mille dix-neuf. Voici le repère, et l'asymptote x égale zéro, en pointillés. On trace la droite delta, y égale x. Pour la position, on étudie le signe de f de x moins x. À toi : calcule f de x moins x, et écris-le comme un carré. Question : que vaut f de x moins x ?
+ÉCRAN : 5-a : position de (C) par rapport à (Δ) : y = x : on étudie le signe de f(x) − x. | À toi : f(x) − x = ½ − ln x + ½(ln x)², à écrire comme un carré.
 QUESTION : f(x) = x + ½ − ln x + ½(ln x)² : f(x) − x est égal à : OPTIONS : ['½(ln x + 1)²', '½(ln x − 1)²', '(ln x − 1)²']
 
-### Diapo 69 `ln_e4_b` — La position par rapport à y = x (2019, 5.a)
-VOIX (fr) : On a trouvé : f de x moins x égale un demi, fois ln x moins un, au carré. Maintenant la position de la courbe par rapport à la droite delta. Rappelle-toi : la position vient du signe de f de x moins x. Un carré, quel est toujours son signe ? Et quand est-il nul ? Question : quelle est la position de la courbe par rapport à delta ?
-ÉCRAN : f(x) − x = ½(ln x − 1)². | À toi : le signe de f(x) − x donne la position ; quand est-il nul ?
+### Diapo 69 `ln_e4_b` — National 2019 N, problème : question 5-a, la position par rapport à (Δ)
+VOIX (fr) : Question cinq a, la suite. On a trouvé : f de x moins x égale un demi, fois ln x moins un, au carré. Maintenant la position de la courbe par rapport à la droite delta. Rappelle-toi : la position vient du signe de f de x moins x. Un carré, quel est toujours son signe ? Et quand est-il nul ? Question : quelle est la position de la courbe par rapport à delta ?
+ÉCRAN : 5-a : f(x) − x = ½(ln x − 1)². | À toi : le signe de f(x) − x donne la position ; quand est-il nul ?
 QUESTION : 2019 N, question 5.a : f(x) − x = ½(ln x − 1)². Position de (C) par rapport à (Δ) : y = x ? OPTIONS : ['(C) est au-dessous de (Δ) sur ]0 ; +∞[', "(C) est au-dessus de (Δ) ; elles se coupent au point d'abscisse 1", '(C) est au-dessus de (Δ) ; elles se rencontrent au point A(e ; e)']
 
-### Diapo 70 `ln_e4_c` — Construire (C) pas à pas : ce qu'on place d'abord (2019, 5.b)
-VOIX (fr) : Dernière question de cette partie : construire la courbe. On ne trace pas la courbe tout de suite : on place d'abord tout ce qu'on sait. Un : l'asymptote x égale zéro, en pointillés. Deux : la droite delta, y égale x. Trois : le minimum, un, trois sur deux, avec une tangente horizontale, car f prime de un égale zéro. Quatre : le point e, e, où la courbe rencontre delta. À toi : combien vaut f prime de e ? Et quelle est la tangente en ce point ? Question : quelle est la tangente à la courbe au point e, e ?
-ÉCRAN : ① l'asymptote x = 0 ; ② (Δ) : y = x ; | ③ le minimum (1 ; 3/2), tangente horizontale ; ④ le point A(e ; e). | À toi : la tangente à (C) en A(e ; e) ?
+### Diapo 70 `ln_e4_c` — National 2019 N, problème : question 5-b, construire (C) : ce qu'on place d'abord
+VOIX (fr) : Question cinq b : construire la droite delta et la courbe. On ne trace pas la courbe tout de suite : on place d'abord tout ce qu'on sait. Un : l'asymptote x égale zéro, en pointillés. Deux : la droite delta, y égale x. Trois : le minimum, un, trois sur deux, avec une tangente horizontale, car f prime de un égale zéro. Quatre : le point e, e, où la courbe rencontre delta. À toi : combien vaut f prime de e ? Et quelle est la tangente en ce point ? Question : quelle est la tangente à la courbe au point e, e ?
+ÉCRAN : 5-b : ① l'asymptote x = 0 ; ② (Δ) : y = x ; | ③ le minimum (1 ; 3/2), tangente horizontale ; ④ le point A(e ; e). | À toi : la tangente à (C) en A(e ; e) ?
 QUESTION : 2019 N : f′(x) = (x − 1 + ln x)/x et f(e) = e. La tangente à (C) au point A(e ; e) est : OPTIONS : ['la droite horizontale y = e', 'la droite (Δ) : y = x', 'la droite y = x − 1']
 
-### Diapo 71 `ln_e4_d` — Construire (C) : l'inflexion, la branche, puis la courbe (2019, 5.b)
-VOIX (fr) : Cinq : delta est la tangente au point e, e. Six : le point d'inflexion I, e au carré, e au carré plus un demi, environ sept virgule quatre, sept virgule neuf. Sept : en plus l'infini, la courbe a une branche parabolique de direction delta, c'est ce que montre le sujet à la question deux d. Maintenant seulement, on trace la courbe : elle descend d'en haut près de l'asymptote, arrive au minimum, remonte au-dessus de delta, la touche en e, e, passe par I, et monte avec delta. Tout ce qu'on a placé, la courbe le respecte.
-ÉCRAN : ⑤ (Δ) est tangente à (C) en A(e ; e). | ⑥ I(e² ; e² + ½) ≈ (7,4 ; 7,9) : point d'inflexion. | ⑦ en +∞ : branche parabolique de direction (Δ) ; puis on trace (C).
+### Diapo 71 `ln_e4_d` — National 2019 N, problème : question 5-b, l'inflexion, la branche, puis la courbe
+VOIX (fr) : Question cinq b, la suite. Cinq : delta est la tangente au point e, e. Six : le point d'inflexion I, e au carré, e au carré plus un demi, environ sept virgule quatre, sept virgule neuf. Sept : en plus l'infini, la courbe a une branche parabolique de direction delta, c'est ce que montre le sujet à la question deux d. Maintenant seulement, on trace la courbe : elle descend d'en haut près de l'asymptote, arrive au minimum, remonte au-dessus de delta, la touche en e, e, passe par I, et monte avec delta. Tout ce qu'on a placé, la courbe le respecte.
+ÉCRAN : 5-b : ⑤ (Δ) est tangente à (C) en A(e ; e). | ⑥ I(e² ; e² + ½) ≈ (7,4 ; 7,9) : point d'inflexion (4-b). | ⑦ en +∞ : branche parabolique de direction (Δ) (2-d) ; puis on trace (C).
 
 ### Diapo 72 `ln_enonce_2021n` — National 2021 N : l’énoncé, tel qu’à l’examen
 VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt et un, la session normale, tel qu'il est à l'examen. Problème, neuf points. Soit f la fonction définie sur zéro, plus l’infini, par : f de zéro égale zéro, et f de x égale deux x ln x, moins deux x, si x est positif. Et C sa courbe, dans un repère orthonormé. Trois b : calculer f prime de x. c : dresser le tableau de variations de f. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 73 `ln_e5` — Un problème du national : f et sa dérivée
-VOIX (fr) : Un problème du national 2021, pas à pas. f(x) = 2x ln x − 2x et f(0) = 0. Le repère. D'abord le point O : f est continue à droite en 0 et la courbe part avec une demi-tangente verticale. L'étape suivante est à toi : la dérivée ; attention, 2x ln x est un produit. Question : calcule f′(x).
-ÉCRAN : f(x) = 2x ln x − 2x sur ]0 ; +∞[ et f(0) = 0 (national 2021). | En O : continuité à droite, demi-tangente verticale. | Puis la dérivée : 2x ln x est un produit.
+### Diapo 73 `ln_e5` — National 2021 N, problème : questions 1 et 3-a, le point O
+VOIX (fr) : Un problème du national 2021, pas à pas. f(x) = 2x ln x − 2x et f(0) = 0. Le repère. D'abord le point O. Question un : f est continue à droite en 0. Question trois a : la courbe part avec une demi-tangente verticale. Question trois b, à toi : la dérivée ; attention, 2x ln x est un produit. Question : calcule f′(x).
+ÉCRAN : f(x) = 2x ln x − 2x sur ]0 ; +∞[ et f(0) = 0 (national 2021). | Question 1 et 3-a : en O, continuité à droite, demi-tangente verticale. | 3-b : la dérivée ; 2x ln x est un produit.
 QUESTION : f(x) = 2x ln x − 2x sur ]0 ; +∞[. Que vaut f′(x) ? OPTIONS : ['2 ln x − 2', '2 ln x', '2/x − 2']
 
-### Diapo 74 `ln_e5_b` — Le signe de f′ et les variations (2021, 3.c)
-VOIX (fr) : La correction : la dérivée de deux x ln x, c'est deux ln x plus deux x fois un sur x, donc deux ln x plus deux. Moins deux : il reste f prime de x égale deux ln x. Maintenant le tableau de variations. Le signe de f prime, c'est le signe de ln x, et on le connaît par la courbe de ln. À toi : comment varie f ? Question : quelles sont les variations de f ?
-ÉCRAN : f′(x) = (2x ln x)′ − 2 = 2 ln x + 2x × 1/x − 2 = 2 ln x. | f′(x) a le signe de ln x. | À toi : les variations de f sur ]0 ; +∞[.
+### Diapo 74 `ln_e5_b` — National 2021 N, problème : questions 3-b et 3-c, f′ et les variations
+VOIX (fr) : Question trois b, la correction : la dérivée de deux x ln x, c'est deux ln x plus deux x fois un sur x, donc deux ln x plus deux. Moins deux : il reste f prime de x égale deux ln x. Question trois c : le tableau de variations. Le signe de f prime, c'est le signe de ln x, et on le connaît par la courbe de ln. À toi : comment varie f ? Question : quelles sont les variations de f ?
+ÉCRAN : 3-b : f′(x) = (2x ln x)′ − 2 = 2 ln x + 2x × 1/x − 2 = 2 ln x. | f′(x) a le signe de ln x. | 3-c, à toi : les variations de f sur [0 ; +∞[.
 QUESTION : 2021 N, question 3.c : f′(x) = 2 ln x sur ]0 ; +∞[. Alors : OPTIONS : ['f est croissante sur ]0 ; 1] et décroissante sur [1 ; +∞[ ; maximum f(1) = −2', 'f est décroissante sur ]0 ; 1] et croissante sur [1 ; +∞[ ; minimum f(1) = −2', "f est croissante sur ]0 ; +∞[ car 2 ln x > 0 ; pas d'extremum"]
 
 ### Diapo 75 `ln_enonce_2021n_p2` — National 2021 N : la suite de l’énoncé
 VOIX (fr) : Même problème du national deux mille vingt et un : la fonction f, avec f de x égale deux x ln x, moins deux x. Voici la suite de l'énoncé. Quatre a : résoudre les équations, f de x égale zéro, et f de x égale x. Maintenant, comprenons cette question.
 
-### Diapo 76 `ln_e5_q` — f(x) = 0 et f(x) = x : des équations avec ln (2021, 4.a)
+### Diapo 76 `ln_e5_q` — National 2021 N, problème : question 4-a, f(x) = 0 et f(x) = x
 VOIX (fr) : Question quatre a : résoudre f de x égale zéro, et f de x égale x. La première, on l'a résolue dans les équations : deux x, fois ln x moins un, égale zéro, donc x égale e. Maintenant f de x égale x, avec x strictement positif. On met tout du même côté : deux x ln x moins trois x égale zéro. On factorise par x : x, fois deux ln x moins trois, égale zéro. À toi : termine, et fais attention au domaine. Question : quelles sont les solutions de f de x égale x ?
-ÉCRAN : f(x) = 0 ⇔ 2x(ln x − 1) = 0 ⇔ x = e (déjà résolue). | f(x) = x ⇔ 2x ln x − 3x = 0 ⇔ x(2 ln x − 3) = 0. | À toi : termine, sans oublier x ∈ ]0 ; +∞[.
+ÉCRAN : 4-a : f(x) = 0 ⇔ 2x(ln x − 1) = 0 ⇔ x = e (déjà résolue). | f(x) = x ⇔ 2x ln x − 3x = 0 ⇔ x(2 ln x − 3) = 0. | À toi : termine, sans oublier x ∈ ]0 ; +∞[.
 QUESTION : 2021 N, question 4.a : résous f(x) = x dans ]0 ; +∞[. OPTIONS : ['S = {0 ; e^(3/2)}', 'S = {e^(2/3)}', 'S = {e^(3/2)}']
 
 ### Diapo 77 `ln_enonce_2021n_p3` — National 2021 N : la suite de l’énoncé
 VOIX (fr) : Même problème du national deux mille vingt et un : la fonction f, et sa courbe C. Voici la suite de l'énoncé. Quatre b : construire la courbe C, on prend e puissance trois demis, égale quatre virgule cinq. Six a : déterminer le minimum de f. b : en déduire que ln x, est plus grand que, x moins un, sur x. Maintenant, comprenons l'exercice, question par question.
 
-### Diapo 78 `ln_e5_c` — Construire (C) pas à pas, puis l'inégalité (2021, 4.b et 6)
-VOIX (fr) : Maintenant construire la courbe, pas à pas. Un : le point O, avec une demi-tangente verticale. Deux : le minimum, un, moins deux, avec une tangente horizontale. Trois : f de e égale zéro, la courbe coupe l'axe en e. Quatre : la droite y égale x, et le point e puissance trois sur deux, environ quatre virgule cinq. Cinq : f de x sur x égale deux ln x moins deux, qui tend vers plus l'infini : branche parabolique de direction l'axe des ordonnées. Maintenant seulement la courbe : elle part de O, descend jusqu'au minimum, remonte, coupe l'axe en e, et monte de plus en plus vite. Dernière question : moins deux est le minimum de f. À toi : comment en tirer une inégalité avec ln x ? Question : quelle est la bonne inégalité ?
-ÉCRAN : ① O : demi-tangente verticale ; ② minimum (1 ; −2) ; ③ (e ; 0) ; | ④ (C) coupe y = x en e^(3/2) ≈ 4,5 ; ⑤ branche parabolique de direction (Oy). | À toi : f(1) = −2 est le minimum de f ; quelle inégalité avec ln x en déduire ?
+### Diapo 78 `ln_e5_c` — National 2021 N, problème : question 4-b, construire (C), puis questions 6-a et 6-b
+VOIX (fr) : Question quatre b : construire la courbe, pas à pas. Un : le point O, avec une demi-tangente verticale. Deux : le minimum, un, moins deux, avec une tangente horizontale. Trois : f de e égale zéro, la courbe coupe l'axe en e. Quatre : la droite y égale x, et le point e puissance trois sur deux, environ quatre virgule cinq. Cinq : f de x sur x égale deux ln x moins deux, qui tend vers plus l'infini : branche parabolique de direction l'axe des ordonnées. Maintenant seulement la courbe : elle part de O, descend jusqu'au minimum, remonte, coupe l'axe en e, et monte de plus en plus vite. Questions six a et six b : moins deux est le minimum de f. À toi : comment en tirer une inégalité avec ln x ? Question : quelle est la bonne inégalité ?
+ÉCRAN : 4-b : ① O : demi-tangente verticale ; ② minimum (1 ; −2) ; ③ (e ; 0) ; | ④ (C) coupe y = x en e^(3/2) ≈ 4,5 ; ⑤ branche parabolique de direction (Oy). | 6-a, 6-b : f(1) = −2 est le minimum de f ; quelle inégalité avec ln x en déduire ?
 QUESTION : Avec f′(x) = 2 ln x et f(1) = −2 minimum, on déduit pour x > 0 : OPTIONS : ['ln x ≥ (x − 1)/x', 'ln x ≤ (x − 1)/x', 'ln x ≥ x − 1']
 
 ### Diapo 79 `ln_e6` — Étudier ln(u(x)) : le domaine et les limites aux bornes

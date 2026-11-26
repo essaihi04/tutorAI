@@ -13,6 +13,10 @@ différente), tuteur humain et pas robotique. 26 cours audités (23 du 2ᵉ Bac 
 - `regles-52-56-a-ajouter.md` — texte des règles 52 à 56, ajoutées au skill professeur le 26/11/2026.
 - `banque-de-phrases.md` — annonces d'attention, redites, rappels, ouvertures, réactions variées.
 
+Version auditée : les cours servis d'`origin/main` au 26/11/2026 (voix v27-v29) pour `mesures.*` et `textes/`.
+Les lectures `ordre-des-notions/` ont été faites sur une copie locale plus ancienne (voix v17-18) : mêmes diapos,
+mêmes questions, seuls les nombres de la voix étaient écrits autrement ; les défauts restent valables.
+
 ## Ce qui ressort
 
 1. **Ordre des notions** : environ 94 défauts forts et 280 moyens sur 26 cours. Les plus fréquents :
@@ -26,10 +30,10 @@ différente), tuteur humain et pas robotique. 26 cours audités (23 du 2ᵉ Bac 
 3. **Dit = écrit** : beaucoup de formules dites sans être écrites à leur mot, surtout en physique-chimie et en maths
    (RLC, RL, acides-bases) ; à confirmer à l'œil sur les diapos listées (exemples sûrs : `op_t5_convertir` sans
    aucun geste, `lc_rp2_bobine` qui n'écrit la formule qu'à la relecture).
-4. **Annonce d'attention** : 0 dans 25 cours sur 26. « رد البال » existe (182 fois) mais signale un piège après coup.
+4. **Annonce d'attention** : 0 dans 25 cours sur 26. « رد البال » existe (173 fois) mais signale un piège après coup.
 5. **Redites** : entre 0 % et 55 % des notions clés ont une deuxième façon de les dire dans leur diapo (Tronc Commun : presque 0).
-6. **Robotique** : 413 voix sur 1 696 commencent par « دابا » (jusqu'à 48 % dans un cours) ; 18 diapos de RLC
-   commencent par « نفس التمرين ديال الامتحان الوطني » ; 303 réactions fausses commencent par « شوف، الجواب »,
+6. **Robotique** : 409 voix sur 1 696 commencent par « دابا » (jusqu'à 48 % dans un cours) ; 18 diapos de RLC
+   commencent par « نفس التمرين ديال الامتحان الوطني » ; 305 réactions fausses commencent par « شوف، الجواب »,
    155 justes par « مزيان، الجواب ».
 
 ## Erreurs de contenu trouvées en passant
