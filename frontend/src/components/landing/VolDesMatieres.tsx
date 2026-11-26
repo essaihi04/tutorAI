@@ -25,7 +25,7 @@ const MONDES = [
   { z: -50, couleur: '#facc15', nom: 'Les maths', phrase: 'Les courbes prennent vie : limites, dérivées, suites, complexes.', signes: ['f ′(x)', '∫', 'lim', 'uₙ', 'ln x', 'π', 'z = a + ib'] },
   { z: -150, couleur: '#22d3ee', nom: 'La physique', phrase: 'Le laser traverse la fente, le prisme ouvre les couleurs, le condensateur se charge, le noyau se désintègre.', signes: ['λ', 'τ = RC', 'v = λ·f', 'θ = λ/a', 'E = mc²', 'u_C', 'N = N₀e^(−λt)'] },
   { z: -300, couleur: '#fb923c', nom: 'La chimie', phrase: 'Les béchers changent de couleur, la burette goutte, le pH-mètre lit : vitesse, équilibre, dosage.', signes: ['pH', 'Qr', 'K', 'H₃O⁺', 'pKa', 'x_max', 't½'] },
-  { z: -415, couleur: '#4ade80', nom: 'Les SVT', phrase: 'Tu entres dans la cellule, la mitochondrie, l\'ADN… puis dans le muscle, jusqu\'au sarcomère.', signes: ['ADN', 'ATP', 'ARNm', 'codon', 'Ca²⁺', 'glucose'] },
+  { z: -415, couleur: '#4ade80', nom: 'Les SVT', phrase: 'Tu entres dans la cellule, tu vois l\'ADN… puis tu plonges dans le muscle, jusqu\'au sarcomère.', signes: ['ADN', 'ATP', 'ARNm', 'codon', 'Ca²⁺', 'glucose'] },
 ] as const;
 
 /** Le zoom dans le muscle : chaque étape est un objet plus fin, révélé quand on traverse le précédent. */
@@ -83,14 +83,19 @@ function toile(l: number, h: number, dessin: (c: CanvasRenderingContext2D) => vo
 
 /** Un mot écrit à la craie, qui flotte (signes des matières, étiquettes des objets). */
 function ecrit(texte: string, couleur: string, taille = 1, lueur = 18) {
-  const texture = toile(512, 160, c => {
-    c.font = "92px 'Patrick Hand','Caveat','Segoe Print',cursive";
+  // la toile prend la largeur du texte : une étiquette longue n'est jamais coupée
+  const police = "92px 'Patrick Hand','Caveat','Segoe Print',cursive";
+  const mesure = document.createElement('canvas').getContext('2d')!;
+  mesure.font = police;
+  const l = Math.max(512, Math.ceil(mesure.measureText(texte).width + 60));
+  const texture = toile(l, 160, c => {
+    c.font = police;
     c.textAlign = 'center'; c.textBaseline = 'middle';
     c.shadowColor = couleur; c.shadowBlur = lueur; c.fillStyle = couleur;
-    c.fillText(texte, 256, 84);
+    c.fillText(texte, l / 2, 84);
   });
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, opacity: .92 }));
-  s.scale.set(9 * taille, 2.8 * taille, 1);
+  s.scale.set(9 * taille * l / 512, 2.8 * taille, 1);
   return s;
 }
 
@@ -123,7 +128,11 @@ export default function VolDesMatieres() {
     const jeter: { dispose(): void }[] = [];
     const garde = <T extends { dispose(): void }>(x: T) => { jeter.push(x); return x; };
     /** Les animations reçoivent le temps et la profondeur de la caméra. */
-    const anime: ((t: number, cz: number) => void)[] = [];
+    // Chaque animation est rangée dans la zone (profondeur) de son objet : on n'anime que ce qui est près de la caméra
+    // (devant elle jusqu'à 120 unités, derrière jusqu'à 20). `zone = null` : toujours animé.
+    let zone: number | null = null;
+    const animations: { f: (t: number, cz: number) => void; z: number | null }[] = [];
+    const anime = { push: (f: (t: number, cz: number) => void) => { animations.push({ f, z: zone }); } };
     const fil = (couleur: string, opacity = .9) => garde(new THREE.LineBasicMaterial({ color: couleur, transparent: true, opacity }));
     const mat = (couleur: string, opacity = 1, lueur = .45) => garde(new THREE.MeshStandardMaterial({
       color: couleur, emissive: couleur, emissiveIntensity: lueur, roughness: .35, metalness: .05, transparent: opacity < 1, opacity,
@@ -143,6 +152,14 @@ export default function VolDesMatieres() {
       l.quaternion.setFromUnitVectors(V(0, 1, 0), B.clone().sub(A).normalize());
       return l;
     };
+    /** Beaucoup d'objets identiques en un seul appel de dessin (les billes d'un noyau, les bases de l'ADN…). */
+    const instances = (parent: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material, mats: THREE.Matrix4[]) => {
+      if (!mats.length) return;
+      const im = new THREE.InstancedMesh(g, m, mats.length);
+      mats.forEach((x, k) => im.setMatrixAt(k, x));
+      im.computeBoundingSphere(); parent.add(im);
+    };
+    const place = (x: number, y: number, z: number, r: number) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion(), V(r, r, r));
     const etiquette = (parent: THREE.Object3D, texte: string, couleur: string, x: number, y: number, z = 0, taille = .55) => {
       const s = ecrit(texte, couleur, taille, 10); s.position.set(x, y, z);
       jeter.push(s.material.map!, s.material); parent.add(s); return s;
@@ -165,6 +182,7 @@ export default function VolDesMatieres() {
     }
     // ── Les signes de chaque matière, autour du couloir de vol ──
     for (const monde of MONDES) {
+      zone = monde.z;
       monde.signes.forEach((txt, k) => {
         const s = ecrit(txt, monde.couleur);
         const cote = k % 2 ? 1 : -1;
@@ -175,6 +193,7 @@ export default function VolDesMatieres() {
       });
     }
 
+    zone = -80;
     // ════════ MATHS ════════
     {
       const g = garde(new THREE.PlaneGeometry(70, 70, 36, 36));
@@ -224,13 +243,16 @@ export default function VolDesMatieres() {
     }
 
     // ════════ PHYSIQUE ════════
+    zone = -150;
     // L'atome : noyau de protons (roses) et de neutrons (gris), électrons bleu ciel
     {
       const atome = new THREE.Group(); atome.position.set(-14, 4, -150); atome.scale.setScalar(1.2);
+      const pA: THREE.Matrix4[] = [], nA: THREE.Matrix4[] = [];
       for (let k = 0; k < 12; k++) {
         const d = V(hasard(-1, 1), hasard(-1, 1), hasard(-1, 1)).normalize().multiplyScalar(k ? hasard(.5, 1.1) : 0);
-        atome.add(bille(k % 2 ? C.neutron : C.proton, .62, d.x, d.y, d.z));
+        (k % 2 ? nA : pA).push(place(d.x, d.y, d.z, .62));
       }
+      instances(atome, gBille, mat(C.proton), pA); instances(atome, gBille, mat(C.neutron), nA);
       const gOrbite = garde(new THREE.TorusGeometry(6, .045, 8, 90));
       [0, 1, 2].forEach(k => {
         const plan = new THREE.Group(); plan.rotation.set(k * 1.05, k * .7, 0);
@@ -242,6 +264,7 @@ export default function VolDesMatieres() {
       anime.push(t => { atome.rotation.y = t * .25; });
       scene.add(atome);
     }
+    zone = -172;
     // La cuve à ondes : une pointe frappe l'eau, les rides s'éloignent
     {
       const g = garde(new THREE.CircleGeometry(15, 80, 0, Math.PI * 2));
@@ -259,6 +282,7 @@ export default function VolDesMatieres() {
       scene.add(eau, pointe);
       const e = etiquette(scene, 'cuve à ondes', '#22d3ee', 4, -4.2, -172, .6); flotte(e, .2);
     }
+    zone = -196;
     // Le banc de diffraction : laser → fente → écran (taches de diffraction)
     {
       const banc = new THREE.Group(); banc.position.set(12, -1.5, -196);
@@ -292,6 +316,7 @@ export default function VolDesMatieres() {
       anime.push(t => { (cone.material as THREE.MeshBasicMaterial).opacity = .13 + Math.sin(t * 3) * .03; });
       scene.add(banc);
     }
+    zone = -222;
     // Le prisme : la lumière blanche s'ouvre en couleurs, le violet le plus dévié
     {
       const pr = new THREE.Group(); pr.position.set(-14, 3, -222);
@@ -309,6 +334,7 @@ export default function VolDesMatieres() {
       anime.push(t => { rayons.forEach((r, k) => { (r.material as THREE.MeshStandardMaterial).opacity = .75 + Math.sin(t * 2 + k) * .2; }); });
       scene.add(pr);
     }
+    zone = -248;
     // Le circuit RC : générateur, résistor, condensateur ; les électrons circulent, la courbe u_C monte
     {
       const rc = new THREE.Group(); rc.position.set(13, 1, -248); rc.rotation.y = -.35;
@@ -355,13 +381,16 @@ export default function VolDesMatieres() {
       });
       scene.add(rc);
     }
+    zone = -272;
     // Le noyau radioactif : il émet une particule α (2 protons + 2 neutrons)
     {
       const nuc = new THREE.Group(); nuc.position.set(-14, 2, -272);
+      const pN: THREE.Matrix4[] = [], nN: THREE.Matrix4[] = [];
       for (let k = 0; k < 34; k++) {
         const d = V(hasard(-1, 1), hasard(-1, 1), hasard(-1, 1)).normalize().multiplyScalar(Math.cbrt(Math.random()) * 2.4);
-        nuc.add(bille(k % 2 ? C.neutron : C.proton, .62, d.x, d.y, d.z));
+        (k % 2 ? nN : pN).push(place(d.x, d.y, d.z, .62));
       }
+      instances(nuc, gBille, mat(C.proton), pN); instances(nuc, gBille, mat(C.neutron), nN);
       const alpha = new THREE.Group();
       [[.4, .4, 0, C.proton], [-.4, -.4, 0, C.proton], [.4, -.4, .3, C.neutron], [-.4, .4, -.3, C.neutron]].forEach(([x, y, z, c]) => alpha.add(bille(c as string, .5, x as number, y as number, z as number)));
       nuc.add(alpha);
@@ -380,6 +409,7 @@ export default function VolDesMatieres() {
     }
 
     // ════════ CHIMIE ════════
+    zone = -304;
     // La molécule qui tourne
     {
       const mol = new THREE.Group(); mol.position.set(13, 3, -304); mol.scale.setScalar(1.05);
@@ -399,6 +429,7 @@ export default function VolDesMatieres() {
       const liq = new THREE.Mesh(garde(new THREE.CylinderGeometry(r * .92, r * .9, h * niveau, 32)), m); liq.position.set(x, y - h / 2 + h * niveau / 2 + .02, z); parent.add(liq);
       return m;
     };
+    zone = -322;
     // Deux béchers, le même violet : l'un se décolore d'un coup (rapide), l'autre peu à peu (lente)
     {
       const g = new THREE.Group(); g.position.set(-14, -3, -322); g.rotation.y = .45;
@@ -420,6 +451,7 @@ export default function VolDesMatieres() {
       });
       scene.add(g);
     }
+    zone = -346;
     // Le dosage : potence, burette qui goutte, erlenmeyer au BBT qui vire, pH-mètre
     {
       const d = new THREE.Group(); d.position.set(13, -3, -346); d.rotation.y = -.35;
@@ -469,6 +501,7 @@ export default function VolDesMatieres() {
       });
       scene.add(d);
     }
+    zone = -360;
     // Les tubes à essai et leurs solutions (Cu²⁺ bleu, MnO₄⁻ violet, I₂ brun, BBT vert), des bulles qui montent
     {
       const r = new THREE.Group(); r.position.set(-13, -3, -374); r.rotation.y = .25;
@@ -488,12 +521,14 @@ export default function VolDesMatieres() {
       for (let k = 0; k < (petit ? 10 : 20); k++) {
         const b = new THREE.Mesh(gB, mB); const x = (Math.random() < .5 ? -1 : 1) * hasard(9, 24), z = hasard(-390, -290), v = hasard(.8, 2), d = hasard(0, 30);
         b.scale.setScalar(hasard(.3, 1.1));
+        b.position.set(x, ((v * 7 + d) % 30) - 15, z);   // posée dès le départ (animée seulement quand on approche)
         anime.push(t => { b.position.set(x + Math.sin(t + d) * .6, ((t * v + d) % 30) - 15, z); });
         scene.add(b);
       }
     }
 
     // ════════ SVT ════════
+    zone = -424;
     // La cellule : membrane dorée, hyaloplasme vert d'eau, noyau violet et nucléole, mitochondries
     {
       const cel = new THREE.Group(); cel.position.set(-15, 2, -424); cel.scale.set(1.25, 1, 1.1);
@@ -506,12 +541,13 @@ export default function VolDesMatieres() {
       [[-3.2, 1.5, 1.5, .4], [-2.4, -2.6, -1, 1.2], [3.4, -2.4, 1.2, 2], [-.6, 3.6, -1.6, .8], [3.6, 2.4, -1.6, 2.6]].forEach(([x, y, z, a]) => {
         const m = new THREE.Mesh(gMito, mMito); m.position.set(x, y, z); m.rotation.set(a, a * .7, a * 1.3); cel.add(m);
       });
-      for (let k = 0; k < 60; k++) { const d = V(hasard(-1, 1), hasard(-1, 1), hasard(-1, 1)).normalize().multiplyScalar(hasard(3, 5.6)); cel.add(bille('#e2e8f0', .09, d.x, d.y, d.z)); }
+      instances(cel, gBille, mat('#e2e8f0'), Array.from({ length: 60 }, () => { const d = V(hasard(-1, 1), hasard(-1, 1), hasard(-1, 1)).normalize().multiplyScalar(hasard(3, 5.6)); return place(d.x, d.y, d.z, .09); }));
       etiquette(cel, 'cellule', '#4ade80', 0, 8.2, 0, .7); etiquette(cel, 'noyau', '#e2e8f0', 1, 3.4, 1.5); etiquette(cel, 'mitochondrie', '#fb923c', -3.4, -4.2, 1, .5);
       anime.push(t => { cel.rotation.y = t * .18; });
       flotte(cel, .6, .35);
       scene.add(cel);
     }
+    zone = -464;
     // La molécule d'ADN : deux brins (squelette indigo) enroulés en double hélice, avec grand et petit sillon ;
     // les bases se font face au milieu : A (rouge) – T (jaune) par 2 liaisons hydrogène, C (bleu) – G (vert) par 3.
     {
@@ -529,34 +565,30 @@ export default function VolDesMatieres() {
       const mBase = (c: string) => (mBases[c] ??= mat(c, 1, .55));
       const mH = garde(new THREE.MeshBasicMaterial({ color: '#e2e8f0', transparent: true, opacity: .85 }));
       const gH = garde(new THREE.CylinderGeometry(.035, .035, 1, 6));
+      const phos: THREE.Matrix4[] = [], liens: THREE.Matrix4[] = [], bases: Record<string, THREE.Matrix4[]> = {};
       const paires: [string, string, number][] = [[C.A, C.T, 2], [C.G, C.Cy, 3], [C.T, C.A, 2], [C.Cy, C.G, 3], [C.A, C.T, 2], [C.Cy, C.G, 3]];
       for (let k = 0; k < N; k++) {
         const y = (k - N / 2) * PAS, a1 = k * TOUR, a2 = a1 + DECALAGE;
         const P1 = V(Math.cos(a1) * R, y, Math.sin(a1) * R), P2 = V(Math.cos(a2) * R, y, Math.sin(a2) * R);
-        const ph1 = new THREE.Mesh(gPhos, mPhos); ph1.position.copy(P1); const ph2 = new THREE.Mesh(gPhos, mPhos); ph2.position.copy(P2);
-        adn.add(ph1, ph2);
+        phos.push(new THREE.Matrix4().makeTranslation(P1.x, P1.y, P1.z), new THREE.Matrix4().makeTranslation(P2.x, P2.y, P2.z));
         const [c1, c2, liaisons] = paires[(k * 5 + (k >> 2)) % paires.length];
         const dir = P2.clone().sub(P1), long = dir.length(), u = dir.clone().normalize();
         const q = new THREE.Quaternion().setFromUnitVectors(V(1, 0, 0), u);
         const ecart = .5;                                         // l'espace des liaisons hydrogène au milieu
         const l = (long - ecart) / 2;
-        [[c1, P1, 1], [c2, P2, -1]].forEach(([c, P, s]) => {
-          const b = new THREE.Mesh(gBase, mBase(c as string));
-          b.scale.set(l / .7, 1, 1);
-          b.position.copy(P as THREE.Vector3).addScaledVector(u, (s as number) * l / 2);
-          b.quaternion.copy(q);
-          adn.add(b);
+        [[c1, P1, 1], [c2, P2, -1]].forEach(([c, P, sg]) => {
+          const pos = (P as THREE.Vector3).clone().addScaledVector(u, (sg as number) * l / 2);
+          (bases[c as string] ??= []).push(new THREE.Matrix4().compose(pos, q, V(l / .7, 1, 1)));
         });
         const centre = P1.clone().add(P2).multiplyScalar(.5);
         for (let h = 0; h < liaisons; h++) {
           const off = (h - (liaisons - 1) / 2) * .28;
-          const tige = new THREE.Mesh(gH, mH);
-          tige.scale.set(1, ecart, 1);
-          tige.position.copy(centre).add(V(0, 0, 0).addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(q), off));
-          tige.quaternion.setFromUnitVectors(V(0, 1, 0), u);
-          adn.add(tige);
+          const pos = centre.clone().addScaledVector(V(0, 0, 1).applyQuaternion(q), off);
+          liens.push(new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), u), V(1, ecart, 1)));
         }
       }
+      instances(adn, gPhos, mPhos, phos); instances(adn, gH, mH, liens);
+      Object.entries(bases).forEach(([c, m]) => instances(adn, gBase, mBase(c), m));
       etiquette(adn, 'ADN : la double hélice', '#4ade80', 0, N / 2 * PAS + 2.6, 0, .85);
       etiquette(adn, 'A = T : 2 liaisons H', '#facc15', 6.8, 3, 0, .5);
       etiquette(adn, 'C ≡ G : 3 liaisons H', '#facc15', 6.8, 1.4, 0, .5);
@@ -588,6 +620,7 @@ export default function VolDesMatieres() {
       jeter.push(tex);
       return tex;
     };
+    zone = -500;
     // le muscle : un fuseau rouge-rosé, deux tendons blancs
     {
       const g = new THREE.Group(); g.position.set(0, 0, ETAPES[0].z);
@@ -602,6 +635,7 @@ export default function VolDesMatieres() {
       anime.push(t => { fuseau.scale.set(1 + Math.sin(t * 1.4) * .04, 1 - Math.sin(t * 1.4) * .03, 1 + Math.sin(t * 1.4) * .04); });
       scene.add(g);
     }
+    zone = -520;
     // un faisceau : des fibres serrées dans leur gaine
     {
       const g = new THREE.Group(); g.position.set(0, 0, ETAPES[1].z);
@@ -616,6 +650,7 @@ export default function VolDesMatieres() {
       fondu([mF, mG], ETAPES[1].z);
       scene.add(g);
     }
+    zone = -538;
     // une fibre : un cylindre strié, ses noyaux en bordure
     {
       const g = new THREE.Group(); g.position.set(0, 0, ETAPES[2].z);
@@ -626,6 +661,7 @@ export default function VolDesMatieres() {
       fondu([mF, mN], ETAPES[2].z);
       scene.add(g);
     }
+    zone = -555;
     // une myofibrille : plus fine, les bandes claires et sombres bien visibles
     {
       const g = new THREE.Group(); g.position.set(0, 0, ETAPES[3].z);
@@ -635,6 +671,7 @@ export default function VolDesMatieres() {
       fondu([mF], ETAPES[3].z, [z1]);
       scene.add(g);
     }
+    zone = -574;
     // le sarcomère : deux stries Z, l'actine (perles rouge-orangé) qui glisse entre la myosine (bleue, à têtes)
     {
       const g = new THREE.Group(); g.position.set(0, 0, ETAPES[4].z); g.rotation.y = -.25; g.rotation.x = .12;
@@ -685,6 +722,25 @@ export default function VolDesMatieres() {
       scene.add(g);
     }
 
+    zone = null;
+    // ── Tout préparer avant le départ : shaders compilés et textures envoyées au GPU pendant l'écran d'accueil,
+    // sinon chaque objet qui apparaît pour la première fois fige le vol un instant (à-coups des premières secondes) ──
+    const preparer = () => {
+      scene.traverse(o => {
+        const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+        (Array.isArray(m) ? m : m ? [m] : []).forEach(x => { const map = (x as THREE.MeshBasicMaterial).map; if (map) renderer.initTexture(map); });
+      });
+      renderer.compileAsync(scene, camera).catch(() => renderer.compile(scene, camera));
+    };
+    const idle = (window as Window & { requestIdleCallback?: (f: () => void) => number }).requestIdleCallback;
+    if (idle) idle(preparer); else setTimeout(preparer, 300);
+    // Mesure (développement seulement) : temps des animations et du rendu par image, par tranche de profondeur
+    const mesures: Record<string, { n: number; anim: number; rendu: number; appels: number }> = {};
+    const mesurer = (anim: number, rendu: number, z: number) => {
+      const k = String(Math.round(z / 20) * 20), m = (mesures[k] ??= { n: 0, anim: 0, rendu: 0, appels: 0 });
+      m.n++; m.anim += anim; m.rendu += rendu; m.appels = Math.max(m.appels, renderer.info.render.calls);
+      (window as unknown as { __vol: unknown }).__vol = mesures;
+    };
     // ── La taille, le défilement, le vol ──
     const tailler = () => { const w = el.clientWidth, h = el.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.fov = w < h ? 78 : 62; camera.updateProjectionMatrix(); };
     tailler();
@@ -716,8 +772,11 @@ export default function VolDesMatieres() {
       teinte.set(proche.couleur).lerp(brume, .9);
       (scene.fog as THREE.FogExp2).color.lerp(teinte, .04);
       lampe.color.lerp(couleurLampe.set(proche.couleur), .05);
-      for (const f of anime) f(t, z);
+      const t0 = performance.now();
+      for (const a of animations) if (a.z === null || (z - a.z < 120 && z - a.z > -20)) a.f(t, z);
+      const t1 = performance.now();
       renderer.render(scene, camera);
+      if (import.meta.env.DEV) mesurer(t1 - t0, performance.now() - t1, z);
       const arrondi = Math.round(courant * 400) / 400;
       if (arrondi !== vu) { vu = arrondi; setP(arrondi); }
       image = requestAnimationFrame(dessiner);
