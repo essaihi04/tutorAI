@@ -92,6 +92,15 @@ export default function Landing() {
           clip-path: inset(0 100% 0 0); animation: lp-tracer 1.1s .5s cubic-bezier(.6,.1,.3,1) forwards;
         }
         @keyframes lp-tracer { to { clip-path: inset(0 0 0 0); } }
+        /* Les mots clés de la promesse en darija : ils prennent leur couleur l'un après l'autre et un trait de craie
+           se dessine dessous, de droite à gauche (sens de l'écriture arabe) */
+        .lp-mot { position: relative; color: #fff; transition: color .6s ease, text-shadow .6s ease; }
+        .lp-mot::after {
+          content: ''; position: absolute; right: -1%; left: -1%; bottom: .02em; height: .11em; border-radius: 99px;
+          background: currentColor; opacity: .85; clip-path: inset(0 0 0 100%);
+        }
+        .lp-mots-vus .lp-mot { color: var(--mot); text-shadow: 0 0 18px color-mix(in srgb, var(--mot) 45%, transparent); transition-delay: var(--attente); }
+        .lp-mots-vus .lp-mot::after { animation: lp-tracer .9s cubic-bezier(.6,.1,.3,1) forwards; animation-delay: calc(var(--attente) + .25s); }
         @keyframes lp-monte { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
         .lp-monte { animation: lp-monte .7s ease-out both; }
         @keyframes lp-ecoule { from { width: 0; } to { width: 100%; } }
@@ -322,38 +331,45 @@ function HeroSection() {
    (26 novembre 2026 : « je veux commencer avec vous dès le zéro, c'est le temps de travailler,
    on va comprendre ensemble, je vais répondre à vos questions »)
    ════════════════════════════════════════════════════════════ */
+/** Un mot clé de la promesse : il s'allume à son tour (`n`) quand la phrase arrive à l'écran. */
+function Mot({ c, n, children }: { c: string; n: number; children: React.ReactNode }) {
+  return <span className="lp-mot" style={{ ['--mot' as string]: c, ['--attente' as string]: `${.35 + n * .7}s` } as React.CSSProperties}>{children}</span>;
+}
+
 function PromesseSection() {
+  // En darija seulement (26 novembre 2026) : le tuteur parle à l'élève dans sa langue.
+  const [phrase, vue] = useVisible<HTMLParagraphElement>(0.3);
   const engagements = [
-    { icon: Sprout, c: MATIERE.svt, titre: 'On commence de zéro', desc: "Tu as des lacunes ? Tant mieux, on les comble. Chaque prérequis est réexpliqué avant d'avancer." },
-    { icon: Clock, c: MATIERE.maths, titre: "C'est le moment de travailler", desc: 'Un peu chaque jour, dès maintenant : en juin, tu arrives prêt·e, pas épuisé·e.' },
-    { icon: HeartHandshake, c: MATIERE.physique, titre: 'On comprend ensemble', desc: "Je ne récite pas : je dessine, je te fais manipuler, et on n'avance que quand c'est clair." },
-    { icon: MessageCircle, c: '#f472b6', titre: 'Je réponds à tes questions', desc: "Toutes. Même celle que tu n'oses pas poser en classe. Autant de fois qu'il le faut." },
+    { icon: Sprout, c: MATIERE.svt, titre: 'نبداو من الصفر', desc: 'عندك نقص؟ ماشي مشكل، غادي نعمروه. كل حاجة خاصك قبل الدرس، كنعاودو نشرحوها.' },
+    { icon: Clock, c: MATIERE.maths, titre: 'هادا هو الوقت باش نخدمو', desc: 'شوية كل نهار، من دابا: فيونيو غادي توصل واجد، ماشي عيان.' },
+    { icon: HeartHandshake, c: MATIERE.physique, titre: 'كنفهمو مع بعض', desc: 'ما كنحفظكش: كنرسم، كنخليك تجرب بيدك، وما كنزيدوش حتى يكون كلشي واضح.' },
+    { icon: MessageCircle, c: '#f472b6', titre: 'كنجاوبك على أسئلتك', desc: 'كاملين. حتى السؤال اللي كتحشم تسولو فالقسم. شحال ما بغيتي من مرة.' },
   ];
   return (
     <section className="relative z-10 pb-16 sm:pb-20">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="lp-carte p-6 sm:p-10">
-          <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8 mb-8">
-            <img src="/media/avatar/moalim-professeur.png" alt="" className="w-24 h-32 object-contain shrink-0 drop-shadow-xl" />
-            <div className="text-center md:text-left">
-              <div className="craie text-xl leading-none text-cyan-300 mb-2">— le mot de Moalim —</div>
-              <p className="craie text-3xl sm:text-[2.6rem] leading-[1.1] text-white">
-                « Je commence avec toi <span className="text-yellow-300">de zéro</span>. C'est le moment de travailler :
-                on va <span className="text-emerald-300">comprendre ensemble</span>, et je réponds à
-                <span className="text-yellow-300"> toutes tes questions</span>. »
+        <div className="lp-carte p-6 sm:p-10 [@media(max-height:500px)]:p-4" dir="rtl">
+          <div className="flex flex-col md:flex-row [@media(max-height:500px)]:flex-row items-center md:items-start gap-5 md:gap-8 [@media(max-height:500px)]:gap-3 mb-8 [@media(max-height:500px)]:mb-3">
+            <img src="/media/avatar/moalim-professeur.png" alt="" className="w-24 h-32 [@media(max-height:500px)]:w-14 [@media(max-height:500px)]:h-20 object-contain shrink-0 drop-shadow-xl" />
+            <div className="text-center md:text-right [@media(max-height:500px)]:text-right">
+              <div className="font-brand text-lg [@media(max-height:500px)]:text-[15px] leading-none text-cyan-300 mb-3 [@media(max-height:500px)]:mb-1">— الكلمة ديال معلم —</div>
+              <p ref={phrase} className={`font-brand font-bold text-2xl sm:text-[2.2rem] [@media(max-height:500px)]:text-xl leading-[1.5] [@media(max-height:500px)]:leading-[1.45] text-white ${vue ? 'lp-mots-vus' : ''}`}>
+                « غادي نبدا معاك <Mot c="#fde047" n={0}>من الصفر</Mot>. هادا هو الوقت باش نخدمو:
+                غادي <Mot c="#6ee7b7" n={1}>نفهمو مع بعض</Mot>، وغادي نجاوبك على
+                {' '}<Mot c="#fde047" n={2}>جميع الأسئلة ديالك</Mot>. »
               </p>
             </div>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 [@media(max-height:500px)]:grid-cols-4 gap-4 [@media(max-height:500px)]:gap-2">
             {engagements.map(x => (
-              <div key={x.titre} className="rounded-2xl bg-black/25 border border-white/10 p-4">
+              <div key={x.titre} className="rounded-2xl bg-black/25 border border-white/10 p-4 [@media(max-height:500px)]:p-2.5">
                 <div className="flex items-center gap-2.5 mb-2">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${x.c}22`, color: x.c }}>
+                  <div className="w-9 h-9 [@media(max-height:500px)]:hidden rounded-xl flex items-center justify-center shrink-0" style={{ background: `${x.c}22`, color: x.c }}>
                     <x.icon className="w-4.5 h-4.5" />
                   </div>
-                  <h3 className="font-bold text-white leading-tight">{x.titre}</h3>
+                  <h3 className="font-brand font-bold text-lg [@media(max-height:500px)]:text-[15px] text-white leading-tight">{x.titre}</h3>
                 </div>
-                <p className="text-sm text-white/65 leading-relaxed">{x.desc}</p>
+                <p className="font-brand text-[15px] text-white/70 leading-relaxed [@media(max-height:500px)]:leading-snug">{x.desc}</p>
               </div>
             ))}
           </div>
