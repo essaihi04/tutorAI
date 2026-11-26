@@ -89,7 +89,11 @@ def main():
         args.remove(voir)
     public, cours = args[0], args[1:]
     for f in cours:
-        d = json.load(open(f, encoding='utf-8'))
+        brut = open(f, encoding='utf-8').read()
+        # garder l'indentation du fichier (1 ou 2 espaces) : un diff réduit aux repères
+        ind = re.search(r'\n( +)"', brut)
+        indent = len(ind.group(1)) if ind else 2
+        d = json.loads(brut)
         n = sans = 0
         for a in d['activities']:
             for s in a['slides']:
@@ -110,7 +114,7 @@ def main():
                     for c, t in rep:
                         print(f'  {t:6.2f} s  car {c:4d}  « {texte[c:c + 40]} »')
         with open(f, 'w', encoding='utf-8') as o:
-            json.dump(d, o, ensure_ascii=False, indent=2)
+            json.dump(d, o, ensure_ascii=False, indent=indent)
             o.write('\n')
         print(f'{os.path.basename(f)} : {n} pistes repérées ({sans} sans repère intermédiaire)')
 
