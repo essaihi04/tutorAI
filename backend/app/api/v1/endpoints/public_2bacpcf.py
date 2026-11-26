@@ -28,12 +28,12 @@ DOSSIER = Path(__file__).resolve().parents[4] / "data" / "2bacpcf"
 ELEVES = DOSSIER / "eleves.jsonl"
 SUIVI = DOSSIER / "suivi.jsonl"
 PREFIXE_CLASSE = "2BACPCF"
-#: chaque séance qui s'ouvre au tableau, et son nombre de diapositives
+#: chaque séance qui s'ouvre au tableau, et son nombre de diapositives (révisions allégées le 24/11 : 27 et 26)
 COURS = {
-    "rev_phys_ondes_radioactivite": ("Révision de physique", 38),
+    "rev_phys_ondes_radioactivite": ("Révision de physique", 27),
     "phys_ch3_ondes_lumineuses": ("Propagation d'une onde lumineuse", 68),
     "phys_ch4_radioactivite": ("Décroissance radioactive", 87),
-    "rev_chim_deux_sens_equilibre": ("Révision de chimie", 39),
+    "rev_chim_deux_sens_equilibre": ("Révision de chimie", 26),
     "phys_ch11_transformations_deux_sens": ("Transformations dans les deux sens", 56),
     "phys_ch12_etat_equilibre": ("État d'équilibre", 58),
 }
