@@ -1,0 +1,424 @@
+# phys_ch4_radioactivite — Décroissance radioactive
+
+## I. Le noyau et sa stabilité
+
+### Diapo 1 `ra_ouverture_cours` — Décroissance radioactive
+VOIX (fr) : Bienvenue dans un nouveau cours : Décroissance radioactive. Dans ce cours, nous allons apprendre le noyau, les désintégrations, la loi de décroissance, l'activité, et la datation. Au national, les transformations nucléaires comptent pour huit pour cent de la note. Comment allons-nous travailler ? Tu écoutes bien, tu réponds aux questions au tableau, et quand le cours s'arrête, tu écris dans ton cahier. Allons-y !
+ÉCRAN : On apprend : Noyau, désintégrations, loi de décroissance, datation | Au bac : le nucléaire = 8 % de la note | Écouter · répondre au tableau · écrire dans le cahier
+
+### Diapo 2 `ra_n1_ouverture` — Comment connaît-on l'âge d'un bois ancien ?
+VOIX (fr) : Comment on connaît l'âge d'un bois très ancien ? Dans ce bois, il y a du carbone quatorze. Ses noyaux se transforment, un par un, au hasard. Un noyau seul, personne ne sait quand il va se transformer. Mais beaucoup de noyaux, ensemble, suivent une loi très régulière. C'est cette loi qui donne l'âge. Ce chapitre, c'est surtout du comptage.
+ÉCRAN : Un bois ancien contient du carbone 14 dont les noyaux se transforment. | Un noyau seul se transforme au hasard : on ne sait pas quand. | Beaucoup de noyaux suivent une loi : c'est elle qui donne l'âge. | Le chapitre : le noyau, les désintégrations, la loi, l'activité, la datation.
+
+### Diapo 3 `ra_n2_atome` — De l'atome au noyau
+VOIX (fr) : Regarde l'atome de carbone. Au centre, le noyau, très très petit. Autour, les électrons, chargés moins. Si l'atome était aussi grand qu'un stade, le noyau serait un pois chiche au centre. Et pourtant, presque toute la masse est dans ce petit noyau. On zoome sur le noyau. Dedans, deux sortes de particules : les protons, chargés plus, et les neutrons, sans charge. Les protons et les neutrons, on les appelle des nucléons. Autrement dit : dehors, léger, les électrons ; dedans, lourd, les nucléons.
+ÉCRAN : L'atome : un noyau très petit au centre, des électrons (charge −) autour. | Presque toute la masse de l'atome est dans le noyau. | Le noyau contient des protons (charge +) et des neutrons (sans charge). | Protons et neutrons s'appellent des nucléons. | Ordres de grandeur : proton, masse ≈ 1,67·10⁻²⁷ kg et charge +e = +1,6·10⁻¹⁹ C ; neutron, masse ≈ 1,67·10⁻²⁷ kg et charge nulle.
+
+### Diapo 4 `ra_n3_compter` — Compter les nucléons
+VOIX (fr) : On compte sur le carbone quatorze. D'abord les protons : six. Leur nombre s'appelle Z, le nombre de charge. Ensuite les neutrons : huit. Leur nombre s'appelle N. Enfin tous les nucléons ensemble : six plus huit, quatorze. Ce nombre s'appelle A, le nombre de nucléons. Donc A égale Z plus N.
+ÉCRAN : Z : le nombre de protons (nombre de charge). | N : le nombre de neutrons. | A : le nombre de nucléons, A = Z + N. | Carbone 14 : 6 protons, 8 neutrons, 14 nucléons.
+
+### Diapo 5 `ra_n4_notation` — La notation ᴬ_Z X
+VOIX (fr) : On écrit un noyau avec une lettre et deux nombres. La lettre X, c'est le symbole de l'élément. En haut à gauche, le grand nombre A : les nucléons. En bas à gauche, le petit nombre Z : les protons. Et les neutrons ? On les calcule : N égale A moins Z. Exemple : l'uranium deux cent trente-huit, quatre-vingt-douze. Que vaut Z, et que vaut A ?
+ÉCRAN : X : le symbole de l'élément chimique. | A en haut à gauche : le nombre de nucléons. | Z en bas à gauche : le nombre de charge. | N = A − Z : le nombre de neutrons.
+QUESTION : Dans ²³⁸₉₂U, que valent Z et A ? OPTIONS : ['Z = 238 et A = 92', 'Z = 92 et A = 238', 'Z = 146 et A = 238']
+
+### Diapo 6 `ra_n5_composition` — Donner la composition d'un noyau
+VOIX (fr) : Au national, on te demande souvent : donne la composition du noyau. Tu écris deux lignes. Première ligne : le nombre de protons, c'est Z. Deuxième ligne : le nombre de neutrons, N égale A moins Z. Pour l'uranium deux cent trente-huit : quatre-vingt-douze protons, et deux cent trente-huit moins quatre-vingt-douze, cent quarante-six neutrons.
+ÉCRAN : Composition = nombre de protons et nombre de neutrons. | Protons : Z (on le lit en bas). | Neutrons : N = A − Z. | Exemple : ²³⁸₉₂U : 92 protons et 238 − 92 = 146 neutrons.
+
+### Diapo 7 `ra_n6_isotopes` — Nucléides et isotopes
+VOIX (fr) : Un nucléide, c'est une famille de noyaux tous pareils : même A et même Z. Regarde l'hydrogène. Ces trois noyaux ont tous un seul proton : même Z. Mais ils n'ont pas le même nombre de neutrons : A est différent. Pareil pour le carbone douze et le carbone quatorze. On dit que ce sont des isotopes. Je relis : les isotopes sont des noyaux, de même nombre de charge Z, et de nombres de nucléons A différents.
+ÉCRAN : Élément chimique : ensemble des atomes et des ions qui ont le même nombre de charge Z. | Nucléide : l'ensemble des noyaux qui ont le même A et le même Z. | Isotopes : noyaux qui ont le même nombre de charge Z et des nombres de nucléons A différents. | ¹H, ²H, ³H : trois isotopes de l'hydrogène. | ¹²₆C et ¹⁴₆C : deux isotopes du carbone (même Z = 6). | Dans la nature, les isotopes sont mélangés : l'uranium naturel contient ≈ 99,3 % de ²³⁸U et ≈ 0,7 % de ²³⁵U.
+
+### Diapo 8 `ra_s1_diagramme` — Le diagramme (N, Z)
+VOIX (fr) : On place les noyaux sur un dessin. L'axe horizontal, c'est Z, les protons. L'axe vertical, c'est N, les neutrons. Chaque noyau devient un point. On trace aussi la droite où N égale Z : elle sert de repère. Le carbone quatorze a six protons et huit neutrons. Quelles coordonnées a son point ?
+ÉCRAN : Diagramme (N, Z) : Z en abscisse, N en ordonnée. | Chaque nucléide est un point (Z ; N). | La droite N = Z sert de repère. | Carbone 14 : le point (6 ; 8).
+QUESTION : Le carbone 14 (6 protons, 8 neutrons) : quelles coordonnées (Z ; N) ? OPTIONS : ['(8 ; 6)', '(6 ; 14)', '(6 ; 8)']
+
+### Diapo 9 `ra_s2_vallee` — La vallée de stabilité
+VOIX (fr) : Les noyaux stables ne sont pas partout. Ils forment une bande étroite : la vallée de stabilité. Pour les noyaux légers, la vallée suit la droite N égale Z. Pour les noyaux lourds, elle monte au-dessus : il faut plus de neutrons que de protons. Un noyau hors de la vallée est instable : il est radioactif. Attention : être sur la droite ne suffit pas, il faut être dans la vallée.
+ÉCRAN : Les noyaux stables forment une bande : la vallée de stabilité. | Noyaux légers stables (Z < 20) : près de la droite N = Z. | Noyaux lourds stables : plus de neutrons que de protons (N > Z). | Un point hors de la vallée : noyau instable (radioactif). | Être sur la droite N = Z ne suffit pas : un noyau est stable seulement s'il est dans la vallée.
+
+### Diapo 10 `ra_s5_isotopes_ligne` — Les isotopes sur une même verticale
+VOIX (fr) : Les isotopes ont le même Z : sur le diagramme, ils ont la même abscisse, sur une même verticale. Le carbone 12 est dans la vallée : stable. Le carbone 14 est au-dessus : trop de neutrons, instable. Comment le carbone 14 revient-il vers la vallée ? C'est la partie suivante.
+ÉCRAN : Des isotopes ont le même Z. | Dans le diagramme (N, Z), ils sont sur une même droite perpendiculaire à l'axe des Z. | Le carbone 12 est dans la vallée : stable. | Le carbone 14 est au-dessus : trop de neutrons, instable. | Attention : si un sujet met N en abscisse et Z en ordonnée, les isotopes sont alors sur une droite horizontale.
+## II. La radioactivité et les désintégrations
+
+### Diapo 11 `ra_r1_definition` — La radioactivité
+VOIX (fr) : Voilà un noyau instable : on l'appelle le noyau père. D'un coup, il lance une particule. Ce qui reste est un autre noyau : le noyau fils. Le fils est plus stable que le père. Mais plus stable ne veut pas dire stable : parfois le fils se transforme à son tour. Je relis : la radioactivité, c'est la désintégration spontanée d'un noyau instable, en un noyau plus stable, avec émission d'une particule.
+ÉCRAN : Radioactivité : transformation spontanée d'un noyau instable (père) en un noyau plus stable (fils), avec émission d'une particule. | Noyau père → noyau fils + particule. | Le fils est plus stable, pas forcément stable.
+QUESTION : Après une désintégration, le noyau obtenu est-il toujours stable ? OPTIONS : ['Oui, toujours', 'Non : il est plus stable, pas forcément stable', 'Non, il est moins stable que le père']
+
+### Diapo 12 `ra_r2_caracteres` — Aléatoire : ni lequel, ni quand
+VOIX (fr) : Regarde ces douze noyaux, tous pareils. Lequel va partir le premier ? Le voilà, c'est celui-là : personne ne pouvait le savoir. Et le deuxième, un autre, au hasard. On ne sait ni lequel, ni quand. On dit que la désintégration est aléatoire. Autrement dit : c'est comme un tirage au sort, tu mets les papiers dans une boîte, tu en tires un, tu ne peux pas savoir lequel sortira. Je relis : la désintégration est aléatoire, on ne peut pas prévoir quel noyau, ni à quel instant.
+ÉCRAN : Douze noyaux identiques : impossible de prévoir lequel part le premier. | Aléatoire : on ne peut prévoir ni quel noyau, ni à quel instant. | Comme un tirage au sort.
+
+### Diapo 13 `ra_r2b_spontanee` — Spontanée et inéluctable : chauffer n'y change rien
+VOIX (fr) : Voici un échantillon radioactif dans un flacon, et devant lui un compteur. Personne ne le touche, et il se désintègre tout seul : on dit que la désintégration est spontanée. Regarde le compteur : à vingt degrés Celsius, environ quarante par seconde. Maintenant on allume le feu dessous. La température monte jusqu'à huit cents degrés Celsius. Regarde le compteur : toujours environ quarante. Le même nombre. Rien ne l'arrête, rien ne la ralentit : on dit qu'elle est inéluctable. Autrement dit : comme un sablier, chaud ou froid, le sable tombe au même rythme.
+ÉCRAN : Spontanée : la désintégration se fait toute seule. | On chauffe l'échantillon de 20 °C à 800 °C : le compteur compte toujours ≈ 40 désintégrations par seconde. | Inéluctable : ni la température, ni la pression, ni les liaisons chimiques de l'atome ne l'arrêtent ou ne la ralentissent.
+
+### Diapo 14 `ra_r3_soddy` — Les lois de Soddy
+VOIX (fr) : Dans toute désintégration, deux choses se conservent. Voilà le père, le fils et la particule. Première loi : on additionne les nombres du haut. A égale A un plus A deux : le nombre de nucléons se conserve. Deuxième loi : on additionne les nombres du bas. Z égale Z un plus Z deux : le nombre de charge se conserve. Attention : c'est la charge qui se conserve, pas les protons.
+ÉCRAN : Pour ᴬ_Z X → ᴬ¹_Z₁ Y + ᴬ²_Z₂ P : | Conservation du nombre de nucléons : A = A₁ + A₂. | Conservation du nombre de charge : Z = Z₁ + Z₂. | On conserve Z (la charge), pas les protons : un neutron peut devenir proton.
+
+### Diapo 15 `ra_d1_alpha` — La désintégration α
+VOIX (fr) : La désintégration alpha concerne les noyaux lourds. La particule alpha, c'est un noyau d'hélium : quatre en haut, deux en bas. Exemple : le polonium deux cent dix donne le plomb deux cent six, plus un noyau d'hélium. On vérifie Soddy en haut : deux cent six plus quatre, deux cent dix. En bas : quatre-vingt-deux plus deux, quatre-vingt-quatre. Donc en alpha, A diminue de quatre et Z diminue de deux.
+ÉCRAN : Particule α : noyau d'hélium ⁴₂He (2 protons et 2 neutrons, charge +2e : c'est l'ion He²⁺). | Exemple : ²¹⁰₈₄Po → ²⁰⁶₈₂Pb + ⁴₂He. | Forme générale : ᴬ_Z X → ᴬ⁻⁴_Z₋₂ Y + ⁴₂He. | Elle concerne les noyaux lourds. | Pénétration : la particule α est arrêtée par une feuille de papier.
+
+### Diapo 16 `ra_d2_beta_moins` — La désintégration β⁻
+VOIX (fr) : Le carbone quatorze a trop de neutrons. Regarde dans le noyau : un neutron devient un proton. Un neutron donne un proton et un électron. Cet électron est lancé hors du noyau : c'est la particule bêta moins. Le noyau ne contenait pas d'électron : il est créé à cet instant. L'équation : le carbone quatorze donne l'azote quatorze, plus un électron. A ne change pas, Z augmente de un.
+ÉCRAN : Dans le noyau : ¹₀n → ¹₁p + ⁰₋₁e. | L'électron émis vient du noyau : le noyau ne contenait pas d'électron, il est créé quand un neutron devient proton. | Exemple : ¹⁴₆C → ¹⁴₇N + ⁰₋₁e. | Forme générale : ᴬ_Z X → ᴬ_Z₊₁ Y + ⁰₋₁e. | Pénétration : β⁻ traverse le papier, elle est arrêtée par quelques millimètres d'aluminium.
+QUESTION : Le noyau ne contient pas d'électron. D'où sort l'électron émis en β⁻ ? OPTIONS : ["D'un neutron du noyau qui devient proton", "D'un proton qui devient neutron", 'Il était caché dans le noyau depuis le début']
+
+### Diapo 17 `ra_d3_beta_plus` — La désintégration β⁺
+VOIX (fr) : Le phosphore trente a trop de protons. Dans le noyau, un proton devient un neutron. Un proton donne un neutron et un positon. Le positon, c'est comme un électron, mais chargé plus. Il est lancé hors du noyau. L'équation : le phosphore trente donne le silicium trente, plus un positon. A ne change pas, Z diminue de un. Complète l'équation du phosphore trente.
+ÉCRAN : Dans le noyau : ¹₁p → ¹₀n + ⁰₁e. | Le positon ⁰₁e a la même masse que l'électron et une charge opposée (on écrit aussi ⁰₊₁e ; on dit aussi « positron »). | Exemple : ³⁰₁₅P → ³⁰₁₄Si + ⁰₁e. | Forme générale : ᴬ_Z X → ᴬ_Z₋₁ Y + ⁰₁e. | La radioactivité β⁺ concerne surtout des noyaux artificiels (fabriqués au laboratoire).
+
+### Diapo 18 `ra_d4_gamma` — La désexcitation γ
+VOIX (fr) : Le cobalt soixante fait une désintégration bêta moins. Le nickel soixante obtenu est excité : on met une étoile. Il a trop d'énergie. Il se calme en émettant un rayonnement gamma, une onde électromagnétique. L'équation : nickel soixante étoile donne nickel soixante, plus gamma. Le symbole reste le même, A et Z restent les mêmes. Gamma traverse le papier et l'aluminium, il faut du plomb pour l'arrêter.
+ÉCRAN : Après α ou β, le noyau fils est souvent excité (Y*) : il a un excédent d'énergie par rapport à son état fondamental (Y). | Il se désexcite en émettant un rayonnement γ (onde électromagnétique). | ᴬ_Z Y* → ᴬ_Z Y + γ : A et Z ne changent pas. | γ est très pénétrant : il traverse le papier et l'aluminium, il est arrêté par une épaisseur de plomb.
+
+### Diapo 19 `ra_d5_inconnu` — Trouver le noyau fils dans le tableau
+VOIX (fr) : Exemple : le phosphore trente-deux fait bêta moins. Le noyau fils est inconnu : on écrit A en haut, Z en bas, X. Première ligne : trente-deux égale A plus zéro, donc A égale trente-deux. Deuxième ligne : quinze égale Z moins un, donc Z égale seize. Dans le tableau, Z égale seize, c'est le soufre. Toujours dans cet ordre : A, puis Z, puis le tableau.
+ÉCRAN : On écrit l'équation avec ᴬ_Z X inconnu. | Soddy sur A, puis Soddy sur Z. | Z donne l'élément dans le tableau. | ³²₁₅P → ³²₁₆S + ⁰₋₁e.
+
+### Diapo 20 `ra_d6_type` — Trouver le type par la particule
+VOIX (fr) : Parfois, c'est la particule qui manque. On la trouve par Soddy, puis on la nomme. Si c'est un noyau d'hélium, c'est alpha. Si c'est un électron, c'est bêta moins. Si c'est un positon, c'est bêta plus. Au national deux mille dix-huit : le plutonium deux cent quarante et un donne l'américium deux cent quarante et un, plus X.
+ÉCRAN : ⁴₂He → α ; ⁰₋₁e → β⁻ ; ⁰₁e → β⁺. | On trouve la particule par Soddy, puis on la nomme. | ²⁴¹₉₄Pu → ²⁴¹₉₅Am + ⁰₋₁e : β⁻ (national 2018 R).
+## III. Les désintégrations sur le diagramme, la famille
+
+### Diapo 21 `ra_s4_fleches` — Les flèches β⁻ et β⁺
+VOIX (fr) : Chaque désintégration rapproche le noyau de la vallée. On regarde les flèches une par une. La première : bêta moins. Dans le noyau, un neutron devient un proton. Donc Z augmente de un, et N diminue de un. La deuxième : bêta plus. C'est l'inverse : un proton devient un neutron. Z diminue de un, N augmente de un. Sur le dessin, un pas vers la gauche et un pas vers le haut. Autrement dit : bêta moins enlève un neutron en trop, bêta plus enlève un proton en trop. Dans les deux cas, A ne change pas. Après une désintégration bêta moins, le point va-t-il vers la droite ou vers la gauche ?
+ÉCRAN : β⁻ : un neutron devient proton : Z augmente de 1, N diminue de 1. | β⁺ : un proton devient neutron : Z diminue de 1, N augmente de 1. | Dans les deux cas, A ne change pas ; le noyau se rapproche de la vallée.
+QUESTION : Après une désintégration β⁻, le point du noyau se déplace : OPTIONS : ['Vers la gauche (Z diminue)', 'Vers la droite (Z augmente)', 'Il ne bouge pas']
+
+### Diapo 22 `ra_s4b_alpha` — La flèche α : deux protons et deux neutrons en moins
+VOIX (fr) : Maintenant la troisième flèche : alpha. Elle concerne les noyaux lourds, en haut à droite. Le noyau lance deux protons et deux neutrons, ensemble. Donc Z diminue de deux, et N diminue de deux. Sur le dessin, le point recule de deux pas vers la gauche, et de deux pas vers le bas. Autrement dit : un noyau trop lourd s'allège, il jette un petit bloc de quatre nucléons. A diminue de quatre.
+ÉCRAN : Les noyaux lourds (en haut à droite) font une désintégration α. | Le noyau perd 2 protons et 2 neutrons ensemble : Z − 2, N − 2, donc A − 4. | Sur le diagramme : deux pas vers la gauche, deux pas vers le bas.
+
+### Diapo 23 `ra_s3_zones` — Trop de neutrons, trop de protons, trop lourd
+VOIX (fr) : Hors de la vallée, on se pose une question : de quoi le noyau a-t-il trop ? Au-dessus de la vallée, il a trop de neutrons : il fait une désintégration bêta moins. Au-dessous de la vallée, il a trop de protons : il fait une désintégration bêta plus. Et tout en haut à droite, les noyaux lourds : ils font une désintégration alpha.
+ÉCRAN : Au-dessus de la vallée : trop de neutrons → radioactivité β⁻. | Au-dessous de la vallée : trop de protons → radioactivité β⁺. | Noyaux lourds (en haut à droite) : radioactivité α. | On se demande : de quoi le noyau a-t-il trop ?
+
+### Diapo 24 `ra_f1_famille` — La famille radioactive
+VOIX (fr) : L'uranium deux cent trente-huit est le père. Première flèche : une désintégration alpha. Le fils est encore instable. Puis une bêta moins. Et ça continue, flèche après flèche. On arrive au plomb deux cent six : il est stable, la chaîne s'arrête. Bilan : huit alpha et six bêta moins. Cette chaîne s'appelle une famille radioactive.
+ÉCRAN : Famille radioactive : suite de désintégrations d'un noyau père jusqu'à un noyau stable. | ²³⁸₉₂U → … → ²⁰⁶₈₂Pb (stable). | Bilan : 8 désintégrations α et 6 désintégrations β⁻. | Quatre familles connues : celles de l'uranium 238, de l'uranium 235, du thorium 232 et du neptunium 237.
+
+### Diapo 25 `ra_f3_enonce` — National 2024 R, exercice 3 : l’énoncé, tel qu’à l’examen
+VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt-quatre, la session de rattrapage, exercice trois, tel qu'il est à l'examen. Désintégration en chaîne. Suite à des désintégrations en chaîne, un nucléide peut se transformer en d'autres jusqu'à obtention d'un nucléide stable, formant ainsi une famille radioactive. Le diagramme ci-contre donne quelques nucléides appartenant à une famille radioactive. Données : masse du noyau de bismuth deux cent douze : deux cent onze virgule neuf cent quatre-vingt-onze mille deux cent quatre-vingt-six u ; masse du noyau de thallium deux cent huit : deux cent sept virgule neuf cent quatre-vingt-deux mille dix-neuf u ; masse de la particule alpha : quatre virgule zéro zéro deux mille six cent trois u ; un u égale neuf cent trente et un virgule cinq méga électron-volts par c au carré. Question un : En exploitant le diagramme ci-contre : un point un : identifier, en justifiant, le type de la désintégration un ; un point deux : reconnaître le nucléide X. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 26 `ra_f3_famille2024` — Lire une famille sur un diagramme (national 2024 R)
+VOIX (fr) : Au national deux mille vingt-quatre, la famille est dessinée. On lit chaque flèche avec A et Z. Flèche un : A diminue de quatre, Z diminue de deux : c'est alpha. Flèche deux : A ne bouge pas, Z augmente de un : c'est bêta moins. Le nucléide X se lit avec ses coordonnées, puis le tableau donne son nom. Une flèche où A ne change pas et Z augmente de un : quel type ?
+ÉCRAN : Sur un diagramme, chaque flèche relie un père à son fils. | A diminue de 4 et Z de 2 : α. | A ne change pas et Z augmente de 1 : β⁻. | A ne change pas et Z diminue de 1 : β⁺.
+QUESTION : Une flèche où A ne change pas et Z augmente de 1 correspond à : OPTIONS : ['α', 'β⁺', 'β⁻']
+
+### Diapo 27 `ra_f2_systeme` — Combien de α, combien de β⁻ ?
+VOIX (fr) : Pour compter les α et les β⁻, on écrit une seule équation bilan. Exemple du national 2012 : l'uranium 238 donne le plomb 206, y particules α et x électrons. Sur A, les électrons comptent zéro : seule l'équation de A donne y. 238 = 206 + 4y, donc 4y = 32 et y = 8. Puis sur Z : 92 = 82 − x + 2y, donc x = 82 + 2y − 92 = 82 + 16 − 92 = 6. Résultat : 8 α et 6 β⁻.
+ÉCRAN : Bilan : ᴬ_Z X → ᴬ'_Z' Y + y ⁴₂He + x ⁰₋₁e. | Conservation de A : A = A' + 4y (les β⁻ ne changent pas A). | Conservation de Z : Z = Z' + 2y − x. | On trouve y d'abord, puis x. | Exemple (national 2012 N) : ²³⁸₉₂U → ²⁰⁶₈₂Pb : 238 = 206 + 4y, donc y = 8 ; 92 = 82 − x + 2y, donc x = 82 + 16 − 92 = 6.
+## IV. Compter les noyaux, puis la loi de décroissance
+
+### Diapo 28 `ra_p3_puissances` — Rappel : les puissances de dix
+VOIX (fr) : Un échantillon contient énormément de noyaux. Un petit rappel sur les puissances de dix. Dix puissance un, c'est dix. Dix puissance deux, cent. Dix puissance trois, mille. C'est un, suivi de zéros : le nombre en haut dit combien de zéros. Autrement dit, avec la virgule : un virgule dix-neuf fois dix puissance sept. La virgule saute sept fois vers la droite : onze millions neuf cent mille. Et quand la puissance est négative, la virgule va vers la gauche : dix puissance moins trois, c'est zéro virgule zéro zéro un. Et deux fois dix puissance moins six gramme, c'est une toute petite partie du gramme.
+ÉCRAN : 10¹ = 10 ; 10² = 100 ; 10³ = 1 000 : 1 suivi de n zéros. | 1,19·10⁷ : la virgule saute 7 rangs à droite : 11 900 000. | Puissance négative : la virgule va à gauche : 10⁻³ = 0,001. | 2·10⁻⁶ g = 0,000 002 g.
+
+### Diapo 29 `ra_l1_echantillon` — Beaucoup de noyaux : que devient l'échantillon ?
+VOIX (fr) : Un noyau seul, c'est le hasard. Mais regarde quatre cents noyaux d'iode cent trente et un. À gauche la grille, à droite la courbe du nombre de noyaux restants, N. Les noyaux partent au hasard, mais la courbe descend de façon très régulière.
+ÉCRAN : Un noyau seul : on ne sait pas quand il se désintègre. | Un échantillon de 400 noyaux d'iode 131 : on compte les noyaux restants N. | N diminue de façon régulière : la courbe se construit point par point.
+
+### Diapo 30 `ra_l1b_moitie` — Compter les noyaux tous les 8 jours
+VOIX (fr) : Maintenant on compte nous-mêmes. Au départ, 400 noyaux. On laisse passer 8 jours : il en reste 200. 8 jours de plus, 16 jours : il en reste 100. Encore 8 jours, 24 jours : il en reste 50. 400, 200, 100, 50 : prends ton temps et compare chaque nombre au précédent.
+ÉCRAN : À t = 0 : N₀ = 400 noyaux d'iode 131. | On arrête à 8 jours, 16 jours, 24 jours et on lit N. | On compare chaque nombre au précédent.
+QUESTION : Tous les 8 jours, que devient le nombre N de noyaux restants ? OPTIONS : ['Il diminue de 100 noyaux', 'Il est divisé par deux', 'Il diminue de 200 noyaux']
+
+### Diapo 31 `ra_t1_definition` — La demi-vie t½
+VOIX (fr) : On lit N zéro au départ de la courbe. On prend la moitié, N zéro sur deux. On va horizontalement jusqu'à la courbe, puis on descend sur l'axe des temps. On lit t un demi, la demi-vie : pour l'iode, huit jours. N de t un demi égale N zéro sur deux. Je relis la définition : la demi-vie, est la durée au bout de laquelle, la moitié des noyaux initialement présents, s'est désintégrée.
+ÉCRAN : Demi-vie t½ (on écrit aussi t₁/₂) : durée au bout de laquelle la moitié des noyaux initialement présents s'est désintégrée. | N(t½) = N₀/2. | Lecture : on place N₀/2 sur l'axe, on va à la courbe, on descend sur l'axe des temps. | Iode 131 : t½ = 8 jours. | t½ est caractéristique du nucléide : elle ne dépend pas de N₀. Radon 222 : 3,8 jours ; carbone 14 : 5730 ans ; uranium 238 : 4,5·10⁹ ans.
+
+### Diapo 32 `ra_l2_proportion` — Chaque jour, la même proportion
+VOIX (fr) : On fait un tableau, jour par jour. Premier jour : beaucoup de noyaux partent. Deuxième jour : un peu moins. Troisième jour : encore un peu moins. Mais divise les partis par les présents : on trouve toujours à peu près le même nombre, environ huit pour cent par jour. Donc plus il y a de noyaux, plus il en part. Le nombre de désintégrations est proportionnel au nombre de noyaux présents.
+ÉCRAN : Jour par jour, on compte les noyaux qui partent. | Le nombre qui part diminue, mais la proportion reste la même (environ 8 % par jour pour l'iode 131). | Le nombre de désintégrations est proportionnel au nombre N de noyaux présents.
+OBSERVATION : Désintégrés divisés par présents, jour après jour : que remarques-tu ?
+
+### Diapo 33 `ra_l3_equation` — dN = −λ·N·dt
+VOIX (fr) : Pendant une durée très courte dt, N passe de N(t) à N(t + dt). Sa variation : dN = N(t + dt) − N(t). Elle est négative, car N diminue. Le nombre de noyaux désintégrés pendant dt est donc N(t) − N(t + dt), c'est-à-dire −dN. Ce nombre est proportionnel à N et à dt : −dN = λ·N·dt. λ est la constante radioactive. Donc dN = −λ·N·dt. Pourquoi le signe moins ? Parce que N diminue : dN est négative. On divise par dt : dN/dt = −λ·N. Donc dN/dt + λ·N = 0 : c'est l'équation différentielle de la décroissance, de constante λ.
+ÉCRAN : Pendant dt : dN = N(t + dt) − N(t) < 0 (N diminue). | Noyaux désintégrés pendant dt : N(t) − N(t + dt) = −dN. | Ils sont proportionnels à N et à dt : −dN = λ·N·dt, donc dN = −λ·N·dt. | λ : la constante radioactive (en s⁻¹). | On divise par dt : dN/dt = −λ·N, soit l'équation différentielle dN/dt + λ·N = 0.
+
+### Diapo 34 `ra_l4a_exp` — Rappel : l'exponentielle qui décroît
+VOIX (fr) : Un rappel de maths, on va en avoir besoin. Regarde la courbe de exponentielle moins x. Au début, x égale zéro : exponentielle zéro égale un. La courbe part de un. Quand x augmente, exponentielle moins x diminue. Mais elle n'arrive jamais à zéro : elle s'en approche sans l'atteindre. Autrement dit : regarde ce verre d'eau. Chaque minute, il perd la moitié de ce qui reste. La moitié, puis le quart, puis le huitième. Il diminue toujours, et il n'est jamais vide.
+ÉCRAN : e⁰ = 1 : la courbe de e^(−x) part de 1. | Quand x augmente, e^(−x) diminue. | Elle s'approche de 0 sans jamais l'atteindre. | Comme un verre qui perd, chaque minute, la moitié de ce qui reste.
+
+### Diapo 35 `ra_l4_rappel` — Rappel : ln enlève e
+VOIX (fr) : Maintenant ln. Imagine deux machines. x entre dans la machine exponentielle, et il sort exponentielle x. Puis il entre dans la machine ln, et il ressort x, comme au début. ln enlève l'exponentielle : ln de exponentielle x égale x. Autrement dit, avec la calculatrice : ln de zéro virgule cinq donne moins zéro virgule six cent quatre-vingt-treize. C'est-à-dire ln un demi égale moins ln deux, et ln deux vaut environ zéro virgule six cent quatre-vingt-treize. Alors, que vaut ln de exponentielle moins trois ?
+ÉCRAN : x → machine e → eˣ → machine ln → x : ln enlève e. | ln(eˣ) = x. | À la calculatrice : ln(0,5) = −0,693. | ln(1/2) = −ln2 ; ln2 ≈ 0,693.
+QUESTION : Que vaut ln(e^(−3)) ? OPTIONS : ['3', '−3', 'e³']
+
+### Diapo 36 `ra_l5_loi` — La loi de décroissance
+VOIX (fr) : La solution de cette équation est de la forme N(t) = K·e^(−λt), K constante. On vérifie : la dérivée dN/dt = −λ·K·e^(−λt). On remplace dans l'équation : −λ·K·e^(−λt) + λ·K·e^(−λt) = 0. Les deux termes s'annulent : l'équation est vérifiée. Condition initiale : à t = 0, N(0) = K·e⁰ = K ; or N(0) = N₀, donc K = N₀. C'est la loi de décroissance radioactive : N(t) = N₀·e^(−λt). N₀ est le nombre de noyaux au début, N(t) le nombre de noyaux restants à l'instant t.
+ÉCRAN : Solution de dN/dt + λ·N = 0 de la forme N(t) = K·e^(−λt), K constante. | Vérification : dN/dt = −λ·K·e^(−λt), donc dN/dt + λ·N = −λ·K·e^(−λt) + λ·K·e^(−λt) = 0. | Condition initiale : N(0) = K·e⁰ = K ; or N(0) = N₀, donc K = N₀. | Loi : N(t) = N₀·e^(−λt) ; N₀ : noyaux à t = 0 ; N(t) : noyaux restants à l'instant t.
+
+### Diapo 37 `ra_l6_lambda` — La constante radioactive λ
+VOIX (fr) : Lambda dépend du nucléide : l'iode n'a pas le même lambda que le carbone. Son unité, c'est l'inverse d'un temps : seconde puissance moins un, jour puissance moins un, ou an puissance moins un. Lambda fois t n'a pas d'unité, donc lambda et t doivent utiliser la même unité de temps. Et plus lambda est grande, plus les noyaux partent vite.
+ÉCRAN : λ : constante radioactive (on dit aussi constante de désintégration), propre au nucléide : l'iode 131 n'a pas le même λ que le carbone 14. | Unité : l'inverse d'une durée : s⁻¹ (SI), ou j⁻¹, an⁻¹. | λ·t n'a pas d'unité : λ et t doivent être dans la même unité de temps. | λ ne dépend ni de N₀, ni de la température, ni de la pression, ni des liaisons chimiques. | Plus λ est grande, plus la décroissance est rapide.
+
+### Diapo 38 `ra_l8_restants` — Restants et désintégrés
+VOIX (fr) : Au national, on demande souvent les noyaux désintégrés, pas les restants. Regarde les deux courbes : les restants descendent, les désintégrés montent. Elles se croisent quand il reste la moitié. Plus tard, à deux fois la moitié du temps, il reste un quart, et trois quarts sont désintégrés. La formule : N d égale N zéro moins N de t. N zéro égale quatre cents, N égale cent : combien de noyaux désintégrés ?
+ÉCRAN : Noyaux désintégrés : N_d = N₀ − N(t) = N₀·(1 − e^(−λt)). | Les deux courbes se croisent quand N = N₀/2. | Si le fils est stable, N_d = nombre de noyaux fils formés. | Lire la question : restants ou désintégrés ?
+QUESTION : N₀ = 400 et N = 100 : combien de noyaux désintégrés ? OPTIONS : ['100', '300', '500']
+
+### Diapo 39 `ra_l7_tau` — La constante de temps τ
+VOIX (fr) : Sur la courbe N(t), on trace la tangente à l'origine. Elle coupe l'axe des temps en un point : c'est τ, la constante de temps. τ = 1/λ. λ est en s⁻¹, donc τ est en secondes : c'est une durée, dans l'unité de t. Pourquoi la tangente coupe-t-elle l'axe en τ ? La pente de la tangente à l'origine est la dérivée en zéro : −λ·N₀·e⁰ = −λ·N₀. Équation de la tangente : y = N₀ − λ·N₀·t. Elle coupe l'axe des temps quand y = 0 : N₀ − λ·N₀·t = 0, donc t = 1/λ = τ. On lit τ sur la tangente, et on calcule λ = 1/τ.
+ÉCRAN : Constante de temps : τ = 1/λ. | Unité : τ est une durée, en seconde (s) dans le SI, ou dans l'unité de t (jours, ans), car λ est en s⁻¹ (ou j⁻¹, an⁻¹). | Pente de la tangente à l'origine : (dN/dt)(0) = −λ·N₀·e⁰ = −λ·N₀. | Équation de la tangente : y = N₀ − λ·N₀·t. | Elle coupe l'axe des temps quand y = 0 : N₀ − λ·N₀·t = 0, donc t = 1/λ = τ. | On lit τ sur le graphe, puis λ = 1/τ.
+
+### Diapo 40 `ra_l7b_037` — Lire τ à 0,37·N₀
+VOIX (fr) : Combien de noyaux restent à l'instant τ ? On le calcule. La loi à l'instant τ : N(τ) = N₀·e^(−λτ). Et τ = 1/λ, donc λ·τ = λ·(1/λ) = 1. Donc N(τ) = N₀·e⁻¹. À la calculatrice, e⁻¹ ≈ 0,37. Donc N(τ) ≈ 0,37·N₀ : il reste 37 % des noyaux. C'est une deuxième façon de lire τ : on place 0,37·N₀ sur l'axe des N, on va jusqu'à la courbe, puis on descend sur l'axe des temps : c'est τ. Ici N₀ = 8·10²⁰, donc environ 3·10²⁰, et on lit τ ≈ 11,5 jours.
+ÉCRAN : N(τ) = N₀·e^(−λ·τ), avec τ = 1/λ. | λ·τ = λ·(1/λ) = 1, donc N(τ) = N₀·e⁻¹. | e⁻¹ ≈ 0,37 (calculatrice), donc N(τ) ≈ 0,37·N₀ : il reste 37 % des noyaux. | Lecture : on place 0,37·N₀ sur l'axe des N, on va jusqu'à la courbe, puis on descend sur l'axe des temps : t = τ. | Ici N₀ = 8,0·10²⁰ : 0,37 × 8,0·10²⁰ ≈ 3,0·10²⁰ noyaux, lu à τ ≈ 11,5 jours.
+
+### Diapo 41 `ra_t2_demo` — Établir t½ = ln2/λ
+VOIX (fr) : On va montrer t½ = ln2/λ, comme au national 2023. On écrit la loi à l'instant t½. On écrit la condition : N(t½) = N₀/2. On les met face à face et on simplifie par N₀ : e^(−λ·t½) = 1/2. On prend ln : −λ·t½ = −ln2, donc λ·t½ = ln2. Donc t½ = ln2/λ. Et τ = 1/λ, donc t½ = τ·ln2.
+ÉCRAN : N(t½) = N₀/2 (définition) et N(t½) = N₀·e^(−λ·t½) (loi). | Donc N₀·e^(−λ·t½) = N₀/2 ; on divise par N₀ : e^(−λ·t½) = 1/2. | On prend ln : −λ·t½ = ln(1/2) = −ln2, donc λ·t½ = ln2. | t½ = ln2/λ ; et τ = 1/λ, donc t½ = τ·ln2. | t½ ne dépend pas de N₀ : elle ne dépend que du nucléide.
+
+### Diapo 42 `ra_t3_paliers` — N₀/2, N₀/4, N₀/8
+VOIX (fr) : À chaque demi-vie, on divise par deux. Après une demi-vie : N₀/2. Après deux demi-vies : la moitié de la moitié, N₀/4. Après trois demi-vies : N₀/8. En général, on le calcule avec la loi. À t = n·t½ : N = N₀·e^(−λ·n·t½). Et λ·t½ = ln2, donc N = N₀·e^(−n·ln2). Et e^(n·ln2) = 2ⁿ, car e^(ln2) = 2. Donc N(n·t½) = N₀/2ⁿ. Le nombre ne devient jamais nul, il devient seulement très petit. Après trois demi-vies, combien de noyaux reste-t-il ?
+ÉCRAN : Après 1 demi-vie : N₀/2. | Après 2 demi-vies : N₀/4. | Après 3 demi-vies : N₀/8. | Calcul : à t = n·t½, N = N₀·e^(−λ·n·t½) = N₀·e^(−n·ln2), car λ·t½ = ln2. | e^(n·ln2) = 2ⁿ (car e^(ln2) = 2), donc N(n·t½) = N₀/2ⁿ. | N ne devient jamais nul : il devient seulement très petit.
+QUESTION : Après 3 demi-vies, quelle fraction des noyaux initiaux reste-t-il ? OPTIONS : ['1/3', '1/6', '1/8']
+
+### Diapo 43 `ra_t4_pourcentages` — x % désintégrés : combien restent ?
+VOIX (fr) : Piège classique du national : on te donne les désintégrés, la loi parle des restants. Donc on traduit d'abord. Trente pour cent désintégrés : il reste soixante-dix pour cent, N égale zéro virgule sept N zéro. Quatre-vingt-dix pour cent désintégrés : il reste dix pour cent. Et à deux demi-vies, il reste un quart, vingt-cinq pour cent : donc soixante-quinze pour cent sont désintégrés.
+ÉCRAN : On traduit d'abord : x % désintégrés, donc il reste (100 − x) % : N = (1 − x/100)·N₀. | 30 % désintégrés : N = 0,70·N₀ ; 90 % désintégrés : N = 0,10·N₀. | À 2t½ : N = N₀/4, il reste 25 %, donc 75 % sont désintégrés. | Ensuite seulement, on met ce N dans la loi N = N₀·e^(−λt) pour trouver t (calcul montré à la datation).
+## V. L'activité et la datation
+
+### Diapo 44 `ra_a1_compteur` — Le compteur Geiger compte les désintégrations
+VOIX (fr) : On ne peut pas voir les noyaux. Alors on compte ce qu'ils lancent. Voilà l'échantillon dans une petite bouteille. Devant, le compteur Geiger : à chaque désintégration, il fait un petit bruit. On compte pendant une seconde exactement.
+ÉCRAN : On ne voit pas les noyaux : on compte les particules émises. | Le compteur Geiger fait un éclat à chaque désintégration détectée. | On compte pendant une seconde : nombre de désintégrations par seconde.
+
+### Diapo 45 `ra_a2_definition` — L'activité a, en becquerel
+VOIX (fr) : Ce nombre de désintégrations par seconde s'appelle l'activité, notée a. Son unité est le becquerel : un becquerel, c'est une désintégration par seconde. Je relis : l'activité est le nombre de désintégrations, par seconde, dans l'échantillon. Revenons plus tard devant le compteur : il y a moins de noyaux, donc moins de bruits. L'activité diminue avec le temps. Après une demi-vie, que devient une activité de quatre cents becquerels ?
+ÉCRAN : Activité a : nombre moyen de désintégrations par seconde dans l'échantillon. | Unité : le becquerel (Bq) ; 1 Bq = 1 désintégration par seconde. Ancienne unité : le curie, 1 Ci = 3,7·10¹⁰ Bq. | L'activité diminue avec le temps, comme N. | On écrit a (certains sujets écrivent A ; ici A est le nombre de nucléons). | Le becquerel rappelle Henri Becquerel, qui a découvert la radioactivité en 1896.
+QUESTION : Après une demi-vie, une activité de 400 Bq devient : OPTIONS : ['400 Bq', '200 Bq', '100 Bq']
+
+### Diapo 46 `ra_a3_demo` — a = −dN/dt = λ·N
+VOIX (fr) : L'activité, c'est la vitesse de disparition des noyaux : a égale moins d N sur d t. Pourquoi moins ? Parce que N diminue, d N est négatif, et l'activité doit être positive. Maintenant on dérive la loi : d N sur d t égale moins lambda N zéro exponentielle moins lambda t, c'est moins lambda N. Donc a égale lambda N. Autrement dit : plus il y a de noyaux, plus il y a de désintégrations par seconde.
+ÉCRAN : a = −dN/dt (le signe − : N diminue, a est positive). | dN/dt = −λ·N₀·e^(−λt) = −λ·N. | Donc a = −(−λ·N) = λ·N : plus de noyaux, plus de désintégrations par seconde. | Avec λ = ln2/t½ : a = (ln2/t½)·N ; à N égal, plus t½ est courte, plus l'activité est grande.
+
+### Diapo 47 `ra_a3b_loi_activite` — a₀ = λ·N₀ et a(t) = a₀·e^(−λt)
+VOIX (fr) : On a a = λ·N. Au début, t = 0 et N = N₀ : donc a₀ = λ·N₀. À l'instant t, N(t) = N₀·e^(−λt). Donc a(t) = λ·N₀·e^(−λt). Et λ·N₀ = a₀ : donc a(t) = a₀·e^(−λt). L'activité suit la même loi que N. Autrement dit : s'il ne reste que la moitié des noyaux, il ne reste que la moitié des désintégrations comptées. Moitié des noyaux, moitié de l'activité. De la même façon, après n demi-vies : a = a₀/2ⁿ.
+ÉCRAN : a = λ·N, donc à t = 0 : a₀ = λ·N₀. | a(t) = λ·N(t) = λ·N₀·e^(−λt), donc a(t) = a₀·e^(−λt) : l'activité suit la même loi que N. | Moitié des noyaux, moitié de l'activité : a(n·t½) = a₀/2ⁿ.
+
+### Diapo 48 `ra_a4_unites` — a en Bq : λ en s⁻¹
+VOIX (fr) : Attention, piège fréquent au national. Le becquerel est par seconde. Donc pour a = λ·N, λ doit être en s⁻¹. On convertit t½ en secondes. Polonium 210 : t½ = 138 jours = 138 × 24 × 3600 s = 1,19·10⁷ s. Puis λ = ln2/t½. Application numérique : 0,693/(1,19·10⁷). Résultat : λ ≈ 5,8·10⁻⁸ s⁻¹.
+ÉCRAN : a en Bq (désintégrations par seconde) : λ doit être en s⁻¹. | 1 jour = 24 × 3600 s = 86 400 s ; 1 an ≈ 3,16·10⁷ s. | Polonium 210 (national 2020 N) : t½ = 138 jours = 138 × 24 × 3600 s = 1,19·10⁷ s. | λ = ln2/t½ = 0,693/(1,19·10⁷) ≈ 5,8·10⁻⁸ s⁻¹.
+
+### Diapo 49 `ra_p4_mole` — Rappel : la mole, un paquet d'entités
+VOIX (fr) : Avant de calculer le nombre de noyaux, il nous faut la mole. Regarde cette boîte d'œufs : douze œufs. On dit une douzaine : un paquet de douze. La mole aussi est un paquet, mais énorme : six virgule zéro deux fois dix puissance vingt-trois. Ce nombre s'appelle le nombre d'Avogadro, N A. Regarde ces douze grammes de carbone : ils contiennent une mole d'atomes. Pour savoir combien de moles : n égale m sur M, et M est la masse d'une seule mole. Puis le nombre : N égale n fois N A. Autrement dit : pour compter les œufs, tu multiplies le nombre de douzaines par douze. Ici, on multiplie le nombre de moles par N A.
+ÉCRAN : Une douzaine : un paquet de 12 œufs. | Une mole : un paquet de 6,02·10²³ entités (N_A, nombre d'Avogadro). | 12 g de carbone contiennent 1 mol d'atomes : M = 12 g/mol. | n = m/M, puis N = n·N_A.
+
+### Diapo 50 `ra_a5_masse` — Du gramme au nombre de noyaux
+VOIX (fr) : Souvent, on te donne une masse, et il faut le nombre de noyaux. D'abord la quantité de matière : n égale m sur M. Puis le nombre : N égale m sur M fois N A, avec N A, six virgule zéro deux fois dix puissance vingt-trois. Exemple du national deux mille vingt-trois : deux microgrammes de tritium. Piège : m en grammes, deux fois dix puissance moins six gramme. Combien de noyaux ?
+ÉCRAN : Quantité de matière : n = m/M. | Nombre de noyaux : N = (m/M)·N_A, N_A = 6,02·10²³ mol⁻¹. | m en grammes : 2 µg = 2·10⁻⁶ g. | Tritium (M = 3 g/mol) : N = (2·10⁻⁶/3) × 6,02·10²³ ≈ 4,0·10¹⁷ (national 2023 N).
+QUESTION : 2 µg de tritium (M = 3 g/mol, N_A = 6,02·10²³ mol⁻¹) : combien de noyaux ? OPTIONS : ['4,0·10²³', '4,0·10¹⁷', '1,2·10¹⁸']
+
+### Diapo 51 `ra_a5b_masse_inverse` — Du nombre de noyaux à la masse
+VOIX (fr) : Maintenant le chemin inverse : on a le nombre de noyaux et on cherche la masse. D'abord la quantité de matière : n = N/N_A, car N = n·N_A. Puis la masse : m = n·M, car n = m/M. Donc m = (N/N_A)·M, et m est en grammes. Si on te donne l'activité, tu calcules d'abord N = a/λ, avec λ en s⁻¹. Remarque importante : la masse suit la même loi que N. Car m = (M/N_A)·N, et M/N_A est constant. Donc m(t) = (M/N_A)·N₀·e^(−λt), c'est-à-dire m(t) = m₀·e^(−λt). De même pour la quantité de matière : n(t) = n₀·e^(−λt).
+ÉCRAN : Sens inverse : n = N/N_A (car N = n·N_A), puis m = n·M (car n = m/M). | Donc m = (N/N_A)·M, avec m en g et M en g/mol. | Si on connaît l'activité : d'abord N = a/λ (λ en s⁻¹), puis m = (N/N_A)·M. | Même loi pour la masse : m = (M/N_A)·N et M/N_A est constant, donc m(t) = m₀·e^(−λt). | De même pour la quantité de matière : n(t) = n₀·e^(−λt).
+
+### Diapo 52 `ra_a6_enonce` — National 2022 N, exercice 2 : l’énoncé, tel qu’à l’examen
+VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt-deux, session normale, exercice deux, tel qu'il est à l'examen. Ondes sonores et désintégration de l'iode cent trente et un. Partie deux : désintégration de l'iode cent trente et un. L'iode cent trente et un est radioactif bêta moins. Il est utilisé à faibles doses dans des applications médicales visant l'étude du dysfonctionnement de la thyroïde, ou le traitement de certaines maladies liées à cette glande. La désintégration d'un noyau d'iode cent trente et un produit un noyau X. On se propose, dans cette partie, d'étudier la désintégration de l'iode cent trente et un. Question trois : on injecte à un patient, à un instant choisi comme origine des dates, une dose d'une solution d'iode cent trente et un, dont l'activité à cet instant est a zéro. La courbe de la figure trois représente les variations de l'activité a de t de cette dose en fonction du temps. Trois point un : déterminer graphiquement la demi-vie t un demi de l'iode cent trente et un. Trois point deux : calculer le nombre N zéro de noyaux d'iode présents dans la dose à t égale zéro. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 53 `ra_a6_courbe_a` — Lire une courbe a(t) (national 2022 N)
+VOIX (fr) : Au national 2022, on donne la courbe de l'activité de l'iode 131. On lit a₀ = 4·10⁶ Bq. On prend la moitié, a₀/2, et on descend : t½ = 8 jours. Maintenant N₀. Comme a₀ = λ·N₀, N₀ = a₀/λ. N'oublie pas : λ en s⁻¹. t½ = 8 × 86 400 s = 6,91·10⁵ s. λ = ln2/t½ = 0,693/(6,91·10⁵) ≈ 1,0·10⁻⁶ s⁻¹. Application numérique : N₀ = 4·10⁶/(1,0·10⁻⁶). Résultat : N₀ ≈ 4,0·10¹² noyaux. Remarque : sur la courbe de a, on lit aussi τ comme pour N : la tangente à l'origine, ou a = 0,37·a₀.
+ÉCRAN : On lit a₀ à t = 0, puis a₀/2 donne t½. | Iode 131 : a₀ = 4·10⁶ Bq, t½ = 8 jours. | N₀ = a₀/λ, car a₀ = λ·N₀ (λ en s⁻¹). | t½ = 8 × 86 400 s = 6,91·10⁵ s ; λ = ln2/t½ = 0,693/(6,91·10⁵) ≈ 1,0·10⁻⁶ s⁻¹. | N₀ = 4·10⁶/(1,0·10⁻⁶) ≈ 4,0·10¹² noyaux. | τ se lit aussi sur a(t) : tangente à l'origine, ou a(τ) ≈ 0,37·a₀ (car a = λ·N).
+
+### Diapo 54 `ra_a7_enonce` — National 2021 R, exercice 3 : l’énoncé, tel qu’à l’examen
+VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt et un, la session de rattrapage, exercice trois, tel qu'il est à l'examen. Désintégration du phosphore trente-deux. D'énormes progrès de diagnostic et de traitement des maladies ont été réalisés en médecine grâce à la radioactivité. Ainsi, on utilise le phosphore trente-deux pour réduire la production excessive des globules rouges. On s'intéresse dans cet exercice à la radioactivité du phosphore trente-deux, de numéro atomique quinze. Le phosphore trente-deux est émetteur bêta moins. Donnée : numéros atomiques de quelques éléments chimiques : aluminium treize, silicium quatorze, phosphore quinze, soufre seize. Question deux : Un échantillon radioactif du phosphore trente-deux contient N zéro noyaux à l'instant de date t égale zéro. La courbe de la figure ci-contre représente les variations de logarithme népérien de N en fonction du temps, où N est le nombre de noyaux du phosphore trente-deux restants à un instant de date t. Montrer que logarithme népérien de N s'écrit sous la forme : logarithme népérien de N égale logarithme népérien de N zéro, moins lambda t ; lambda est la constante radioactive du phosphore trente-deux. Question deux point un : Déterminer, en jour puissance moins un, la valeur de lambda. Question deux point deux : En déduire que la demi-vie t un demi du phosphore trente-deux vaut : t un demi égale quatorze virgule vingt-neuf jours. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 55 `ra_a7_droite_ln` — La droite ln N = f(t) (national 2021 R)
+VOIX (fr) : Au national 2021, on donne ln N en fonction de t : c'est une droite. Pourquoi ? On prend le ln de la loi : ln N = ln(N₀·e^(−λt)). Rappel : le ln d'un produit est la somme des ln. Donc ln N = ln N₀ + ln(e^(−λt)). Et ln enlève l'exponentielle : ln N = ln N₀ − λ·t. C'est une droite. L'ordonnée à l'origine est ln N₀. La pente est −λ. On calcule la pente avec deux points : (23,3 − 33)/(200 − 0) = −0,0485 j⁻¹. On identifie : −λ = pente, donc λ = 0,0485 j⁻¹. Puis t½ = ln2/λ = 0,693/0,0485. Résultat : t½ ≈ 14,3 jours. De la même façon, ln a = ln a₀ − λ·t est aussi une droite.
+ÉCRAN : ln N = ln(N₀·e^(−λt)) = ln N₀ + ln(e^(−λt)), car ln(x·y) = ln x + ln y. | ln N = ln N₀ − λ·t : une droite d'ordonnée à l'origine ln N₀ et de pente −λ. | Phosphore 32 : pente = (23,3 − 33)/(200 − 0) = −0,0485 j⁻¹, donc λ = 0,0485 j⁻¹. | t½ = ln2/λ = 0,693/0,0485 ≈ 14,3 jours. | De même : ln a = ln a₀ − λ·t (car a = a₀·e^(−λt)).
+
+### Diapo 56 `ra_c1_principe` — Dater avec le carbone 14
+VOIX (fr) : Un arbre vivant respire : il échange sans arrêt du carbone avec l'air. Les noyaux de carbone quatorze qui se désintègrent sont remplacés. Donc son activité reste constante. On coupe l'arbre : les échanges s'arrêtent. Plus rien ne remplace le carbone quatorze. Il se désintègre, avec une demi-vie de cinq mille sept cent trente ans, et l'activité diminue.
+ÉCRAN : Le carbone 14 est produit sans arrêt dans la haute atmosphère (par les neutrons cosmiques, à partir de l'azote) : sa teneur dans l'air reste constante. | Un être vivant échange du carbone avec l'air : sa teneur en carbone 14 reste constante. | À sa mort, les échanges s'arrêtent : le carbone 14 n'est plus remplacé. | Le carbone 14 se désintègre (t½ = 5730 ans) : l'activité diminue. | a₀ : activité d'un échantillon vivant de même masse (on suppose que la teneur de l'air en carbone 14 n'a pas changé).
+OBSERVATION : L'arbre est coupé : que devient la jauge du carbone 14 dans le bois ?
+
+### Diapo 57 `ra_c2_demo` — Établir t = (1/λ)·ln(a₀/a)
+VOIX (fr) : On part de la loi : a = a₀·e^(−λt). On divise par a₀ : a/a₀ = e^(−λt). On prend ln : ln(a/a₀) = −λ·t. Puis on renverse la fraction pour enlever le signe moins, car ln(1/x) = −ln x : ln(a₀/a) = λ·t. On isole t : t = (1/λ)·ln(a₀/a). Si λ n'est pas donnée, λ = ln2/t½. De la même façon avec les noyaux : t = (1/λ)·ln(N₀/N).
+ÉCRAN : a = a₀·e^(−λt). | On divise par a₀ : a/a₀ = e^(−λt). | On prend ln : ln(a/a₀) = −λ·t. | ln(a₀/a) = −ln(a/a₀) = λ·t (car ln(1/x) = −ln x). | t = (1/λ)·ln(a₀/a) ; si λ n'est pas donnée : λ = ln2/t½, donc t = (t½/ln2)·ln(a₀/a). | Même calcul avec les noyaux : t = (1/λ)·ln(N₀/N). Certains écrivent t = −(1/λ)·ln(a/a₀) : c'est la même relation.
+
+### Diapo 58 `ra_c4b_enonce` — National 2020 R, exercice 3 : l’énoncé, tel qu’à l’examen
+VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt, la session de rattrapage, exercice trois, tel qu'il est à l'examen. Désintégration de l'uranium deux cent trente-quatre. Le thorium deux cent trente, qui se trouve dans les roches marines, résulte de la désintégration spontanée de l'uranium deux cent trente-quatre. C'est pourquoi le thorium et l'uranium se trouvent dans toutes les roches marines, en proportions différentes selon leurs dates de formation. Données : masse d'un noyau d'uranium deux cent trente-quatre : deux cent trente-quatre virgule zéro quatre mille quatre-vingt-quinze u ; la constante radioactive de l'uranium deux cent trente-quatre : lambda égale deux virgule huit cent vingt-trois fois dix puissance moins six an puissance moins un ; masse du proton : m p égale un virgule zéro zéro sept cent vingt-huit u ; masse du neutron : m n égale un virgule zéro zéro huit cent soixante-six u ; unité de masse atomique : un u égale neuf cent trente et un virgule cinq méga électron-volts par c au carré. Question quatre point un : On dispose d'un échantillon d'une roche marine qui contient, à l'instant de sa formation considéré comme origine des dates, t égale zéro, un nombre N zéro de noyaux d'uranium deux cent trente-quatre. On suppose que cet échantillon ne contient pas de thorium à l'origine des dates. En se basant sur la loi de décroissance radioactive, trouver l'expression du nombre de noyaux de thorium N de thorium deux cent trente, en fonction de N zéro, t et la constante radioactive lambda de l'uranium deux cent trente-quatre. Question quatre point deux : Montrer que l'expression du rapport r, égal au nombre de noyaux de thorium deux cent trente sur le nombre de noyaux d'uranium deux cent trente-quatre à un instant t, est : r égale exponentielle de lambda t, moins un. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 59 `ra_c4_fils_pere` — Une roche : noyaux père et noyaux fils
+VOIX (fr) : Pour une roche, on compare les noyaux fils aux noyaux père. Au départ, pas de fils. Le père suit la loi : N zéro exponentielle moins lambda t. Chaque père désintégré donne un fils. Donc les fils, ce sont les pères partis : N fils égale N zéro moins N père. Autrement dit : si on part de cent pères et qu'il en reste soixante, quarante se sont désintégrés, et ils sont devenus quarante fils.
+ÉCRAN : Roche sans noyau fils au départ, fils stable. | N(père) = N₀·e^(−λt). | Chaque père désintégré donne un fils : N(fils) = N₀ − N(père). | Pourquoi pas le carbone 14 pour une roche ? Après 7 demi-vies (7 × 5730 ≈ 40 000 ans), il reste N₀/2⁷ = N₀/128, moins de 1 % : trop peu pour mesurer. | Plus l'échantillon est ancien, plus la demi-vie du nucléide choisi doit être grande : pour une roche, l'uranium 238 (t½ = 4,5·10⁹ ans) et son fils stable, le plomb 206.
+
+### Diapo 60 `ra_c4b_rapport` — Le rapport r = e^(λt) − 1 (national 2020 R)
+VOIX (fr) : On fait le rapport : r = N(fils)/N(père) = (N₀ − N₀·e^(−λt))/(N₀·e^(−λt)). N₀ se simplifie : r = (1 − e^(−λt))/e^(−λt). Et 1/e^(−λt) = e^(λt) : donc r = e^(λt) − 1. Pour trouver t : 1 + r = e^(λt). On prend ln : ln(1 + r) = λ·t. Donc t = (1/λ)·ln(1 + r). Au début r = 0, et plus le temps passe, plus r grandit. Autant de fils que de pères : combien de demi-vies ?
+ÉCRAN : r = N(fils)/N(père) = (N₀ − N₀·e^(−λt))/(N₀·e^(−λt)). | N₀ se simplifie : r = (1 − e^(−λt))/e^(−λt) = e^(λt) − 1 (car 1/e^(−λt) = e^(λt)). | 1 + r = e^(λt), donc ln(1 + r) = λ·t. | t = (1/λ)·ln(1 + r). | À t = 0, r = 0 ; plus la roche est vieille, plus r est grand.
+QUESTION : Une roche contient autant de noyaux fils que de noyaux père (r = 1). Combien de demi-vies se sont écoulées ? OPTIONS : ['Une', 'Deux', 'Une demie']
+## VI. Exercices du national, joués étape par étape
+
+### Diapo 61 `ra_x1_cas_types` — Le mot de la question donne la méthode
+VOIX (fr) : Au national, le mot de la question te donne la méthode. Composition : Z protons et A moins Z neutrons. Équation ou noyau fils : les lois de Soddy, puis le tableau. Type : on regarde la particule. Famille : l'équation de A, puis celle de Z. Demi-vie : ln deux sur lambda. Lambda : par la demi-vie, ou par la pente. Nombre de noyaux : par la masse, ou par a sur lambda. Âge : la formule de datation. Pourcentage : on traduit d'abord en restants.
+ÉCRAN : « Composition » → Z protons, N = A − Z neutrons. | « Équation, noyau fils » → lois de Soddy puis le tableau ; « type » → la particule. | « Famille » → A = A' + 4y puis Z = Z' + 2y − x. | « t½, λ » → t½ = ln2/λ ; « nombre de noyaux » → N = (m/M)·N_A ou N = a/λ. | « Âge, date » → t = (1/λ)·ln(a₀/a) ; « x % désintégrés » → il reste (100 − x) %.
+
+### Diapo 62 `ra_c3_enonce` — National 2022 R, exercice 2 : l’énoncé, tel qu’à l’examen
+VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt-deux, la session de rattrapage, exercice deux, tel qu'il est à l'examen. Ondes mécaniques et datation au carbone quatorze. Partie deux : datation au carbone quatorze. On se propose dans cette partie de déterminer l'âge approximatif d'un morceau de bois ancien à l'aide de la datation au carbone quatorze. La désintégration du noyau de carbone quatorze est de type bêta moins. Données : la masse du noyau de carbone quatorze : treize virgule quatre-vingt-dix-neuf mille neuf cent quatre-vingt-quinze u ; la masse du neutron : un virgule zéro zéro huit cent soixante-six u ; la masse du proton : un virgule zéro zéro sept cent vingt-huit u ; un u égale neuf cent trente et un virgule cinq méga électron-volts par c au carré ; la demi-vie du carbone quatorze : t un demi égale cinq mille sept cent trente ans. Question trois : Le taux de carbone quatorze reste le même dans les tissus des êtres vivants. Ce taux diminue progressivement, suivant la loi de décroissance radioactive, après la mort de ces êtres vivants. L'activité du carbone quatorze dans un morceau de bois ancien est a un égale trois cent dix-huit becquerels, tandis que l'activité du carbone quatorze dans un morceau de bois récent de même masse vaut a zéro égale quatre cent dix-huit becquerels. Déterminer, en ans, l'âge approximatif t un du morceau de bois ancien. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 63 `ra_c3_calcul` — Dater un bois ancien : la relation (national 2022 R)
+VOIX (fr) : National 2022 R. Deux morceaux de bois de même masse : un ancien, un récent. On lit l'activité de chacun : bois ancien, 318 becquerel, c'est a₁ ; bois récent, 418 becquerel, c'est a₀. Demi-vie du carbone 14 : 5730 ans. Voici la courbe de l'activité. a₁ rencontre la courbe en un point : son abscisse est l'âge t₁ cherché. On le fait étape par étape, et c'est toi qui fais chaque étape. Étape 1 : quelle relation donne t₁ ?
+ÉCRAN : Bois ancien : a₁ = 318 Bq ; bois récent de même masse : a₀ = 418 Bq. | Carbone 14 : t½ = 5730 ans. | Sur la courbe a(t), a₁ donne un point : son abscisse est l'âge t₁ cherché. | Étape 1 : la relation qui donne t₁.
+QUESTION : Étape 1 — Quelle relation donne l'âge t du bois ? OPTIONS : ['t = (1/λ)·ln(a/a₀)', 't = (1/λ)·ln(a₀/a)', 't = λ·ln(a₀/a)']
+
+### Diapo 64 `ra_c3b_lambda` — Dater un bois ancien : la constante λ (national 2022 R)
+VOIX (fr) : Correction de l'étape 1. La loi : a₁ égale a₀ exponentielle moins λ t₁. On inverse : a₀ sur a₁ égale exponentielle λ t₁. On prend le ln : ln de a₀ sur a₁ égale λ t₁. Donc t₁ égale un sur λ fois ln de a₀ sur a₁. Dans cette relation, a₀ et a₁ sont connues, mais pas λ. Étape 2 : calcule λ du carbone 14, en an puissance moins un.
+ÉCRAN : Étape 1 corrigée : a₁ = a₀·e^(−λ·t₁), donc t₁ = (1/λ)·ln(a₀/a₁). | a₀ et a₁ sont connues ; λ ne l'est pas. | Étape 2 : λ du carbone 14, en an⁻¹.
+QUESTION : Étape 2 — Calcule λ du carbone 14 (t½ = 5730 ans). OPTIONS : ['λ ≈ 1,21·10⁻⁴ an⁻¹', 'λ ≈ 3,97·10³ an⁻¹', 'λ ≈ 1,21·10⁻⁴ s⁻¹']
+
+### Diapo 65 `ra_c3c_age` — Dater un bois ancien : l'âge t₁ (national 2022 R)
+VOIX (fr) : Correction de l'étape 2. La relation : λ égale ln deux sur t un demi. L'application numérique : 0,693 sur 5730. λ vaut environ 1,21 fois dix puissance moins quatre, an puissance moins un. t un demi est en ans, donc λ est en an puissance moins un. Maintenant tout est connu. Étape 3 : calcule l'âge t₁ du bois ancien.
+ÉCRAN : Étape 2 corrigée : λ = ln2/t½ = 0,693/5730 ≈ 1,21·10⁻⁴ an⁻¹ (t½ en ans, donc λ en an⁻¹). | Étape 3 : l'âge t₁ du bois ancien.
+QUESTION : Étape 3 — Calcule l'âge t du bois (a₀ = 418 Bq ; a = 318 Bq). OPTIONS : ['t ≈ 2,26·10³ ans', 't ≈ −2,26·10³ ans', 't ≈ 3,3·10⁻⁵ ans']
+
+### Diapo 66 `ra_c3d_verif` — Dater un bois ancien : le résultat et sa vérification (national 2022 R)
+VOIX (fr) : Correction de l'étape 3. La relation : t₁ égale un sur λ fois ln de a₀ sur a₁. L'application numérique : un sur 1,21 fois dix puissance moins quatre, fois ln de 418 sur 318. Le résultat : t₁ environ 2,26 fois dix puissance trois ans. Regarde l'abscisse du point sur la courbe : la même valeur. On vérifie toujours le résultat. a₀ sur deux, 209 becquerel, donne t un demi. a₁ est plus grande que a₀ sur deux, donc t₁ est plus petit que t un demi. 2260 ans est plus petit que 5730 ans : le résultat est cohérent.
+ÉCRAN : Étape 3 corrigée : t₁ = (1/λ)·ln(a₀/a₁) = ln(418/318)/(1,21·10⁻⁴) ≈ 2,26·10³ ans. | Vérification : a₁ = 318 Bq > a₀/2 = 209 Bq, donc t₁ < t½ = 5730 ans : cohérent.
+
+### Diapo 67 `ra_x2_enonce` — National 2021 N, exercice 3 : l’énoncé, tel qu’à l’examen
+VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt et un, la session normale, exercice trois, tel qu'il est à l'examen. Désintégration du plutonium deux cent trente-huit. Le stimulateur cardiaque, ou pacemaker, est un dispositif qui, une fois implanté dans l'organisme, fournit des impulsions électriques destinées à stimuler les muscles cardiaques. Ces impulsions permettent d'accélérer la pulsation du cœur lorsqu'il est trop lent. Certains stimulateurs cardiaques fonctionnent à partir de l'énergie libérée lors de la désintégration alpha des noyaux du plutonium deux cent trente-huit. Cet exercice se propose d'étudier un stimulateur cardiaque au plutonium deux cent trente-huit. Données : les noyaux protactinium deux cent trente-huit, uranium deux cent trente-quatre, uranium deux cent trente-huit, neptunium deux cent trente-huit et plutonium deux cent trente-huit. Question un : Écrire l'équation de désintégration alpha du plutonium deux cent trente-huit en identifiant le noyau fils. Question deux point un : La courbe de la figure ci-contre représente l'évolution de l'activité a de t d'un échantillon de plutonium deux cent trente-huit présent dans un stimulateur cardiaque. On choisit l'instant d'implantation de ce stimulateur dans l'organisme d'un patient comme origine des dates, t égale zéro. Déterminer graphiquement la demi-vie t un demi du plutonium deux cent trente-huit. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 68 `ra_x2_2021N` — National 2021 N : le stimulateur cardiaque (l'équation)
+VOIX (fr) : National 2021 N. Voici un stimulateur cardiaque, un petit appareil qui aide le cœur. Sa pile contient du plutonium 238, radioactif alpha. Première question : l'équation. Le plutonium donne un noyau X et un noyau d'hélium. A et Z de X ne sont pas connus, et le tableau donne le Z de chaque élément. Étape 1 : trouve le noyau fils, par les lois de Soddy.
+ÉCRAN : Un stimulateur cardiaque fonctionne avec une pile au plutonium 238, radioactif α. | ²³⁸₉₄Pu → ᴬ_Z X + ⁴₂He ; tableau : Pa (91), U (92), Np (93), Pu (94). | Étape 1 : le noyau fils, par les lois de Soddy.
+QUESTION : Étape 1 — Le plutonium 238 (Z = 94) se désintègre par α (Pa : Z = 91 ; U : Z = 92 ; Np : Z = 93). Quel est le noyau fils ? OPTIONS : ['²³⁸₉₃Np', '²³⁴₉₂U', '²³⁸₉₂U']
+
+### Diapo 69 `ra_x2b_2021N` — National 2021 N : lire la demi-vie sur la courbe
+VOIX (fr) : Correction : les lois de Soddy donnent A égale 234 et Z égale 92. Z égale 92, c'est l'uranium. Le noyau fils est l'uranium 234. Deuxième question. Voici la courbe de l'activité de la pile. L'axe des temps est en ans, l'activité en dix puissance dix becquerel. Au départ, a₀ égale un fois dix puissance onze becquerel. Étape 2 : lis la demi-vie sur la courbe.
+ÉCRAN : Étape 1 corrigée : 238 = A + 4 donc A = 234 ; 94 = Z + 2 donc Z = 92 : uranium 234. | ²³⁸₉₄Pu → ²³⁴₉₂U + ⁴₂He. | La courbe a(t) : t en ans, a en 10¹⁰ Bq ; a₀ = 1,0·10¹¹ Bq. | Étape 2 : lire t½ sur la courbe.
+QUESTION : Étape 2 — Lis la demi-vie t½ du plutonium 238 sur la courbe a(t). OPTIONS : ['t½ ≈ 44 ans', 't½ ≈ 88 ans', 't½ ≈ 176 ans']
+
+### Diapo 70 `ra_x2_enonce_p2` — National 2021 N, exercice 3 : la suite de l’énoncé
+VOIX (fr) : Même exercice du national deux mille vingt et un, session normale : le stimulateur cardiaque au plutonium deux cent trente-huit. Voici la suite de l'énoncé. Question deux point deux : En déduire que la valeur de la constante radioactive lambda est : lambda environ égale à sept virgule quatre-vingt-huit fois dix puissance moins trois an puissance moins un. Question deux point trois : Trouver le nombre N zéro de noyaux de plutonium deux cent trente-huit présents à t égale zéro dans ce stimulateur cardiaque ; on prend un an égale trois cent soixante-cinq jours. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 71 `ra_x2c_2021N` — National 2021 N : λ, puis le nombre N₀
+VOIX (fr) : Correction : la moitié de a₀, 5 fois dix puissance dix becquerel. On va horizontalement jusqu'à la courbe, puis on descend : t un demi égale 88 ans. Maintenant la question : combien de noyaux de plutonium y a-t-il au départ ? Rappel : l'activité est en becquerel. Étape 3 : calcule λ en seconde puissance moins un, puis N₀.
+ÉCRAN : Étape 2 corrigée : a₀/2 = 5,0·10¹⁰ Bq, sur la courbe à t = 88 ans : t½ = 88 ans. | a est en becquerel (Bq = s⁻¹). | Étape 3 : λ en s⁻¹, puis N₀.
+QUESTION : Étape 3 — Calcule λ du plutonium 238 en s⁻¹ (t½ = 88 ans ; 1 an = 365 jours). OPTIONS : ['λ ≈ 7,9·10⁻³ s⁻¹', 'λ ≈ 2,49·10⁻¹⁰ s⁻¹', 'λ ≈ 4,0·10⁹ s⁻¹']
+EXERCICE : Étape 3 (suite) — Calcule le nombre N₀ de noyaux de plutonium 238 à t = 0 (a₀ = 1,0·10¹¹ Bq). OPTIONS : ['N₀ ≈ 2,5·10¹', 'N₀ ≈ 4,0·10²⁰', 'N₀ ≈ 1,3·10¹³']
+
+### Diapo 72 `ra_x2_enonce_p3` — National 2021 N, exercice 3 : la suite de l’énoncé
+VOIX (fr) : Même exercice du national deux mille vingt et un, session normale : le stimulateur cardiaque au plutonium deux cent trente-huit. Voici la suite de l'énoncé. Question trois : On considère que ce stimulateur fonctionne de façon efficace lorsque le nombre de noyaux de plutonium deux cent trente-huit qui se désintègrent ne dépasse pas trente pour cent du nombre de noyaux présents dans l'échantillon à t égale zéro. Déterminer, en ans, la durée maximale t max du fonctionnement efficace du stimulateur cardiaque. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 73 `ra_x2d_2021N` — National 2021 N : la durée de fonctionnement de la pile
+VOIX (fr) : Correction. t un demi en secondes : 88 fois 365 fois 24 fois 3600, environ 2,78 fois dix puissance neuf secondes. λ égale ln deux sur t un demi : environ 2,49 fois dix puissance moins dix seconde puissance moins un. N₀ égale a₀ sur λ : environ 4 fois dix puissance vingt noyaux. Dernière question : la pile marche bien tant que les noyaux désintégrés ne dépassent pas 30 pour cent. Étape 4 : calcule t max, la durée de la pile.
+ÉCRAN : Étape 3 corrigée : t½ ≈ 2,78·10⁹ s ; λ = ln2/t½ ≈ 2,49·10⁻¹⁰ s⁻¹ ; N₀ = a₀/λ ≈ 4,0·10²⁰ noyaux. | La pile fonctionne bien tant que les noyaux désintégrés ne dépassent pas 30 % de N₀. | Étape 4 : la durée t_max, en ans.
+QUESTION : Étape 4 — Au bout de combien d'années 30 % des noyaux de plutonium 238 sont-ils désintégrés ? (t½ = 88 ans) OPTIONS : ['≈ 26 ans', '≈ 45 ans', '≈ 153 ans']
+
+### Diapo 74 `ra_x2e_2021N` — National 2021 N : t_max et sa vérification
+VOIX (fr) : Correction. 30 pour cent désintégrés, il reste donc 70 pour cent : N égale 0,7 N₀. La loi : ln de 0,7 égale moins λ t max. Donc t max égale t un demi sur ln deux, fois ln de un sur 0,7. Le résultat : t max environ 45 ans. Sur la courbe, 70 pour cent de a₀ donne la même valeur. On vérifie : 70 pour cent restent, plus que la moitié, donc t max est plus petit que t un demi. 45 ans est plus petit que 88 ans : le résultat est cohérent.
+ÉCRAN : Étape 4 corrigée : 30 % désintégrés, il reste 70 % : N = 0,70·N₀. | ln(0,70) = −λ·t_max, donc t_max = (t½/ln2)·ln(1/0,70) ≈ 45 ans. | Vérification : 70 % restent, plus que la moitié, donc t_max < t½ = 88 ans.
+
+### Diapo 75 `ra_x3_enonce` — National 2022 N, exercice 2 : l’énoncé, tel qu’à l’examen
+VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt-deux, session normale, exercice deux, tel qu'il est à l'examen. Ondes sonores et désintégration de l'iode cent trente et un. Partie deux : désintégration de l'iode cent trente et un. L'iode cent trente et un est radioactif bêta moins. Il est utilisé à faibles doses dans des applications médicales visant l'étude du dysfonctionnement de la thyroïde, ou le traitement de certaines maladies liées à cette glande. La désintégration d'un noyau d'iode cent trente et un produit un noyau X. On se propose, dans cette partie, d'étudier la désintégration de l'iode cent trente et un. Données : quelques isotopes de l'élément : le tellure cent trente et un et le tellure cent trente-deux ; le xénon cent trente et le xénon cent trente et un ; le césium cent vingt-sept et le césium cent trente-deux. Masse du noyau d'iode cent trente et un : cent trente virgule neuf cent six mille cent vingt-cinq u. Masse du noyau X : cent trente virgule neuf cent cinq mille quatre-vingt-deux u. Masse de la particule bêta moins : cinq virgule quarante-huit mille cinq cent quatre-vingts fois dix puissance moins quatre u. Unité de masse atomique : un u égale neuf cent trente et un virgule cinq méga électron-volts par c au carré. Question un : écrire l'équation de désintégration de l'iode cent trente et un, en identifiant le noyau X produit au cours de cette désintégration. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 76 `ra_x3_2022N` — National 2022 N : l'iode 131 (l'équation)
+VOIX (fr) : National 2022 N. L'iode 131 sert en médecine : on en donne une petite dose au malade. L'iode est radioactif bêta moins. Première question : l'équation. L'iode donne un noyau X et un électron. Le tableau donne le Z du tellure, du xénon et du césium. Étape 1 : trouve le noyau fils.
+ÉCRAN : L'iode 131 sert en médecine : on en injecte une petite dose au patient. | ¹³¹₅₃I → ᴬ_Z X + ⁰₋₁e (β⁻). | Tableau : Te (52), Xe (54), Cs (55). | Étape 1 : le noyau fils.
+QUESTION : Étape 1 — ¹³¹₅₃I se désintègre par β⁻ (Te : Z = 52 ; Xe : Z = 54 ; Cs : Z = 55). Quel est le noyau fils ? OPTIONS : ['¹³¹₅₂Te', '¹³¹₅₄Xe', '¹³¹₅₅Cs']
+
+### Diapo 77 `ra_x3b_enonce` — National 2022 N, exercice 2 : la suite de l’énoncé
+VOIX (fr) : Même exercice du national deux mille vingt-deux : l'iode cent trente et un. Voici la suite de l'énoncé. Question trois : on injecte à un patient, à un instant choisi comme origine des dates, une dose d'une solution d'iode cent trente et un, dont l'activité à cet instant est a zéro. La courbe de la figure trois représente les variations de l'activité a de t de cette dose en fonction du temps. Trois point trois : en utilisant la loi de décroissance radioactive, déterminer, en jours, l'instant t un où quatre-vingt-quinze pour cent des noyaux d'iode cent trente et un se sont désintégrés. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 78 `ra_x3b_2022N` — National 2022 N : 95 % des noyaux désintégrés
+VOIX (fr) : Correction : A égale 131 et Z égale 54 : c'est le xénon. Le noyau fils est le xénon 131. Voici maintenant la courbe de l'activité. On l'a déjà lue : t un demi égale 8 jours. Dernière question : au bout de combien de jours 95 pour cent des noyaux sont-ils désintégrés ? Étape 2 : calcule t₁ en jours.
+ÉCRAN : Étape 1 corrigée : 131 = A + 0 donc A = 131 ; 53 = Z − 1 donc Z = 54 : xénon. | ¹³¹₅₃I → ¹³¹₅₄Xe + ⁰₋₁e. | t½ = 8 jours (lue sur la courbe a(t) dans le cours). | Étape 2 : la date t₁ où 95 % des noyaux sont désintégrés.
+QUESTION : Étape 2 — Au bout de combien de jours 95 % des noyaux d'iode 131 sont-ils désintégrés ? (t½ = 8 jours) OPTIONS : ['≈ 0,6 jour', '≈ 34,6 jours', '≈ 7,6 jours']
+
+### Diapo 79 `ra_x3c_2022N` — National 2022 N : t₁ et sa vérification
+VOIX (fr) : Correction. 95 pour cent désintégrés, il reste donc 5 pour cent : N égale 0,05 N₀. t₁ égale t un demi sur ln deux, fois ln de 20. Le résultat : t₁ environ 34,6 jours. On vérifie avec les demi-vies. Après quatre demi-vies, 32 jours, il reste 6,25 pour cent. Après cinq demi-vies, 40 jours, il reste 3,1 pour cent. 5 pour cent est entre les deux : t₁ est entre 32 et 40 jours. Le résultat est cohérent.
+ÉCRAN : Étape 2 corrigée : il reste 5 % : N = 0,05·N₀ ; ln(0,05) = −λ·t₁. | t₁ = (t½/ln2)·ln 20 = (8/0,693) × ln 20 ≈ 34,6 jours. | Vérification : à 4t½ = 32 j il reste 6,25 % ; à 5t½ = 40 j, 3,1 % : 32 j < t₁ < 40 j.
+
+### Diapo 80 `ra_x4_enonce` — National 2025 N, exercice 2 : l’énoncé, tel qu’à l’examen
+VOIX (fr) : Maintenant, nous allons lire l'énoncé de l'examen national deux mille vingt-cinq, la session normale, exercice deux, tel qu'il est à l'examen. Désintégration du cadmium cent sept. On se propose dans cet exercice d'étudier la désintégration du cadmium cent sept. Le cadmium radioactif cent sept donne, en se désintégrant, le noyau d'argent cent sept et une particule, avec émission d'un rayonnement gamma. Données : masse du noyau de cadmium cent sept : cent six virgule quatre-vingt-huit mille quarante-cinq u ; masse du noyau d'argent cent sept : cent six virgule quatre-vingt-sept mille neuf cent quarante-sept u ; masse de la particule émise : cinq virgule quatre cent quatre-vingt-six fois dix puissance moins quatre u ; demi-vie du cadmium cent sept : t un demi égale six virgule quatre-vingt-treize heures ; un u égale neuf cent trente et un virgule quarante-neuf méga électron-volts par c au carré. Question deux : Écrire l'équation de désintégration d'un noyau de cadmium cent sept, en précisant le type de cette désintégration. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 81 `ra_x4_2025N` — National 2025 N : le cadmium 107 (la particule)
+VOIX (fr) : National 2025 N. Le cadmium 107 se désintègre : il donne l'argent 107, une particule, et un rayonnement gamma. A et Z de la particule ne sont pas connus. Étape 1 : trouve A et Z de la particule par Soddy, puis nomme le type de la désintégration.
+ÉCRAN : Un échantillon de cadmium 107 se désintègre en argent 107, avec une particule et un rayonnement γ. | ¹⁰⁷₄₈Cd → ¹⁰⁷₄₇Ag + ᴬ_Z e + γ. | Étape 1 : A et Z de la particule, puis le type.
+QUESTION : Étape 1 — ¹⁰⁷₄₈Cd → ¹⁰⁷₄₇Ag + ᴬ_Z e + γ : quelle est la particule émise, et le type de désintégration ? OPTIONS : ['⁰₋₁e : β⁻', '⁰₁e : β⁺', '⁴₂He : α']
+
+### Diapo 82 `ra_x4_enonce_p2` — National 2025 N, exercice 2 : la suite de l’énoncé
+VOIX (fr) : Même exercice du national deux mille vingt-cinq, session normale : le cadmium cent sept, de demi-vie six virgule quatre-vingt-treize heures. Voici la suite de l'énoncé. Question trois point un : Un laboratoire reçoit, à la date t égale zéro, un échantillon de cadmium cent sept d'activité a zéro égale un virgule vingt-cinq fois dix puissance douze becquerels. À l'instant t un égale deux t un demi, l'activité de cet échantillon est a un, et à l'instant t deux égale trois t un demi, son activité est a deux. Établir l'expression a deux égale a un sur deux. Question trois point deux : Montrer que l'expression de N d, le nombre de noyaux désintégrés entre les instants t un et t deux, est : N d égale a zéro fois t un demi, sur huit fois logarithme népérien de deux. Maintenant, comprenons l'exercice étape par étape.
+
+### Diapo 83 `ra_x4b_2025N` — National 2025 N : le nombre N₀, puis les noyaux désintégrés
+VOIX (fr) : Correction : A égale zéro et Z égale un : la particule est un positon, la désintégration est bêta plus. Voici la courbe du nombre de noyaux. L'axe des temps est gradué en demi-vies. Les données : t un demi égale 6,93 heures, et a₀ égale 1,25 fois dix puissance douze becquerel. Étape 2 : calcule N₀. Ensuite, combien de noyaux se désintègrent entre deux et trois demi-vies.
+ÉCRAN : Étape 1 corrigée : 107 = 107 + A donc A = 0 ; 48 = 47 + Z donc Z = 1 : positon, β⁺. | Données : t½ = 6,93 h ; a₀ = 1,25·10¹² Bq. | Étape 2 : N₀, puis les noyaux désintégrés entre 2t½ et 3t½.
+QUESTION : Étape 2 — Calcule le nombre N₀ de noyaux de cadmium 107 à t = 0 (t½ = 6,93 h ; a₀ = 1,25·10¹² Bq). OPTIONS : ['N₀ ≈ 1,25·10¹³', 'N₀ ≈ 4,5·10¹⁶', 'N₀ ≈ 3,5·10⁷']
+EXERCICE : Étape 3 — N₀ ≈ 4,5·10¹⁶ : combien de noyaux se désintègrent entre 2t½ et 3t½ ? OPTIONS : ['≈ 5,6·10¹⁵', '≈ 1,1·10¹⁶', '≈ 3,9·10¹⁶']
+
+### Diapo 84 `ra_x4c_2025N` — National 2025 N : N₀ et les noyaux désintégrés entre 2t½ et 3t½
+VOIX (fr) : Correction de N₀ : a₀ fois t un demi sur ln deux, environ 4,5 fois dix puissance seize noyaux. Maintenant sur la courbe : après deux t un demi, il reste N₀ sur quatre. Après trois t un demi, il reste N₀ sur huit. Ce qui s'est désintégré entre les deux, c'est la différence : N₀ sur quatre moins N₀ sur huit, soit N₀ sur huit. N d vaut environ 5,6 fois dix puissance quinze noyaux. Pour finir, le QCM de cours du même sujet : vrai ou faux.
+ÉCRAN : Étape 2 corrigée : N₀ = a₀·t½/ln2 = (1,25·10¹² × 2,49·10⁴)/0,693 ≈ 4,5·10¹⁶. | Étape 3 corrigée : à 2t½ il reste N₀/4, à 3t½ N₀/8 ; N_d = N₀/4 − N₀/8 = N₀/8 ≈ 5,6·10¹⁵ noyaux. | Pour finir : le QCM de cours du même sujet.
+EXERCICE : QCM de cours du national 2025 N : vrai ou faux ? OPTIONS : None
+## VII. Bilan du chapitre
+
+### Diapo 85 `ra_z1_bilan` — Ce qu'il faut retenir
+VOIX (fr) : Voilà ce qu'il faut retenir, bloc par bloc. Le noyau : Z protons, N égale A moins Z neutrons. La stabilité : la vallée, au-dessus bêta moins, au-dessous bêta plus, les lourds alpha. La radioactivité : spontanée, aléatoire, inéluctable, et Soddy conserve A et Z. Les désintégrations : alpha, bêta moins, bêta plus, gamma. La famille : l'équation de A, puis celle de Z. La loi : N de t égale N zéro exponentielle moins lambda t. La demi-vie : t un demi égale ln deux sur lambda. L'activité : a égale lambda N, en becquerel. La datation : t égale un sur lambda fois ln de a zéro sur a. Et en page deux, ce que tu dois encore reprendre.
+ÉCRAN : Noyau ᴬ_Z X : Z protons, N = A − Z neutrons ; isotopes : même Z, A différents. | Diagramme (N, Z) : vallée de stabilité ; au-dessus β⁻, au-dessous β⁺, lourds α. | Radioactivité : désintégration spontanée, aléatoire et inéluctable ; Soddy : A = A₁ + A₂ ; Z = Z₁ + Z₂. | α : ⁴₂He ; β⁻ : ⁰₋₁e ; β⁺ : ⁰₁e ; γ : A et Z inchangés. | Famille : A = A' + 4y puis Z = Z' + 2y − x. | N(t) = N₀·e^(−λt) (même loi pour m et n) ; τ = 1/λ (en s) ; N_d = N₀ − N(t). | t½ = ln2/λ ; N(n·t½) = N₀/2ⁿ. | a = λ·N (a en Bq, λ en s⁻¹) ; N = (m/M)·N_A ; m = (N/N_A)·M. | t = (1/λ)·ln(a₀/a) (a₀ : échantillon récent de même masse).
+
+### Diapo 86 `ra_z2_carte` — La carte du chapitre
+VOIX (fr) : Voilà la carte du chapitre. Au centre, la définition : un noyau instable se désintègre, au hasard. Première branche, le noyau. Puis la stabilité, la vallée. Les désintégrations, alpha, bêta, gamma. La famille radioactive. La loi de décroissance. La demi-vie. L'activité. Et la datation. Un noyau seul, c'est le hasard. Beaucoup de noyaux, c'est une loi. Regarde les branches entourées : ce sont celles que tu dois reprendre.
+ÉCRAN : Centre : la radioactivité, désintégration d'un noyau instable. | Branches : noyau, stabilité, désintégrations, famille, loi, demi-vie, activité, datation. | Touche une branche pour relire sa phrase ; les branches entourées sont à reprendre.
+
+### Diapo 87 `ra_fermeture_cours` — Ce qu'il faut retenir, et comment réviser
+VOIX (fr) : Nous arrivons à la fin du cours : Décroissance radioactive. Que faut-il retenir ? Trois idées. Première : les lois de Soddy : conservation du nombre de nucléons et du nombre de charge. Deuxième : la loi de décroissance : N de t égale N zéro fois e puissance moins lambda t. Troisième : la demi-vie : t demi égale ln deux sur lambda. Maintenant quelques conseils pour réviser. Relis ton cahier, et refais seul les exercices du national. Quand tu réponds, écris la réponse complète : la relation, puis l'application numérique, puis le résultat avec l'unité, car chacune a ses points. Le jour de l'examen, partage ton temps, et commence par la question qui te paraît facile. La veille, dors bien. Écris ces conseils dans ton cahier. Tu as bien travaillé, bon courage ! Le prochain cours : Noyaux, masse et énergie. On s'y retrouve !
+ÉCRAN : Retenir : Soddy : A et Z conservés · N(t) = N₀·e^(−λt) · t₁/₂ = (ln 2)/λ | Réviser : relire le cahier, refaire les exercices du national | Rédiger : relation → A.N. → résultat avec son unité | Jour J : gérer son temps · bien dormir la veille
+
+## Questions de bloc (posées après la dernière diapo du bloc)
+- après diapo 5 `ra_s1_b1` RETROUVER : Cahier fermé : écris la relation qui donne le nombre de neutrons d'un noyau ᴬ_Z X.
+- après diapo 5 `ra_s1_b1` EXERCICE : Donne la composition du noyau ¹⁶₈O. OPTIONS : ['16 protons et 8 neutrons', '8 protons et 8 neutrons', '8 protons et 16 neutrons']
+- après diapo 8 `ra_s1_b2` RETROUVER : Cahier fermé : donne la définition de deux isotopes.
+- après diapo 8 `ra_s1_b2` EXERCICE : Lesquels de ces noyaux sont des isotopes ? OPTIONS : ['¹⁴₆C et ¹⁴₇N', '¹⁶₈O et ¹⁷₉F', '¹²₆C et ¹³₆C']
+- après diapo 10 `ra_s1_b3` RETROUVER : Cahier fermé : quel type de désintégration fait un noyau situé au-dessus de la vallée, au-dessous, et un noyau lourd ?
+- après diapo 10 `ra_s1_b3` EXERCICE : Le césium ¹³⁷₅₅Cs est au-dessus de la vallée de stabilité. Quel type de désintégration fait-il ? OPTIONS : ['β⁺', 'β⁻', 'α']
+- après diapo 13 `ra_s2_b1` RETROUVER : Cahier fermé : donne les trois caractères de la désintégration radioactive.
+- après diapo 13 `ra_s2_b1` EXERCICE : On chauffe un échantillon radioactif de 20 °C à 800 °C. Son nombre de désintégrations par seconde… OPTIONS : ['augmente beaucoup', 'ne change pas', 'devient nul']
+- après diapo 16 `ra_s2_b2` RETROUVER : Cahier fermé : écris les deux lois de Soddy pour ᴬ_Z X → ᴬ¹_Z₁ Y + ᴬ²_Z₂ P.
+- après diapo 16 `ra_s2_b2` EXERCICE : L'uranium ²³⁸₉₂U émet une particule α. Quel est le noyau fils ? (Th : Z = 90 ; Pa : Z = 91) OPTIONS : ['²³⁴₉₀Th', '²³⁸₉₀Th', '²³⁴₉₁Pa']
+- après diapo 20 `ra_s2_b3` RETROUVER : Cahier fermé : écris l'équation générale d'une désintégration β⁻.
+- après diapo 20 `ra_s2_b3` EXERCICE : Le cobalt ⁶⁰₂₇Co est radioactif β⁻. Quel est le noyau fils ? (Fe : Z = 26 ; Ni : Z = 28) OPTIONS : ['⁶⁰₂₆Fe', '⁵⁹₂₈Ni', '⁶⁰₂₈Ni']
+- après diapo 23 `ra_s3_b1` RETROUVER : Cahier fermé : quel type de désintégration fait un noyau situé au-dessus de la vallée, au-dessous, et un noyau lourd ?
+- après diapo 23 `ra_s3_b1` EXERCICE : Le césium ¹³⁷₅₅Cs est au-dessus de la vallée de stabilité. Quel type de désintégration fait-il ? OPTIONS : ['β⁺', 'β⁻', 'α']
+- après diapo 27 `ra_s3_b2` RETROUVER : Cahier fermé : qu'est-ce qu'une famille radioactive ?
+- après diapo 27 `ra_s3_b2` EXERCICE : ²³⁸₉₂U → ²⁰⁶₈₂Pb : combien de désintégrations α et β⁻ ? OPTIONS : ['6 α et 8 β⁻', '8 α et 6 β⁻', '8 α et 10 β⁻']
+- après diapo 31 `ra_s3_b3` RETROUVER : Cahier fermé : écris l'équation différentielle vérifiée par N(t).
+- après diapo 31 `ra_s3_b3` EXERCICE : Dans dN = −λ·N·dt, que représente −dN ? OPTIONS : ['Le nombre de noyaux désintégrés pendant dt', 'Le nombre de noyaux non désintégrés à la date t', 'La constante radioactive, propre au type de noyau']
+- après diapo 34 `ra_s4_b1` RETROUVER : Cahier fermé : écris l'équation différentielle vérifiée par N(t).
+- après diapo 34 `ra_s4_b1` EXERCICE : Dans dN = −λ·N·dt, que représente −dN ? OPTIONS : ['Le nombre de noyaux désintégrés pendant dt', 'Le nombre de noyaux non désintégrés à la date t', 'La constante radioactive, propre au type de noyau']
+- après diapo 37 `ra_s4_b2` RETROUVER : Cahier fermé : écris la loi de décroissance radioactive.
+- après diapo 37 `ra_s4_b2` EXERCICE : Dans N(t) = N₀·e^(−λt), que représente N(t) ? OPTIONS : ["Le nombre de noyaux désintégrés à l'instant t", "Le nombre de noyaux restants à l'instant t", 'Le nombre de noyaux au départ']
+- après diapo 40 `ra_s4_b3` RETROUVER : Cahier fermé : écris la relation entre la constante de temps τ et la constante radioactive λ.
+- après diapo 40 `ra_s4_b3` EXERCICE : Un nucléide a λ = 0,05 j⁻¹. Que vaut sa constante de temps τ ? OPTIONS : ['0,05 jour', '20 jours', '13,9 jours']
+- après diapo 43 `ra_s5_b1` RETROUVER : Cahier fermé : écris la relation entre la demi-vie et la constante radioactive.
+- après diapo 43 `ra_s5_b1` EXERCICE : Le radon 222 a une demi-vie de 3,8 jours. Quel pourcentage des noyaux reste-t-il après 11,4 jours ? OPTIONS : ['12,5 %', '33 %', '25 %']
+- après diapo 47 `ra_s5_b2` RETROUVER : Cahier fermé : écris la relation entre l'activité et le nombre de noyaux.
+- après diapo 47 `ra_s5_b2` EXERCICE : Un échantillon contient N = 4,0·10¹² noyaux de constante radioactive λ = 1,0·10⁻⁶ s⁻¹. Calcule son activité. OPTIONS : ['4,0·10¹⁸ Bq', '4,0·10⁶ Bq', '2,5·10⁻¹⁹ Bq']
+- après diapo 50 `ra_s5_b3` RETROUVER : Cahier fermé : écris la relation qui donne le nombre de noyaux contenus dans une masse m.
+- après diapo 50 `ra_s5_b3` EXERCICE : Combien de noyaux dans 1 g d'iode 131 (M = 131 g/mol, N_A = 6,02·10²³ mol⁻¹) ? OPTIONS : ['4,6·10²¹', '7,9·10²⁵', '6,02·10²³']
+- après diapo 55 `ra_s6_b1` RETROUVER : Cahier fermé : sur une courbe a(t), comment lit-on la demi-vie t½ ?
+- après diapo 55 `ra_s6_b1` EXERCICE : Un arbre est coupé. Quelques siècles plus tard, l'activité du carbone 14 de son bois… OPTIONS : ['est restée égale à a₀', 'a diminué', 'a augmenté']
+- après diapo 57 `ra_s6_b2` RETROUVER : Cahier fermé : sur une courbe a(t), comment lit-on la demi-vie t½ ?
+- après diapo 57 `ra_s6_b2` EXERCICE : Un arbre est coupé. Quelques siècles plus tard, l'activité du carbone 14 de son bois… OPTIONS : ['est restée égale à a₀', 'a diminué', 'a augmenté']
+- après diapo 60 `ra_s6_b3` RETROUVER : Cahier fermé : écris la relation qui donne l'âge t d'un échantillon à partir des activités a₀ et a.
+- après diapo 60 `ra_s6_b3` EXERCICE : Un bois ancien a une activité égale au quart de celle d'un bois récent de même masse (t½ = 5730 ans). Quel est son âge ? OPTIONS : ['1432 ans', '22 920 ans', '11 460 ans']
+- après diapo 64 `ra_s7_b1` RETROUVER : Cahier fermé : donne la définition de la demi-vie, mot pour mot.
+- après diapo 64 `ra_s7_b1` EXERCICE : Au bout de combien d'années 30 % des noyaux de plutonium 238 sont-ils désintégrés ? (t½ = 88 ans) OPTIONS : ['≈ 26 ans', '≈ 45 ans', '≈ 153 ans']
+- après diapo 72 `ra_s7_b2` RETROUVER : Cahier fermé : donne la définition de la demi-vie, mot pour mot.
+- après diapo 72 `ra_s7_b2` EXERCICE : Au bout de combien d'années 30 % des noyaux de plutonium 238 sont-ils désintégrés ? (t½ = 88 ans) OPTIONS : ['≈ 26 ans', '≈ 45 ans', '≈ 153 ans']
+- après diapo 74 `ra_s7_b3` RETROUVER : Cahier fermé : donne la définition de la demi-vie, mot pour mot.
+- après diapo 74 `ra_s7_b3` EXERCICE : Au bout de combien d'années 30 % des noyaux de plutonium 238 sont-ils désintégrés ? (t½ = 88 ans) OPTIONS : ['≈ 26 ans', '≈ 45 ans', '≈ 153 ans']
+- après diapo 79 `ra_s8_b1` RETROUVER : Cahier fermé : donne la définition de la demi-vie, mot pour mot.
+- après diapo 79 `ra_s8_b1` EXERCICE : Au bout de combien d'années 30 % des noyaux de plutonium 238 sont-ils désintégrés ? (t½ = 88 ans) OPTIONS : ['≈ 26 ans', '≈ 45 ans', '≈ 153 ans']
+- après diapo 84 `ra_s8_b2` RETROUVER : Cahier fermé : écris l'équation générale d'une désintégration β⁺.
+- après diapo 84 `ra_s8_b2` EXERCICE : QCM de cours du national 2025 N : vrai ou faux ? OPTIONS : None
+- après diapo 86 `ra_s8_b3` RETROUVER : Cahier fermé : écris l'équation générale d'une désintégration β⁺.
+- après diapo 86 `ra_s8_b3` EXERCICE : QCM de cours du national 2025 N : vrai ou faux ? OPTIONS : None
