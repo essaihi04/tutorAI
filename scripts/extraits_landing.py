@@ -186,12 +186,18 @@ def extrait(cours: dict, ident: str, onglet: str, matiere: str, capacite: str) -
             raise SystemExit(f'fichier absent : {url}')
     duree = piste['duration_ms'] / 1000
     parole = d['speech_text']['mixed'].strip()
+    # (26/11/2026, « Toutes AI Studio ») la page d'accueil a ses propres voix des extraits (même texte que la
+    # diapo, voix Bodi d'AI Studio) dans media/audio/landing/extraits/ ; les voix des cours ne changent pas.
+    propre = PUBLIC / 'media' / 'audio' / 'landing' / 'extraits' / f'{ident}.mp3'
+    if propre.exists():
+        piste = {'url': f'/media/audio/landing/extraits/{ident}.mp3'}
+        duree = duree_mp3(str(propre))
 
     # (26/11/2026, « synchroniser finement ») l'instant d'un mot vient des repères de la piste — où la voix dit
     # vraiment chaque phrase —, comme dans le lecteur de cours ; la diapo ne prend plus que 0,15 s d'avance (0,4 s
     # pour une commande) au lieu de la règle de trois qui avançait de 1,5 à 2 s.
     m = d['audio']['mixed']
-    connus = m.get('reperes') if m.get('reperes_duree') and abs(m['reperes_duree'] - duree) < 0.3 else None
+    connus = m.get('reperes') if not propre.exists() and m.get('reperes_duree') and abs(m['reperes_duree'] - duree) < 0.3 else None
     reperes = reperes_piste(piste['url'], parole, connus)
 
     def instant(mot: str) -> float:

@@ -209,6 +209,14 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
     if (visible && son && enAccueil && !pause) a.play().catch((err: DOMException) => { if (err?.name === 'NotAllowedError') setSon(false); });
     else a.pause();
   }, [visible, son, enAccueil, pause]);
+  useEffect(() => {
+    if (!(visible && son && enAccueil && !pause)) return;
+    const relance = setInterval(() => {
+      const a = voixAccueil.current;
+      if (a && a.paused && !a.ended && a.readyState >= 2) a.play().catch(() => {});
+    }, 300);
+    return () => clearInterval(relance);
+  }, [visible, son, enAccueil, pause]);
   const suivreAccueil = () => {
     const a = voixAccueil.current;
     if (!a || !isFinite(a.duration) || accueil < 0) return;
@@ -247,6 +255,9 @@ export default function TableauVivant({ extraits, couleurs }: { extraits: Extrai
     let dernier = -1;
     const battre = setInterval(() => {
       const a = voix.current;
+      // Une lecture interrompue par le chargement de la piste (AbortError au changement d'extrait) ne repart pas
+      // seule : tant que la voix doit jouer et qu'elle est à l'arrêt, on la relance dès qu'elle est prête.
+      if (son && a && e.audio && a.paused && !a.ended && a.readyState >= 2) a.play().catch(() => {});
       const maintenant = son && a && e.audio ? (a.ended ? e.duree + (horloge.current += PAS) : a.currentTime) : (horloge.current += PAS);
       while (envoyees.current < e.commandes.length && e.commandes[envoyees.current].t <= maintenant) {
         const c = e.commandes[envoyees.current++];
