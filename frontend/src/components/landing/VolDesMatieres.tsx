@@ -42,13 +42,14 @@ const ETAPES = [
  * fait défiler la plage au rythme de sa piste, pour que la voix et l'image restent ensemble.
  */
 const VOIX_VOL = [
-  { fichier: 'vol_0_depart', de: 0, a: .04 },
-  { fichier: 'vol_1_maths', de: .04, a: .24 },
-  { fichier: 'vol_2_physique', de: .24, a: .5 },
-  { fichier: 'vol_3_chimie', de: .5, a: .69 },
-  { fichier: 'vol_4_svt', de: .69, a: .86 },
-  { fichier: 'vol_5_muscle', de: .86, a: .985 },
-  { fichier: 'fin_vol', de: .985, a: 1.001 },
+  // `sans` : la durée du passage quand sa piste manque ou ne se charge pas (s)
+  { fichier: 'vol_0_depart', de: 0, a: .04, sans: 2.5 },
+  { fichier: 'vol_1_maths', de: .04, a: .24, sans: 11 },
+  { fichier: 'vol_2_physique', de: .24, a: .5, sans: 14 },
+  { fichier: 'vol_3_chimie', de: .5, a: .69, sans: 11 },
+  { fichier: 'vol_4_svt', de: .69, a: .86, sans: 10 },
+  { fichier: 'vol_5_muscle', de: .86, a: .985, sans: 11 },
+  { fichier: 'fin_vol', de: .985, a: 1.001, sans: 4 },
 ] as const;
 const VOIX_URL = (f: string) => `/media/audio/landing/${f}.mp3`;
 /** Un mot clé de la phrase de fin : sa couleur et son tour (styles .lp-mot de la landing). */
@@ -748,7 +749,7 @@ export default function VolDesMatieres() {
   const [refusee, setRefusee] = useState(false);
   const [visite, setVisite] = useState(false);
   const enCours = useRef(-1);
-  const durees = useRef<number[]>(VOIX_VOL.map(() => 9));
+  const durees = useRef<number[]>(VOIX_VOL.map(v => v.sans));
   useEffect(() => {
     VOIX_VOL.forEach((v, k) => {
       const a = new Audio(); a.preload = 'metadata'; a.src = VOIX_URL(v.fichier);
@@ -804,7 +805,7 @@ export default function VolDesMatieres() {
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_center,transparent_45%,#0a1410_100%)]" />
 
         {/* L'invitation, au départ : c'est la première chose que voit l'élève */}
-        <div className="absolute inset-x-0 top-[17vh] [@media(max-height:500px)]:top-[19vh] text-center px-4 transition-opacity duration-500" style={{ opacity: p < .03 ? 1 : 0, pointerEvents: p < .03 ? 'auto' : 'none' }}>
+        <div className="absolute inset-x-0 top-[17vh] [@media(max-height:500px)]:top-[19vh] text-center px-4 transition-opacity duration-500" style={{ opacity: p < .03 && !visite ? 1 : 0, pointerEvents: p < .03 && !visite ? 'auto' : 'none' }}>
           <div className="craie text-2xl [@media(max-height:500px)]:text-lg text-cyan-300 mb-2">— ferme les yeux une seconde —</div>
           <h1 className="craie text-5xl sm:text-7xl [@media(max-height:500px)]:text-4xl text-white leading-[.95]">Imagine ton année<br /><span className="text-yellow-300">vue d'en haut.</span></h1>
           <button onClick={lancerVisite}
