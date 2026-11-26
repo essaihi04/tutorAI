@@ -914,7 +914,7 @@ export default function VolDesMatieres() {
           {/* En darija seulement (26 novembre 2026) ; les mots clés s'allument et se soulignent comme dans « le mot de Moalim » */}
           <div dir="rtl" className={`font-brand font-bold text-white max-w-4xl ${fin ? 'lp-mots-vus' : ''}`}>
             <p className="text-4xl sm:text-6xl [@media(max-height:500px)]:text-3xl leading-[1.35]">
-              هادشي ماشي حلم، هادا هو <span className="lp-mot" style={MOT('#fde047', 0)}>البرنامج ديالك</span>.
+              هادشي ماشي حلم، هادا هو <span className="lp-mot" style={MOT('#fde047', 0)}><bdi>le programme</bdi> ديالك</span>.
             </p>
             <p className="mt-3 [@media(max-height:500px)]:mt-1 text-2xl sm:text-4xl [@media(max-height:500px)]:text-xl leading-[1.5] text-white/90">
               غادي نقطعوه <span className="lp-mot" style={MOT('#6ee7b7', 1)}>مع بعض</span>، درس بدرس، وأنا معاك فكل خطوة.
