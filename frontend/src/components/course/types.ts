@@ -108,6 +108,7 @@ export interface Demonstration {
   audio?: string;
   /** (26/11/2026) [caractère de `parole`, seconde de `audio`] : où la voix dit chaque phrase (`scripts/reperes_voix.py`). */
   reperes?: [number, number][];
+  reperes_duree?: number;
   /**
    * `false` : la démonstration garde son tableau à part même quand la diapositive a une figure. Par défaut (18 novembre
    * 2026, simulations-au-tableau règle 17), une diapositive avec une simulation ou une image joue la démonstration SUR
@@ -268,6 +269,8 @@ export interface PublishedSlideAudio {
   /** (25/11/2026) [caractère du texte parlé, seconde de la piste] : où la voix dit vraiment chaque phrase
    *  (`scripts/reperes_voix.py`, d'après les pauses de la piste). Le lecteur interpole entre deux repères. */
   reperes?: [number, number][];
+  /** la durée (s) du fichier sur lequel les repères ont été pris : une autre durée → repères ignorés */
+  reperes_duree?: number;
 }
 
 export interface CourseSlide {

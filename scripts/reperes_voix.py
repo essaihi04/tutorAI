@@ -102,11 +102,13 @@ def main():
                 url = (m.get('url') or '').split('?')[0]
                 mp3 = os.path.join(public, url.lstrip('/'))
                 if not texte or not url or not os.path.isfile(mp3):
-                    m.pop('reperes', None)
+                    m.pop('reperes', None); m.pop('reperes_duree', None)
                     continue
-                t0, t1, reprises, _ = pauses(mp3)
+                t0, t1, reprises, total = pauses(mp3)
                 rep = apparier(texte, t0, t1, reprises)
                 m['reperes'] = [list(x) for x in rep]
+                # la durée du fichier repéré : le lecteur ignore les repères d'une piste refaite depuis (autre durée)
+                m['reperes_duree'] = round(total, 3)
                 n += 1
                 sans += len(rep) <= 2
                 if s['id'] == voir:
@@ -123,10 +125,11 @@ def main():
                 texte = (dm.get('parole') or '').strip()
                 mp3 = os.path.join(public, (dm.get('audio') or '').split('?')[0].lstrip('/'))
                 if not texte or not dm.get('audio') or not os.path.isfile(mp3):
-                    dm.pop('reperes', None)
+                    dm.pop('reperes', None); dm.pop('reperes_duree', None)
                     continue
-                t0, t1, reprises, _ = pauses(mp3)
+                t0, t1, reprises, total = pauses(mp3)
                 dm['reperes'] = [list(x) for x in apparier(texte, t0, t1, reprises)]
+                dm['reperes_duree'] = round(total, 3)
                 n += 1
         with open(f, 'w', encoding='utf-8') as o:
             json.dump(d, o, ensure_ascii=False, indent=indent)

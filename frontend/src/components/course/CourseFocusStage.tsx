@@ -588,7 +588,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   // (`audio.mixed.reperes`, où la voix dit vraiment chaque phrase), l'instant d'un mot est interpolé entre les deux
   // repères qui l'entourent, et la diapo ne prend plus que 0,15 s (0,4 s pour une commande) d'avance. Sans repères :
   // la règle de trois d'avant (place dans le texte × durée), qui avançait de 1,5 à 2 s sur la darija mêlée de français.
-  const reperes = !lectureMuette && pisteEnregistree?.reperes && pisteEnregistree.reperes.length >= 2 ? pisteEnregistree.reperes : null;
+  // (26/11/2026) des repères pris sur une autre version de la piste (durée différente) sont ignorés
+  const reperes = !lectureMuette && pisteEnregistree?.reperes && pisteEnregistree.reperes.length >= 2
+    && (!pisteEnregistree.reperes_duree || !duree || Math.abs(pisteEnregistree.reperes_duree - duree) < 0.3) ? pisteEnregistree.reperes : null;
   const instant = useCallback((mot: string) => {
     const i = parole.indexOf(mot);
     if (i < 0 || !duree) return 0;
@@ -1695,7 +1697,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     }
     const position = () => {
       // avec les repères de la piste (26/11/2026) : le caractère que la voix dit vraiment, sinon la règle de trois
-      if (mode === 'piste' && voix && d.reperes && d.reperes.length >= 2) return caractereALaSeconde(d.reperes, voix.currentTime);
+      if (mode === 'piste' && voix && d.reperes && d.reperes.length >= 2
+        && (!d.reperes_duree || !Number.isFinite(voix.duration) || Math.abs(d.reperes_duree - voix.duration) < 0.3)) return caractereALaSeconde(d.reperes, voix.currentTime);
       if (mode === 'piste' && voix) return Number.isFinite(voix.duration) && voix.duration > 0 ? (voix.currentTime / voix.duration) * n : 0;
       if (mode === 'morceaux') {
         const p = progressionMorceaux();
