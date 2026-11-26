@@ -38,7 +38,7 @@ CHOIX = [
     ('phys_ch1_waves_exemple', 'wx_n7c_correction_2022r', 'National', 'national', 'Il corrige le national',
      {'feuille': 'wx_n7_enonce', 'entete': {'titre': NATIONAL, 'sujet': 'Physique-Chimie · exercice 2 : ondes mécaniques'}}),
     ('phys_ch3_ondes_lumineuses', 'ol_d2_fente_fine', 'Physique', 'physique', "Il fait l'expérience"),
-    ('phys_ch4_radioactivite', 'ra_l1b_moitie', 'Physique', 'physique', 'Il compte avec toi'),
+    ('phys_ch5_energie_nucleaire', 'en_r2_fission', 'Physique', 'physique', 'Il montre la fission'),
     ('math_ch2_derivation_etude_fonctions', 'df_nd2_rapprocher', 'Maths', 'maths', 'Il anime la notion'),
     ('math_ch1_limites_continuite', 'lc_t4_au_moins_une', 'Maths', 'maths', 'Il fait voir le théorème'),
     ('svt_ch1_reactions_responsables_liberation_energie', 'le_c4_relais', 'SVT', 'svt', 'Il anime le mécanisme'),
