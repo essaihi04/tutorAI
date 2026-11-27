@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La carte du voyage du glucose — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La carte du voyage du glucose : à gauche le milieu extérieur, à droite la cellule peinte ; le glucose entre, la glycolyse le coupe en deux acides pyruviques, puis deux routes : avec dioxygène vers la mitochondrie (acides de Krebs et CO2), sans dioxygène vers l'éthanol et le CO2 ; la carte s'enrichit d'étape en étape"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script src="demarche.js"></script>
+<script src="reference2.js"></script>
+<script>
+/*
+ * La carte du voyage du glucose (cours de référence SVT, diapositives rf_a3_voyage1, rappels des activités 2 et 3,
+ * rf_b2_voyage), 27 novembre 2026. C'est le schéma bilan du chapitre, construit flèche par flèche, CUMULATIF :
+ *   ?etape=1 (fin de l'activité 1) : dehors → dedans → glycolyse → 2 acides pyruviques → deux routes
+ *            (avec O2 : la mitochondrie, acides de Krebs + CO2 ; sans O2 : éthanol + CO2) ;
+ *   ?etape=2 (fin de l'activité 2) : la glycolyse détaillée (2 ATP gagnés, 2 NADH,H+, dans le hyaloplasme, sans O2) ;
+ *   ?etape=3 (fin de l'activité 3) : la mitochondrie détaillée (deux membranes, crêtes, matrice et ses enzymes) ;
+ *   ?etape=4 (bilan)               : tout, relu nœud par nœud, puis « à suivre » dans la matrice.
+ * L'étape n s'ouvre figée sur la fin de l'étape n − 1 (tout ce qui précède est déjà au tableau, mêmes dessins) et joue ses
+ * propres moments ; ?depart=<moment> l'emporte. Les dessins sont ceux du lexique (glucose = 6 billes jaunes, acide
+ * pyruvique = 3, éthanol = 2, CO2, ATP, taxi NADH,H+, mitochondrie). Un moment par flèche ; un repère par nœud.
+ */
+const R2 = window.Ref2, P = window.SVTPeinture, LX = window.Lexique, { mix, QS } = R2;
+const ETAPE = Math.max(1, Math.min(4, Math.round(+QS.get('etape')) || 1));
+const PAR_ETAPE = [
+  [ ['dehors', 2.4, 'le glucose est dehors, dans le milieu'],
+    ['entree', 2.6, 'le glucose entre dans la cellule'],
+    ['glycolyse', 3, 'la glycolyse, dans le hyaloplasme'],
+    ['pyruvate', 3, 'le glucose est coupé en deux acides pyruviques : le carrefour'],
+    ['route_o2', 2.8, 'avec dioxygène : l’acide pyruvique entre dans la mitochondrie'],
+    ['krebs_co2', 3.2, 'dans la mitochondrie : acides de Krebs et CO2, c’est la respiration'],
+    ['route_sans_o2', 2.8, 'sans dioxygène : l’acide pyruvique reste dans le hyaloplasme'],
+    ['ethanol_co2', 3.2, 'éthanol et CO2 : c’est la fermentation'] ],
+  [ ['atp', 3, 'la glycolyse rapporte 2 ATP'],
+    ['nadh', 3, 'et 2 taxis chargés : 2 NADH,H+'],
+    ['hyaloplasme', 3, 'elle se passe dans le hyaloplasme, sans dioxygène'] ],
+  [ ['membranes', 3.4, 'la mitochondrie : membrane externe, membrane interne en crêtes'],
+    ['matrice', 3, 'au centre : la matrice'],
+    ['enzymes', 3.4, 'dans la matrice : décarboxylases et déshydrogénases'] ],
+  [ ['tout', 6, 'toute la carte, relue nœud par nœud'],
+    ['a_suivre', 3.5, 'à suivre : que devient l’acide pyruvique dans la matrice ?'] ],
+];
+const MOMENTS = PAR_ETAPE.slice(0, ETAPE).flat();
+const DEPART = ETAPE > 1 ? PAR_ETAPE[ETAPE - 2][PAR_ETAPE[ETAPE - 2].length - 1][0] : null;
+const NOEUDS = ['glucose_dehors', 'glucose', 'glycolyse', 'pyruvates', 'route_o2', 'mitochondrie', 'krebs', 'route_sans_o2', 'ethanol'];
+const a = (nom) => MOMENTS.some(m => m[0] === nom);   // ce moment existe à cette étape
+
+function dessiner(c, t, e) {
+  const { ctx, sx, L, k } = e, leg = e.S.legendes, tt = e.taille(17);
+  const vu = (nom, f = 0) => a(nom) && e.vu(nom, f), d = (nom, x, y) => (a(nom) ? e.d(nom, x, y) : 0), si = (nom, f, cle, fn) => a(nom) && e.si(nom, f, cle, fn);
+  const xM = sx(126), xG0 = xM / 2 + 2, xG = sx(215), xMi = sx(560), yMi = 152, rx = 130 * Math.min(1.3, k), ry = 72, xE = sx(540), yE = 348;
+  // ── les deux milieux : dehors (le milieu), dedans (la cellule : hyaloplasme, membrane) ──
+  c.direct(() => {
+    ctx.save();
+    const g = ctx.createLinearGradient(0, 44, 0, 408); g.addColorStop(0, 'rgba(70,150,200,.30)'); g.addColorStop(1, 'rgba(40,100,160,.22)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(6, 44, xM - 12, 364, 12); ctx.fill();
+    ctx.restore();
+    P.fondHyalo(ctx, xM, 44, L - xM - 6, 364, { arrondi: 16 });
+    ctx.save(); ctx.strokeStyle = P.rgba(P.T.membrane, .95); ctx.lineWidth = 4; ctx.beginPath(); ctx.roundRect(xM, 44, L - xM - 6, 364, 16); ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,90,20,.8)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(xM + 3, 47, L - xM - 12, 358, 13); ctx.stroke(); ctx.restore();
+  });
+  e.ecrire('z_dehors', () => c.texte('dehors', 14, 66, { couleur: 'blanc', taille: 17 }));
+  e.ecrire('z_dedans', () => c.texte('dedans : la cellule', xM + 12, 66, { couleur: 'vert', taille: 17 }));
+  c.repere('dehors', 6, 44, xM - 12, 364, 'dehors : le milieu extérieur');
+  c.repere('dedans', xM, 44, L - xM - 6, 364, 'dedans : la cellule');
+  c.repere('membrane', xM - 5, 80, 10, 300, 'la membrane de la cellule');
+
+  // ── étape 1 : le voyage ──
+  const gl = (x, y, ech, al, etat) => LX.glucose(ctx, x, y, { echelle: ech, alpha: al, etat });
+  if (vu('dehors', .1)) {
+    const ad = d('dehors', .1, .6), ent = d('entree', .15, .85), coupe = d('pyruvate', .1, .75);
+    c.direct(() => {
+      gl(xG0, 132, .5, ad, vu('entree', .5) ? 'degrade' : undefined);                                    // il reste dehors, pâli
+      if (vu('entree', .15)) {
+        if (!vu('pyruvate', .1)) gl(mix(xG0, xG, ent), 132, mix(.5, .62, ent), 1);
+        else {
+          gl(xG, 132, .62, 1, 'degrade');                                                                 // le glucose dégradé reste à sa place
+          const y = mix(132, 262, d('pyruvate', .1, .6));
+          LX.glucose(ctx, xG, y, { echelle: .62, coupe, ecart: 16 });
+          const f = e.u('pyruvate', .55, .85); if (f > 0 && f < 1) P.eclat(ctx, xG, y, 10 + 16 * f, 1 - f);
+        }
+      }
+    });
+    if (leg) si('dehors', .5, 'n_g0', () => c.texte('glucose', xG0, 132 + 12 + tt, { couleur: 'jaune', taille: 17, align: 'center' }));
+    c.repere('glucose_dehors', xG0 - 46, 120, 92, 24, 'le glucose, dehors');
+    si('entree', .05, 'f_ent', () => c.fleche(xG0 + 46, 132, xG - 62, 132, { couleur: 'blanc', largeur: 2.2 }));
+    if (vu('entree', .8)) c.repere('glucose', xG - 56, 118, 112, 28, 'le glucose dans la cellule (6 carbones)');
+    if (si('glycolyse', .05, 'f_gly', () => c.fleche(xG, 152, xG, 240, { couleur: 'jaune', largeur: 2.6 }))) {
+      si('glycolyse', .4, 'n_gly', () => c.texte('glycolyse', xG - 12, 198, { couleur: 'jaune', taille: 19, align: 'right' }));
+      c.repere('glycolyse', xG - 16 - e.larg('glycolyse', 19), 150, e.larg('glycolyse', 19) + 28, 92, 'la glycolyse : le glucose est coupé en deux');
+    }
+    if (vu('pyruvate', .7)) {
+      if (leg) si('pyruvate', .8, 'n_pyr', () => c.texte('2 acides pyruviques', xG, 262 + 12 + tt, { couleur: 'jaune', taille: 17, align: 'center' }));
+      c.repere('pyruvates', xG - 70, 250, 140, 24, 'les deux acides pyruviques : le carrefour');
+      c.repere('carrefour', xG - 74, 246, 148, 32 + (leg ? tt * 1.3 : 0), 'le carrefour : deux routes possibles');
+    }
+  }
+  // la route avec O2 : la mitochondrie
+  c.direct(() => { const am = Math.max(d('route_o2', 0, .4), vu('dehors') ? .38 : 0); if (am > 0) { ctx.save(); ctx.globalAlpha = am; LX.mitochondrie(ctx, xMi, yMi, rx, ry, { cretes: 7, graine: 5 }); ctx.restore(); } });
+  if (vu('dehors')) c.repere('mitochondrie', xMi - rx - 4, yMi - ry - 4, 2 * rx + 8, 2 * ry + 8, 'la mitochondrie');
+  if (si('route_o2', .1, 'f_o2', () => c.fleche(xG + 76, 256, xMi - rx - 10, yMi + 34, { couleur: 'rouge', largeur: 2.4 }))) {
+    const xm = (xG + 76 + xMi - rx - 10) / 2, ym = (256 + yMi + 34) / 2;
+    si('route_o2', .5, 'n_o2', () => c.texte('avec O_{2}', xm + 8, ym + 26, { couleur: 'rouge', taille: 18 }));
+    c.repere('route_o2', Math.min(xG + 76, xm) - 2, yMi + 28, xMi - rx - xG - 76, 256 - yMi - 12, 'la route avec dioxygène');
+    const f = e.u('route_o2', .45, .95); if (f > 0 && f < 1) c.direct(() => LX.acidePyruvique(ctx, mix(xG + 76, xMi - rx + 30, f), mix(256, yMi + 20, f), { echelle: .5, alpha: 1 - .5 * f }));
+  }
+  if (vu('krebs_co2', .1)) {
+    const f = d('krebs_co2', .3, .8), xc = Math.min(L - 36, xMi + rx + 34);
+    c.direct(() => { ctx.save(); ctx.strokeStyle = 'rgba(226,232,240,.8)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(xMi + rx - 20, yMi - 20); ctx.lineTo(mix(xMi + rx - 20, xc - 8, f), mix(yMi - 20, 92, f)); ctx.stroke(); ctx.restore();
+      LX.co2(ctx, mix(xMi + rx - 30, xc, f), mix(yMi - 16, 84, f), { echelle: 1, alpha: f }); });
+    if (si('krebs_co2', .25, 'n_krebs', () => c.texte('respiration : acides de Krebs + CO_{2}', xMi, yMi + ry + 10 + tt, { couleur: 'blanc', taille: 17, align: 'center' })))
+      c.repere('krebs', xMi - e.larg('respiration : acides de Krebs + CO_{2}', 17) / 2 - 4, yMi + ry + 8, e.larg('respiration : acides de Krebs + CO_{2}', 17) + 8, tt * 1.35, 'dans la mitochondrie : acides de Krebs et CO2 (respiration)');
+  }
+  // la route sans O2 : éthanol + CO2
+  if (si('route_sans_o2', .1, 'f_sans', () => c.fleche(xG + 76, 272, xE - 92, yE - 4, { couleur: 'violet', largeur: 2.4 }))) {
+    const xm = (xG + 76 + xE - 92) / 2, ym = (272 + yE) / 2;
+    si('route_sans_o2', .5, 'n_sans', () => c.texte('sans O_{2}', xm - 6, ym + 30, { couleur: 'violet', taille: 18, align: 'right' }));
+    c.repere('route_sans_o2', xG + 74, 266, xE - 92 - xG - 76, yE - 262, 'la route sans dioxygène');
+  }
+  if (vu('ethanol_co2', .1)) {
+    const al = d('ethanol_co2', .1, .6);
+    c.direct(() => { for (const dx of [-62, -22]) LX.ethanol(ctx, xE + dx, yE, { echelle: .6, alpha: al }); for (const dx of [34, 92]) LX.co2(ctx, xE + dx, yE, { echelle: .95, alpha: al }); });
+    si('ethanol_co2', .5, 'n_eth', () => c.texte('fermentation : éthanol + CO_{2}', xE + 4, yE + 14 + tt, { couleur: 'blanc', taille: 17, align: 'center' }));
+    c.repere('ethanol', xE - 84, yE - 16, 204, 32 + tt * 1.4, 'sans dioxygène : éthanol et CO2 (fermentation)');
+  }
+
+  // ── étape 2 : la glycolyse détaillée ──
+  if (vu('atp', .1)) {
+    const al = d('atp', .1, .5);
+    c.direct(() => { for (const j of [0, 1]) LX.atp(ctx, xG + 44, 172 + 27 * j, { alpha: al }); });
+    c.repere('atp', xG + 17, 159, 54, 53, 'la glycolyse rapporte 2 ATP');
+  }
+  if (vu('nadh', .1)) {
+    const al = d('nadh', .1, .5);
+    c.direct(() => { for (const j of [0, 1]) LX.nad(ctx, xG + 116, 172 + 27 * j, { etat: 'reduit', alpha: al, echelle: .9, lueur: .5 }); });
+    c.repere('nadh', xG + 77, 159, 78, 53, '2 taxis chargés : 2 NADH,H+');
+  }
+  if (si('hyaloplasme', .1, 'n_hyalo', () => c.texte('sans O_{2}', xG - 12, 198 + tt * 1.25, { couleur: 'vert', taille: 17, align: 'right' }))) {
+    e.ecrire('n_hyalo2', () => c.texte('hyaloplasme', xM + 12 + e.larg('dedans : la cellule', 17) + 14, 66, { couleur: 'vert', taille: 17 }));
+    c.repere('hyaloplasme', xM + 10 + e.larg('dedans : la cellule', 17) + 12, 48, e.larg('hyaloplasme', 17) + 8, 24, 'le hyaloplasme : là où se passe la glycolyse');
+  }
+
+  // ── étape 3 : la mitochondrie détaillée ──
+  if (vu('membranes', .05)) {
+    const yl = yMi - ry - 12;
+    si('membranes', .1, 'n_ext', () => { c.texte('membrane externe', xMi - rx + 6, yl, { couleur: 'orange', taille: 17, align: 'center' }); });
+    si('membranes', .55, 'n_int', () => { c.texte('crêtes', xMi + rx * .45, yl, { couleur: 'jaune', taille: 17, align: 'center' }); c.ligne(xMi + rx * .45, yl + 4, xMi + rx * .3, yMi - ry * .55, { couleur: 'jaune', largeur: 1.5 }); });
+    c.repere('membranes', xMi - rx - 4, yMi - ry - 4, 2 * rx + 8, 30, 'les deux membranes ; l’interne est repliée en crêtes');
+  }
+  if (vu('matrice', .1)) {
+    c.direct(() => { const al = d('matrice', .1, .5); ctx.save(); ctx.globalAlpha = al; ctx.fillStyle = 'rgba(8,22,42,.82)'; ctx.beginPath(); ctx.roundRect(xMi - 44, yMi - 15, 88, 30, 8); ctx.fill(); ctx.restore(); });
+    si('matrice', .3, 'n_mat', () => c.texte('matrice', xMi, yMi + 6, { couleur: 'cyan', taille: 17, align: 'center' }));
+    c.repere('matrice', xMi - 46, yMi - 17, 92, 34, 'la matrice');
+  }
+  if (si('enzymes', .1, 'n_enz', () => c.texte('décarboxylases, déshydrogénases', xMi, yMi + ry + 10 + tt * 2.3, { couleur: 'cyan', taille: 17, align: 'center' })))
+    c.repere('enzymes', xMi - e.larg('décarboxylases, déshydrogénases', 17) / 2 - 4, yMi + ry + 8 + tt * 1.3, e.larg('décarboxylases, déshydrogénases', 17) + 8, tt * 1.35, 'les enzymes de la matrice');
+
+  // ── étape 4 : à suivre ──
+  if (vu('a_suivre', .1)) {
+    const w = e.larg('à suivre…', 19) + 30, y = yMi + 44;
+    c.direct(() => { const al = d('a_suivre', .1, .4); ctx.save(); ctx.globalAlpha = al; P.carte(ctx, xMi - w / 2, y - 22, w, 32, { arrondi: 10 }); ctx.restore(); });
+    si('a_suivre', .35, 'n_suivre', () => c.texte('à suivre…', xMi, y, { couleur: 'jaune', taille: 19, align: 'center' }));
+    c.repere('a_suivre', xMi - w / 2, y - 22, w, 32, 'à suivre : que devient l’acide pyruvique dans la matrice ?');
+  }
+}
+/* « tout » : la carte relue, les nœuds s'allument un à un. */
+function comptes(t, e) {
+  if (!a('tout') || e.etape !== 'tout' || !e.vu('tout', .02)) return [];
+  const n = Math.min(NOEUDS.length, 1 + Math.floor(e.u('tout') * NOEUDS.length));
+  return NOEUDS.slice(0, n).map((id, i) => ({ id, fort: i === n - 1 }));
+}
+function phase(t, e) {
+  const vu = (nom, f) => a(nom) && e.vu(nom, f);
+  const p = [`Carte du voyage, étape ${ETAPE} sur 4. À gauche « dehors » (le milieu), à droite « dedans : la cellule » avec une mitochondrie.`];
+  if (!vu('dehors')) return p[0] + ' Le glucose n’est pas encore là.';
+  p.push(vu('entree', .5) ? 'Le glucose (6 billes jaunes) est entré dans la cellule (flèche dehors → dedans).' : 'Le glucose (6 billes jaunes) est dehors.');
+  if (vu('glycolyse', .4)) p.push('Flèche « glycolyse » vers le bas.');
+  if (vu('pyruvate', .7)) p.push('La chaîne est coupée en deux chaînes de 3 : « 2 acides pyruviques », le carrefour.');
+  if (vu('route_o2', .5)) p.push('Route rouge « avec O2 » vers la mitochondrie.');
+  if (vu('krebs_co2', .25)) p.push('Sous la mitochondrie : « respiration : acides de Krebs + CO2 » ; un CO2 en sort.');
+  if (vu('route_sans_o2', .5)) p.push('Route violette « sans O2 » dans le hyaloplasme.');
+  if (vu('ethanol_co2', .5)) p.push('« fermentation : éthanol + CO2 » (2 éthanol, 2 CO2).');
+  if (vu('atp', .1)) p.push('À côté de la glycolyse : 2 ATP.');
+  if (vu('nadh', .1)) p.push('Et 2 taxis chargés NADH,H+.');
+  if (vu('hyaloplasme', .1)) p.push('Écrit : « sans O2 », « hyaloplasme ».');
+  if (vu('membranes', .1)) p.push('Sur la mitochondrie : « membrane externe »' + (vu('membranes', .55) ? ', « crêtes ».' : '.'));
+  if (vu('matrice', .3)) p.push('Au centre : « matrice ».');
+  if (vu('enzymes', .1)) p.push('« décarboxylases, déshydrogénases ».');
+  if (vu('tout', .02) && !vu('a_suivre')) p.push('Les nœuds de la carte s’allument un à un.');
+  if (vu('a_suivre', .35)) p.push('Dans la matrice : « à suivre… » (que devient l’acide pyruvique ?).');
+  return p.join(' ');
+}
+
+const C1 = [0, 44, 470, 222], C2 = [60, 110, 440, 208], C3 = [150, 44, 610, 290], C4 = [150, 200, 560, 216], CM = [330, 44, 430, 204];
+const page = R2.page({
+  id: 'svt_reference_voyage', titre: 'La carte du voyage du glucose', variante: 'etape_' + ETAPE, graine: 37,
+  moments: MOMENTS, departDefaut: DEPART, dessiner, comptes, phase,
+  cadrages: { dehors: C1, entree: C1, glycolyse: C2, pyruvate: C2, route_o2: C3, krebs_co2: [300, 44, 460, 218], route_sans_o2: C4, ethanol_co2: C4,
+    atp: C2, nadh: C2, hyaloplasme: [100, 44, 440, 208], membranes: CM, matrice: CM, enzymes: [330, 70, 430, 204], tout: (u) => [C1, C1, C2, C2, C3, [300, 44, 460, 218], [300, 44, 460, 218], C4, C4][Math.min(8, Math.floor(u * 9))],   // téléphone : la caméra suit le nœud allumé
+    a_suivre: [330, 70, 430, 204] },
+  parametres: { defaut: { etape: ETAPE }, schema: { etape: '1..4 (l’étape de la carte : la page se recharge sur cette étape)' },
+    regler: (p) => { const n = Math.round(+p.etape); if (n >= 1 && n <= 4 && n !== ETAPE) { const u = new URL(location.href); u.searchParams.set('etape', n); u.searchParams.delete('depart'); location.replace(u); } } },
+  accroche: 'La carte du voyage du glucose…',
+  fini: ETAPE < 4 ? 'La carte, étape ' + ETAPE + ' : elle se complétera à la fin de la prochaine activité.' : 'Toute la carte. À suivre : que devient l’acide pyruvique dans la matrice ?',
+  texte: 'La carte du voyage du glucose (schéma bilan, cumulatif, ?etape=1..4). Étape 1 : dehors → dedans → glycolyse → 2 acides pyruviques (carrefour) → avec O2 : mitochondrie, acides de Krebs + CO2 (respiration) ; sans O2 : éthanol + CO2 (fermentation). Étape 2 : la glycolyse rapporte 2 ATP et 2 NADH,H+, dans le hyaloplasme, sans O2. Étape 3 : la mitochondrie (membrane externe, crêtes de la membrane interne, matrice, décarboxylases et déshydrogénases). Étape 4 : toute la carte, puis « à suivre » dans la matrice.',
+  explication: [
+    { repere: 'glucose', texte: 'Le glucose entre dans la cellule.' },
+    { repere: 'glycolyse', texte: 'La glycolyse le coupe en deux acides pyruviques, dans le hyaloplasme.' },
+    { repere: 'carrefour', texte: 'L’acide pyruvique est au carrefour : deux routes.' },
+    { repere: 'mitochondrie', texte: 'Avec dioxygène, il entre dans la mitochondrie : respiration.' },
+    { repere: 'ethanol', texte: 'Sans dioxygène, il reste dans le hyaloplasme : éthanol et CO2, fermentation.' } ],
+});
+// Imprimer / PDF : la carte complète de l'étape, sur fond blanc.
+document.getElementById('imprimer').onclick = () => {
+  const avant = { t: page.chrono.t, running: page.chrono.running };
+  window.Tableau.imprimer({ titre: 'La carte du voyage du glucose', scene: page.scene,
+    pages: [{ nom: 'étape ' + ETAPE, preparer: () => { page.chrono.running = false; page.chrono.t = page.M[MOMENTS[MOMENTS.length - 1][0]]; } }],
+    restaurer: () => { page.chrono.t = avant.t; page.chrono.running = avant.running; } });
+  page.pont.noter('imprimer', { etape: ETAPE }); page.pont.emettre();
+};
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

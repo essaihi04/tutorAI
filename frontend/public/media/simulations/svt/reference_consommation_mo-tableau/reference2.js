@@ -57,8 +57,9 @@
     const FIN = +(T + .5).toFixed(2);
     const S = Object.assign({ vitesse: 1, legendes: true }, (o.parametres && o.parametres.defaut) || {});
     const EMBARQUE = (() => { try { return window.parent !== window; } catch (_) { return true; } })();
-    const PILOTE = QS.has('depart') || QS.has('demarche') || QS.has('pilote') || EMBARQUE;
-    const instantDepart = () => { const v = QS.get('depart'); if (v == null || v === '') return 0; return v in M ? M[v] : (+v || 0); };
+    const PILOTE = !!o.departDefaut || QS.has('depart') || QS.has('demarche') || QS.has('pilote') || EMBARQUE;
+    // o.departDefaut : le moment de départ quand l'URL n'en donne pas (voyage.html?etape=n : la fin de l'étape n − 1)
+    const instantDepart = () => { const v = QS.get('depart') ?? o.departDefaut; if (v == null || v === '') return 0; return v in M ? M[v] : (+v || 0); };
     /** L'étape en cours : le premier moment pas encore dépassé (figé sur un moment : ce moment). */
     const etape = (t) => ORDRE.find((n) => t <= M[n] + 1e-3) || ORDRE[ORDRE.length - 1];
     const seg = (nom, t) => borne((t - DEB[nom]) / Math.max(1e-6, M[nom] - DEB[nom]));

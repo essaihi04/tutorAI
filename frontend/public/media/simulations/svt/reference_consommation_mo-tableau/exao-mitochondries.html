@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ExAO : des mitochondries isolées — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche un bioréacteur peint : cuve de verre posée sur un agitateur magnétique dont le barreau tourne, mitochondries en suspension, deux seringues (glucose, acide pyruvique), une sonde à dioxygène reliée à un oxymètre, un thermomètre, une interface ; à droite l'écran d'un ordinateur où la courbe du dioxygène se trace en même temps : palier à 275 micromoles par litre, rien après le glucose, baisse jusqu'à 215 après l'acide pyruvique"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference2.js"></script>
+<script>
+/*
+ * ExAO : des mitochondries isolées (cours de référence SVT, diapositives rf_m2_glucose et rf_m2_pyruvate), 27 novembre 2026.
+ * Document du professeur recréé : bioréacteur (solution oxygénée), sonde à O2, courbe [O2] en µmol/L (axe 65 à 315) en
+ * fonction du temps (0 à 5 min).
+ *   t0 : mitochondries seules, O2 = 275 µmol/L, stable ;
+ *   t1 = 0,6 min : glucose injecté → rien ne change (275 jusqu'à 1,3 min) ;
+ *   t2 = 1,3 min : acide pyruvique injecté → O2 baisse régulièrement : 265 à 2 min, 250 à 3 min, 232 à 4 min, 215 à 5 min.
+ * Le temps de la page est en secondes de scène ; le temps de l'EXPÉRIENCE (min) en est déduit segment par segment (tExp) :
+ * il n'avance pas pendant qu'on pousse une seringue. La courbe se trace sur l'écran de l'ordinateur pendant que la cuve vit
+ * (barreau qui tourne, O2 dissous — deux billes rouges du lexique — avalés par les mitochondries après t2).
+ * Moments : axes, t0, glucose_injecte (ARRÊT pour l'observation : la courbe s'arrête à 0,6 min), rien, pyruvate_injecte,
+ * o2_baisse, decrire, deduire. Réglage : conclusions = false → decrire et deduire n'écrivent rien (l'élève le fait).
+ */
+const R2 = window.Ref2, P = window.SVTPeinture, LX = window.Lexique, { mix, doux, borne, TAU } = R2;
+const fr = window.Tableau.fr;
+const T1 = .6, T2 = 1.3, TMAX = 5, VMIN = 65, VMAX = 315;
+const POINTS = [[0, 275], [T2, 275], [2, 265], [3, 250], [4, 232], [5, 215]];
+/** [O2] (µmol/L) à l'instant x (min) de l'expérience : segments de droite par les points du document. */
+function o2(x) { for (let i = 1; i < POINTS.length; i++) if (x <= POINTS[i][0]) { const [a, va] = POINTS[i - 1], [b, vb] = POINTS[i]; return va + (vb - va) * (x - a) / (b - a); } return 215; }
+/** Le temps de l'expérience (min) à l'instant t de la scène. */
+function tExp(t, M, DEB) {
+  const part = (n) => borne((t - DEB[n]) / (M[n] - DEB[n]));
+  if (t <= DEB.t0) return 0;
+  if (t <= M.glucose_injecte) return T1 * part('t0');
+  if (t <= M.pyruvate_injecte) return mix(T1, T2, part('rien'));
+  return mix(T2, TMAX, part('o2_baisse'));
+}
+const TEINTE = { glucose: [250, 222, 120], pyruvate: [250, 170, 90], milieu: [80, 150, 180] };
+/* Le montage (coordonnées de son bloc, 0..340) */
+const CUVE = { x: 48, y: 152, w: 184, h: 178 }, SER = { glucose: 80, pyruvate: 114 }, SONDE = 162, THERMO = 206;
+const MITOS = [[84, 240, .3], [130, 254, -.4], [80, 286, -.2], [124, 292, .35], [178, 288, .2], [198, 310, -.25], [130, 216, .1]].map(([x, y, a]) => ({ x, y, a }));
+/* Les O2 dissous : places fixes dans le liquide ; les cinq premiers seront avalés (chacun par une mitochondrie). */
+const O2S = [[102, 222, 0], [152, 276, 3], [104, 270, 2], [186, 262, 4], [170, 314, 5], [64, 262, -1], [158, 236, -1], [66, 312, -1], [104, 312, -1], [216, 290, -1], [186, 228, -1], [68, 212, -1], [216, 216, -1], [150, 200, -1]];
+
+/** Le boîtier d'un appareil (oxymètre, interface) : corps sombre, liseré, o.ecran = texte de l'afficheur. */
+function boitier(ctx, x, y, w, h, o = {}) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#5b6472'); g.addColorStop(1, '#2c323c');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill(); ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(220,230,240,.55)'; ctx.lineWidth = 1.2; ctx.stroke();
+  if (o.ecran != null) {
+    ctx.fillStyle = '#0d1f14'; ctx.beginPath(); ctx.roundRect(x + 6, y + 6, w - 12, h - 18, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc9a'; ctx.font = `700 ${o.taille || 20}px ui-monospace, Menlo, Consolas, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(125,252,154,.7)'; ctx.shadowBlur = 5; ctx.fillText(o.ecran, x + w / 2, y + 6 + (h - 18) / 2 + 1); ctx.shadowBlur = 0;
+    ctx.fillStyle = '#f87171'; ctx.beginPath(); ctx.arc(x + 10, y + h - 6, 2.4, 0, TAU); ctx.fill();
+  } else {
+    for (let i = 0; i < 3; i++) { ctx.fillStyle = ['#4ade80', '#facc15', '#22d3ee'][i]; ctx.beginPath(); ctx.arc(x + 14 + i * 14, y + h / 2, 3.2, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = '#11151b'; ctx.fillRect(x + w - 24, y + h / 2 - 5, 14, 10);
+  }
+  ctx.restore();
+}
+/** Un câble souple entre deux points. */
+function cable(ctx, x1, y1, x2, y2, o = {}) {
+  ctx.save(); ctx.strokeStyle = o.couleur || 'rgba(30,32,38,.95)'; ctx.lineWidth = o.w || 3.2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1 + (o.dx1 ?? 0), y1 + (o.dy1 ?? -30), x2 + (o.dx2 ?? -30), y2 + (o.dy2 ?? 0), x2, y2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(160,170,185,.35)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+}
+/** L'agitateur magnétique : socle, plateau, bouton, voyant. */
+function agitateur(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4;
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#e5e9ee'); g.addColorStop(.18, '#aeb6c2'); g.addColorStop(1, '#5a6270');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill(); ctx.shadowColor = 'transparent';
+  ctx.fillStyle = '#f4f6f8'; ctx.beginPath(); ctx.roundRect(x + 6, y - 3, w - 12, 6, 3); ctx.fill();          // le plateau blanc
+  const bx = x + w - 30, by = y + h / 2 + 3;
+  ctx.fillStyle = '#20242b'; ctx.beginPath(); ctx.arc(bx, by, 10, 0, TAU); ctx.fill();
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + 6, by - 6); ctx.stroke();
+  ctx.fillStyle = '#4ade80'; ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 6; ctx.beginPath(); ctx.arc(x + 18, by, 3.4, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+/** Le barreau aimanté, vu de côté au fond de la cuve : il tourne (angle a). */
+function barreau(ctx, x, y, a) {
+  const dx = 19 * Math.cos(a), dy = 5 * Math.sin(a);
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(x - dx, y - dy + 3); ctx.lineTo(x + dx, y + dy + 3); ctx.stroke();
+  ctx.strokeStyle = '#f1f5f9'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(x - dx, y - dy); ctx.lineTo(x + dx, y + dy); ctx.stroke();
+  ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dx * .96, y + dy * .96); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x - dx * .8, y - dy * .8 - 2.2); ctx.lineTo(x + dx * .8, y + dy * .8 - 2.2); ctx.stroke();
+  // le petit tourbillon au-dessus
+  ctx.strokeStyle = 'rgba(225,240,250,.22)'; ctx.lineWidth = 1.2;
+  for (let i = 0; i < 2; i++) { ctx.beginPath(); ctx.ellipse(x, y - 10 - i * 9, 22 - i * 7, 4 - i, 0, a * .7 + i, a * .7 + i + 4.2); ctx.stroke(); }
+  ctx.restore();
+}
+/** L'ordinateur : écran (dalle sombre, cadre), pied, socle. Renvoie rien ; la zone utile est [x+10, y+10, w-20, h-20]. */
+function ordinateur(ctx, x, y, w, h, allume) {
+  ctx.save();
+  ctx.fillStyle = '#3d444f'; ctx.beginPath(); ctx.moveTo(x + w / 2 - 22, y + h - 2); ctx.lineTo(x + w / 2 + 22, y + h - 2); ctx.lineTo(x + w / 2 + 30, y + h + 16); ctx.lineTo(x + w / 2 - 30, y + h + 16); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#566070'; ctx.beginPath(); ctx.roundRect(x + w / 2 - 62, y + h + 14, 124, 8, 4); ctx.fill();
+  ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5;
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#4b5360'); g.addColorStop(1, '#22272f');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.fill(); ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(210,220,232,.5)'; ctx.lineWidth = 1.4; ctx.stroke();
+  const d = ctx.createLinearGradient(x, y, x + w, y + h);
+  if (allume > 0) { d.addColorStop(0, `rgba(16,34,58,${.9 + .1 * allume})`); d.addColorStop(1, `rgba(7,18,34,${.9 + .1 * allume})`); } else { d.addColorStop(0, '#0b0f14'); d.addColorStop(1, '#06080b'); }
+  ctx.fillStyle = d; ctx.beginPath(); ctx.roundRect(x + 8, y + 8, w - 16, h - 16, 5); ctx.fill();
+  if (allume > 0) { ctx.globalAlpha = .1 * allume; ctx.fillStyle = '#9fd0ff'; ctx.beginPath(); ctx.moveTo(x + 8, y + 8); ctx.lineTo(x + w * .45, y + 8); ctx.lineTo(x + w * .2, y + h - 8); ctx.lineTo(x + 8, y + h - 8); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; }
+  ctx.fillStyle = allume > 0 ? '#4ade80' : '#475569'; ctx.beginPath(); ctx.arc(x + w - 14, y + h - 4.5, 1.8, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+function dessiner(c, t, e) {
+  const { ctx, L, M, DEB } = e, leg = e.S.legendes, plus = L - 760;
+  const ox = plus * .14;                                  // le montage glisse un peu vers la droite sur un tableau large
+  const EC = { x: 350 + plus * .3, y: 46, h: 252 }; EC.w = L - 10 - EC.x;
+  const G = { X0: EC.x + 60, X1: EC.x + EC.w - 46, Y0: 256, Y1: 98 };
+  const xT = (v) => G.X0 + v / TMAX * (G.X1 - G.X0), yV = (v) => G.Y0 - (v - VMIN) / (VMAX - VMIN) * (G.Y0 - G.Y1);
+  const te = tExp(t, M, DEB), val = o2(te), rot = t * 8.5;
+  const allume = e.d('axes', 0, .12);
+  const mange = e.u('o2_baisse');
+
+  /* ── le montage, peint ── */
+  ctx.save(); ctx.translate(ox, 0);
+  c.direct(() => {
+    // l'agitateur et la cuve
+    agitateur(ctx, 30, 334, 220, 40);
+    cable(ctx, 334, 262, 350 + plus * .3 - ox + 6, 280, { dy1: 30, dx1: 10, dx2: -20, dy2: 20 });   // interface → ordinateur
+    cable(ctx, SONDE, 106, 290, 140, { dy1: -46, dx2: 0, dy2: -40 });                               // sonde → oxymètre
+    cable(ctx, 290, 196, 290, 238, { dy1: 14, dx2: 0, dy2: -14 });                                  // oxymètre → interface
+    LX.chimie.thermometre(ctx, THERMO, 100, 168, .37);
+    R2.sonde(ctx, SONDE, 106, 252, { pointe: [248, 113, 113], w: 13 });
+    P.becher(ctx, CUVE.x, CUVE.y, CUVE.w, CUVE.h, { niveau: .82, teinte: TEINTE.milieu, alpha: .42 });
+    // le couvercle
+    const gc = ctx.createLinearGradient(0, CUVE.y - 9, 0, CUVE.y + 3); gc.addColorStop(0, 'rgba(226,232,240,.85)'); gc.addColorStop(1, 'rgba(120,130,145,.85)');
+    ctx.fillStyle = gc; ctx.beginPath(); ctx.roundRect(CUVE.x - 8, CUVE.y - 9, CUVE.w + 16, 11, 4); ctx.fill();
+    // les mitochondries du lexique, et les O2 dissous
+    barreau(ctx, CUVE.x + CUVE.w / 2, CUVE.y + CUVE.h - 12, rot);
+    for (const m of MITOS) LX.mitochondrie(ctx, m.x + 1.5 * Math.sin(t * .9 + m.x), m.y + 1.2 * Math.cos(t * .7 + m.y), 20, 9.5, { cretes: 4, angle: m.a, graine: 3 + m.x });
+    O2S.forEach(([x, y, cible], i) => {
+      let px = x + 2.2 * Math.sin(t * 1.1 + i * 2.1), py = y + 1.8 * Math.cos(t * .9 + i * 1.3), a = 1, k = .5;
+      if (cible >= 0 && mange > 0) {
+        const j = [0, 3, 2, 4, 5].indexOf(cible), u = doux(borne((mange - .08 - j * .17) / .2)), m = MITOS[cible];
+        px = mix(px, m.x, u); py = mix(py, m.y, u); a = 1 - borne((u - .75) / .25); k = mix(.5, .28, u);
+        if (u > .8 && u < 1) P.eclat(ctx, m.x, m.y, 16, .5 * (1 - u) / .2);
+      }
+      LX.o2(ctx, px, py, { echelle: k, alpha: a });
+    });
+    // les seringues, et le nuage de ce qui est injecté
+    [['glucose', 'glucose_injecte'], ['pyruvate', 'pyruvate_injecte']].forEach(([id, nom]) => {
+      R2.seringue(ctx, SER[id], 98, 146, 200, e.d(nom, .12, .5), TEINTE[id], { w: 18 });
+      R2.nuage(ctx, SER[id], 206, e.u(nom, .3, 1), TEINTE[id], { r: 40 });
+    });
+    boitier(ctx, 246, 140, 88, 56, { ecran: allume > 0 ? fr(val, 0) : '– – –' });
+    boitier(ctx, 250, 238, 84, 40);
+  });
+  /* ── les légendes du montage ── */
+  if (leg) {
+    e.ecrire('l_glu', () => c.texte('glucose', SER.glucose - 12, 62, { couleur: 'jaune', taille: 17, align: 'center' }));
+    e.ecrire('l_pyr', () => c.texte('acide pyruvique', SER.pyruvate + 62, 62, { couleur: 'jaune', taille: 17, align: 'center' }));
+    e.ecrire('l_th', () => { c.texte('thermomètre', 240, 110, { couleur: 'blanc', taille: 17 }); c.ligne(236, 106, THERMO + 9, 110, { couleur: 'faible', largeur: 1.3 }); });
+    e.ecrire('l_ox', () => c.texte('oxymètre', 290, 216, { couleur: 'rouge', taille: 17, align: 'center' }));
+    e.ecrire('l_in', () => c.texte('interface', 292, 298, { couleur: 'blanc', taille: 17, align: 'center' }));
+    e.ecrire('l_ag', () => c.texte('agitateur', 256, 362, { couleur: 'blanc', taille: 17 }));
+    e.ecrire('l_mi', () => c.texte('mitochondries isolées, solution oxygénée', 6, 402, { couleur: 'orange', taille: 17 }));
+  }
+  c.repere('seringue_glucose', SER.glucose - 13, 70, 26, 134, 'la seringue de glucose');
+  c.repere('seringue_pyruvate', SER.pyruvate - 13, 70, 26, 134, 'la seringue d’acide pyruvique');
+  const enCours = e.vu('pyruvate_injecte') ? 'pyruvate' : 'glucose';
+  c.repere('seringue', SER[enCours] - 13, 70, 26, 134, enCours === 'glucose' ? 'la seringue de glucose' : 'la seringue d’acide pyruvique');
+  c.repere('sonde_o2', SONDE - 9, 104, 18, 150, 'la sonde à dioxygène');
+  c.repere('oxymetre', 244, 138, 92, 60, `l’oxymètre : ${fr(val, 0)} µmol/L`);
+  c.repere('interface', 248, 236, 88, 44, 'l’interface, reliée à l’ordinateur');
+  c.repere('thermometre', THERMO - 9, 98, 26, 186, 'le thermomètre');
+  c.repere('agitateur', 30, 318, 220, 58, 'l’agitateur magnétique : son barreau tourne');
+  c.repere('mitochondries', CUVE.x + 8, 200, CUVE.w - 16, 124, 'les mitochondries isolées, dans la solution oxygénée');
+  c.repere('montage', 26, 50, 312, 330, 'le montage : le bioréacteur');
+  ctx.restore();
+
+  /* ── l'ordinateur : l'écran porte le graphique ── */
+  c.direct(() => ordinateur(ctx, EC.x, EC.y, EC.w, EC.h, allume));
+  c.repere('ordinateur', EC.x, EC.y, EC.w, EC.h + 24, 'l’ordinateur : la courbe se trace sur son écran');
+  const F = { couleur: 'faible', largeur: 1.6 };
+  if (e.si('axes', .14, 'axe_y', () => {
+    c.fleche(G.X0, G.Y0, G.X0, G.Y1 - 16, F);
+    c.texte('O_{2} (µmol/L)', G.X0 - 46, 76, { couleur: 'rouge', taille: 17 });
+    for (let v = VMIN; v <= VMAX; v += 50) { const y = yV(v); c.ligne(G.X0 - 4, y, G.X0 + 4, y, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(String(v), G.X0 - 9, y + 6, { couleur: 'rouge', taille: 17, align: 'right', duree: .1 }); }
+  })) c.repere('axe_o2', G.X0 - 50, 60, 62, G.Y0 - 52, 'l’axe vertical : le dioxygène, en µmol/L, de 65 à 315');
+  if (e.si('axes', .55, 'axe_x', () => {
+    c.fleche(G.X0, G.Y0, G.X1 + 20, G.Y0, F);
+    for (let v = 0; v <= TMAX; v++) { const x = xT(v); c.ligne(x, G.Y0 - 4, x, G.Y0 + 4, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(String(v), x, G.Y0 + 22, { couleur: 'blanc', taille: 17, align: 'center', duree: .1 }); }
+    c.texte('t (min)', G.X1 + 34, G.Y0 - 12, { couleur: 'blanc', taille: 17, align: 'right' });
+  })) c.repere('axe_temps', G.X0 - 6, G.Y0 - 8, G.X1 - G.X0 + 44, 38, 'l’axe horizontal : le temps, en minutes, de 0 à 5');
+
+  // la courbe, tracée jusqu'à l'instant de l'expérience ; la valeur lue, en haut de l'écran
+  if (te > 0) {
+    const n = Math.max(2, Math.ceil(te / TMAX * 160));
+    c.direct(() => {
+      c.courbe((u) => [xT(te * u), yV(o2(te * u))], n, { couleur: 'rouge', largeur: 2.8, net: true });
+      c.point(xT(te), yV(val), 4.5, 'rouge');
+    });
+    c.repere('courbe', G.X0 - 2, yV(275) - 10, xT(te) - G.X0 + 10, yV(val) - yV(275) + 20, 'la courbe du dioxygène');
+  }
+  if (allume > 0) c.direct(() => c.texte(`O_{2} = ${fr(val, 0)} µmol/L   t = ${fr(te, 1)} min`, EC.x + EC.w - 18, 76, { couleur: 'rouge', taille: 17, align: 'right', alpha: allume }));
+  if (e.si('t0', .55, 'v275', () => c.texte('275', xT(.3), yV(275) - 9, { couleur: 'rouge', taille: 18, align: 'center', gras: true })))
+    c.repere('palier', xT(0) + 2, yV(275) - 28, Math.max(40, xT(Math.min(te, T2)) - xT(0)), 36, 'le palier : 275 µmol/L');
+  // les deux injections : flèche verticale qui monte vers la courbe, nom dessous
+  const tt = e.taille(17);
+  [['glucose_injecte', 't1', T1, 'glucose', 178, 'center', 0], ['pyruvate_injecte', 't2', T2, 'acide pyruvique', 214, 'left', -12]].forEach(([nom, id, x, mot, yb, al, dx]) => {
+    if (!e.si(nom, .45, 'fl_' + id, () => {
+      c.fleche(xT(x), yb, xT(x), yV(275) + 8, { couleur: 'jaune', largeur: 2.2, tete: 9 });
+      c.texte(mot, xT(x) + dx, yb + 4 + tt * .9, { couleur: 'jaune', taille: 17, align: al });
+    })) return;
+    const w = e.larg(mot, 17);
+    c.repere(id, al === 'center' ? xT(x) - w / 2 - 3 : xT(x) + dx - 3, yV(275) + 4, w + 6, yb - yV(275) + tt * 1.25, `${id === 't1' ? 't1 = 0,6' : 't2 = 1,3'} min : on injecte ${id === 't1' ? 'le glucose' : 'l’acide pyruvique'}`);
+  });
+  if (e.si('o2_baisse', .97, 'v215', () => c.texte('215', xT(5) - 4, yV(215) + 26, { couleur: 'rouge', taille: 18, align: 'center', gras: true })))
+    c.repere('valeur_finale', xT(5) - 26, yV(215) + 6, 46, 26, '215 µmol/L à 5 min');
+
+  /* ── décrire, puis déduire (sous l'écran) ── */
+  if (e.S.conclusions) {
+    const x0 = EC.x + 2, wmax = L - 12 - x0, y1 = 328 + tt * .9, pas = tt * 1.3;
+    const l1 = e.si('decrire', .05, 'd1', () => c.texte('Avant t_{2} : O_{2} stable à 275 µmol/L, même avec le glucose.', x0, y1, { couleur: 'blanc', taille: 17, max: wmax }));
+    e.si('decrire', .5, 'd2', () => c.texte('Après t_{2} : O_{2} baisse, de 275 à 215 µmol/L à 5 min.', x0, y1 + pas, { couleur: 'blanc', taille: 17, max: wmax }));
+    if (l1) c.repere('description', x0 - 4, y1 - tt, wmax + 4, pas + tt * 1.3, 'la description : avant t2, après t2');
+    if (e.si('deduire', .1, 'concl', () => {
+      const s = 'La mitochondrie utilise l’acide pyruvique, pas le glucose.', w = Math.min(wmax - 4, e.larg(s, 17) + 20), yc = y1 + 2 * pas + 8;
+      c.rect(x0, yc - tt * 1.05, w, tt * 1.5, { couleur: 'vert', fond: 'vert', fondAlpha: .12, arrondi: 8, largeur: 1.8, duree: .3 });
+      c.texte(s, x0 + w / 2, yc, { couleur: 'vert', taille: 17, align: 'center', max: w - 14 });
+    })) c.repere('conclusion', x0 - 2, y1 + 2 * pas + 8 - tt * 1.1, wmax, tt * 1.6, 'la conclusion : l’acide pyruvique, pas le glucose');
+  }
+}
+
+function phase(t, e) {
+  const te = tExp(t, e.M, e.DEB), v = fr(o2(te), 0), lu = ` L’oxymètre et l’écran affichent ${v} µmol/L à t = ${fr(te, 1)} min.`;
+  const montage = 'À gauche le bioréacteur (cuve sur un agitateur dont le barreau tourne, mitochondries isolées dans une solution oxygénée, seringue de glucose, seringue d’acide pyruvique, sonde à O2 reliée à l’oxymètre, thermomètre, interface) ; à droite l’écran de l’ordinateur. ';
+  if (!e.vu('axes')) return montage + 'L’écran est éteint.';
+  if (!e.vu('t0')) return montage + 'L’écran s’allume : axe vertical O2 en µmol/L (65 à 315), axe horizontal t en min (0 à 5). Pas encore de courbe.';
+  if (!e.vu('glucose_injecte')) return 'Mitochondries seules : la courbe est un palier à 275 µmol/L (valeur écrite).' + lu;
+  if (!e.vu('rien')) return 'À t1 = 0,6 min, la seringue de glucose est poussée (nuage dans la cuve, flèche « glucose » sur le graphique). La courbe s’arrête à 0,6 min : la suite n’est pas montrée.' + lu;
+  if (!e.vu('pyruvate_injecte')) return 'Après le glucose, rien ne change : le palier continue à 275 µmol/L jusqu’à 1,3 min.' + lu;
+  if (!e.vu('o2_baisse')) return 'À t2 = 1,3 min, la seringue d’acide pyruvique est poussée (flèche « acide pyruvique »). La courbe s’arrête à 1,3 min.' + lu;
+  if (!e.vu('decrire')) return 'Après l’acide pyruvique, la courbe baisse régulièrement (265 à 2 min, 250 à 3 min, 232 à 4 min, 215 à 5 min) ; dans la cuve, les mitochondries avalent des O2 (billes rouges) qui disparaissent.' + lu;
+  const fin = 'Courbe complète : 275 µmol/L jusqu’à 1,3 min, puis baisse jusqu’à 215 à 5 min. ';
+  if (!e.S.conclusions) return fin + 'Rien n’est écrit sous l’écran : l’élève décrit et déduit lui-même.';
+  if (!e.vu('deduire')) return fin + 'Écrit sous l’écran : « Avant t2 : O2 stable à 275 µmol/L, même avec le glucose. »' + (e.vu('decrire', .5) ? ' « Après t2 : O2 baisse, de 275 à 215 µmol/L à 5 min. »' : '');
+  return fin + 'Description écrite, puis la conclusion encadrée en vert : « La mitochondrie utilise l’acide pyruvique, pas le glucose. »';
+}
+
+const MONT = [0, 44, 440, 208], GRA = [420, 40, 410, 262], BAS = [352, 196, 424, 226];
+const PG = R2.page({
+  id: 'svt_reference_exao_mitochondries', titre: 'ExAO : des mitochondries isolées', variante: 'exao_mitochondries', graine: 31,
+  moments: [
+    ['axes', 4.5, 'les axes : O2 en µmol/L (65 à 315), temps en min (0 à 5)'],
+    ['t0', 4, 'mitochondries seules : O2 stable à 275 µmol/L'],
+    ['glucose_injecte', 3.6, 't1 = 0,6 min : on injecte le glucose'],
+    ['rien', 4, 'après le glucose : rien ne change, 275 µmol/L'],
+    ['pyruvate_injecte', 3.6, 't2 = 1,3 min : on injecte l’acide pyruvique'],
+    ['o2_baisse', 9, 'O2 baisse : de 275 à 215 µmol/L à 5 min'],
+    ['decrire', 5.5, 'décrire : avant t2, après t2'],
+    ['deduire', 4, 'déduire : la mitochondrie utilise l’acide pyruvique, pas le glucose'],
+  ],
+  dessiner, phase,
+  etat: (t) => { const te = tExp(t, PG.M, PG.DEB); return { unite_temps_experience: 'min', valeurs: { t_min: +te.toFixed(2), o2_umol_L: +o2(te).toFixed(1) } }; },
+  parametres: {
+    defaut: { conclusions: R2.QS.get('conclusions') !== 'false' },
+    schema: { conclusions: 'true | false (false : la description et la conclusion ne s’écrivent pas, l’élève les trouve)' },
+    regler: (p, S) => { if ('conclusions' in p) S.conclusions = R2.bool(p.conclusions); },
+    dit: (S) => `Réglage : vitesse × ${fr(S.vitesse, 1)}, légendes ${S.legendes ? 'affichées' : 'cachées'}, conclusions ${S.conclusions ? 'écrites' : 'cachées'}.`,
+  },
+  cadrages: {   // téléphone : le graphique pour la courbe, le montage quand on pousse une seringue, puis la flèche sur le graphique
+    axes: GRA, t0: GRA, glucose_injecte: (u) => (u < .6 ? MONT : GRA), rien: GRA, pyruvate_injecte: (u) => (u < .6 ? MONT : GRA),
+    o2_baisse: (u) => (u > .12 && u < .5 ? [0, 150, 440, 208] : GRA), decrire: BAS, deduire: BAS,
+  },
+  accroche: 'Des mitochondries isolées dans une solution oxygénée : on va injecter du glucose, puis de l’acide pyruvique…',
+  fini: 'Glucose : rien. Acide pyruvique : O2 baisse de 275 à 215 µmol/L. La mitochondrie utilise l’acide pyruvique.',
+  texte: 'ExAO, mitochondries isolées dans un bioréacteur (solution oxygénée) : seringues, thermomètre, agitateur, sonde à O2 et oxymètre, interface, ordinateur. O2 en µmol/L (65 à 315), temps de 0 à 5 min. t0 : O2 stable à 275. t1 = 0,6 min, glucose : rien ne change. t2 = 1,3 min, acide pyruvique : O2 baisse régulièrement, 265 à 2 min, 250 à 3 min, 232 à 4 min, 215 à 5 min. Conclusion : la mitochondrie utilise l’acide pyruvique, pas le glucose.',
+  explication: [
+    { repere: 'montage', texte: 'Le bioréacteur : des mitochondries isolées dans une solution oxygénée, agitée, à température constante.' },
+    { repere: 'oxymetre', texte: 'La sonde et l’oxymètre mesurent le dioxygène dissous ; l’ordinateur trace la courbe.' },
+    { repere: 't1', texte: 'On injecte le glucose : le dioxygène ne change pas.' },
+    { repere: 't2', texte: 'On injecte l’acide pyruvique : le dioxygène baisse.' },
+    { repere: 'conclusion', texte: 'La mitochondrie utilise l’acide pyruvique, pas le glucose.' } ],
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
