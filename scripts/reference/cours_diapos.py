@@ -740,7 +740,7 @@ diapo(
        "hydrogènes sont enlevés, et un taxi les prend : NAD plus devient NADH,H plus. Et du deuxième côté, la même "
        "chose. Nous avons donc deux NADH,H plus. Ensuite, un nouveau phosphate entre de chaque côté, sans dépenser "
        "d'ATP. Chaque chaîne a maintenant deux phosphates.",
-    mx="le fructose diphosphate واجد، وجات <r:phase2>la phase الثانية: la scission، يعني القسمة. <m:scission>شوف: "
+    mx="le fructose diphosphate واجد، وجات <m:scission>la phase الثانية: <r:phase2>la scission، يعني القسمة. شوف: "
        "السلسلة ديال six carbones تقسمات على جوج، <r:c3_gauche>وحدة هنا <r:c3_droite>ووحدة هنا. كل وحدة فيها trois "
        "carbones، و un phosphate. ودابا كلشي غادي يوقع جوج مرات: مرة ف كل جهة. <m:taxi1>ف الجهة الأولى، كيتحيدو "
        "deux hydrogènes، وطاكسي كيهز les hydrogènes: N A D plus كيولي N A D H, H plus. <m:taxi2>وف الجهة الثانية، نفس الحاجة. "
@@ -763,7 +763,7 @@ diapo(
        "deux plus deux égale quatre ATP. Et que reste-t-il des chaînes ? Deux molécules d'acide pyruvique, chacune à "
        "trois carbones. C'est l'acide pyruvique que nous avons suivi avec le glucose marqué. Sa formule : "
        "CH3-CO-COOH. Tu vois ? On a donné au début, et maintenant on a gagné.",
-    mx="جا الوقت باش la cellule تربح. <r:phase3>هادي la phase الثالثة: فيها كتخرج l'énergie. <m:atp_branche1>ف "
+    mx="جا الوقت باش la cellule تربح. <m:atp_branche1>هادي <r:phase3>la phase الثالثة: فيها كتخرج l'énergie. ف "
        "الجهة الأولى: <r:c3_gauche>les deux phosphates كيمشيو ل deux ADP، وكيعطيو deux ATP. <m:atp_branche2>وف الجهة "
        "الثانية: <r:c3_droite>deux ATP أخرى. <r:atp_gagnes>نحسبو: deux plus deux égale quatre ATP. "
        "<m:pyruvates>وشنو بقا من السلاسل؟ <r:pyruvates>deux molécules ديال l'acide pyruvique، كل وحدة فيها trois "
@@ -1072,23 +1072,29 @@ diapo(
     lead="La fiche du chapitre, point par point, puis ta page : ce qu'il te reste à retravailler.",
     page=REF + "bilan.html", legende="Ce qu'il faut retenir",
     alt="Une fiche de révision à la craie, écrite point par point, puis la page de l'élève",
-    montre="La fiche « Ce qu'il faut retenir » s'écrit point par point au rythme de la voix, puis la page de "
+    montre="La fiche « Ce qu'il faut retenir » (neuf blocs) s'écrit bloc par bloc au rythme de la voix, puis la page de "
            "l'élève : ce qu'il lui reste à retravailler. Bouton imprimer.",
-    fr="Voici la fiche du cours. Premier point, la respiration cellulaire : oxydation complète du glucose, avec le "
-       "dioxygène, et beaucoup d'énergie. Deuxième, la fermentation : sans dioxygène, oxydation incomplète, elle "
-       "donne l'éthanol, et peu d'énergie. Troisième, les lieux : la fermentation dans le hyaloplasme, et la "
-       "respiration a besoin de la mitochondrie. Quatrième, la glycolyse : dans le hyaloplasme, elle donne deux "
-       "acides pyruviques, deux ATP et deux transporteurs réduits. Cinquième : la mitochondrie utilise l'acide "
-       "pyruvique, pas le glucose. Et sixième : la mitochondrie a une double membrane, et sa membrane interne est "
-       "riche en enzymes. Et maintenant ta page : regarde ce qu'il te reste à revoir.",
-    mx="هادي la fiche ديال الدرس: <m:respiration>النقطة الأولى، la respiration cellulaire: oxydation complète du "
-       "glucose، مع le dioxygène، وبزاف ديال l'énergie. <m:fermentation>الثانية، la fermentation: بلا dioxygène، "
-       "oxydation incomplète، كتعطي l'éthanol، و l'énergie قليلة. <m:lieux>الثالثة، البلايص: la fermentation ف le "
-       "hyaloplasme، و la respiration كتحتاج la mitochondrie. <m:glycolyse>الرابعة، la glycolyse: ف le hyaloplasme، "
-       "كتعطي deux acides pyruviques، deux ATP، و deux transporteurs réduits. <m:mitochondrie>الخامسة: la "
-       "mitochondrie كتستعمل l'acide pyruvique، ماشي le glucose. <m:structure>والسادسة: la mitochondrie عندها double "
-       "membrane، و la membrane interne ديالها عامرة ب les enzymes. <m:lacunes>ودابا الصفحة ديالك: شوف شنو باقي "
-       "خاصك تراجع.",
+    fr="Voici la fiche du cours, en neuf points. Premier, la respiration cellulaire : oxydation complète du "
+       "glucose, avec le dioxygène, et beaucoup d'énergie. Deuxième, la fermentation alcoolique : sans dioxygène, "
+       "oxydation incomplète, elle donne l'éthanol, et peu d'énergie. Troisième, les lieux : la respiration a besoin "
+       "des mitochondries, la fermentation se fait dans le hyaloplasme. Quatrième, le voyage du glucose : la "
+       "glycolyse est commune, et l'acide pyruvique est au carrefour. Cinquième, la glycolyse : trois phases, elle "
+       "donne deux acides pyruviques, deux ATP et deux transporteurs réduits. Sixième, la centrifugation "
+       "fractionnée : elle isole les mitochondries. Ensuite : la mitochondrie utilise l'acide pyruvique, pas le "
+       "glucose. Puis son schéma : double membrane, crêtes, matrice et sphères pédonculées. Enfin : la membrane "
+       "interne est riche en enzymes, et la matrice contient les décarboxylases et les déshydrogénases. Et "
+       "maintenant ta page : regarde ce qu'il te reste à revoir.",
+    mx="هادي la fiche ديال الدرس، وفيها neuf points. <m:respiration>الأولى، la respiration cellulaire: oxydation "
+       "complète du glucose، مع le dioxygène، وبزاف ديال l'énergie. <m:fermentation>الثانية، la fermentation "
+       "alcoolique: بلا dioxygène، oxydation incomplète، كتعطي l'éthanol، و l'énergie قليلة. <m:localisation>الثالثة، "
+       "البلايص: la respiration كتحتاج les mitochondries، و la fermentation كتوقع ف le hyaloplasme. <m:devenir>الرابعة، "
+       "الرحلة ديال le glucose: la glycolyse كاينة ف جوج، و l'acide pyruvique واقف فين كتفرق الطريق. "
+       "<m:glycolyse>الخامسة، la glycolyse: trois phases، وكتعطي deux acides pyruviques، deux ATP، و deux "
+       "transporteurs réduits. <m:centrifugation>السادسة، la centrifugation fractionnée: بيها كنعزلو les "
+       "mitochondries. <m:pyruvate>من بعد: la mitochondrie كتستعمل l'acide pyruvique، ماشي le glucose. "
+       "<m:ultrastructure>من بعد le schéma ديالها: double membrane، les crêtes، la matrice، و les sphères "
+       "pédonculées. <m:composition>وف اللخر: la membrane interne عامرة ب les enzymes، و la matrice فيها les "
+       "décarboxylases و les déshydrogénases. <m:lacunes>ودابا الصفحة ديالك: شوف شنو باقي خاصك تراجع.",
     bullets=["Respiration : oxydation complète ; fermentation : oxydation incomplète.",
              "Glycolyse commune ; la mitochondrie utilise l'acide pyruvique."],
     cahier="Bilan : la glycolyse (hyaloplasme) est commune ; avec O₂ la mitochondrie dégrade l'acide pyruvique ; "
