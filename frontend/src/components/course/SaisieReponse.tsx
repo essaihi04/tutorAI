@@ -46,7 +46,7 @@ async function lireLaPhoto(f: File, contexte: ContexteOcr): Promise<string> {
   return (texte || '').trim();
 }
 
-/** « 📷 Photo » : appareil photo direct ; « 🖼️ » : image déjà prise ; le texte lu est ajouté au champ. */
+/** « 📷 Photo » : appareil photo direct ; « 📁 » : image déjà prise ; le texte lu est ajouté au champ. */
 export function BoutonPhoto({ contexte, onTexte, onErreur, disabled, petit = false, relais = true }: {
   contexte: ContexteOcr; onTexte: (t: string) => void; onErreur?: (m: string | undefined) => void; disabled?: boolean; petit?: boolean;
   /** liens libres : le texte rendu depuis le téléphone arrive ici (faux quand le champ qui l'entoure s'en charge) */
@@ -71,7 +71,7 @@ export function BoutonPhoto({ contexte, onTexte, onErreur, disabled, petit = fal
   };
   const forme = `shrink-0 cursor-pointer rounded-full ${petit ? 'px-3 py-1 text-xs' : 'px-4 py-2 text-sm'} ${disabled ? 'pointer-events-none opacity-40' : ''}`;
   return (<>
-    {/* 27/11/2026 (user) : « 📷 Photo » ouvre l'appareil photo DIRECTEMENT (capture) ; une image déjà prise passe par « 🖼️ ».
+    {/* 27/11/2026 (user) : « 📷 Photo » ouvre l'appareil photo DIRECTEMENT (capture) ; une image déjà prise passe par « 📁 » (pas 🖼️ : c’est le bouton « joindre une image » de la question au tuteur).
         Sur ordinateur, `capture` est ignoré : les deux ouvrent le choix de fichier. */}
     <label className={`${forme} ${lecture ? 'bg-sky-500/40 animate-pulse' : 'bg-white/10 hover:bg-white/20'}`}
       style={{ fontFamily: 'system-ui, sans-serif' }} title="Photographie ta feuille : le texte lu s'écrit dans le champ, tu le corriges avant d'envoyer">
@@ -80,7 +80,7 @@ export function BoutonPhoto({ contexte, onTexte, onErreur, disabled, petit = fal
     </label>
     <label className={`${forme} bg-white/10 hover:bg-white/20 ${lecture ? 'pointer-events-none opacity-40' : ''}`}
       style={{ fontFamily: 'system-ui, sans-serif' }} title="Choisir une photo déjà prise (galerie, fichier)">
-      🖼️
+      📁
       <input type="file" accept="image/*" className="hidden" disabled={disabled || lecture} onChange={choisi} />
     </label>
     <BoutonTelephone petit={petit} disabled={disabled || lecture} />
