@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pourquoi la pâte à pain gonfle-t-elle ? — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css">
+<style>@media (max-height: 340px) { .scene { padding-bottom: .2em; } .tableau { padding: .2em .5em; } }</style></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une scène de cuisine peinte : un bol en faïence avec une pâte à pain, un sachet de levure de boulanger que l’on verse dans la pâte, la pâte qui double de volume en une heure, puis une loupe qui montre dans la pâte des levures et des bulles de dioxyde de carbone. La question du cours s’écrit en bas."></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference.js"></script>
+<script>
+/*
+ * La pâte à pain — cours de référence SVT (docs/reference-svt/ARCHITECTURE.md § 3, diapo rf_o1_pate, démarche = Problème),
+ * 27 novembre 2026. Une scène de cuisine peinte, cinq moments :
+ *   bol            : un bol en faïence, une pâte plate au fond, un sachet de levure de boulanger à côté ;
+ *   levure_ajoutee : le sachet est déchiré, levé, versé (les granules tombent dans la pâte), puis on mélange à la cuillère ;
+ *   gonfle         : l'horloge avance d'une heure, la pâte monte en dôme au-dessus du bord (elle double), des bulles affleurent ;
+ *   zoom           : une loupe sur la pâte : des levures (Lexique.levure) et des bulles de CO2 (Lexique.co2, bulle) ;
+ *   question       : « D'où la levure tire-t-elle son énergie ? » écrite à la craie jaune, encadrée. Aucune réponse n'est écrite.
+ * Repères : pate, bol, sachet, horloge, bulles (sur la pâte, puis dans la loupe), levures (la loupe), question.
+ */
+const R = window.Ref, LX = window.Lexique, { doux, mix, borne, rgba, TAU, rr, graine } = R;
+const MOMENTS = [
+  ['bol', 4, 'un bol, une pâte plate, un sachet de levure de boulanger'],
+  ['levure_ajoutee', 11.5, 'la levure est versée dans la pâte, puis mélangée'],
+  ['gonfle', 21, 'une heure plus tard : la pâte a doublé de volume, des bulles affleurent'],
+  ['zoom', 27.5, 'à la loupe : dans la pâte, des levures et des bulles de CO2'],
+  ['question', 32, 'le problème : d’où la levure tire-t-elle son énergie ?'] ];
+const QUESTION = 'D’où la levure tire-t-elle son énergie ?';
+const BEIGE = '#f0d69a';
+
+/* ── La géométrie (cadre L × 420) ── */
+function geo(L) {
+  const k = Math.min(1.12, 1 + (L - 760) / 2200), table = 328;
+  const bol = { cx: L * .395, rx: 160 * k, ry: 32 * k, h: 124 * k, yb: table + 4 };
+  bol.yr = bol.yb - bol.h;
+  const lp = { r: 100 * k, cy: 172, cx: mix(650, L * .805, borne((L - 760) / 240)) };
+  const sa = { w: 118 * k, h: 150 * k, x: Math.max(8 + 59 * k, L * .088), y: table + 2 };
+  const hor = { cx: sa.x + 4, cy: 82, r: 34 * k };
+  return { k, table, bol, lp, sa, hor };
+}
+
+/* ── L'état de la scène à l'instant t ── */
+function etat(e) {
+  const p = e.p('levure_ajoutee'), S = {};
+  S.bol = e.d('bol', 0, .35); S.sachet = e.d('bol', .42, .78);
+  S.dechire = e.d('levure_ajoutee', 0, .08);
+  S.leve = doux(borne((p - .08) / .16)) * (1 - doux(borne((p - .62) / .16)));     // 0 posé, 1 au-dessus du bol
+  S.incline = doux(borne((p - .2) / .11)) * (1 - doux(borne((p - .58) / .1)));
+  S.verse = borne((p - .3) / .27);                                                // part de la levure versée
+  S.cuillere = doux(borne((p - .6) / .06)) * (1 - doux(borne((p - .93) / .07)));
+  S.tour = borne((p - .65) / .28); S.melange = doux(S.tour);
+  S.g = e.d('gonfle', .06, .94); S.horloge = e.d('gonfle', 0, .08); S.heure = e.p('gonfle', .06, .94);
+  S.loupe = e.d('zoom', 0, .3); S.levures = e.d('zoom', .22, .46); S.co2 = e.p('zoom', .5, .92);
+  return S;
+}
+
+/* ── La table (un plan de travail en bois) ── */
+function table(ctx, L, y) {
+  const x0 = 6, w = L - 12;
+  ctx.save();
+  const g = ctx.createLinearGradient(0, y - 12, 0, y + 20); g.addColorStop(0, 'rgb(142,98,56)'); g.addColorStop(1, 'rgb(190,138,84)');
+  rr(ctx, x0, y - 12, w, 32, 5); ctx.fillStyle = g; ctx.fill(); ctx.save(); ctx.clip();
+  const r = graine(5); ctx.lineWidth = 1;
+  for (let i = 0; i < 10; i++) {
+    const yy = y - 10 + i * 3.1 + r() * 2; ctx.strokeStyle = `rgba(92,56,26,${.18 + r() * .25})`; ctx.beginPath(); ctx.moveTo(x0, yy);
+    for (let x = x0; x <= x0 + w; x += 30) ctx.lineTo(x, yy + Math.sin(x * .011 + i * 1.7) * 1.8);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,236,200,.12)'; ctx.fillRect(x0, y + 10, w, 10);
+  ctx.restore();
+  const g2 = ctx.createLinearGradient(0, y + 19, 0, y + 32); g2.addColorStop(0, 'rgb(122,82,44)'); g2.addColorStop(1, 'rgb(74,46,24)');
+  rr(ctx, x0, y + 19, w, 13, [0, 0, 5, 5]); ctx.fillStyle = g2; ctx.fill();
+  ctx.fillStyle = 'rgba(255,232,196,.45)'; ctx.fillRect(x0 + 3, y + 18.4, w - 6, 1.4);
+  ctx.restore();
+}
+
+/* ── Le bol en faïence : l'intérieur et le bord arrière d'abord, la paroi avant ensuite (elle cache le bas de la pâte) ── */
+function bord(ctx, B, a0, a1) {
+  const { cx, yr, rx, ry } = B; ctx.save(); ctx.lineCap = 'butt';
+  ctx.strokeStyle = 'rgba(96,90,80,.9)'; ctx.lineWidth = 7.4; ctx.beginPath(); ctx.ellipse(cx, yr, rx, ry, 0, a0, a1); ctx.stroke();
+  const g = ctx.createLinearGradient(cx - rx, 0, cx + rx, 0); g.addColorStop(0, 'rgb(206,204,198)'); g.addColorStop(.25, 'rgb(255,255,250)'); g.addColorStop(.7, 'rgb(236,232,222)'); g.addColorStop(1, 'rgb(170,164,154)');
+  ctx.strokeStyle = g; ctx.lineWidth = 5.6; ctx.beginPath(); ctx.ellipse(cx, yr, rx, ry, 0, a0, a1); ctx.stroke();
+  ctx.strokeStyle = 'rgba(38,82,172,.95)'; ctx.lineWidth = 1.7; ctx.beginPath(); ctx.ellipse(cx, yr, rx + 1.6, ry + 1.6, 0, a0, a1); ctx.stroke();
+  ctx.restore();
+}
+function bolFond(ctx, B) {
+  const { cx, yr, rx, ry } = B;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.36)'; ctx.beginPath(); ctx.ellipse(cx + 8, B.yb + 3, rx * .66, 9, 0, 0, TAU); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(cx, yr, rx, ry, 0, 0, TAU); ctx.clip();
+  const g = ctx.createLinearGradient(0, yr - ry, 0, yr + ry); g.addColorStop(0, 'rgb(246,243,234)'); g.addColorStop(.5, 'rgb(208,202,188)'); g.addColorStop(1, 'rgb(140,132,118)');
+  ctx.fillStyle = g; ctx.fillRect(cx - rx, yr - ry, 2 * rx, 2 * ry);
+  const h = ctx.createRadialGradient(cx + rx * .4, yr - ry * .55, 2, cx + rx * .4, yr - ry * .55, rx * .55); h.addColorStop(0, 'rgba(255,255,255,.6)'); h.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = h; ctx.fillRect(cx - rx, yr - ry, 2 * rx, 2 * ry);
+  const o = ctx.createLinearGradient(cx - rx, 0, cx - rx * .4, 0); o.addColorStop(0, 'rgba(60,50,40,.4)'); o.addColorStop(1, 'rgba(60,50,40,0)');
+  ctx.fillStyle = o; ctx.fillRect(cx - rx, yr - ry, rx, 2 * ry);
+  ctx.strokeStyle = 'rgba(44,86,170,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(cx, yr + 6, rx - 9, ry - 3, 0, Math.PI, TAU); ctx.stroke();
+  ctx.restore();
+  bord(ctx, B, Math.PI, TAU);
+  ctx.restore();
+}
+function bolDevant(ctx, B) {
+  const { cx, yr, rx, ry, yb } = B, h = yb - yr;
+  const corps = () => {
+    ctx.beginPath(); ctx.moveTo(cx - rx, yr); ctx.ellipse(cx, yr, rx, ry, 0, Math.PI, 0, true);
+    ctx.bezierCurveTo(cx + rx, yr + h * .58, cx + rx * .74, yb - 7, cx + rx * .43, yb - 5); ctx.lineTo(cx + rx * .41, yb); ctx.lineTo(cx - rx * .41, yb); ctx.lineTo(cx - rx * .43, yb - 5);
+    ctx.bezierCurveTo(cx - rx * .74, yb - 7, cx - rx, yr + h * .58, cx - rx, yr); ctx.closePath();
+  };
+  ctx.save();
+  const g = ctx.createLinearGradient(cx - rx, 0, cx + rx, 0);
+  g.addColorStop(0, 'rgb(168,170,176)'); g.addColorStop(.16, 'rgb(252,252,248)'); g.addColorStop(.48, 'rgb(236,233,224)'); g.addColorStop(.82, 'rgb(182,176,166)'); g.addColorStop(1, 'rgb(118,114,110)');
+  corps(); ctx.fillStyle = g; ctx.fill(); ctx.save(); ctx.clip();
+  // l'ombre du bas (le bol s'arrondit vers son pied)
+  const gb = ctx.createLinearGradient(0, yr + ry, 0, yb); gb.addColorStop(0, 'rgba(40,30,20,0)'); gb.addColorStop(.6, 'rgba(40,30,20,.1)'); gb.addColorStop(1, 'rgba(40,30,20,.42)');
+  ctx.fillStyle = gb; ctx.fillRect(cx - rx, yr, 2 * rx, h + 4);
+  // le décor : deux filets bleus et une frise de points, parallèles au bord
+  ctx.strokeStyle = 'rgba(38,82,172,.95)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(cx, yr + h * .2, rx * .985, ry * 1.02, 0, 0, Math.PI); ctx.stroke();
+  ctx.lineWidth = 1.8; ctx.beginPath(); ctx.ellipse(cx, yr + h * .39, rx * .93, ry * .98, 0, 0, Math.PI); ctx.stroke();
+  ctx.fillStyle = 'rgba(38,82,172,.9)';
+  for (let i = 1; i < 20; i++) { const a = Math.PI * i / 20, x = cx + Math.cos(a) * rx * .955, y = yr + h * .295 + Math.sin(a) * ry; ctx.beginPath(); ctx.arc(x, y, 2 * (.5 + .5 * Math.sin(a)) + .6, 0, TAU); ctx.fill(); }
+  // les reflets de l'émail : une bande douce à gauche, une « fenêtre », un filet à droite
+  const rg = ctx.createLinearGradient(cx - rx * .8, 0, cx - rx * .5, 0); rg.addColorStop(0, 'rgba(255,255,255,0)'); rg.addColorStop(.5, 'rgba(255,255,255,.75)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = rg; ctx.beginPath(); ctx.moveTo(cx - rx * .8, yr + ry * .9); ctx.quadraticCurveTo(cx - rx * .78, yr + h * .7, cx - rx * .5, yb - 12); ctx.lineTo(cx - rx * .38, yb - 12); ctx.quadraticCurveTo(cx - rx * .56, yr + h * .6, cx - rx * .52, yr + ry * 1.05); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.moveTo(cx - rx * .3, yr + h * .5); ctx.lineTo(cx - rx * .16, yr + h * .51); ctx.lineTo(cx - rx * .15, yr + h * .68); ctx.lineTo(cx - rx * .27, yr + h * .66); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.beginPath(); ctx.ellipse(cx + rx * .76, yr + h * .5, 3.5, h * .22, .34, 0, TAU); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(70,64,58,.75)'; ctx.lineWidth = 1.1; corps(); ctx.stroke();
+  // le pied
+  const gp = ctx.createLinearGradient(cx - rx * .43, 0, cx + rx * .43, 0); gp.addColorStop(0, 'rgb(130,128,128)'); gp.addColorStop(.3, 'rgb(226,224,216)'); gp.addColorStop(1, 'rgb(98,94,90)');
+  ctx.fillStyle = gp; rr(ctx, cx - rx * .43, yb - 6, rx * .86, 7, 3); ctx.fill();
+  ctx.restore();
+  bord(ctx, B, 0, Math.PI);
+}
+
+/* ── La pâte ── g = 0 : plate au fond du bol ; g = 1 : un dôme qui dépasse largement le bord (volume doublé). */
+const POINTS = (() => { const r = graine(71), o = []; for (let i = 0; i < 90; i++) o.push([r() * 2 - 1, r(), r(), r()]); return o; })();
+const BULLES_PATE = (() => { const r = graine(19), o = []; for (let i = 0; i < 22; i++) o.push([(r() * 2 - 1) * .86, .14 + r() * .78, .22 + r() * .66, r()]); return o; })();
+function formePate(B, S, h) {
+  const g = S.g, remue = S.tour > 0 && S.tour < 1 ? Math.sin(S.tour * TAU * 3) : 0;
+  return { cx: B.cx, yb: B.yr + B.ry * (.5 - .26 * g), rxd: B.rx * (.7 + .2 * g), ryd: B.ry * (.6 + .2 * g),
+    h: 11 + B.h * 1.03 * g + remue * 2 + g * Math.sin(h * 1.1) * 1.2, dx: 7 * g * B.rx / 150, g };
+}
+function cheminPate(ctx, P) {
+  const { cx, yb, rxd, ryd, h, dx } = P, gf = Math.min(1, h / 70);
+  ctx.beginPath(); ctx.moveTo(cx - rxd, yb);
+  ctx.bezierCurveTo(cx - rxd * (1 + .07 * gf), yb - h * .66, cx - rxd * .6 + dx, yb - h, cx + dx, yb - h);
+  ctx.bezierCurveTo(cx + rxd * .64 + dx, yb - h, cx + rxd * (1 + .08 * gf), yb - h * .62, cx + rxd, yb);
+  ctx.ellipse(cx, yb, rxd, ryd, 0, 0, Math.PI); ctx.closePath();
+}
+const surPate = (P, u, v) => [P.cx + P.dx * v + u * P.rxd * Math.sqrt(Math.max(0, 1 - Math.pow(v, 2.3))) * .9, P.yb - P.h * v * .94 + (1 - v) * P.ryd * .3];
+function bulleSurface(ctx, x, y, r, a) {
+  if (r < .5 || a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createRadialGradient(x - r * .3, y - r * .35, r * .1, x, y, r);
+  g.addColorStop(0, 'rgba(255,251,236,.9)'); g.addColorStop(.7, 'rgba(244,226,184,.6)'); g.addColorStop(1, 'rgba(176,134,82,.55)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(112,80,44,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r, .12 * Math.PI, .95 * Math.PI); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(x - r * .36, y - r * .4, Math.max(.6, r * .2), 0, TAU); ctx.fill();
+  ctx.restore();
+}
+function pate(ctx, P, S, h) {
+  const { cx, yb, rxd, ryd, g } = P, hh = P.h, m = S.melange;
+  ctx.save();
+  cheminPate(ctx, P);
+  const gr = ctx.createRadialGradient(cx - rxd * .34, yb - hh * .72, 3, cx, yb - hh * .3, rxd * 1.25);
+  gr.addColorStop(0, rgba([mix(252, 250, m), mix(244, 236, m), mix(222, 204, m)], 1)); gr.addColorStop(.5, rgba([mix(238, 234, m), mix(222, 210, m), mix(184, 162, m)], 1)); gr.addColorStop(1, rgba([mix(196, 190, m), mix(168, 154, m), mix(120, 104, m)], 1));
+  ctx.fillStyle = gr; ctx.fill(); ctx.save(); ctx.clip();
+  // l'ombre du bord du bol sur le bas de la pâte
+  const go = ctx.createLinearGradient(0, yb - 4, 0, yb + ryd); go.addColorStop(0, 'rgba(70,48,24,0)'); go.addColorStop(1, 'rgba(70,48,24,.4)');
+  ctx.fillStyle = go; ctx.fillRect(cx - rxd * 1.1, yb - 4, rxd * 2.2, ryd + 6);
+  // l'ombre propre du dôme, à droite
+  const gd = ctx.createLinearGradient(cx + rxd * .2, 0, cx + rxd * 1.05, 0); gd.addColorStop(0, 'rgba(110,76,40,0)'); gd.addColorStop(1, `rgba(110,76,40,${.1 + .26 * g})`);
+  ctx.fillStyle = gd; ctx.fillRect(cx, yb - hh - 4, rxd * 1.2, hh + ryd + 8);
+  // le grain de la farine
+  for (const [u, v, s, q] of POINTS) { const [x, y] = surPate(P, u * .96, .04 + v * .9); ctx.fillStyle = q > .5 ? `rgba(255,252,240,${.2 + .3 * s})` : `rgba(150,112,66,${.1 + .16 * s})`; ctx.beginPath(); ctx.arc(x, y, .6 + s * 1.1, 0, TAU); ctx.fill(); }
+  // le tourbillon du mélange
+  if (S.tour > 0 && S.tour < 1) {
+    const a0 = S.tour * TAU * 3; ctx.strokeStyle = `rgba(150,110,60,${.4 * Math.sin(S.tour * Math.PI)})`; ctx.lineWidth = 1.6;
+    for (let j = 0; j < 3; j++) { ctx.beginPath(); for (let i = 0; i <= 24; i++) { const a = a0 + j * 2.1 + i * .16, d = .25 + i * .028; const x = cx + Math.cos(a) * rxd * d, y = yb - hh * .45 + Math.sin(a) * ryd * d * .8; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); }
+  }
+  // la surface qui se tend : des plis clairs qui suivent le dôme
+  if (g > .15) {
+    ctx.lineCap = 'round';
+    for (let j = 0; j < 4; j++) {
+      const f = .36 + j * .17; ctx.strokeStyle = `rgba(255,250,232,${(.2 - j * .03) * g})`; ctx.lineWidth = 2.4 - j * .3; ctx.beginPath();
+      for (let i = 0; i <= 20; i++) { const u = -.82 + i * .058, [x, y] = surPate(P, u * f * 1.3 - .12, 1 - (1 - f) * (1 - Math.pow(Math.abs(u), 2.2)) - .03 - (1 - f) * .2); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.stroke();
+    }
+  }
+  // le brillant
+  const gl = ctx.createRadialGradient(cx - rxd * .36, yb - hh * .74, 1, cx - rxd * .36, yb - hh * .74, rxd * .5); gl.addColorStop(0, `rgba(255,255,255,${.22 + .3 * g})`); gl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gl; ctx.fillRect(cx - rxd * 1.1, yb - hh - 4, rxd * 2.2, hh + 10);
+  // les bulles qui affleurent : chacune naît quand la pâte atteint son seuil, grossit, respire
+  const boite = { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9, n: 0 };
+  for (let i = 0; i < BULLES_PATE.length; i++) {
+    const [u, v, seuil, s] = BULLES_PATE[i], a = borne((g - seuil * .8) / .16); if (a <= 0) continue;
+    const [x, y] = surPate(P, u, v), r = (2.6 + 5.4 * s) * a * (1 + .07 * Math.sin(h * (1.4 + s) + i)) * (rxd / 135);
+    bulleSurface(ctx, x, y, r, Math.min(1, a * 1.6));
+    boite.x0 = Math.min(boite.x0, x - r); boite.y0 = Math.min(boite.y0, y - r); boite.x1 = Math.max(boite.x1, x + r); boite.y1 = Math.max(boite.y1, y + r); boite.n++;
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(126,92,50,.7)'; ctx.lineWidth = 1.3; cheminPate(ctx, P); ctx.stroke();
+  ctx.restore();
+  return boite;
+}
+
+/* ── Les granules de levure sèche : ils tombent du sachet, font un petit tas, puis sont mélangés ── */
+const GRANULES = (() => { const r = graine(33), o = []; for (let i = 0; i < 80; i++) o.push([r(), r() * 2 - 1, r(), r()]); return o.sort((a, b) => a[0] - b[0]); })();
+function granules(ctx, P, S, bouche, k) {
+  if (S.verse <= 0 || S.melange >= .7) return;
+  const fondu = 1 - borne(S.melange / .7);
+  for (let i = 0; i < GRANULES.length; i++) {
+    const [tau, dx, s, q] = GRANULES[i], u = borne((S.verse - tau * .86) / .14); if (u <= 0) continue;
+    const xf = P.cx + dx * 34 * k * (.4 + .6 * s), tas = (1 - Math.abs(dx)) * 7 * k * Math.min(1, S.verse * 1.4) * q, yf = P.yb - P.h + 2 + Math.abs(dx) * 3 - tas;
+    const x = mix(bouche[0] + (q - .5) * 12, xf, u), y = mix(bouche[1], yf, u * u);
+    ctx.fillStyle = rgba([mix(186, 214, s), mix(140, 170, s), mix(78, 104, s)], (u < 1 ? 1 : fondu));
+    ctx.beginPath(); ctx.ellipse(x, y, 1.9 + s, 1.5 + s * .6, q * 3, 0, TAU); ctx.fill();
+    if (u >= 1 && fondu > .5) { ctx.fillStyle = 'rgba(255,240,210,.5)'; ctx.beginPath(); ctx.arc(x - .6, y - .6, .6, 0, TAU); ctx.fill(); }
+  }
+}
+
+/* ── Le sachet de levure de boulanger (papier, soudures crantées, bandeau rouge « LEVURE ») ── */
+function sachet(ctx, cx, cy, w, h, o = {}) {
+  const a = o.alpha ?? 1, ouvert = o.ouvert || 0, vide = o.vide || 0, x0 = -w / 2, y0 = -h / 2, band = h * .085;
+  ctx.save(); ctx.globalAlpha = a; ctx.translate(cx, cy); ctx.rotate(o.angle || 0);
+  const pince = vide * w * .07;
+  const corps = () => {
+    ctx.beginPath();
+    if (ouvert > .5) { // le haut est déchiré : un bord irrégulier
+      const r = graine(8); ctx.moveTo(x0 + 1, y0 + band + 2);
+      for (let i = 1; i <= 12; i++) ctx.lineTo(x0 + w * i / 12, y0 + band + (i % 2 ? -2.5 : 2) + r() * 3);
+    } else { ctx.moveTo(x0, y0); for (let i = 1; i <= 14; i++) ctx.lineTo(x0 + w * i / 14, y0 + (i % 2 ? 2.6 : 0)); }
+    ctx.quadraticCurveTo(-x0 - pince, 0, -x0, -y0);
+    for (let i = 13; i >= 0; i--) ctx.lineTo(x0 + w * i / 14, -y0 - (i % 2 ? 2.6 : 0));
+    ctx.quadraticCurveTo(x0 + pince, 0, x0 + (ouvert > .5 ? 1 : 0), y0 + (ouvert > .5 ? band + 2 : 0)); ctx.closePath();
+  };
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4;
+  corps(); ctx.fillStyle = 'rgb(226,178,84)'; ctx.fill(); ctx.restore();
+  ctx.save(); corps(); ctx.clip();
+  const g = ctx.createLinearGradient(x0, 0, -x0, 0); g.addColorStop(0, 'rgb(196,146,62)'); g.addColorStop(.22, 'rgb(250,216,128)'); g.addColorStop(.55, 'rgb(240,196,100)'); g.addColorStop(1, 'rgb(176,124,50)');
+  ctx.fillStyle = g; ctx.fillRect(x0, y0, w, h);
+  // le gonflé du sachet plein (reflet doux), les plis du sachet vide
+  const gg = ctx.createRadialGradient(x0 + w * .36, y0 + h * .4, 2, 0, 0, w * .75); gg.addColorStop(0, `rgba(255,248,214,${.5 * (1 - vide)})`); gg.addColorStop(1, 'rgba(255,248,214,0)');
+  ctx.fillStyle = gg; ctx.fillRect(x0, y0, w, h);
+  if (vide > .2) { ctx.strokeStyle = `rgba(120,80,30,${.4 * vide})`; ctx.lineWidth = 1.2; for (const [xa, ya, xb, yb] of [[-.3, -.3, -.12, .34], [.2, -.36, .32, .1], [-.05, .1, .26, .4]]) { ctx.beginPath(); ctx.moveTo(xa * w, ya * h); ctx.lineTo(xb * w, yb * h); ctx.stroke(); } }
+  // le bandeau rouge et son nom
+  const yb = y0 + h * .2, hb = h * .23, gb = ctx.createLinearGradient(0, yb, 0, yb + hb); gb.addColorStop(0, 'rgb(212,58,44)'); gb.addColorStop(1, 'rgb(158,30,26)');
+  ctx.fillStyle = gb; ctx.fillRect(x0, yb, w, hb);
+  ctx.fillStyle = 'rgba(255,236,200,.85)'; ctx.fillRect(x0, yb + 2.5, w, 1.3); ctx.fillRect(x0, yb + hb - 3.8, w, 1.3);
+  LX.etiquette(ctx, 'LEVURE', 0, yb + hb / 2, { taille: w * .19, couleur: '#fff6dc' });
+  LX.etiquette(ctx, 'de boulanger', 0, yb + hb + h * .095, { taille: w * .148, couleur: '#5a2c0c' });
+  // un petit pain doré dessiné sous le nom
+  const py = y0 + h * .79, pw = w * .25, gpn = ctx.createRadialGradient(-pw * .3, py - 5, 1, 0, py, pw); gpn.addColorStop(0, 'rgb(236,170,86)'); gpn.addColorStop(1, 'rgb(150,86,34)');
+  ctx.fillStyle = gpn; ctx.beginPath(); ctx.ellipse(0, py, pw, h * .07, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,226,170,.9)'; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; for (const d of [-.5, 0, .5]) { ctx.beginPath(); ctx.moveTo(d * pw - 3, py - 3); ctx.lineTo(d * pw + 3, py + 3); ctx.stroke(); }
+  // les soudures crantées (haut et bas)
+  ctx.strokeStyle = 'rgba(110,74,26,.55)'; ctx.lineWidth = 1;
+  for (const yy of (ouvert > .5 ? [-y0 - band] : [y0 + band, -y0 - band])) { ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(-x0, yy); ctx.stroke(); }
+  for (let i = 1; i < 16; i++) { const xx = x0 + w * i / 16; ctx.beginPath(); ctx.moveTo(xx, -y0 - band + 2); ctx.lineTo(xx, -y0 - 2); if (ouvert <= .5) { ctx.moveTo(xx, y0 + 2); ctx.lineTo(xx, y0 + band - 2); } ctx.stroke(); }
+  // l'ombre du côté droit
+  const gs = ctx.createLinearGradient(-x0 - w * .2, 0, -x0, 0); gs.addColorStop(0, 'rgba(60,34,8,0)'); gs.addColorStop(1, 'rgba(60,34,8,.3)'); ctx.fillStyle = gs; ctx.fillRect(-x0 - w * .2, y0, w * .2, h);
+  ctx.restore();
+  if (ouvert > .5) { ctx.fillStyle = 'rgba(60,36,10,.75)'; ctx.beginPath(); ctx.ellipse(0, y0 + band + 2.5, w * .44, 3.2, 0, 0, TAU); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(96,62,20,.7)'; ctx.lineWidth = 1; corps(); ctx.stroke();
+  ctx.restore();
+}
+
+/* ── La cuillère en bois (la tête plonge dans la pâte) ── */
+function cuillere(ctx, x, y, ang, a, k) {
+  ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(ang); ctx.scale(k, k);
+  const g = ctx.createLinearGradient(-7, 0, 7, 0); g.addColorStop(0, 'rgb(150,100,52)'); g.addColorStop(.35, 'rgb(226,176,112)'); g.addColorStop(1, 'rgb(128,82,40)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-4.4, -8); ctx.lineTo(-5.6, -168); ctx.quadraticCurveTo(0, -178, 5.6, -168); ctx.lineTo(4.4, -8); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(70,40,14,.7)'; ctx.lineWidth = 1; ctx.stroke();
+  const gt = ctx.createRadialGradient(-5, 2, 2, 0, 8, 24); gt.addColorStop(0, 'rgb(232,186,122)'); gt.addColorStop(1, 'rgb(134,86,42)');
+  ctx.fillStyle = gt; ctx.beginPath(); ctx.ellipse(0, 10, 15, 23, 0, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+/* ── L'horloge de la cuisine : u = part de l'heure écoulée (de 10 h à 11 h) ── */
+function horloge(ctx, cx, cy, r, u, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4;
+  const gm = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); gm.addColorStop(0, 'rgb(236,96,70)'); gm.addColorStop(1, 'rgb(142,34,26)');
+  ctx.fillStyle = gm; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill(); ctx.restore();
+  const gc = ctx.createRadialGradient(cx - r * .3, cy - r * .35, 2, cx, cy, r); gc.addColorStop(0, 'rgb(255,255,250)'); gc.addColorStop(1, 'rgb(214,214,206)');
+  ctx.fillStyle = gc; ctx.beginPath(); ctx.arc(cx, cy, r * .84, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,40,46,.9)'; ctx.lineCap = 'round';
+  for (let i = 0; i < 12; i++) { const an = i / 12 * TAU, l = i % 3 ? .1 : .18; ctx.lineWidth = i % 3 ? 1.2 : 2.2; ctx.beginPath(); ctx.moveTo(cx + Math.sin(an) * r * (.76 - l), cy - Math.cos(an) * r * (.76 - l)); ctx.lineTo(cx + Math.sin(an) * r * .76, cy - Math.cos(an) * r * .76); ctx.stroke(); }
+  // le secteur parcouru par la grande aiguille (une heure)
+  if (u > 0) { ctx.fillStyle = 'rgba(250,190,40,.3)'; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r * .66, -Math.PI / 2, -Math.PI / 2 + u * TAU); ctx.closePath(); ctx.fill(); }
+  const aig = (an, l, w, coul) => { ctx.strokeStyle = coul; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(cx - Math.sin(an) * r * .08, cy + Math.cos(an) * r * .08); ctx.lineTo(cx + Math.sin(an) * r * l, cy - Math.cos(an) * r * l); ctx.stroke(); };
+  aig((10 + u) / 12 * TAU, .42, 3.4, 'rgb(34,36,44)'); aig(u * TAU, .66, 2.3, 'rgb(34,36,44)');
+  ctx.fillStyle = 'rgb(190,40,30)'; ctx.beginPath(); ctx.arc(cx, cy, 2.6, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.beginPath(); ctx.ellipse(cx - r * .28, cy - r * .42, r * .36, r * .16, -.6, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* ── Dans la loupe : la pâte de près, des levures, des bulles de CO2 ── */
+const graineLevure = (i, bourgeon) => { for (let s = 200 + i * 37; ; s++) if ((graine(s)() > .45) === bourgeon) return s; };
+const LEV = [[-45, -28, 21, true, -.5], [36, -46, 18, true, .9], [-6, 30, 22, false, .3], [55, 20, 17, true, 2.6], [-58, 40, 15, false, 1.2]].map((l, i) => [...l, graineLevure(i, l[3])]);
+const CO2 = [[-2, -64, 0], [-74, 2, 0], [12, -10, 1], [72, -22, 3], [26, 62, 2], [-26, 70, 4], [-20, -4, 2]];
+const ALVEOLES = (() => { const r = graine(57), o = []; for (let i = 0; i < 26; i++) o.push([(r() * 2 - 1) * 96, (r() * 2 - 1) * 96, 4 + r() * 11, r()]); return o; })();
+function loupeDedans(ctx, lp, e, S) {
+  const h = e.horloge, q = lp.r / 98, flot = (i, amp = 1.6) => [Math.sin(h * .8 + i * 1.7) * amp, Math.cos(h * .6 + i * 2.3) * amp];
+  // la mie : des alvéoles pâles et un réseau de fils clairs
+  for (const [x, y, r, s] of ALVEOLES) { ctx.fillStyle = `rgba(255,246,220,${.07 + .1 * s})`; ctx.beginPath(); ctx.ellipse(lp.cx + x * q, lp.cy + y * q, r * q * 1.3, r * q, s * 3, 0, TAU); ctx.fill(); ctx.strokeStyle = `rgba(120,88,48,${.1 + .1 * s})`; ctx.lineWidth = 1; ctx.stroke(); }
+  if (S.levures <= 0) return null;
+  ctx.save(); ctx.globalAlpha = S.levures;
+  LEV.forEach(([x, y, r, b, an, gr], i) => { const [dx, dy] = flot(i + 30, 1); LX.levure(ctx, lp.cx + (x + dx) * q, lp.cy + (y + dy) * q, r * q, { angle: an, mitos: 2, graine: gr, bourgeon: b }); });
+  ctx.restore();
+  // les bulles de CO2 : chacune sort d'une levure, l'une après l'autre
+  const boite = { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9, n: 0 };
+  CO2.forEach(([x, y, lv], i) => {
+    const u = borne((S.co2 - i / CO2.length) * CO2.length * .8); if (u <= 0) return;
+    const v = doux(u), [dx, dy] = flot(i, 2.2), ech = .86 * q * (.5 + .5 * v);
+    const px = lp.cx + mix(LEV[lv][0], x + dx, v) * q, py = lp.cy + mix(LEV[lv][1], y + dy, v) * q;
+    ctx.save(); ctx.globalAlpha = Math.min(1, u * 2.5);
+    const gb = ctx.createRadialGradient(px - 4 * ech, py - 5 * ech, 1, px, py, 16 * ech); gb.addColorStop(0, 'rgba(255,255,255,.34)'); gb.addColorStop(1, 'rgba(235,245,255,.1)');
+    ctx.fillStyle = gb; ctx.beginPath(); ctx.arc(px, py, 16 * ech, 0, TAU); ctx.fill();
+    LX.co2(ctx, px, py, { echelle: ech, bulle: true });
+    ctx.restore();
+    boite.x0 = Math.min(boite.x0, px - 17 * ech); boite.y0 = Math.min(boite.y0, py - 17 * ech); boite.x1 = Math.max(boite.x1, px + 17 * ech); boite.y1 = Math.max(boite.y1, py + 17 * ech); boite.n++;
+  });
+  return boite;
+}
+
+/* ── Le dessin ── */
+function sachetPose(G, S) {      // centre et angle du sachet à l'instant t
+  const { sa, bol, k } = G, repos = [sa.x, sa.y - sa.h / 2], haut = [bol.cx + bol.rx * .44, bol.yr - 96 * k];
+  const u = S.leve, x = mix(repos[0], haut[0], u), y = mix(repos[1], haut[1], u) - Math.sin(u * Math.PI) * 46 * k;
+  const secoue = S.verse > 0 && S.verse < 1 ? Math.sin(S.verse * 26) * .06 : 0;
+  return { x, y, angle: -2.0 * S.incline + secoue + (S.dechire >= 1 && u === 0 ? .045 : 0) };
+}
+function dessiner(c, e) {
+  const G = geo(e.L), S = etat(e), { bol, lp, sa, hor, k } = G, h = e.horloge, tf = e.tf(18);
+  const P = formePate(bol, S, h), pose = sachetPose(G, S);
+  const bouche = [pose.x + (sa.h / 2 - 6) * Math.sin(pose.angle), pose.y - (sa.h / 2 - 6) * Math.cos(pose.angle)];
+  const cible = surPate(P, .46, .7);                     // le point de la pâte que la loupe regarde
+  let bSurf = null, bLoupe = null;
+  c.direct(() => {
+    const ctx = c.ctx;
+    table(ctx, e.L, G.table);
+    if (S.horloge > 0) horloge(ctx, hor.cx, hor.cy, hor.r, S.heure, S.horloge);
+    if (S.bol > 0) {
+      ctx.save(); ctx.globalAlpha = S.bol;
+      bolFond(ctx, bol);
+      if (S.cuillere > 0) { const a = S.tour * TAU * 3; cuillere(ctx, bol.cx + Math.cos(a) * bol.rx * .3, P.yb - 16 * k + Math.sin(a) * 6 - (1 - S.cuillere) * 90, .5 + Math.cos(a) * .16, S.cuillere, k); }
+      bSurf = pate(ctx, P, S, h);
+      granules(ctx, P, S, bouche, k);
+      bolDevant(ctx, bol);
+      ctx.restore();
+    }
+    if (S.sachet > 0) {
+      // la bande déchirée s'envole
+      if (S.dechire > 0 && S.dechire < 1) { ctx.save(); ctx.globalAlpha = 1 - S.dechire; ctx.translate(sa.x + S.dechire * 40, sa.y - sa.h - S.dechire * 26); ctx.rotate(S.dechire * 1.4); ctx.fillStyle = 'rgb(232,186,92)'; ctx.fillRect(-sa.w / 2, 0, sa.w, sa.h * .085); ctx.restore(); }
+      sachet(ctx, pose.x, pose.y + (1 - S.sachet) * 30, sa.w, sa.h, { alpha: S.sachet, angle: pose.angle, ouvert: S.dechire > .15 ? 1 : 0, vide: S.verse });
+    }
+    if (S.loupe > 0) {
+      ctx.save(); ctx.globalAlpha = S.loupe;
+      const a1 = Math.atan2(lp.cy - cible[1], lp.cx - cible[0]); ctx.strokeStyle = 'rgba(226,232,240,.55)'; ctx.lineWidth = 1.4; ctx.setLineDash([6, 5]);
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(cible[0] + Math.cos(a1 + s * 1.57) * 10, cible[1] + Math.sin(a1 + s * 1.57) * 10); ctx.lineTo(lp.cx + Math.cos(a1 + Math.PI + s * 1.05) * lp.r, lp.cy + Math.sin(a1 + Math.PI + s * 1.05) * lp.r); ctx.stroke(); }
+      ctx.setLineDash([]); ctx.strokeStyle = 'rgba(240,244,250,.9)'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.arc(cible[0], cible[1], 10, 0, TAU); ctx.stroke();
+      ctx.restore();
+      R.loupe(ctx, lp.cx, lp.cy, lp.r * (.5 + .5 * S.loupe), (cx) => { bLoupe = loupeDedans(cx, lp, e, S); }, { alpha: S.loupe, fond: [232, 206, 156], manche: 1.02, longueur: 34 * k });
+    }
+  });
+
+  /* Ce que le professeur écrit */
+  if (e.p('bol', .3, 1) > 0) {
+    const px = bol.cx + bol.rx * .93 + 10, py = bol.yr + 40 * k;
+    e.ecrire(c, 'n_pate', () => { c.texte('pâte', px, py, { couleur: BEIGE, taille: 18 }); c.ligne(px + 4, py - tf, P.cx + P.rxd * .8, bol.yr + bol.ry * .3, { couleur: BEIGE, largeur: 1.4, alpha: .8 }); });
+  }
+  if (e.p('gonfle', .9, 1) > 0) e.ecrire(c, 'n_heure', () => c.texte('1 heure plus tard', Math.max(6, hor.cx - c.largeurTexte('1 heure plus tard', e.tf(17)) / 2), hor.cy + hor.r + e.tf(17) + 7, { couleur: 'blanc', taille: 17 }));
+  if (S.levures >= 1) {
+    const q = lp.r / 98, lx = lp.cx - lp.r * .62, ly = lp.cy + lp.r + tf + 12;
+    e.ecrire(c, 'n_levures', () => { c.texte('levures', lx, ly, { couleur: BEIGE, taille: 18, align: 'center', gras: true }); c.ligne(lx + 4, ly - tf - 1, lp.cx + LEV[4][0] * q, lp.cy + (LEV[4][1] + 12) * q, { couleur: BEIGE, largeur: 1.4, alpha: .8 }); });
+  }
+  if (e.p('zoom', .8, 1) > 0) {
+    const q = lp.r / 98, lx = lp.cx - 6, ly = lp.cy - lp.r - 14;
+    e.ecrire(c, 'n_co2', () => { c.texte('bulles de CO_{2}', lx, ly, { couleur: 'violet', taille: 18, align: 'center', gras: true }); c.ligne(lx, ly + 5, lp.cx + CO2[0][0] * q, lp.cy + (CO2[0][1] - 14) * q, { couleur: 'violet', largeur: 1.4, alpha: .8 }); });
+  }
+  if (e.des('question')) {
+    if (e.compact) e.bandeau = { texte: QUESTION, couleur: 'jaune', repere: 'question', label: 'la question du cours : ' + QUESTION };
+    else {
+      const t = 23, w = c.largeurTexte(QUESTION, e.tf(t)) + 34, y = 396;
+      e.ecrire(c, 'question', () => { c.texte(QUESTION, e.L / 2, y, { couleur: 'jaune', taille: t, align: 'center', gras: true }); c.rect(e.L / 2 - w / 2, y - 27, w, 40, { couleur: 'jaune', largeur: 2.2, arrondi: 10, fond: 'jaune', fondAlpha: .08 }); });
+      c.repere('question', e.L / 2 - w / 2, y - 27, w, 40, 'la question du cours : ' + QUESTION);
+    }
+  }
+
+  /* Les repères */
+  if (S.bol > .5) {
+    c.repere('pate', P.cx - P.rxd - 4, P.yb - P.h - 4, 2 * P.rxd + 8, Math.max(26, P.h + P.ryd * .6), S.g > .9 ? 'la pâte gonflée (elle a doublé de volume)' : S.verse > 0 ? 'la pâte avec la levure' : 'la pâte, plate au fond du bol');
+    c.repere('bol', bol.cx - bol.rx - 4, bol.yr - bol.ry, 2 * bol.rx + 8, bol.h + bol.ry + 6, 'le bol');
+  }
+  if (S.sachet > .5) { const d = Math.max(sa.w, sa.h) / 2 * (S.incline > .1 ? 1 : 0); c.repere('sachet', pose.x - sa.w / 2 - d * .3, pose.y - sa.h / 2 - 2, sa.w + d * .6, sa.h + 4, S.verse >= 1 ? 'le sachet de levure de boulanger, vide' : 'le sachet de levure de boulanger'); }
+  if (S.horloge > .5) c.repere('horloge', hor.cx - hor.r, hor.cy - hor.r, 2 * hor.r, 2 * hor.r, 'l’horloge : une heure passe');
+  if (S.loupe > .9) c.repere('levures', lp.cx - lp.r - 4, lp.cy - lp.r - 4, 2 * lp.r + 8, 2 * lp.r + 8, 'la loupe : des levures dans la pâte');
+  if (bLoupe && bLoupe.n) c.repere('bulles', bLoupe.x0, bLoupe.y0, bLoupe.x1 - bLoupe.x0, bLoupe.y1 - bLoupe.y0, 'les bulles de CO2 dans la pâte (vues à la loupe)');
+  else if (bSurf && bSurf.n > 2) c.repere('bulles', bSurf.x0 - 3, bSurf.y0 - 3, bSurf.x1 - bSurf.x0 + 6, bSurf.y1 - bSurf.y0 + 6, 'les bulles qui affleurent à la surface de la pâte');
+}
+
+/* ── Téléphone : la boîte à montrer pour l'étape en cours ── */
+function foyer(e) {
+  const G = geo(e.L), { bol, lp, sa } = G, id = e.etape();
+  const cuisine = { x: 0, y: 36, w: bol.cx + bol.rx + 60, h: 330 };
+  if (id === 'zoom' || id === 'question') return e.p('zoom') < .12 ? cuisine : { x: bol.cx - 30, y: 36, w: lp.cx + lp.r + 30 - (bol.cx - 30), h: 330 };
+  return cuisine;
+}
+
+/* ── Ce qui se voit ── */
+function voit(e) {
+  const S = etat(e);
+  let s = 'Une scène de cuisine peinte, sur un plan de travail en bois. ';
+  if (S.bol < .5) return s + 'Le plan de travail est encore vide.';
+  s += S.g >= 1 ? 'Dans le bol en faïence (blanc à filets bleus), la pâte forme un grand dôme qui dépasse le bord : elle a doublé de volume, sa surface est tendue et des bulles affleurent. '
+    : S.g > 0 ? `Dans le bol, la pâte monte (${Math.round(S.g * 100)} % de la montée) : le dôme s’élève, des bulles apparaissent à la surface. `
+    : S.verse >= 1 ? (S.melange >= 1 ? 'Dans le bol, la pâte est plate ; la levure y a été mélangée. ' : S.cuillere > 0 ? 'Une cuillère en bois mélange la levure à la pâte, dans le bol. ' : 'Les granules de levure forment un petit tas sur la pâte plate. ')
+    : 'Un bol en faïence (blanc à filets bleus) contient une pâte plate, bien en dessous du bord. ';
+  if (S.sachet > .5) s += S.verse >= 1 && S.leve === 0 ? 'À côté, le sachet de levure de boulanger est posé, ouvert et vide. '
+    : S.verse > 0 && S.verse < 1 ? 'Le sachet de levure, incliné au-dessus du bol, se verse : les granules tombent dans la pâte. '
+    : S.leve > 0 ? 'Le sachet de levure, déchiré, est au-dessus du bol. ' : 'À côté du bol, un sachet jaune à bandeau rouge marqué « LEVURE » (levure de boulanger), fermé. ';
+  if (S.horloge > .5) s += S.heure >= 1 ? 'L’horloge a avancé d’une heure (de 10 h à 11 h) ; « 1 heure plus tard » est écrit dessous. ' : `L’horloge tourne : ${Math.round(S.heure * 60)} min écoulées. `;
+  if (S.loupe > .5) s += `Une loupe regarde dans la pâte : on y voit ${S.levures > .5 ? 'cinq levures (cellules ovales beiges, certaines avec un bourgeon)' : 'la mie de près'}${S.co2 > 0 ? ` et ${Math.min(CO2.length, Math.ceil(S.co2 * CO2.length / .8))} bulle(s) de CO2 qui sortent des levures` : ''}. `;
+  if (e.des('question')) s += `En bas, la question est écrite en jaune et encadrée : « ${QUESTION} » — aucune réponse n’est écrite.`;
+  return s;
+}
+
+R.page({
+  id: 'svt_reference_pate', vue: 'pate', titre: 'Pourquoi la pâte à pain gonfle-t-elle ?', moments: MOMENTS, dessiner, foyer, voit, vivant: () => true,
+  texte: 'La pâte à pain : on ajoute de la levure de boulanger à la pâte ; une heure plus tard, la pâte a doublé de volume. À la loupe, la pâte contient des levures (des cellules vivantes) et des bulles de CO2. Problème du cours : d’où la levure tire-t-elle son énergie ?',
+  explications: [{ repere: 'pate', texte: 'Une pâte à pain, plate au fond du bol.' }, { repere: 'sachet', texte: 'On y ajoute de la levure de boulanger.' }, { repere: 'pate', texte: 'Une heure plus tard, la pâte a doublé de volume.' },
+    { repere: 'levures', texte: 'Dans la pâte : des levures, des cellules vivantes.' }, { repere: 'bulles', texte: 'Elles rejettent des bulles de CO2 qui gonflent la pâte.' }, { repere: 'question', texte: 'D’où la levure tire-t-elle son énergie ?' }],
+  accueil: 'Une pâte à pain, un sachet de levure…', fini: 'La pâte a gonflé. D’où la levure tire-t-elle son énergie ?',
+  etat: (e) => { const S = etat(e); return { pate_montee: +S.g.toFixed(2), levure_versee: +S.verse.toFixed(2) }; },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

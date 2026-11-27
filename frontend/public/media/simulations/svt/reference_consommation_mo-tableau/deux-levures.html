@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deux levures au microscope électronique — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css">
+<style>@media (max-height: 340px) { .scene { padding-bottom: .2em; } .tableau { padding: .2em .5em; } }</style></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux clichés de microscope électronique, côte à côte, au même grossissement. À gauche, une levure cultivée en milieu aérobie : noyau, une vacuole, hyaloplasme et de nombreuses grandes mitochondries à crêtes. À droite, une levure cultivée en milieu anaérobie : noyau, plusieurs vacuoles, hyaloplasme et seulement deux petites mitochondries. Chaque cliché porte sa barre d’échelle de 0,6 micromètre."></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference.js"></script>
+<script>
+/*
+ * Deux levures au microscope électronique — cours de référence SVT (docs/reference-svt/ARCHITECTURE.md § 2 et § 3),
+ * 27 novembre 2026. Document recréé : deux électronographies (microscope électronique à transmission, × 20 000 environ,
+ * barre d'échelle 0,6 µm), aucune photo : les deux coupes sont PEINTES (peindreCoupe) dans un canvas caché, une fois par
+ * taille, puis posées sur le tableau comme deux clichés.
+ *   Milieu 1, aérobie   : noyau, une vacuole, hyaloplasme, 8 mitochondries grandes, à crêtes.
+ *   Milieu 2, anaérobie : noyau, 3 vacuoles, hyaloplasme, 2 mitochondries petites, presque sans crêtes.
+ * Les deux cellules ont la même taille (même grossissement) : 1 µm = 60 unités de la coupe, la barre de 0,6 µm en fait 36.
+ *
+ * Moments : aerobie, anaerobie ║ arrêt pour l'observation (rien d'allumé, de compté, de légendé) ║ mitochondries_aerobie
+ * (les mitochondries du milieu 1 s'allument une à une : chacune se colorise aux couleurs du lexique et reçoit son numéro ;
+ * total écrit), mitochondries (celles du milieu 2 ; total écrit), leg_noyau, leg_vacuole, leg_hyaloplasme, legendes,
+ * conclusion_respiration, conclusion.
+ */
+const R = window.Ref, LX = window.Lexique, { doux, mix, borne, rgba, TAU, graine, rr } = R, T = LX.T;
+
+/* ── Les deux coupes : tout est donné dans le repère de la cellule (origine au centre, grand axe 138, petit axe 114) ── */
+const UM = 60;                     // unités de la coupe par micromètre
+const COUPES = {
+  a: { id: 'a', graine: 71, tilt: -.09, a: 138, b: 114, phase: .6, cicatrice: 3.75,
+    noyau: { x: 45, y: -45, rx: 40, ry: 37, nucleole: [-.36, .34], g: 5 },
+    vacuoles: [{ x: 50, y: 45, rx: 36, ry: 33, g: 3 }],
+    mitos: [                                        // dans l'ordre où elles sont comptées ; num : où s'écrit le numéro
+      { x: -78, y: -52, rx: 27, ry: 11.5, a: -.58, cretes: 7, courbe: .18, num: [-106, -68] },
+      { x: -18, y: -80, rx: 28, ry: 11.5, a: .04, cretes: 7, courbe: -.2, num: [-58, -88] },
+      { x: -28, y: -36, rx: 26, ry: 11, a: .36, cretes: 6, courbe: .12, num: [-37, -11] },
+      { x: 103, y: 2, rx: 25, ry: 10.5, a: 1.5, cretes: 6, courbe: -.16, num: [102, -37] },
+      { x: -98, y: 8, rx: 26, ry: 11, a: 1.36, cretes: 6, courbe: .2, num: [-130, 10] },
+      { x: -38, y: 14, rx: 28, ry: 11.5, a: -.1, cretes: 7, courbe: -.14, num: [3, 12] },
+      { x: -70, y: 55, rx: 27, ry: 11.5, a: .6, cretes: 7, courbe: .16, num: [-100, 76] },
+      { x: -9, y: 73, rx: 26, ry: 11, a: -.14, cretes: 6, courbe: -.2, num: [-12, 102] },
+    ],
+    lipides: [[-68, -19, 5], [3, 39, 5.5], [-30, 42, 4.5]],
+    cibles: { noyau: [60, -60], mitochondrie: [110, 4], vacuole: [68, 47], hyaloplasme: [31, 89] },
+    boites: { hyaloplasme: [14, 76, 40, 24] },
+  },
+  b: { id: 'b', graine: 113, tilt: .08, a: 138, b: 114, phase: 2.1, cicatrice: -.62,
+    noyau: { x: -52, y: -42, rx: 40, ry: 37, nucleole: [.3, -.38], g: 9 },
+    vacuoles: [{ x: -50, y: 47, rx: 34, ry: 30, g: 7 }, { x: 58, y: -8, rx: 42, ry: 39, g: 11 }, { x: 29, y: 68, rx: 20, ry: 16.5, g: 13 }],
+    mitos: [
+      { x: -105, y: 2, rx: 11.5, ry: 7.5, a: 1.4, cretes: 1, courbe: .1, petite: true, num: [-80, 4] },
+      { x: 4, y: -72, rx: 12, ry: 7.5, a: -.2, cretes: 0, courbe: -.1, petite: true, num: [31, -75] },
+    ],
+    lipides: [[0, -20, 5.5], [101, 45, 5], [-20, -89, 4.5], [66, 58, 4.5]],
+    cibles: { noyau: [-70, -58], mitochondrie: [-112, 2], vacuole: [-68, 49], hyaloplasme: [-6, 88] },
+    boites: { hyaloplasme: [-16, -8, 34, 46] },
+  },
+};
+[COUPES.a, COUPES.b].forEach(S => S.mitos.forEach((m, i) => { m.g = S.graine + i * 7.3; }));
+const NA = COUPES.a.mitos.length, NB = COUPES.b.mitos.length;
+
+/* ── Peinture ── */
+/** Un gris de cliché, très légèrement sépia. */
+const gr = (v, a = 1) => `rgba(${Math.round(Math.min(255, v * 1.01 + 3))},${Math.round(Math.min(255, v * .99 + 1))},${Math.round(v * .935)},${a})`;
+/** Un ovale un peu irrégulier (contour d'une cellule, d'un noyau, d'une vacuole). */
+function ovale(ctx, a, b, wob = 0, ph = 0, n = 120) {
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const th = i / n * TAU, f = 1 + wob * (Math.sin(3 * th + ph) * .6 + Math.sin(5 * th + ph * 2.3) * .4 + Math.sin(2 * th + ph * .7) * .55);
+    const x = a * f * Math.cos(th), y = b * f * Math.sin(th);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+}
+/** Le contour d'une mitochondrie (bâtonnet arrondi, un peu courbé), dans son repère (grand axe horizontal). */
+function formeMito(ctx, m, retrait = 0) {
+  const rx = m.rx - retrait, ry = m.ry - retrait, n = 64, ex = .8;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const th = i / n * TAU, cs = Math.cos(th), sn = Math.sin(th);
+    const ux = Math.sign(cs) * Math.pow(Math.abs(cs), ex), uy = Math.sign(sn) * Math.pow(Math.abs(sn), ex), f = 1 + .028 * Math.sin(3 * th + m.g);
+    const x = rx * ux * f, y = ry * uy * f + (m.courbe || 0) * m.ry * (ux * ux - .5);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+}
+const PALETTE = {
+  gris: (m) => ({ ext: gr(34), esp: gr(158), int: gr(40), mat0: gr(m.petite ? 122 : 100), mat1: gr(m.petite ? 104 : 76), bord: gr(38), lumen: gr(176), grain: gr(30, .55), lExt: 1.5, lInt: 1.3 }),
+  couleur: () => ({ ext: rgba(T.mitoExt.map(v => v * .82), 1), esp: rgba(T.mitoEsp, 1), int: rgba(T.crete, 1), mat0: rgba(T.matrice.map(v => Math.min(255, v + 62)), 1), mat1: rgba(T.matrice.map(v => v * .86), 1),
+    bord: rgba(T.crete, 1), lumen: rgba(T.mitoEsp, 1), grain: 'rgba(235,248,255,.5)', lExt: 2, lInt: 1.5 }),
+};
+/**
+ * Une mitochondrie en coupe : membrane externe, espace intermembranaire, membrane interne, matrice, crêtes transversales
+ * (replis de la membrane interne : deux traits de membrane et, entre eux, la lumière de la crête). La même forme sert au
+ * cliché (mode 'gris') et à la mitochondrie allumée (mode 'couleur' : couleurs du lexique).
+ */
+function mito(ctx, m, mode) {
+  const P = PALETTE[mode](m), rnd = graine(Math.round(m.g * 97) + 13), ret = m.petite ? 2 : 2.7, rx = m.rx - ret, ry = m.ry - ret;
+  ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(m.a); ctx.lineJoin = 'round';
+  formeMito(ctx, m, 0); ctx.fillStyle = P.esp; ctx.fill();
+  formeMito(ctx, m, ret);
+  const g = ctx.createLinearGradient(0, -ry, 0, ry); g.addColorStop(0, P.mat0); g.addColorStop(1, P.mat1); ctx.fillStyle = g; ctx.fill();
+  ctx.save(); formeMito(ctx, m, ret); ctx.clip();
+  // les granules de la matrice
+  ctx.fillStyle = P.grain;
+  for (let k = 0; k < (m.petite ? 5 : 16); k++) { const x = (rnd() * 2 - 1) * rx * .9, y = (rnd() * 2 - 1) * ry * .8; ctx.beginPath(); ctx.arc(x, y, .5 + rnd() * .6, 0, TAU); ctx.fill(); }
+  // les crêtes : alternativement d'un bord et de l'autre, elles ne traversent pas toute la matrice
+  const n = m.cretes, trac = [];
+  for (let j = 0; j < n; j++) {
+    const s = j % 2 ? 1 : -1, x0 = -rx + (j + .5 + (rnd() - .5) * .3) * 2 * rx / n, prof = m.petite ? .3 + rnd() * .12 : .58 + rnd() * .26;
+    const dec = (m.courbe || 0) * m.ry * ((x0 / m.rx) ** 2 - .5), x1 = x0 + (rnd() - .5) * 5, xm = x0 + (rnd() - .5) * 4;
+    trac.push([x0, s * (ry + 3) + dec, xm, s * ry * (1 - prof) + dec, x1, s * ry * (1 - 2 * prof) + dec]);
+  }
+  const lb = m.petite ? 2.6 : Math.max(3, m.ry * .31);
+  ctx.lineCap = 'round';
+  for (const [lw, st] of [[lb, P.bord], [lb * .4, P.lumen]]) {
+    ctx.lineWidth = lw; ctx.strokeStyle = st;
+    for (const t of trac) { ctx.beginPath(); ctx.moveTo(t[0], t[1]); ctx.quadraticCurveTo(t[2], t[3], t[4], t[5]); ctx.stroke(); }
+  }
+  ctx.restore();
+  formeMito(ctx, m, ret); ctx.lineWidth = P.lInt; ctx.strokeStyle = P.int; ctx.stroke();
+  formeMito(ctx, m, 0); ctx.lineWidth = P.lExt; ctx.strokeStyle = P.ext; ctx.stroke();
+  ctx.restore();
+}
+
+/** Le grain du film : une tuile de bruit, tirée une fois (déterministe). */
+let TUILE = null;
+function tuileGrain() {
+  if (TUILE) return TUILE;
+  const n = 192, cv = document.createElement('canvas'); cv.width = cv.height = n;
+  const cx = cv.getContext('2d'), im = cx.createImageData(n, n), r = graine(4099);
+  for (let i = 0; i < n * n; i++) { const v = 128 + ((r() + r() + r()) / 3 - .5) * 330; im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = Math.max(0, Math.min(255, v)); im.data[i * 4 + 3] = 255; }
+  cx.putImageData(im, 0, 0);
+  return (TUILE = cv);
+}
+/** Des taches douces, claires ou sombres (hétérogénéité d'une plage). */
+function marbrures(ctx, rnd, n, zone, r0, r1, alpha) {
+  for (let k = 0; k < n; k++) {
+    const x = zone[0] + rnd() * zone[2], y = zone[1] + rnd() * zone[3], rad = r0 + rnd() * (r1 - r0), cl = rnd() < .5, a = alpha * (.5 + rnd() * .5);
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, cl ? `rgba(255,252,240,${a})` : `rgba(10,10,8,${a})`); g.addColorStop(1, cl ? 'rgba(255,252,240,0)' : 'rgba(10,10,8,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, TAU); ctx.fill();
+  }
+}
+
+/**
+ * Peint une coupe de levure « façon microscope électronique à transmission » dans la boîte (0, 0, w, h) :
+ * résine du fond, paroi épaisse et claire, membrane plasmique (trait sombre), hyaloplasme gris et granuleux (ribosomes),
+ * réticulum, noyau (double enveloppe, pores, nucléole), vacuole(s), mitochondries, globules lipidiques, puis le grain du
+ * film et le vignettage. S : la coupe (listes d'organites) ; k : le grossissement ; o.teinte : hyaloplasme teinté (0..1).
+ */
+function peindreCoupe(ctx, S, w, h, k, o = {}) {
+  const rnd = graine(S.graine), A = S.a, B = S.b;
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
+  /* la résine d'inclusion */
+  const gf = ctx.createLinearGradient(0, 0, w, h); gf.addColorStop(0, gr(176)); gf.addColorStop(.5, gr(168)); gf.addColorStop(1, gr(158));
+  ctx.fillStyle = gf; ctx.fillRect(0, 0, w, h);
+  marbrures(ctx, rnd, 46, [0, 0, w, h], 14, 46, .05);
+  ctx.save(); ctx.strokeStyle = 'rgba(20,20,16,.035)'; ctx.lineWidth = 1.2;       // les fines stries du couteau
+  for (let x = -h; x < w; x += 7 + rnd() * 9) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + h * .5, h); ctx.stroke(); }
+  ctx.restore();
+  for (let i = 0; i < 26; i++) { ctx.fillStyle = gr(70 + rnd() * 50, .25 + rnd() * .3); ctx.beginPath(); ctx.arc(rnd() * w, rnd() * h, .4 + rnd() * .9, 0, TAU); ctx.fill(); }
+
+  ctx.translate(w / 2, h / 2); ctx.rotate(S.tilt); ctx.scale(k, k);
+  /* la paroi : épaisse, claire, feuilletée ; un liseré sombre et flou dehors */
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 9 * k; ovale(ctx, A, B, .012, S.phase); ctx.fillStyle = gr(206); ctx.fill(); ctx.restore();
+  if (S.cicatrice != null) {     // la cicatrice de bourgeon : un bourrelet de paroi, en anneau vu en coupe (deux lèvres)
+    const an = S.cicatrice;
+    for (const d of [-.085, .085]) { const x = Math.cos(an + d) * (A + 1.5), y = Math.sin(an + d) * (B + 1.5);
+      ctx.fillStyle = gr(202); ctx.beginPath(); ctx.ellipse(x, y, 5.2, 3.4, an + d, 0, TAU); ctx.fill(); ctx.strokeStyle = gr(96, .7); ctx.lineWidth = 1; ctx.stroke(); }
+    ctx.fillStyle = gr(206); ctx.beginPath(); ctx.ellipse(Math.cos(an) * (A - 3), Math.sin(an) * (B - 3), 9, 6, an + Math.PI / 2, 0, TAU); ctx.fill();
+  }
+  ovale(ctx, A, B, .012, S.phase); ctx.fillStyle = gr(208); ctx.fill();
+  ctx.save(); ovale(ctx, A, B, .012, S.phase); ctx.clip();
+  ctx.lineWidth = 3.4; ctx.strokeStyle = gr(132, .55); ovale(ctx, A, B, .012, S.phase); ctx.stroke();                 // couche externe, plus dense
+  ctx.lineWidth = 3.6; ctx.strokeStyle = gr(232, .8); ovale(ctx, A - 5.2, B - 5.2, .012, S.phase); ctx.stroke();      // couche interne, très claire
+  ctx.lineWidth = .7; ctx.strokeStyle = gr(150, .45); ovale(ctx, A - 3.3, B - 3.3, .012, S.phase); ctx.stroke();
+  for (let i = 0; i < 520; i++) { const th = rnd() * TAU, d = rnd() * 9; ctx.fillStyle = gr(120 + rnd() * 80, .28); ctx.fillRect(Math.cos(th) * (A - d), Math.sin(th) * (B - d), .9, .9); }
+  ctx.restore();
+  ctx.lineWidth = 1.1; ctx.strokeStyle = gr(84, .8); ovale(ctx, A, B, .012, S.phase); ctx.stroke();
+
+  /* le hyaloplasme : gris moyen, granuleux */
+  const ai = A - 9.6, bi = B - 9.6, cyto = () => ovale(ctx, ai, bi, .013, S.phase + .25, 160);
+  cyto(); const gc = ctx.createRadialGradient(-20, -16, 10, 0, 0, A); gc.addColorStop(0, gr(122)); gc.addColorStop(1, gr(104)); ctx.fillStyle = gc; ctx.fill();
+  ctx.save(); cyto(); ctx.clip();
+  marbrures(ctx, rnd, 90, [-A, -B, 2 * A, 2 * B], 6, 22, .085);
+  // les ribosomes : de fins points sombres, par milliers
+  for (let i = 0; i < 5200; i++) {
+    const x = (rnd() * 2 - 1) * ai, y = (rnd() * 2 - 1) * bi, s = rnd();
+    ctx.fillStyle = gr(20 + s * 30, .5 + s * .4); ctx.beginPath(); ctx.arc(x, y, .5 + s * .5, 0, TAU); ctx.fill();
+  }
+  for (let i = 0; i < 700; i++) { ctx.fillStyle = gr(190, .16 + rnd() * .14); ctx.beginPath(); ctx.arc((rnd() * 2 - 1) * ai, (rnd() * 2 - 1) * bi, .5 + rnd() * .7, 0, TAU); ctx.fill(); }
+  // le réticulum endoplasmique : quelques citernes, sous la membrane et dans le hyaloplasme
+  ctx.lineCap = 'round';
+  const citerne = (fn) => { for (const [lw, st] of [[2.3, gr(40, .8)], [.8, gr(178, .9)]]) { ctx.lineWidth = lw; ctx.strokeStyle = st; ctx.beginPath(); fn(); ctx.stroke(); } };
+  for (let i = 0; i < 9; i++) {
+    const t0 = rnd() * TAU, len = .16 + rnd() * .26, dd = 5.5 + rnd() * 3;
+    citerne(() => { for (let j = 0; j <= 14; j++) { const th = t0 + len * j / 14, wv = Math.sin(j * 1.3 + i) * .7; const x = Math.cos(th) * (ai - dd + wv), y = Math.sin(th) * (bi - dd + wv); j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } });
+  }
+  if (o.teinte) { ctx.globalCompositeOperation = 'color'; ctx.fillStyle = rgba(T.hyalo, .42 * o.teinte); ctx.fillRect(-A, -B, 2 * A, 2 * B); ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = rgba(T.hyalo, .07 * o.teinte); ctx.fillRect(-A, -B, 2 * A, 2 * B); }
+  ctx.restore();
+  /* la membrane plasmique : un trait sombre, net, contre la paroi */
+  ctx.lineWidth = 1.9; ctx.strokeStyle = gr(30); cyto(); ctx.stroke();
+
+  /* les vacuoles : très claires, presque vides, bordées du tonoplaste */
+  for (const v of S.vacuoles) {
+    const r2 = graine(S.graine * 3 + v.g);
+    ctx.save(); ctx.translate(v.x, v.y);
+    ovale(ctx, v.rx, v.ry, .03, v.g, 72);
+    const gv = ctx.createRadialGradient(-v.rx * .2, -v.ry * .2, 2, 0, 0, v.rx); gv.addColorStop(0, gr(242)); gv.addColorStop(.8, gr(234)); gv.addColorStop(1, gr(220));
+    ctx.fillStyle = gv; ctx.fill();
+    ctx.save(); ovale(ctx, v.rx, v.ry, .03, v.g, 72); ctx.clip();
+    for (let i = 0; i < v.rx * 3; i++) { ctx.fillStyle = gr(170 + r2() * 40, .22); ctx.beginPath(); ctx.arc((r2() * 2 - 1) * v.rx, (r2() * 2 - 1) * v.ry, .5 + r2() * 1.1, 0, TAU); ctx.fill(); }
+    const na = 3 + Math.floor(r2() * 3);                               // quelques granules denses, parfois accolés
+    for (let i = 0; i < na; i++) { const an = r2() * TAU, d = r2() * .62, x = Math.cos(an) * v.rx * d, y = Math.sin(an) * v.ry * d, rad = 1.1 + r2() * 1.7;
+      ctx.fillStyle = gr(52 + r2() * 30, .9); ctx.beginPath(); ctx.arc(x, y, rad, 0, TAU); ctx.fill();
+      if (r2() < .5) { ctx.beginPath(); ctx.arc(x + rad * 1.2, y + rad * .5, rad * .6, 0, TAU); ctx.fill(); } }
+    ctx.restore();
+    ctx.lineWidth = 1.25; ctx.strokeStyle = gr(48); ovale(ctx, v.rx, v.ry, .03, v.g, 72); ctx.stroke();
+    ctx.restore();
+  }
+
+  /* le noyau : plus clair que le hyaloplasme, double enveloppe percée de pores, nucléole sombre */
+  { const N = S.noyau, r2 = graine(S.graine * 5 + N.g), forme = (d = 0) => ovale(ctx, N.rx + d, N.ry + d, .022, N.g, 90);
+    ctx.save(); ctx.translate(N.x, N.y);
+    forme(); const gn = ctx.createRadialGradient(-6, -6, 3, 0, 0, N.rx); gn.addColorStop(0, gr(184)); gn.addColorStop(1, gr(168)); ctx.fillStyle = gn; ctx.fill();
+    ctx.save(); forme(); ctx.clip();
+    marbrures(ctx, r2, 26, [-N.rx, -N.ry, 2 * N.rx, 2 * N.ry], 4, 12, .09);
+    for (let i = 0; i < 900; i++) { const s = r2(); ctx.fillStyle = gr(96 + s * 40, .3 + s * .25); ctx.beginPath(); ctx.arc((r2() * 2 - 1) * N.rx, (r2() * 2 - 1) * N.ry, .45 + s * .45, 0, TAU); ctx.fill(); }
+    for (let i = 0; i < 7; i++) { const an = r2() * TAU, x = Math.cos(an) * N.rx * .86, y = Math.sin(an) * N.ry * .86, rad = 4 + r2() * 5;     // chromatine dense, contre l'enveloppe
+      const g = ctx.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, gr(70, .42)); g.addColorStop(1, gr(70, 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, TAU); ctx.fill(); }
+    // le nucléole : une masse dense, granuleuse, excentrée
+    const nx = N.nucleole[0] * N.rx, ny = N.nucleole[1] * N.ry, na = Math.atan2(ny, nx) + Math.PI / 2;
+    ctx.save(); ctx.translate(nx, ny); ctx.rotate(na); ctx.shadowColor = gr(50, .8); ctx.shadowBlur = 5 * k;
+    ctx.fillStyle = gr(58); ctx.beginPath(); ctx.ellipse(0, 0, N.rx * .36, N.ry * .25, 0, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
+    for (let i = 0; i < 160; i++) { const an = r2() * TAU, d = Math.sqrt(r2()); ctx.fillStyle = r2() < .5 ? gr(26, .6) : gr(104, .45); ctx.beginPath(); ctx.arc(Math.cos(an) * N.rx * .36 * d, Math.sin(an) * N.ry * .25 * d, .5 + r2() * .6, 0, TAU); ctx.fill(); }
+    ctx.restore();
+    ctx.restore();
+    // l'enveloppe : deux membranes sombres, l'espace clair entre elles ; aux pores, elle s'interrompt
+    ctx.lineWidth = 4.1; ctx.strokeStyle = gr(28); forme(.6); ctx.stroke();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = gr(196); forme(.6); ctx.stroke();
+    const np = 9;
+    for (let i = 0; i < np; i++) { const an = (i + .2 + r2() * .6) / np * TAU, x = Math.cos(an) * (N.rx + .6), y = Math.sin(an) * (N.ry + .6);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(Math.sin(an) * N.rx, Math.cos(an) * N.ry));
+      ctx.fillStyle = gr(140); ctx.fillRect(-3, -1.8, 6, 3.6); ctx.fillStyle = gr(70, .75); ctx.fillRect(-.6, -1.2, 1.2, 2.4); ctx.restore(); }
+    ctx.restore(); }
+
+  /* les globules lipidiques : ronds, homogènes, sans membrane visible */
+  for (const [x, y, r] of S.lipides) {
+    const g = ctx.createRadialGradient(x - r * .3, y - r * .3, .5, x, y, r); g.addColorStop(0, gr(186)); g.addColorStop(.75, gr(170)); g.addColorStop(1, gr(140));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.lineWidth = .8; ctx.strokeStyle = gr(84, .8); ctx.stroke();
+  }
+  /* les mitochondries */
+  for (const m of S.mitos) { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 2.5 * k; ctx.translate(m.x, m.y); ctx.rotate(m.a); formeMito(ctx, m, 0); ctx.fillStyle = gr(60); ctx.fill(); ctx.restore(); mito(ctx, m, 'gris'); }
+  ctx.restore();
+}
+
+/** Les finitions du cliché (sur le canvas caché, en pixels) : léger flou de mise au point, grain du film, vignettage. */
+function finitions(cv, res) {
+  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  try { const tmp = document.createElement('canvas'); tmp.width = W; tmp.height = H; tmp.getContext('2d').drawImage(cv, 0, 0);
+    ctx.save(); ctx.filter = `blur(${(.5 * res).toFixed(2)}px)`; ctx.globalAlpha = .3; ctx.drawImage(tmp, 0, 0); ctx.restore(); } catch (_) { /* pas de filtre : le cliché reste net */ }
+  ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = .34; ctx.scale(res * .5, res * .5);
+  ctx.fillStyle = ctx.createPattern(tuileGrain(), 'repeat'); ctx.fillRect(0, 0, W / (res * .5) + 1, H / (res * .5) + 1); ctx.restore();
+  const gv = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .36, W / 2, H / 2, Math.hypot(W, H) * .56);
+  gv.addColorStop(0, 'rgba(0,0,0,0)'); gv.addColorStop(1, 'rgba(8,6,2,.36)'); ctx.fillStyle = gv; ctx.fillRect(0, 0, W, H);
+}
+const CACHE = new Map();
+function imageCoupe(S, w, h, k, res, teinte) {
+  const cle = [S.id, w, h, k.toFixed(3), res, teinte ? 1 : 0].join('|');
+  let cv = CACHE.get(cle);
+  if (!cv) {
+    if (CACHE.size > 10) CACHE.clear();
+    cv = document.createElement('canvas'); cv.width = Math.round(w * res); cv.height = Math.round(h * res);
+    const cx = cv.getContext('2d'); cx.scale(res, res); peindreCoupe(cx, S, w, h, k, { teinte: teinte ? 1 : 0 }); cx.setTransform(1, 0, 0, 1, 0, 0);
+    finitions(cv, res); CACHE.set(cle, cv);
+  }
+  return cv;
+}
+
+/* ── Les moments (s de la scène) ── */
+const MOMENTS = [
+  ['aerobie', 3.6, 'le cliché de la levure du milieu aérobie'], ['anaerobie', 7.2, 'le cliché de la levure du milieu anaérobie : les deux clichés côte à côte'],
+  ['mitochondries_aerobie', 19.2, `milieu aérobie : ${NA} mitochondries, grandes`], ['mitochondries', 24.6, `milieu anaérobie : ${NB} mitochondries, petites`],
+  ['leg_noyau', 27.4, 'légende : noyau'], ['leg_vacuole', 30.2, 'légende : vacuole'], ['leg_hyaloplasme', 33, 'légende : hyaloplasme'], ['legendes', 36, 'les quatre légendes : noyau, vacuole, hyaloplasme, mitochondrie'],
+  ['conclusion_respiration', 40.4, 'respiration ↔ mitochondries'], ['conclusion', 45.4, 'fermentation ↔ hyaloplasme (pas besoin de mitochondries)'],
+];
+const TITRES = { a: 'milieu aérobie (avec O_{2})', b: 'milieu anaérobie (sans O_{2})' };
+const TOTAUX = { a: `${NA} mitochondries, grandes`, b: `${NB} mitochondries, petites` };
+const CONCL = { a: 'respiration ↔ mitochondries', b: 'fermentation ↔ hyaloplasme (pas besoin de mitochondries)' };
+const LEG = [   // dans l'ordre où elles sont écrites ; rang : la place dans la colonne, de haut en bas
+  { id: 'noyau', moment: 'leg_noyau', mot: 'noyau', couleur: 'blanc', y: -78 }, { id: 'vacuole', moment: 'leg_vacuole', mot: 'vacuole', couleur: 'blanc', y: 52 },
+  { id: 'hyaloplasme', moment: 'leg_hyaloplasme', mot: 'hyaloplasme', couleur: 'blanc', y: 106 }, { id: 'mitochondrie', moment: 'legendes', mot: 'mitochondrie', couleur: 'orange', y: -10 },
+];
+const plat = (s) => s.replace(/_\{([^}]*)\}/g, '$1');
+
+/* ── La géométrie : deux clichés qui remplissent la largeur, une colonne de légendes entre eux ── */
+function geo(e, c) {
+  const L = e.L, tf = e.tf(17);
+  const col = e.compact || !c ? 140 : Math.max(100, Math.ceil(c.largeurTexte('mitochondrie', tf)) + 18);
+  const y = e.compact ? 34 : 32, h = e.compact ? 246 : 300;
+  const w = Math.floor(Math.min(430, (L - 12 - col) / 2)), reste = L - 12 - col - 2 * w, marge = 6 + reste * .3;
+  const k = +Math.min((w - 30) / 276, (h - (e.compact ? 14 : 22)) / 232, 1.2).toFixed(3);
+  const boite = (S, x) => ({ S, x, y, w, h, k, cx: x + w / 2, cy: y + h / 2 });
+  const G = { tf, L, col, a: boite(COUPES.a, Math.round(marge)), b: boite(COUPES.b, Math.round(L - marge - w)), yTitre: 354, yTotal: 376, yConcl: 402 };
+  G.xCol = (G.a.x + G.a.w + G.b.x) / 2;
+  return G;
+}
+/** Un point de la cellule (repère de la coupe) → sa place sur le tableau. */
+function pt(cl, x, y) { const co = Math.cos(cl.S.tilt), si = Math.sin(cl.S.tilt); return [cl.cx + cl.k * (x * co - y * si), cl.cy + cl.k * (x * si + y * co)]; }
+/** La boîte d'une mitochondrie sur le tableau. */
+function boiteMito(cl, m) { const [x, y] = pt(cl, m.x, m.y), an = m.a + cl.S.tilt, dx = (Math.abs(Math.cos(an)) * m.rx + Math.abs(Math.sin(an)) * m.ry) * cl.k + 3, dy = (Math.abs(Math.sin(an)) * m.rx + Math.abs(Math.cos(an)) * m.ry) * cl.k + 3; return [x - dx, y - dy, 2 * dx, 2 * dy]; }
+
+/* ── L'état à l'instant t : quelles mitochondries sont allumées ── */
+function etat(e) {
+  const pa = e.p('mitochondries_aerobie'), pb = e.p('mitochondries');
+  const ua = COUPES.a.mitos.map((_, i) => borne((pa - .02 - i * .1) / .05)), ub = COUPES.b.mitos.map((_, i) => borne((pb - .06 - i * .3) / .12));
+  return { ua, ub, na: ua.filter(u => u >= .5).length, nb: ub.filter(u => u >= .5).length, totalA: pa >= .86, totalB: pb >= .74,
+    aA: e.d('aerobie', .06, .62), aB: e.d('anaerobie', .06, .62), teinte: e.d('conclusion', .08, .5) };
+}
+
+function cliche(c, e, cl, alpha, teinte) {
+  if (alpha <= 0) return;
+  const ctx = c.ctx, res = Math.min(3, Math.max(1.5, Math.ceil((c.echelle || 1) * (window.devicePixelRatio || 1) * 2) / 2));
+  const dy = (1 - alpha) * -16;
+  ctx.save(); ctx.globalAlpha = alpha; ctx.translate(0, dy);
+  // le tirage : papier clair, ombre portée sur le tableau
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4; ctx.fillStyle = gr(232); rr(ctx, cl.x - 3, cl.y - 3, cl.w + 6, cl.h + 6, 2.5); ctx.fill(); ctx.restore();
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(imageCoupe(cl.S, cl.w, cl.h, cl.k, res, false), cl.x, cl.y, cl.w, cl.h);
+  if (teinte > 0) { ctx.globalAlpha = alpha * teinte; ctx.drawImage(imageCoupe(cl.S, cl.w, cl.h, cl.k, res, true), cl.x, cl.y, cl.w, cl.h); ctx.globalAlpha = alpha; }
+  ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = .8; ctx.strokeRect(cl.x, cl.y, cl.w, cl.h);
+  // la barre d'échelle : 0,6 µm
+  const tf = e.tf(17), lb = .6 * UM * cl.k, lt = c.largeurTexte('0,6 µm', tf) * 1.06, wP = Math.max(lb, lt) + 16, hP = tf + 15, xP = cl.S.id === 'a' ? cl.x + 7 : cl.x + cl.w - wP - 7, yP = cl.y + cl.h - hP - 7, xb = xP + (wP - lb) / 2, yb = yP + hP - 7;
+  ctx.fillStyle = 'rgba(6,8,8,.72)'; rr(ctx, xP, yP, wP, hP, 4); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(xb, yb - 1.6, lb, 3.2); ctx.fillRect(xb - 1, yb - 4.5, 2, 9); ctx.fillRect(xb + lb - 1, yb - 4.5, 2, 9);
+  ctx.font = `700 ${tf}px ${window.Tableau.POLICE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillText('0,6 µm', xP + wP / 2, yb - 7);
+  ctx.restore();
+  if (alpha > .9) c.repere(cl.S.id === 'a' ? 'echelle' : 'echelle_anaerobie', xP, yP, wP, hP, 'la barre d’échelle : 0,6 µm (grossissement × 20 000 environ)');
+}
+
+/** Les mitochondries allumées : colorisées (couleurs du lexique), un éclat quand elles s'allument, leur numéro. */
+function allumees(c, e, cl, us, lueur = 0) {
+  const ctx = c.ctx, tf = e.tf(17);
+  cl.S.mitos.forEach((m, i) => {
+    const u = us[i]; if (u <= 0) return;
+    const v = doux(u), eclat = u < 1 ? Math.sin(u * Math.PI) : 0;
+    ctx.save(); ctx.translate(cl.cx, cl.cy); ctx.rotate(cl.S.tilt); ctx.scale(cl.k, cl.k);
+    // le halo : vif à l'allumage, puis un liseré clair qui détache la mitochondrie du gris
+    ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(m.a); ctx.shadowColor = 'rgba(255,226,110,1)'; ctx.shadowBlur = (5 + 16 * eclat + 9 * lueur) * (c.echelle || 1) * cl.k;
+    ctx.globalAlpha = Math.min(1, v * 1.2); ctx.fillStyle = 'rgba(255,236,150,.95)'; formeMito(ctx, m, -1.2 - 1.6 * eclat); ctx.fill(); ctx.restore();
+    ctx.globalAlpha = v; mito(ctx, m, 'couleur');
+    ctx.restore();
+    if (u >= .5) {      // le numéro, dans une pastille
+      const [x, y] = pt(cl, m.num[0], m.num[1]), r = tf * .6, a = borne((u - .5) * 4);
+      ctx.save(); ctx.globalAlpha = a; ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 4; ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(60,40,0,.7)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.font = `700 ${tf}px ${window.Tableau.POLICE}`; ctx.fillStyle = '#2b1d00'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillText(String(i + 1), x, y + tf * .34); ctx.restore();
+    }
+    if (u >= 1) { const b = boiteMito(cl, m); c.repere(`mito_${cl.S.id}${i + 1}`, b[0], b[1], b[2], b[3], `la mitochondrie n° ${i + 1} du milieu ${cl.S.id === 'a' ? 'aérobie (grande, à crêtes)' : 'anaérobie (petite, presque sans crêtes)'}`); }
+  });
+}
+
+/* ── Le dessin ── */
+function dessiner(c, e) {
+  const G = geo(e, c), E = etat(e), tf = G.tf, ctx = c.ctx;
+  const lueurResp = e.des('conclusion_respiration') && !e.vu('conclusion_respiration') ? Math.sin(e.p('conclusion_respiration') * Math.PI) : 0;
+  c.direct(() => {
+    cliche(c, e, G.a, E.aA, 0); cliche(c, e, G.b, E.aB, E.teinte);
+    allumees(c, e, G.a, E.ua, lueurResp); allumees(c, e, G.b, E.ub);
+  });
+  // le titre du document
+  if (!e.compact) e.ecrire(c, 'titre', () => c.texte('Deux levures au microscope électronique (× 20 000)', G.a.x - 2, 23, { couleur: 'jaune', taille: 19, gras: true, max: e.L - 250 }));
+  // sous chaque cliché : son titre, le total des mitochondries, la conclusion
+  for (const cl of [G.a, G.b]) {
+    const id = cl.S.id, vis = id === 'a' ? E.aA : E.aB, nom = id === 'a' ? 'aerobie' : 'anaerobie';
+    if (vis <= .9) continue;
+    c.repere('levure_' + nom, cl.x, cl.y, cl.w, cl.h, `le cliché de la levure du milieu ${id === 'a' ? 'aérobie (avec O2)' : 'anaérobie (sans O2)'}`);
+    const N = cl.S.noyau, pn = pt(cl, N.x, N.y);
+    c.repere(id === 'a' ? 'noyau' : 'noyau_anaerobie', pn[0] - N.rx * cl.k, pn[1] - N.ry * cl.k, 2 * N.rx * cl.k, 2 * N.ry * cl.k, 'le noyau');
+    cl.S.vacuoles.forEach((v, i) => { const p = pt(cl, v.x, v.y); c.repere(id === 'a' ? 'vacuole' : 'vacuole_anaerobie_' + (i + 1), p[0] - v.rx * cl.k, p[1] - v.ry * cl.k, 2 * v.rx * cl.k, 2 * v.ry * cl.k, id === 'a' ? 'la vacuole' : 'une vacuole'); });
+    { const b = cl.S.boites.hyaloplasme, p = pt(cl, b[0] + b[2] / 2, b[1] + b[3] / 2); c.repere(id === 'b' ? 'hyaloplasme' : 'hyaloplasme_aerobie', p[0] - b[2] * cl.k / 2, p[1] - b[3] * cl.k / 2, b[2] * cl.k, b[3] * cl.k, 'le hyaloplasme'); }
+    if (e.des(id === 'a' ? 'mitochondries_aerobie' : 'mitochondries')) {
+      const bs = cl.S.mitos.map(m => boiteMito(cl, m)), x0 = Math.min(...bs.map(b => b[0])), y0 = Math.min(...bs.map(b => b[1])), x1 = Math.max(...bs.map(b => b[0] + b[2])), y1 = Math.max(...bs.map(b => b[1] + b[3]));
+      c.repere('mitochondries_' + nom, x0, y0, x1 - x0, y1 - y0, `les mitochondries du milieu ${id === 'a' ? 'aérobie' : 'anaérobie'}`);
+    }
+    if (e.compact) continue;
+    e.ecrire(c, 'titre_' + id, () => c.texte(TITRES[id], cl.cx, G.yTitre, { couleur: 'jaune', taille: 17, align: 'center' }));
+    c.repere('titre_' + nom, cl.cx - c.largeurTexte(plat(TITRES[id]), tf) / 2 - 4, G.yTitre - tf, c.largeurTexte(plat(TITRES[id]), tf) + 8, tf + 6, plat(TITRES[id]));
+    if (id === 'a' ? E.totalA : E.totalB) {
+      e.ecrire(c, 'total_' + id, () => c.texte(TOTAUX[id], cl.cx, G.yTotal, { couleur: 'orange', taille: 17, align: 'center', gras: true }));
+      c.repere('total_' + nom, cl.cx - c.largeurTexte(TOTAUX[id], tf) / 2 - 6, G.yTotal - tf, c.largeurTexte(TOTAUX[id], tf) + 12, tf + 6, 'le total : ' + TOTAUX[id]);
+    }
+  }
+  legendes(c, e, G);
+  conclusions(c, e, G);
+  if (e.compact) e.bandeau = bandeau(e, E);
+}
+
+function legendes(c, e, G) {
+  const tf = G.tf, ctx = c.ctx;
+  for (const l of LEG) {
+    if (!e.des(l.moment)) continue;
+    const y = G.a.cy + G.a.k * l.y, wl = c.largeurTexte(l.mot, tf), cotes = !e.compact ? ['a', 'b'] : e.des('conclusion') && e.p('conclusion') >= .08 ? ['b'] : ['a'];
+    const traits = cotes.map((id) => { const cl = G[id], s = id === 'a' ? -1 : 1, [x1, y1] = pt(cl, ...cl.S.cibles[l.id]); return [G.xCol + s * (wl / 2 + 5), y, x1, y1]; });
+    const a = e.d(l.moment, .12, .5);
+    c.direct(() => { ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = `rgba(6,14,10,${.6 * a})`; ctx.lineWidth = 4.6;       // un filet sombre sous le trait de craie : il reste lisible sur les plages claires du cliché
+      for (const t of traits) { ctx.beginPath(); ctx.moveTo(t[0], t[1]); ctx.lineTo(t[2], t[3]); ctx.stroke(); ctx.fillStyle = `rgba(6,14,10,${.6 * a})`; ctx.beginPath(); ctx.arc(t[2], t[3], 5, 0, TAU); ctx.fill(); }
+      ctx.restore(); });
+    e.ecrire(c, 'leg_' + l.id, () => {
+      c.texte(l.mot, G.xCol, y + tf * .34, { couleur: l.couleur, taille: 17, align: 'center', gras: true });
+      for (const t of traits) { c.ligne(t[0], t[1], t[2], t[3], { couleur: l.couleur, largeur: 2.2, tremble: .5 }); c.point(t[2], t[3], 3.2, l.couleur); }
+    });
+    c.repere('legende_' + l.id, G.xCol - wl / 2 - 5, y - tf * .7, wl + 10, tf * 1.3, 'la légende « ' + l.mot + ' »');
+  }
+}
+
+function conclusions(c, e, G) {
+  if (e.compact) return;
+  const tf = G.tf, w = { a: c.largeurTexte(CONCL.a, tf), b: c.largeurTexte(CONCL.b, tf) };
+  const xa = Math.max(G.a.cx, w.a / 2 + 12);
+  let xb = G.b.cx; if (xb + w.b / 2 > e.L - 12) xb = e.L - 12 - w.b / 2; if (xb - w.b / 2 < xa + w.a / 2 + 26) xb = xa + w.a / 2 + 26 + w.b / 2;
+  const maxB = e.L - 14 - (xa + w.a / 2 + 26);
+  [['a', 'conclusion_respiration', xa, undefined], ['b', 'conclusion', xb, maxB]].forEach(([id, moment, x, max]) => {
+    if (!e.des(moment) || e.p(moment) < (id === 'b' ? .4 : .25)) return;
+    const wt = Math.min(w[id], max || 1e9);
+    e.ecrire(c, 'concl_' + id, () => { c.texte(CONCL[id], x, G.yConcl, { couleur: 'vert', taille: 17, align: 'center', gras: true, max });
+      c.rect(x - wt / 2 - 8, G.yConcl - tf * .98, wt + 16, tf * 1.34, { couleur: 'vert', largeur: 1.8, arrondi: 6, fond: 'vert', fondAlpha: .1 }); });
+    c.repere(moment, x - wt / 2 - 8, G.yConcl - tf, wt + 16, tf * 1.36, 'la conclusion : ' + CONCL[id]);
+  });
+}
+
+/* ── Téléphone : la phrase de l'étape, et la boîte à montrer ── */
+function bandeau(e, E) {
+  const id = e.etape();
+  if (e.des('conclusion')) return e.p('conclusion') >= .4 ? { texte: CONCL.b, couleur: 'vert', repere: 'conclusion', label: 'la conclusion : ' + CONCL.b } : { texte: CONCL.a, couleur: 'vert', repere: 'conclusion_respiration' };
+  if (e.des('conclusion_respiration')) return e.p('conclusion_respiration') >= .25 ? { texte: CONCL.a, couleur: 'vert', repere: 'conclusion_respiration', label: 'la conclusion : ' + CONCL.a } : { texte: 'Les quatre légendes : noyau, vacuole, hyaloplasme, mitochondrie', couleur: 'blanc' };
+  if (e.des('leg_noyau')) return { texte: 'On légende : ' + LEG.filter(l => e.des(l.moment)).map(l => l.mot).join(', '), couleur: 'blanc' };
+  if (e.des('mitochondries')) return E.totalB ? { texte: 'Milieu anaérobie : ' + TOTAUX.b, couleur: 'orange', repere: 'total_anaerobie' } : { texte: `Milieu anaérobie : on compte les mitochondries… ${E.nb || ''}`, couleur: 'blanc' };
+  if (e.des('mitochondries_aerobie')) return E.totalA ? { texte: 'Milieu aérobie : ' + TOTAUX.a, couleur: 'orange', repere: 'total_aerobie' } : { texte: `Milieu aérobie : on compte les mitochondries… ${E.na || ''}`, couleur: 'blanc' };
+  if (e.des('anaerobie')) return e.p('anaerobie') >= .72 ? { texte: 'À gauche : milieu aérobie (avec O_{2}). À droite : milieu anaérobie (sans O_{2}). Même grossissement.', couleur: 'jaune' } : { texte: 'Milieu anaérobie (sans O_{2}) : une autre levure, au même grossissement', couleur: 'jaune', repere: 'titre_anaerobie' };
+  return { texte: 'Milieu aérobie (avec O_{2}) : une levure au microscope électronique, × 20 000', couleur: 'jaune', repere: 'titre_aerobie' };
+}
+function foyer(e) {
+  const G = geo(e), bo = (cl) => ({ x: cl.x - 5, y: cl.y - 5, w: cl.w + 10, h: cl.h + 10 }), deux = { x: G.a.x - 5, y: G.a.y - 5, w: G.b.x + G.b.w - G.a.x + 10, h: G.a.h + 10 };
+  const avecCol = (cl) => (cl === G.a ? { x: G.a.x - 5, y: G.a.y - 5, w: G.xCol + G.col / 2 - G.a.x + 7, h: G.a.h + 10 } : { x: G.xCol - G.col / 2 - 2, y: G.b.y - 5, w: G.b.x + G.b.w - G.xCol + G.col / 2 + 7, h: G.b.h + 10 });
+  if (e.des('conclusion')) return avecCol(e.p('conclusion') >= .08 ? G.b : G.a);
+  if (e.des('leg_noyau')) return avecCol(G.a);
+  if (e.des('mitochondries')) return bo(G.b);
+  if (e.des('mitochondries_aerobie')) return bo(G.a);
+  if (e.des('anaerobie')) return e.p('anaerobie') >= .72 ? deux : bo(G.b);
+  return bo(G.a);
+}
+
+/* ── Ce qui se voit ── */
+function voit(e) {
+  const E = etat(e);
+  const dA = 'À gauche, le cliché du milieu aérobie (avec O2) : une levure ovale à paroi épaisse et claire, hyaloplasme gris granuleux, un noyau (en haut à droite), une grande vacuole très claire, de nombreux ovales sombres à crêtes ; barre d’échelle 0,6 µm.';
+  const dB = 'À droite, le cliché du milieu anaérobie (sans O2), au même grossissement : une levure de même taille, un noyau (en haut à gauche), trois vacuoles très claires, et seulement deux petits ovales sombres ; barre d’échelle 0,6 µm.';
+  if (E.aA <= 0) return 'Deux levures au microscope électronique : le tableau est encore vide (seul le titre « Deux levures au microscope électronique (× 20 000) » est écrit).';
+  if (!e.des('anaerobie')) return `Un seul cliché en niveaux de gris, façon microscope électronique${E.aA < 1 ? ' (il apparaît)' : ''}. ${dA} Rien n’est légendé ni compté.`;
+  let s = `Deux clichés en niveaux de gris, côte à côte${E.aB < 1 ? ' (le second apparaît)' : ''}. ${dA} ${dB}`;
+  if (!e.des('mitochondries_aerobie')) return s + ' Arrêt pour l’observation : rien n’est allumé, compté, légendé ni conclu ; aucune étiquette d’organite.';
+  s = 'Deux clichés de microscope électronique, côte à côte, au même grossissement (barre 0,6 µm) : à gauche la levure du milieu aérobie, à droite celle du milieu anaérobie.';
+  s += ` Milieu aérobie : ${E.na} mitochondrie${E.na > 1 ? 's' : ''} sur ${NA} allumée${E.na > 1 ? 's' : ''} (colorisée${E.na > 1 ? 's' : ''} : membrane externe orange, matrice bleue, crêtes claires ; numérotée${E.na > 1 ? 's' : ''} de 1 à ${E.na})${E.totalA ? ` ; total écrit sous le cliché : « ${TOTAUX.a} »` : ''}.`;
+  if (e.des('mitochondries')) s += ` Milieu anaérobie : ${E.nb} mitochondrie${E.nb > 1 ? 's' : ''} sur ${NB} allumée${E.nb > 1 ? 's' : ''}${E.totalB ? ` ; total écrit : « ${TOTAUX.b} »` : ''}.`;
+  else s += ' Rien n’est encore allumé sur le cliché anaérobie.';
+  const legs = LEG.filter(l => e.des(l.moment)).map(l => l.mot);
+  if (legs.length) s += ` Légendes écrites à la craie entre les deux clichés, avec un trait de rappel vers chaque cellule : ${legs.join(', ')}.`;
+  const cc = [];
+  if (e.des('conclusion_respiration') && e.p('conclusion_respiration') >= .25) cc.push(`sous le cliché aérobie « ${CONCL.a} »`);
+  if (e.des('conclusion') && e.p('conclusion') >= .4) cc.push(`sous le cliché anaérobie « ${CONCL.b} »`);
+  if (cc.length) s += ` Conclusion écrite en vert, encadrée : ${cc.join(' ; ')}.`;
+  if (E.teinte > .5) s += ' Le hyaloplasme de la levure du milieu anaérobie est teinté en vert.';
+  return s;
+}
+
+R.page({
+  id: 'svt_reference_deux_levures', vue: 'deux_levures', titre: 'Deux levures au microscope électronique', moments: MOMENTS, dessiner, foyer, voit, vivant: () => false,
+  texte: `Document : deux électronographies de levures (microscope électronique à transmission, × 20 000 environ, barre d’échelle 0,6 µm). Milieu aérobie (avec O2) : noyau, une vacuole, hyaloplasme, ${NA} mitochondries grandes, à crêtes bien visibles (nombreuses et bien développées). Milieu anaérobie (sans O2) : noyau, trois vacuoles, hyaloplasme, ${NB} mitochondries petites, presque sans crêtes (rares et réduites). Conclusion : respiration ↔ mitochondries ; fermentation ↔ hyaloplasme (elle n’a pas besoin de mitochondries).`,
+  explications: [{ repere: 'levure_aerobie', texte: 'La levure cultivée avec du dioxygène.' }, { repere: 'levure_anaerobie', texte: 'La levure cultivée sans dioxygène, au même grossissement.' },
+    { repere: 'mitochondries_aerobie', texte: `Avec dioxygène : ${NA} mitochondries, grandes.` }, { repere: 'mitochondries_anaerobie', texte: `Sans dioxygène : ${NB} mitochondries, petites.` },
+    { repere: 'conclusion_respiration', texte: 'La respiration se fait dans les mitochondries.' }, { repere: 'conclusion', texte: 'La fermentation se fait dans le hyaloplasme.' }],
+  accueil: 'Deux levures, au microscope électronique…',
+  fini: 'Respiration : dans les mitochondries. Fermentation : dans le hyaloplasme.',
+  etat: (e) => { const E = etat(e); return { mitochondries_allumees: { aerobie: E.na, anaerobie: E.nb }, totaux: { aerobie: NA, anaerobie: NB }, echelle: '0,6 µm' }; },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

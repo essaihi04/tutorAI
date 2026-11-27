@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’équation de la respiration, l’équation de la fermentation — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css">
+<style>@media (max-height: 340px) { .scene { padding-bottom: .2em; } .tableau { padding: .2em .5em; } }</style></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Des modèles moléculaires peints : à gauche le glucose, une chaîne de six billes jaunes (et, pour la respiration, six molécules de dioxygène) ; une flèche ; à droite les produits, comptés un par un, et un éclat d’énergie ; en bas, l’équation de la réaction, chaque terme sous son groupe de molécules."></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference.js"></script>
+<script>
+/*
+ * Les deux équations bilans — cours de référence SVT (docs/reference-svt/ARCHITECTURE.md § 3), 27 novembre 2026.
+ * Deux vues (?vue=), même disposition : réactifs à gauche, flèche, produits à droite, équation en bas (chaque terme sous
+ * son groupe de molécules). Tout est dessiné avec le lexique : glucose = chaîne de 6 billes jaunes, O2, CO2 (carbone
+ * jaune : il vient du glucose), H2O, éthanol (2 billes jaunes + 2 H), éclat d'énergie.
+ *
+ *   respiration  : glucose → o2 (6, comptés) → fleche → co2 (6, comptés : à chaque CO2, UN carbone quitte la chaîne) →
+ *                  eau (6, comptées : l'oxygène vient du dioxygène) → energie (grand éclat) → equation.
+ *                  C6H12O6 + 6 O2 → 6 CO2 + 6 H2O + énergie
+ *   fermentation : glucose → fleche → ethanol (2 : 2 carbones chacun, tirés de la chaîne) → co2 (2) → compte (les carbones
+ *                  allumés : 2 × 2 + 2 × 1 = 6) → energie (petit éclat) → reste (halo : l'éthanol garde de l'énergie) →
+ *                  equation.   C6H12O6 → 2 C2H5OH + 2 CO2 + énergie (peu)
+ * Règle 13 : le glucose (et le dioxygène) restent à leur place, pâlis et marqués ; ce sont des copies qui voyagent.
+ * Pas d'états physiques : équation bilan de SVT, telle que l'écrit le cours.
+ */
+const R = window.Ref, LX = window.Lexique, { doux, mix, borne, TAU } = R;
+const Q = new URLSearchParams(location.search);
+const vue = Q.get('vue') === 'fermentation' ? 'fermentation' : 'respiration', RESP = vue === 'respiration';
+const NOM = RESP ? 'respiration' : 'fermentation';
+const plat = (s) => s.replace(/_\{([^}]*)\}/g, '$1');
+
+const MOMENTS = RESP ? [
+  ['glucose', 4.5, 'le glucose : une chaîne de 6 carbones, C6H12O6'],
+  ['o2', 13.5, '6 molécules de dioxygène, comptées : 6 O2'],
+  ['fleche', 16, 'la flèche de la réaction : la respiration'],
+  ['co2', 26, '6 CO2 sortent : les 6 carbones du glucose partent un par un'],
+  ['eau', 35, '6 molécules d’eau : 6 H2O'],
+  ['energie', 39, 'beaucoup d’énergie libérée'],
+  ['equation', 46, 'l’équation : C6H12O6 + 6 O2 → 6 CO2 + 6 H2O + énergie'],
+] : [
+  ['glucose', 4.5, 'le glucose : une chaîne de 6 carbones, C6H12O6'],
+  ['fleche', 7.5, 'la flèche de la réaction : la fermentation, sans dioxygène'],
+  ['ethanol', 14.5, '2 molécules d’éthanol, 2 carbones chacune'],
+  ['co2', 19.5, '2 molécules de CO2'],
+  ['compte', 27.5, 'les carbones comptés : 2 × 2 + 2 × 1 = 6, rien n’est perdu'],
+  ['energie', 31, 'peu d’énergie libérée'],
+  ['reste', 35, 'l’éthanol garde de l’énergie'],
+  ['equation', 42, 'l’équation : C6H12O6 → 2 C2H5OH + 2 CO2 + énergie (peu)'],
+];
+
+/* ── La géométrie : colonnes (x des centres), cadre 760 × 420 étiré en mode large ; téléphone : colonnes resserrées (600) ── */
+const ROWS = [100, 152, 204], ROWF = [108, 204];
+function geo(e) {
+  if (e.compact) {
+    return RESP ? { W: 600, k: 1, big: { x: 200, y: 150, s: 1.7 }, glu: { x: 86, y: 120, s: 1 }, o2: 215, fl: [258, 318], co2: 376, eau: 474, en: 558, dx: { o2: 27, co2: 30, eau: 22 }, er: 34 }
+      : { W: 600, k: 1, big: { x: 190, y: 150, s: 1.7 }, glu: { x: 116, y: 120, s: 1.25 }, fl: [236, 312], eth: 372, co2: 466, en: 552, er: 19 };
+  }
+  const L = e.L, k = borne(L / 760, 1, 1.3);
+  return RESP ? { W: L, k, big: { x: .5 * L, y: 170, s: 2.2 * k }, glu: { x: .132 * L, y: 120, s: 1.15 * k }, o2: .340 * L, fl: [.429 * L, .542 * L], co2: .629 * L, eau: .784 * L, en: .925 * L, dx: { o2: 30 * k, co2: 31 * k, eau: 26 * k }, er: 44 * Math.min(k, 1.2) }
+    : { W: L, k, big: { x: .5 * L, y: 170, s: 2.2 * k }, glu: { x: .225 * L, y: 120, s: 1.5 * k }, fl: [.429 * L, .542 * L], eth: .60 * L, co2: .735 * L, en: .90 * L, er: 21 * k };
+}
+const place = (cx, dx, k) => ({ x: cx + (k % 2 ? dx : -dx), y: ROWS[k >> 1] });
+
+/* ── Le déroulé : pour le k-ième d'une série dans l'étape id — u : le trajet (adouci), v : la molécule se complète, n : comptée ── */
+const T = { o2: [.12, .125, .085, .02], co2: [.03, .145, .08, .05], eau: [.03, .145, .08, .05], eth: [.05, .45, .25, .12], co2f: [.06, .42, .22, .1] };
+function serie(e, id, cle, k) {
+  const [a0, pas, d1, d2] = T[cle], a = a0 + k * pas;
+  return { u: e.d(id, a, a + d1), v: e.p(id, a + d1, a + d1 + d2), n: e.p(id, a + d1 + d2 - .001, a + d1 + d2 + .02) };
+}
+const CARB = [.04, .105];                       // le compte des carbones (fermentation) : départ, pas
+const carbone = (e, k) => e.p('compte', CARB[0] + k * CARB[1], CARB[0] + k * CARB[1] + .03);
+function compteDe(e, id, cle, n) { let c = 0; for (let k = 0; k < n; k++) if (serie(e, id, cle, k).n > 0) c++; return c; }
+
+/* ── Peinture ── */
+function vol(ctx, de, vers, u, r0, r1, couleur) {
+  const x = mix(de[0], vers[0], u), y = mix(de[1], vers[1], u) - Math.sin(Math.PI * u) * 24;
+  LX.bille(ctx, x, y, mix(r0, r1, u), couleur);
+}
+/** Ce qu'on compte s'allume : une lueur jaune douce derrière la molécule (vive : celle qu'on vient de compter). */
+function lueur(ctx, x, y, r, vive) {
+  const g = ctx.createRadialGradient(x, y, r * .15, x, y, r);
+  g.addColorStop(0, `rgba(255,226,110,${vive ? .7 : .34})`); g.addColorStop(.6, `rgba(250,204,21,${vive ? .32 : .15})`); g.addColorStop(1, 'rgba(250,204,21,0)');
+  ctx.save(); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.restore();
+}
+/** L'éclat d'énergie : le halo du lexique, des rayons fins et des étincelles qui scintillent. */
+function energie(ctx, x, y, r, a, h, grand) {
+  if (a <= 0 || r <= 1) return;
+  const n = grand ? 12 : 6;
+  ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(h * .12);
+  for (let i = 0; i < n; i++) {
+    const l = r * (i % 2 ? .78 : 1.12) * (1 + .06 * Math.sin(h * 3 + i * 1.7)), w = r * .075;
+    const g = ctx.createLinearGradient(0, 0, l, 0); g.addColorStop(0, 'rgba(255,246,190,.85)'); g.addColorStop(1, 'rgba(250,204,21,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0, -w); ctx.lineTo(l, 0); ctx.lineTo(0, w); ctx.closePath(); ctx.fill(); ctx.rotate(TAU / n);
+  }
+  ctx.restore();
+  LX.eclat(ctx, x, y, r * (.86 + .04 * Math.sin(h * 2.6)), a);
+  LX.eclat(ctx, x, y, r * .4, a);
+  for (let i = 0; i < (grand ? 7 : 3); i++) {
+    const an = i * 2.4 + h * .35, d = r * (.62 + .22 * Math.sin(h * 1.7 + i * 2.1));
+    LX.eclat(ctx, x + Math.cos(an) * d, y + Math.sin(an) * d, r * (grand ? .16 : .2), a * (.5 + .5 * Math.sin(h * 4 + i * 1.3) ** 2));
+  }
+}
+
+function dessiner(c, e) {
+  const G = geo(e), ctx = c.ctx, h = e.horloge, k = G.k, tf = e.tf(17), tT = Math.max(21, tf), etape = e.etape();
+  const entier = e.compact && etape === 'equation' && e.des('equation');     // téléphone : vue d'ensemble, les noms des colonnes sont omis
+  const sO = 1.7 * k, sC = 1.6 * k, sE = Math.min(1.7 * k, 1.9), sEt = (e.compact ? 1.35 : 1.6) * Math.min(k, 1.2);
+  const yTot = (RESP ? 262 : 266) + (e.compact ? (tf - 17) * 1.2 : 0);
+  const chiffre = (n, x, y, a) => { if (a > 0) c.texte(String(n), x, y, { couleur: 'jaune', taille: 17, gras: true, align: 'center', alpha: Math.min(1, a) }); };
+  const enCours = (id) => e.des(id) && !e.vu(id);
+  const txt = [];                               // les écritures à la craie, après la peinture
+
+  c.direct(() => {
+    /* ── le glucose : grand, puis rangé à sa place ; ses carbones partis restent là, pâlis ── */
+    const g = e.d(RESP ? 'o2' : 'fleche', 0, RESP ? .1 : .45);
+    const gx = mix(G.big.x, G.glu.x, g), gy = mix(G.big.y, G.glu.y, g), gs = mix(G.big.s, G.glu.s, g), rC = LX.R.C * gs;
+    const pts = LX.positionsChaine(6, gx, gy, { echelle: gs }), parti = [0, 0, 0, 0, 0, 0];
+    if (RESP) for (let i = 0; i < 6; i++) parti[5 - i] = serie(e, 'co2', 'co2', i).u;
+    else { const a = serie(e, 'ethanol', 'eth', 0).u, b = serie(e, 'ethanol', 'eth', 1).u; parti[0] = parti[1] = a; parti[4] = parti[5] = b; parti[2] = serie(e, 'co2', 'co2f', 0).u; parti[3] = serie(e, 'co2', 'co2f', 1).u; }
+    const al = pts.map((_, i) => e.d('glucose', .04 + .1 * i, .2 + .1 * i) * (1 - .68 * parti[i]));
+    LX.chaine(ctx, pts, { echelle: gs, alphas: al, liaisons: [0, 1, 2, 3, 4].map(i => Math.min(al[i], al[i + 1])) });
+    const degrade = parti.every(v => v >= 1), tFo = Math.max(mix(32, 22, g), tf), yFo = gy + rC + tFo * 1.2;
+    const aN = e.p('glucose', .04, .2);
+    if (aN > 0 && !entier) c.texte('glucose', gx, mix(gy - rC - 14, 60, g), { couleur: 'jaune', taille: 17, align: 'center', alpha: aN });
+    const aF = e.p('glucose', .74, .92);
+    if (aF > 0) c.texte('C_{6}H_{12}O_{6}', gx, yFo, { couleur: 'jaune', taille: tFo, align: 'center', gras: true, alpha: aF * (degrade ? .6 : 1) });
+    const pm = e.p('co2', .93, 1);
+    if (pm > 0) c.texte('(dégradé)', gx, yFo + tf * 1.3, { couleur: 'blanc', taille: 17, align: 'center', alpha: pm * .85 });
+    if (aN > 0) c.repere('glucose', gx - 2.5 * LX.PAS * gs - rC - 6, gy - rC - 8, 5 * LX.PAS * gs + 2 * rC + 12, (aF > 0 ? yFo - gy + rC + 16 : 2 * rC + 16) + (pm > 0 ? tf * 1.3 : 0),
+      degrade ? 'le glucose (dégradé : ses 6 carbones sont partis)' : 'le glucose : une chaîne de 6 carbones, C6H12O6');
+    pts.forEach((p, i) => { if (al[i] > .1) c.repere('carbone_' + (i + 1), p[0] - rC, p[1] - rC, 2 * rC, 2 * rC, `le carbone n° ${i + 1} du glucose`); });
+
+    if (RESP) {
+      /* ── les 6 O2, comptés ── */
+      const nO = compteDe(e, 'o2', 'o2', 6);
+      for (let i = 0; i < 6; i++) {
+        const s = serie(e, 'o2', 'o2', i), p = place(G.o2, G.dx.o2, i); if (s.u <= 0) continue;
+        const pris = serie(e, 'eau', 'eau', i).u, y = mix(p.y + 150, p.y, s.u);
+        if (s.n > 0 && pris < 1) lueur(ctx, p.x, p.y, 19 * sO, enCours('o2') && i === nO - 1);
+        LX.o2(ctx, p.x, y, { echelle: sO, alpha: Math.min(1, s.u * 2) * (1 - .68 * pris) });
+        chiffre(i + 1, p.x, p.y + 6 * sO + tf * .98, s.n * (1 - .4 * pris));
+        if (s.n > 0) c.repere('o2_' + (i + 1), p.x - 14 * sO, p.y - 8 * sO, 28 * sO, 16 * sO, `la molécule de dioxygène n° ${i + 1}`);
+      }
+      if (e.des('o2') && e.p('o2', .05, 1) > 0) {
+        if (!entier) txt.push(['n_o2', () => c.texte('dioxygène', G.o2, 60, { couleur: 'rouge', taille: 17, align: 'center' })]);
+        c.repere('o2', G.o2 - G.dx.o2 - 16 * sO, 44, 2 * G.dx.o2 + 32 * sO, yTot - 36, e.vu('eau') ? 'les 6 molécules de dioxygène (consommées)' : 'les molécules de dioxygène');
+      }
+      if (e.p('o2', .9, 1) > 0) txt.push(['t_o2', () => c.texte('6 O_{2}', G.o2, yTot, { couleur: 'rouge', taille: tT, align: 'center', gras: true })]);
+      if (e.p('eau', .93, 1) > 0 && !e.compact) txt.push(['m_o2', () => c.texte('(consommé)', G.o2, yTot + tf * 1.3, { couleur: 'blanc', taille: 17, align: 'center', alpha: .85 })]);
+
+      /* ── les 6 CO2 : un carbone du glucose pour chacun ── */
+      const nC = compteDe(e, 'co2', 'co2', 6);
+      for (let i = 0; i < 6; i++) {
+        const s = serie(e, 'co2', 'co2', i), p = place(G.co2, G.dx.co2, i); if (s.u <= 0) continue;
+        if (s.n > 0) lueur(ctx, p.x, p.y, 20 * sC, enCours('co2') && i === nC - 1);
+        if (s.u < 1) vol(ctx, pts[5 - i], [p.x, p.y], s.u, rC, 6 * sC, LX.C.carbone);
+        else { LX.bille(ctx, p.x, p.y, 6 * sC, LX.C.carbone, { alpha: 1 - s.v }); LX.co2(ctx, p.x, p.y, { echelle: sC, alpha: s.v }); }
+        chiffre(i + 1, p.x, p.y + 7 * sC + tf * .98, s.n);
+        if (s.n > 0) c.repere('co2_' + (i + 1), p.x - 17 * sC, p.y - 8 * sC, 34 * sC, 16 * sC, `la molécule de CO2 n° ${i + 1} (son carbone vient du glucose)`);
+      }
+      if (e.p('co2', .02, 1) > 0) {
+        if (!entier) txt.push(['n_co2', () => c.texte('dioxyde de carbone', G.co2, 60, { couleur: 'violet', taille: 17, align: 'center' })]);
+        c.repere('co2', G.co2 - G.dx.co2 - 17 * sC, 44, 2 * G.dx.co2 + 34 * sC, yTot - 36, 'les molécules de dioxyde de carbone');
+      }
+      if (e.p('co2', .9, 1) > 0) txt.push(['t_co2', () => c.texte('6 CO_{2}', G.co2, yTot, { couleur: 'violet', taille: tT, align: 'center', gras: true })]);
+
+      /* ── les 6 H2O : l'oxygène vient du dioxygène ── */
+      const nE = compteDe(e, 'eau', 'eau', 6);
+      for (let i = 0; i < 6; i++) {
+        const s = serie(e, 'eau', 'eau', i), p = place(G.eau, G.dx.eau, i), o = place(G.o2, G.dx.o2, i); if (s.u <= 0) continue;
+        if (s.n > 0) lueur(ctx, p.x, p.y + 2 * sE, 16 * sE, enCours('eau') && i === nE - 1);
+        if (s.u < 1) vol(ctx, [o.x + 6 * sO, o.y], [p.x, p.y], s.u, 6 * sO, 6 * sE, LX.C.oxygene);
+        else { LX.bille(ctx, p.x, p.y, 6 * sE, LX.C.oxygene, { alpha: 1 - s.v }); LX.h2o(ctx, p.x, p.y, { echelle: sE, alpha: s.v }); }
+        chiffre(i + 1, p.x, p.y + 9 * sE + tf * .98, s.n);
+        if (s.n > 0) c.repere('eau_' + (i + 1), p.x - 11 * sE, p.y - 7 * sE, 22 * sE, 17 * sE, `la molécule d’eau n° ${i + 1}`);
+      }
+      if (e.p('eau', .02, 1) > 0) {
+        if (!entier) txt.push(['n_eau', () => c.texte('eau', G.eau, 60, { couleur: 'bleu', taille: 17, align: 'center' })]);
+        c.repere('eau', G.eau - G.dx.eau - 12 * sE, 44, 2 * G.dx.eau + 24 * sE, yTot - 36, 'les molécules d’eau');
+      }
+      if (e.p('eau', .9, 1) > 0) txt.push(['t_eau', () => c.texte('6 H_{2}O', G.eau, yTot, { couleur: 'bleu', taille: tT, align: 'center', gras: true })]);
+    } else {
+      /* ── les 2 éthanols : 2 carbones chacun, tirés de la chaîne ; puis les 2 CO2 ── */
+      const pe = e.p('reste'), rC2 = LX.R.C * sEt, cptC = e.des('compte');
+      const nEt = compteDe(e, 'ethanol', 'eth', 2), nCo = compteDe(e, 'co2', 'co2f', 2);
+      let nCarb = 0; for (let i = 0; i < 6; i++) if (carbone(e, i) > 0) nCarb++;
+      for (let j = 0; j < 2; j++) {
+        const s = serie(e, 'ethanol', 'eth', j), x = G.eth, y = ROWF[j]; if (s.u <= 0) continue;
+        const cible = LX.positionsChaine(2, x, y, { echelle: sEt }), src = j ? [pts[4], pts[5]] : [pts[0], pts[1]];
+        if (pe > 0) LX.eclat(ctx, x, y - 6 * sEt, 46 * sEt * (.94 + .06 * Math.sin(h * 2.4 + j)), .62 * pe);
+        if (s.n > 0 && !cptC && pe <= 0) lueur(ctx, x, y - 5 * sEt, 36 * sEt, enCours('ethanol') && j === nEt - 1);
+        [0, 1].forEach(i => { const a = carbone(e, 2 * j + i); if (a > 0) lueur(ctx, cible[i][0], cible[i][1], rC2 * 1.9, enCours('compte') && 2 * j + i === nCarb - 1); });
+        if (s.u < 1) { const mv = [0, 1].map(i => [mix(src[i][0], cible[i][0], s.u), mix(src[i][1], cible[i][1], s.u) - Math.sin(Math.PI * s.u) * 24]); LX.chaine(ctx, mv, { echelle: mix(gs, sEt, s.u) }); }
+        else { if (s.v < 1) LX.chaine(ctx, cible, { echelle: sEt, alpha: 1 - s.v }); LX.ethanol(ctx, x, y, { echelle: sEt, alpha: s.v }); }
+        chiffre(j + 1, x - 14 * sEt - rC2 - 12, y + tf * .35, s.n);
+        [0, 1].forEach(i => { const a = carbone(e, 2 * j + i); chiffre(2 * j + i + 1, cible[i][0], y + rC2 + tf * .98, a); if (a > 0) c.repere('c_' + (2 * j + i + 1), cible[i][0] - rC2, y - rC2, 2 * rC2, 2 * rC2, `le carbone n° ${2 * j + i + 1} (dans un éthanol)`); });
+        if (s.n > 0) c.repere('ethanol_' + (j + 1), x - 14 * sEt - rC2 - 4, y - 26 * sEt, 28 * sEt + 2 * rC2 + 8, 26 * sEt + rC2 + 4, `la molécule d’éthanol n° ${j + 1} : 2 carbones`);
+      }
+      if (e.p('ethanol', .04, 1) > 0) {
+        if (!entier) txt.push(['n_eth', () => c.texte('éthanol', G.eth, 60, { couleur: 'cyan', taille: 17, align: 'center' })]);
+        c.repere('ethanol', G.eth - 14 * sEt - rC2 - 22, 44, 28 * sEt + 2 * rC2 + 30, yTot - 36, pe > 0 ? 'les 2 molécules d’éthanol : elles gardent de l’énergie' : 'les molécules d’éthanol (2 carbones chacune)');
+      }
+      if (e.p('ethanol', .92, 1) > 0) txt.push(['t_eth', () => c.texte('2 C_{2}H_{5}OH', G.eth, yTot, { couleur: 'cyan', taille: tT, align: 'center', gras: true })]);
+      for (let j = 0; j < 2; j++) {
+        const s = serie(e, 'co2', 'co2f', j), x = G.co2, y = ROWF[j]; if (s.u <= 0) continue;
+        const a = carbone(e, 4 + j);
+        if (s.n > 0 && !cptC) lueur(ctx, x, y, 20 * sC, enCours('co2') && j === nCo - 1);
+        if (a > 0) lueur(ctx, x, y, 13 * sC, enCours('compte') && 4 + j === nCarb - 1);
+        if (s.u < 1) vol(ctx, pts[2 + j], [x, y], s.u, rC, 6 * sC, LX.C.carbone);
+        else { LX.bille(ctx, x, y, 6 * sC, LX.C.carbone, { alpha: 1 - s.v }); LX.co2(ctx, x, y, { echelle: sC, alpha: s.v }); }
+        chiffre(j + 1, x - 16 * sC - 11, y + tf * .35, s.n);
+        chiffre(5 + j, x, y + 7 * sC + tf * .98, a);
+        if (a > 0) c.repere('c_' + (5 + j), x - 6 * sC - 3, y - 6 * sC - 3, 12 * sC + 6, 12 * sC + 6, `le carbone n° ${5 + j} (dans un CO2)`);
+        if (s.n > 0) c.repere('co2_' + (j + 1), x - 17 * sC, y - 8 * sC, 34 * sC, 16 * sC, `la molécule de CO2 n° ${j + 1}`);
+      }
+      if (e.p('co2', .04, 1) > 0) {
+        if (!entier) txt.push(['n_co2', () => c.texte('CO_{2}', G.co2, 60, { couleur: 'violet', taille: 17, align: 'center' })]);
+        c.repere('co2', G.co2 - 17 * sC - 22, 44, 34 * sC + 26, yTot - 36, 'les molécules de dioxyde de carbone');
+      }
+      if (e.p('co2', .88, 1) > 0) txt.push(['t_co2', () => c.texte('2 CO_{2}', G.co2, yTot, { couleur: 'violet', taille: tT, align: 'center', gras: true })]);
+      /* le compte des carbones, écrit sous le glucose : autant qu'au départ */
+      const tc = Math.max(19, tf), yc = Math.max(244, yFo + tf * 1.3 + tc * 1.5);
+      if (e.p('compte', .7, 1) > 0) {
+        const s1 = '2 × 2 + 2 × 1 = ', s2 = '6 carbones', w1 = c.largeurTexte(s1, tc), w2 = c.largeurTexte(s2, tc) * 1.04, x0 = Math.max(6, G.glu.x - (w1 + w2) / 2);
+        txt.push(['compte1', () => { c.texte(s1, x0, yc, { couleur: 'blanc', taille: tc }); c.texte(s2, x0 + w1, yc, { couleur: 'vert', taille: tc, gras: true }); }]);
+        c.repere('compte', x0 - 4, yc - tc, w1 + w2 + 8, tc * 1.3 + (e.p('compte', .86, 1) > 0 ? tc * 1.3 : 0), 'le compte des carbones : 2 × 2 + 2 × 1 = 6, rien n’est perdu');
+      }
+      if (e.p('compte', .86, 1) > 0) txt.push(['compte2', () => c.texte('rien n’est perdu', G.glu.x, yc + tc * 1.3, { couleur: 'vert', taille: tc, align: 'center' })]);
+      if (pe > .35 && !e.compact) {
+        const s = 'énergie restée dans l’éthanol', w = c.largeurTexte(s, tf), x = Math.max(G.fl[0] + w / 2, Math.min(G.eth, G.W - 8 - w / 2));
+        txt.push(['reste', () => c.texte(s, x, yTot + tf * 1.55, { couleur: 'jaune', taille: 17, align: 'center' })]);
+        c.repere('reste', x - w / 2 - 4, yTot + tf * .5, w + 8, tf * 1.4, 'l’énergie restée dans l’éthanol');
+      }
+    }
+
+    /* ── l'énergie ── */
+    const pE = e.d('energie', .05, .7);
+    if (pE > 0) {
+      const yE = RESP ? 142 : 150, r = G.er * pE;
+      energie(ctx, G.en, yE, r, Math.min(1, pE * 2), h, RESP);
+      const mots = RESP ? ['beaucoup', 'd’énergie'] : ['peu', 'd’énergie'], y0 = yE + G.er * (RESP ? 1.12 : 1.5) + tf * 1.1;
+      if (e.p('energie', .6, 1) > 0) txt.push(['n_en', () => mots.forEach((m, i) => c.texte(m, G.en, y0 + i * tf * 1.2, { couleur: 'jaune', taille: 17, align: 'center', gras: true }))]);
+      c.repere('energie', G.en - Math.max(G.er * 1.15, 40), yE - G.er * 1.15, 2 * Math.max(G.er * 1.15, 40), y0 - yE + G.er * 1.15 + tf * 1.5, RESP ? 'l’énergie libérée : beaucoup' : 'l’énergie libérée : peu');
+    }
+  });
+
+  /* ── la flèche de la réaction, qui porte son nom ── */
+  const pf = e.p('fleche', RESP ? .1 : .5, 1);
+  if (pf > 0) {
+    const [x1, x2] = G.fl, y = 152, m = (x1 + x2) / 2;
+    e.ecrire(c, 'fleche', () => { c.fleche(x1 + 4, y, x2 - 4, y, { couleur: 'blanc', largeur: 3.2, tete: 13 }); c.texte(NOM, m, y - 14, { couleur: 'vert', taille: 17, align: 'center', gras: true }); if (!RESP && !e.compact) c.texte('sans O_{2}', m, y + tf + 10, { couleur: 'rouge', taille: 17, align: 'center' }); });
+    c.repere('fleche', x1 - 4, y - tf - 18, x2 - x1 + 8, tf + 34 + (RESP ? 0 : tf), `la flèche de la réaction : ${NOM}`);
+  }
+  for (const [cle, fn] of txt) e.ecrire(c, cle, fn);
+
+  /* ── l'équation, chaque terme sous son groupe ── */
+  if (e.des('equation')) {
+    const EQ = RESP ? 'C_{6}H_{12}O_{6} + 6 O_{2} → 6 CO_{2} + 6 H_{2}O + énergie' : 'C_{6}H_{12}O_{6} → 2 C_{2}H_{5}OH + 2 CO_{2} + énergie (peu)';
+    if (e.compact) { e.bandeau = { texte: EQ, couleur: 'vert', repere: 'equation', label: 'l’équation : ' + plat(EQ) }; return; }
+    const termes = RESP ? [['C_{6}H_{12}O_{6}', G.glu.x, 'jaune'], ['+'], ['6 O_{2}', G.o2, 'rouge'], ['→'], ['6 CO_{2}', G.co2, 'violet'], ['+'], ['6 H_{2}O', G.eau, 'bleu'], ['+'], ['énergie', G.en, 'jaune']]
+      : [['C_{6}H_{12}O_{6}', G.glu.x, 'jaune'], ['→'], ['2 C_{2}H_{5}OH', G.eth, 'cyan'], ['+'], ['2 CO_{2}', G.co2, 'violet'], ['+'], ['énergie (peu)', G.en, 'jaune']];
+    let t = 27, pos;
+    for (; t >= 18; t--) {            // la plus grande taille où chaque signe a sa place entre deux termes
+      pos = termes.map(([s, x]) => { if (x == null) return null; const w = c.largeurTexte(s, t) * 1.06; const cx = Math.max(12 + w / 2, Math.min(x, G.W - 14 - w / 2)); return [cx - w / 2, cx + w / 2, cx]; });
+      let ok = true; for (let i = 1; i < termes.length - 1; i += 2) if (pos[i + 1][0] - pos[i - 1][1] < t * (termes[i][0] === '→' ? 2.4 : 1.5)) ok = false;
+      if (ok) break;
+    }
+    const y = 366, pq = e.p('equation');
+    e.ecrire(c, 'equation', () => {
+      termes.forEach(([s, x, coul], i) => {
+        if (x != null) c.texte(s, pos[i][2], y, { couleur: coul, taille: t, align: 'center', gras: true });
+        else {
+          const xm = s === '→' && RESP ? (G.fl[0] + G.fl[1]) / 2 : (pos[i - 1][1] + pos[i + 1][0]) / 2;
+          if (s === '→') c.fleche(xm - t * .8, y - t * .32, xm + t * .8, y - t * .32, { couleur: 'blanc', largeur: 2.6, tete: 10 });
+          else c.texte(s, xm, y, { couleur: 'blanc', taille: t, align: 'center', gras: true });
+        }
+      });
+      c.rect(6, y - t - 16, G.W - 12, t + 40, { couleur: 'vert', largeur: 2.2, arrondi: 12, fond: 'vert', fondAlpha: .08 });
+    });
+    if (pq > 0) c.repere('equation', 6, y - t - 16, G.W - 12, t + 40, 'l’équation : ' + plat(EQ));
+  }
+}
+
+/* ── Téléphone : la boîte à montrer pour l'étape en cours (colonnes resserrées sur 600) ── */
+function foyer(e) {
+  const id = e.etape(), tout = { x: 0, y: 34, w: 600, h: 262 };
+  if (id === 'glucose' || (id === (RESP ? 'o2' : 'fleche') && e.p(id) < .04)) return { x: 0, y: 44, w: 400, h: 200 };
+  if (RESP) return { o2: { x: 0, y: 40, w: 390, h: 246 }, fleche: { x: 60, y: 40, w: 400, h: 246 }, co2: { x: 0, y: 40, w: 440, h: 246 }, eau: { x: 168, y: 40, w: 400, h: 246 }, energie: { x: 250, y: 40, w: 350, h: 246 }, equation: tout }[id] || tout;
+  return { fleche: { x: 0, y: 40, w: 400, h: 230 }, ethanol: { x: 0, y: 40, w: 440, h: 246 }, co2: { x: 0, y: 40, w: 500, h: 250 }, compte: { x: 0, y: 40, w: 500, h: 262 }, energie: { x: 220, y: 40, w: 380, h: 246 }, reste: { x: 220, y: 40, w: 380, h: 246 }, equation: tout }[id] || tout;
+}
+
+/* ── Ce qui se voit ── */
+function voit(e) {
+  const fait = (id) => e.vu(id), n = (id, cle, m) => compteDe(e, id, cle, m);
+  const base = `Vue ${vue} : modèles moléculaires peints, réactifs à gauche, produits à droite.`;
+  const out = [];
+  if (!e.des('glucose')) return `${base} Le tableau est encore vide.`;
+  const range = e.d(RESP ? 'o2' : 'fleche', 0, RESP ? .1 : .45) >= 1;
+  if (RESP) {
+    const c2 = n('co2', 'co2', 6), ea = n('eau', 'eau', 6), o = n('o2', 'o2', 6);
+    out.push(c2 === 0 ? `Le glucose : une chaîne de 6 billes jaunes (6 carbones)${range ? ', à gauche' : ', en grand'}${e.p('glucose', .74, 1) > 0 ? ', sa formule C6H12O6 écrite dessous' : ''}.`
+      : c2 < 6 ? `Le glucose, à gauche : ${c2} de ses 6 carbones ${c2 > 1 ? 'sont partis (pâlis)' : 'est parti (pâli)'}, il en reste ${6 - c2}.` : 'Le glucose reste à sa place, pâli et marqué « (dégradé) » : ses 6 carbones sont partis.');
+    if (e.des('o2')) out.push(o < 6 ? `Le dioxygène arrive (deux billes rouges) : ${o} molécule${o > 1 ? 's' : ''} comptée${o > 1 ? 's' : ''} sur 6, allumée${o > 1 ? 's' : ''} avec ${o > 1 ? 'leur' : 'son'} numéro.` : `6 molécules de dioxygène, numérotées 1 à 6, total « 6 O2 »${fait('eau') ? ' ; elles sont pâlies, marquées « (consommé) »' : ''}.`);
+    if (e.p('fleche', .1, 1) > 0) out.push('La flèche de la réaction, avec le mot « respiration ».');
+    if (e.des('co2')) out.push(c2 < 6 ? `Les CO2 sortent un par un (O=C=O, carbone jaune venu du glucose) : ${c2} compté${c2 > 1 ? 's' : ''} sur 6.` : '6 molécules de CO2, numérotées 1 à 6, total « 6 CO2 ».');
+    if (e.des('eau')) out.push(ea < 6 ? `Les molécules d’eau se forment (leur oxygène vient du dioxygène) : ${ea} comptée${ea > 1 ? 's' : ''} sur 6.` : '6 molécules d’eau, numérotées 1 à 6, total « 6 H2O ».');
+    if (e.des('energie')) out.push(`À droite, un grand éclat${fait('energie') ? ' : « beaucoup d’énergie »' : ' grandit'}.`);
+    if (e.des('equation')) out.push(`En bas, ${fait('equation') ? 'l’équation encadrée en vert' : 'l’équation s’écrit'} : C6H12O6 + 6 O2 → 6 CO2 + 6 H2O + énergie (chaque terme sous son groupe de molécules).`);
+  } else {
+    const et = n('ethanol', 'eth', 2), c2 = n('co2', 'co2f', 2); let nc = 0; for (let i = 0; i < 6; i++) if (carbone(e, i) > 0) nc++;
+    out.push(et === 0 ? `Le glucose : une chaîne de 6 billes jaunes (6 carbones)${range ? ', à gauche' : ', en grand'}${e.p('glucose', .74, 1) > 0 ? ', sa formule C6H12O6 écrite dessous' : ''}.`
+      : fait('co2') ? 'Le glucose reste à sa place, pâli et marqué « (dégradé) ».' : `Le glucose, à gauche : ${2 * et + c2} de ses 6 carbones sont partis (pâlis).`);
+    if (e.p('fleche', .5, 1) > 0) out.push('La flèche de la réaction, avec les mots « fermentation » et « sans O2 ».');
+    if (e.des('ethanol')) out.push(et < 2 ? `L’éthanol se forme (2 billes jaunes tirées de la chaîne, 2 hydrogènes blancs) : ${et} molécule comptée sur 2.` : '2 molécules d’éthanol (2 carbones chacune), numérotées 1 et 2, total « 2 C2H5OH ».');
+    if (e.des('co2')) out.push(c2 < 2 ? `Les CO2 sortent (un carbone de la chaîne chacun) : ${c2} compté sur 2.` : '2 molécules de CO2, numérotées 1 et 2, total « 2 CO2 ».');
+    if (e.des('compte')) out.push(nc < 6 ? `Les carbones des produits s’allument un à un : ${nc} sur 6.` : `Les 6 carbones des produits sont allumés et numérotés (4 dans les éthanols, 2 dans les CO2)${e.p('compte', .7, 1) > 0 ? ' ; sous le glucose : « 2 × 2 + 2 × 1 = 6 carbones »' : ''}${e.p('compte', .86, 1) > 0 ? ', « rien n’est perdu »' : ''}.`);
+    if (e.des('energie')) out.push(`À droite, un petit éclat${fait('energie') ? ' : « peu d’énergie »' : ' apparaît'} (bien plus petit que celui de la respiration).`);
+    if (e.des('reste')) out.push('Un halo doré entoure les deux éthanols : « énergie restée dans l’éthanol ».');
+    if (e.des('equation')) out.push(`En bas, ${fait('equation') ? 'l’équation encadrée en vert' : 'l’équation s’écrit'} : C6H12O6 → 2 C2H5OH + 2 CO2 + énergie (peu).`);
+  }
+  return `${base} ${out.join(' ')}`;
+}
+
+const ids = (p, n) => Array.from({ length: n }, (_, i) => `${p}_${i + 1}`);
+R.page({
+  id: 'svt_reference_equation_' + vue, vue, titre: RESP ? 'L’équation de la respiration' : 'L’équation de la fermentation alcoolique', moments: MOMENTS, dessiner, foyer, voit,
+  vivant: (e) => e.des('energie'), numero: 'pastille',
+  comptes: RESP ? { o2: ids('o2', 6), co2: ids('co2', 6), eau: ids('eau', 6), carbones: ids('carbone', 6) } : { ethanol: ids('ethanol', 2), co2: ids('co2', 2), carbones: ids('c', 6) },
+  texte: RESP ? 'Équation bilan de la respiration cellulaire, en modèles moléculaires : C6H12O6 + 6 O2 → 6 CO2 + 6 H2O + énergie. Le glucose (chaîne de 6 carbones) et 6 dioxygènes donnent 6 dioxydes de carbone (un carbone du glucose chacun), 6 molécules d’eau et beaucoup d’énergie : le glucose est entièrement dégradé.'
+    : 'Équation bilan de la fermentation alcoolique, en modèles moléculaires : C6H12O6 → 2 C2H5OH + 2 CO2 + énergie (peu). Le glucose (6 carbones) donne 2 éthanols (2 carbones chacun) et 2 CO2 (1 carbone chacun) : 2 × 2 + 2 × 1 = 6 carbones. Peu d’énergie est libérée : l’éthanol en garde.',
+  explications: RESP ? [{ repere: 'glucose', texte: 'Le glucose : six carbones.' }, { repere: 'o2', texte: 'Six molécules de dioxygène.' }, { repere: 'co2', texte: 'Six CO2 : chaque carbone du glucose part dans un CO2.' }, { repere: 'eau', texte: 'Six molécules d’eau.' }, { repere: 'energie', texte: 'Beaucoup d’énergie est libérée.' }, { repere: 'equation', texte: 'L’équation bilan de la respiration.' }]
+    : [{ repere: 'glucose', texte: 'Le glucose : six carbones.' }, { repere: 'ethanol', texte: 'Deux éthanols, deux carbones chacun.' }, { repere: 'co2', texte: 'Deux CO2.' }, { repere: 'energie', texte: 'Peu d’énergie : l’éthanol en garde.' }, { repere: 'equation', texte: 'L’équation bilan de la fermentation alcoolique.' }],
+  accueil: 'Le glucose : une chaîne de six carbones…',
+  fini: RESP ? 'C6H12O6 + 6 O2 → 6 CO2 + 6 H2O + énergie.' : 'C6H12O6 → 2 C2H5OH + 2 CO2 + énergie (peu).',
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
