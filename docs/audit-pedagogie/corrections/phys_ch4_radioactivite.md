@@ -58,7 +58,7 @@ cours servi après la phase 1 ; l'ancienne copie d'attente est remplacée). Rien
 | `ra_l2b_derivee` « Rappel : la dérivée, une vitesse de variation » | avant dN = −λ·N·dt (défauts 5 et 10, recommandation 1 du prof) : dN/dt, pente de la tangente, « équation différentielle » | `courbe.html?courbe=N&depart=t_demi`, arrêt sur la tangente |
 
 La règle (e^(kt))′ = k·e^(kt) est dite et écrite à la diapo 36, juste avant son usage. Les blocs, les compétences
-(C1, C4, C6) et les lignes du cahier suivent (numérotation des sections I et II refaite).
+(C1, C4, C6) et les lignes du cahier suivent : une ligne ajoutée à chaque endroit dans le cahier revu le 26/11 (élément chimique, notation des particules, rappel de la dérivée, 63 % à τ, choix du nucléide), sans renumérotation.
 
 ### Ordre des notions — défauts traités
 - 1, 2, 12, 14, 15 : phase 1. 4, 5, 6, 7, 10 : diapos ci-dessus.
