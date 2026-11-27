@@ -61,12 +61,12 @@ const MOMENTS = RESP ? [
 const ROWS = [100, 152, 204], ROWF = [108, 204];
 function geo(e) {
   if (e.compact) {
-    return RESP ? { W: 600, k: 1, big: { x: 200, y: 150, s: 1.7 }, glu: { x: 86, y: 120, s: 1 }, o2: 215, fl: [258, 318], co2: 376, eau: 474, en: 558, dx: { o2: 27, co2: 30, eau: 22 }, er: 34 }
+    return RESP ? { W: 620, k: 1, big: { x: 200, y: 150, s: 1.7 }, glu: { x: 80, y: 120, s: 1 }, o2: 212, fl: [262, 340], co2: 400, eau: 498, en: 578, dx: { o2: 27, co2: 30, eau: 22 }, er: 32 }
       : { W: 600, k: 1, big: { x: 190, y: 150, s: 1.7 }, glu: { x: 116, y: 120, s: 1.25 }, fl: [236, 312], eth: 372, co2: 466, en: 552, er: 19 };
   }
   const L = e.L, k = borne(L / 760, 1, 1.3);
   return RESP ? { W: L, k, big: { x: .5 * L, y: 170, s: 2.2 * k }, glu: { x: .132 * L, y: 120, s: 1.15 * k }, o2: .340 * L, fl: [.429 * L, .542 * L], co2: .629 * L, eau: .784 * L, en: .925 * L, dx: { o2: 30 * k, co2: 31 * k, eau: 26 * k }, er: 44 * Math.min(k, 1.2) }
-    : { W: L, k, big: { x: .5 * L, y: 170, s: 2.2 * k }, glu: { x: .225 * L, y: 120, s: 1.5 * k }, fl: [.429 * L, .542 * L], eth: .60 * L, co2: .735 * L, en: .90 * L, er: 21 * k };
+    : { W: L, k, big: { x: .5 * L, y: 170, s: 2.2 * k }, glu: { x: .20 * L, y: 120, s: 1.4 * k }, fl: [.375 * L, .472 * L], eth: .565 * L, co2: .735 * L, en: .90 * L, er: 21 * k };
 }
 const place = (cx, dx, k) => ({ x: cx + (k % 2 ? dx : -dx), y: ROWS[k >> 1] });
 
@@ -235,6 +235,7 @@ function dessiner(c, e) {
         c.repere('compte', x0 - 4, yc - tc, w1 + w2 + 8, tc * 1.3 + (e.p('compte', .86, 1) > 0 ? tc * 1.3 : 0), 'le compte des carbones : 2 × 2 + 2 × 1 = 6, rien n’est perdu');
       }
       if (e.p('compte', .86, 1) > 0) txt.push(['compte2', () => c.texte('rien n’est perdu', G.glu.x, yc + tc * 1.3, { couleur: 'vert', taille: tc, align: 'center' })]);
+      if (pe > .35 && e.compact && !e.des('equation')) e.bandeau = { texte: 'énergie restée dans l’éthanol', couleur: 'jaune', repere: 'reste', label: 'l’énergie restée dans l’éthanol' };
       if (pe > .35 && !e.compact) {
         const s = 'énergie restée dans l’éthanol', w = c.largeurTexte(s, tf), x = Math.max(G.fl[0] + w / 2, Math.min(G.eth, G.W - 8 - w / 2));
         txt.push(['reste', () => c.texte(s, x, yTot + tf * 1.55, { couleur: 'jaune', taille: 17, align: 'center' })]);
@@ -257,7 +258,7 @@ function dessiner(c, e) {
   const pf = e.p('fleche', RESP ? .1 : .5, 1);
   if (pf > 0) {
     const [x1, x2] = G.fl, y = 152, m = (x1 + x2) / 2;
-    e.ecrire(c, 'fleche', () => { c.fleche(x1 + 4, y, x2 - 4, y, { couleur: 'blanc', largeur: 3.2, tete: 13 }); c.texte(NOM, m, y - 14, { couleur: 'vert', taille: 17, align: 'center', gras: true }); if (!RESP && !e.compact) c.texte('sans O_{2}', m, y + tf + 10, { couleur: 'rouge', taille: 17, align: 'center' }); });
+    e.ecrire(c, 'fleche', () => { c.fleche(x1 + 4, y, x2 - 4, y, { couleur: 'blanc', largeur: 3.2, tete: 13 }); if (!entier || !RESP) c.texte(NOM, m, y - 14, { couleur: 'vert', taille: 17, align: 'center', gras: true }); if (!RESP && !e.compact) c.texte('sans O_{2}', m, y + tf + 10, { couleur: 'rouge', taille: 17, align: 'center' }); });
     c.repere('fleche', x1 - 4, y - tf - 18, x2 - x1 + 8, tf + 34 + (RESP ? 0 : tf), `la flèche de la réaction : ${NOM}`);
   }
   for (const [cle, fn] of txt) e.ecrire(c, cle, fn);
@@ -292,10 +293,10 @@ function dessiner(c, e) {
 
 /* ── Téléphone : la boîte à montrer pour l'étape en cours (colonnes resserrées sur 600) ── */
 function foyer(e) {
-  const id = e.etape(), tout = { x: 0, y: 34, w: 600, h: 262 };
+  const id = e.etape(), tout = { x: 0, y: 34, w: RESP ? 620 : 600, h: 262 };
   if (id === 'glucose' || (id === (RESP ? 'o2' : 'fleche') && e.p(id) < .04)) return { x: 0, y: 44, w: 400, h: 200 };
-  if (RESP) return { o2: { x: 0, y: 40, w: 390, h: 246 }, fleche: { x: 60, y: 40, w: 400, h: 246 }, co2: { x: 0, y: 40, w: 440, h: 246 }, eau: { x: 168, y: 40, w: 400, h: 246 }, energie: { x: 250, y: 40, w: 350, h: 246 }, equation: tout }[id] || tout;
-  return { fleche: { x: 0, y: 40, w: 400, h: 230 }, ethanol: { x: 0, y: 40, w: 440, h: 246 }, co2: { x: 0, y: 40, w: 500, h: 250 }, compte: { x: 0, y: 40, w: 500, h: 262 }, energie: { x: 220, y: 40, w: 380, h: 246 }, reste: { x: 220, y: 40, w: 380, h: 246 }, equation: tout }[id] || tout;
+  if (RESP) return { o2: { x: 0, y: 40, w: 400, h: 246 }, fleche: { x: 0, y: 40, w: 420, h: 246 }, co2: { x: 0, y: 40, w: 460, h: 246 }, eau: { x: 172, y: 40, w: 448, h: 240 }, energie: { x: 172, y: 40, w: 448, h: 240 }, equation: tout }[id] || tout;
+  return { fleche: { x: 0, y: 40, w: 400, h: 230 }, ethanol: { x: 0, y: 40, w: 440, h: 246 }, co2: { x: 0, y: 40, w: 500, h: 250 }, compte: { x: 0, y: 40, w: 500, h: 262 }, energie: tout, reste: tout, equation: tout }[id] || tout;
 }
 
 /* ── Ce qui se voit ── */
