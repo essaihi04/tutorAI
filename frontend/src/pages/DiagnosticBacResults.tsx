@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo, useRef, forwardRef } from 'react';
 import html2canvas from 'html2canvas';
 import LatexRenderer from '../components/LatexRenderer';
 import BacCountdown from '../components/BacCountdown';
-import { BAC_DATE, BAC_YEAR } from '../config/bac';
+import { BAC_DATE, BAC_DATE_OFFICIELLE, BAC_YEAR } from '../config/bac';
 import {
   CheckCircle, XCircle, RotateCcw, Zap,
   ChevronDown, ChevronUp, Calendar, Share2,
@@ -90,7 +90,7 @@ const BacResultShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:18, position:'relative' }}>
           <div>
             <div style={{ fontSize:9, color:'rgba(255,255,255,0.3)', textTransform:'uppercase', letterSpacing:2 }}>وزارة التربية الوطنية · MASSAR</div>
-            <div style={{ fontSize:13, fontWeight:800, marginTop:3 }}>نتائج الباكالوريا — Session Normale 2026</div>
+            <div style={{ fontSize:13, fontWeight:800, marginTop:3 }}>نتائج الباكالوريا — Session Normale {BAC_YEAR}</div>
           </div>
           <div style={{ textAlign:'right' }}>
             <div style={{ fontSize:8, color:'rgba(255,255,255,0.28)' }}>رمز مسار</div>
@@ -129,7 +129,7 @@ const BacResultShareCard = forwardRef<HTMLDivElement, ShareCardProps>(
         </div>
         {/* CTA */}
         <div style={{ background:'rgba(99,102,241,0.18)', border:'1px solid rgba(99,102,241,0.35)', borderRadius:12, padding:'10px 14px', position:'relative' }}>
-          <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>أنت كم حصلت في الباكالوريا 2026؟</div>
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:4 }}>أنت كم حصلت في الباكالوريا {BAC_YEAR}؟</div>
           <div style={{ fontSize:11, color:'rgba(255,255,255,0.55)', marginBottom:6 }}>اختبر نتيجتك في 20 سؤال فقط · مجاني</div>
           <div style={{ fontSize:12, fontWeight:800, color:'#a5b4fc' }}>{DIAG_URL.replace('https://','')}</div>
         </div>
@@ -157,15 +157,15 @@ function BacShareModal({ onClose, ...cardProps }: ShareModalProps) {
   const [fileShareUnsupported, setFileShareUnsupported] = useState(false);
 
   const shareText =
-    `🎓 حصلت على ${cardProps.avg.toFixed(2)}/20 في الباكالوريا 2026!\n` +
+    `🎓 حصلت على ${cardProps.avg.toFixed(2)}/20 في الباكالوريا ${BAC_YEAR}!\n` +
     `Mention : ${cardProps.mentionFr}\n\n` +
     `أنت كم حصلت؟ اختبر نتيجتك في 20 سؤال 👇\n${DIAG_URL}`;
   const shareTextNoUrl =
-    `🎓 حصلت على ${cardProps.avg.toFixed(2)}/20 في الباكالوريا 2026!\n` +
+    `🎓 حصلت على ${cardProps.avg.toFixed(2)}/20 في الباكالوريا ${BAC_YEAR}!\n` +
     `Mention : ${cardProps.mentionFr}\n\n` +
-    `أنت كم حصلت في الباكالوريا 2026؟`;
+    `أنت كم حصلت في الباكالوريا ${BAC_YEAR}؟`;
 
-  const fileName = `bac-2026-resultats-${cardProps.massarCode}.png`;
+  const fileName = `bac-${BAC_YEAR}-resultats-${cardProps.massarCode}.png`;
 
   const generatePng = async (): Promise<Blob | null> => {
     if (!cardRef.current) return null;
@@ -344,7 +344,7 @@ export default function DiagnosticBacResults() {
             <div className="bg-[#12122e] px-4 py-2.5 border-b border-white/[.08] flex items-center justify-between">
               <div>
                 <div className="text-[9px] text-white/30 uppercase tracking-widest">وزارة التربية الوطنية · MASSAR</div>
-                <div className="text-[11px] font-bold text-white mt-0.5">نتائج الباكالوريا — Session Normale 2026</div>
+                <div className="text-[11px] font-bold text-white mt-0.5">نتائج الباكالوريا — Session Normale {BAC_YEAR}</div>
               </div>
               <div className="text-right">
                 <div className="text-[9px] text-white/30">رمز مسار</div>
@@ -366,7 +366,7 @@ export default function DiagnosticBacResults() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-white font-black text-2xl tabular-nums">{bac_note_predicted.toFixed(2)} / 20</span>
-                <span className="text-white/35 text-[10px]">المعدل العام 2026</span>
+                <span className="text-white/35 text-[10px]">المعدل العام {BAC_YEAR}</span>
               </div>
             </div>
 
@@ -406,7 +406,7 @@ export default function DiagnosticBacResults() {
 
           {/* ── Countdown strip ── */}
           <div className="bg-white/[.03] border border-white/[.07] rounded-xl px-3 py-1.5 flex items-center justify-between">
-            <span className="text-white/30 text-[9px] uppercase tracking-widest">BAC · 4 Juin 2026</span>
+            <span className="text-white/30 text-[9px] uppercase tracking-widest">BAC · {BAC_DATE_OFFICIELLE ? `${BAC_DATE.getDate()} juin ${BAC_YEAR}` : `Juin ${BAC_YEAR}`}</span>
             <BacCountdown size="sm" />
           </div>
 

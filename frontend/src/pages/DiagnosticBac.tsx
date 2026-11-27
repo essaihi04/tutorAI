@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getBacDiagnosticQuestions, submitBacDiagnostic } from '../services/api';
 import LatexRenderer from '../components/LatexRenderer';
 import BacCountdown from '../components/BacCountdown';
-import { BAC_YEAR } from '../config/bac';
+import { BAC_DATE, BAC_DATE_OFFICIELLE, BAC_YEAR } from '../config/bac';
 import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, Brain,
   Check, HelpCircle, Zap, Trophy,
@@ -110,7 +110,7 @@ export default function DiagnosticBac() {
               🔥 Temps restant avant l'Examen National BAC {BAC_YEAR}
             </p>
             <BacCountdown size="lg" />
-            <p className="text-center text-white/30 text-[10px] mt-2">4 Juin 2026 · 08h00</p>
+            <p className="text-center text-white/30 text-[10px] mt-2">{BAC_DATE_OFFICIELLE ? `${BAC_DATE.getDate()} juin ${BAC_YEAR} · 08h00` : `Juin ${BAC_YEAR}`}</p>
           </div>
 
           {/* Main card */}

@@ -7,6 +7,7 @@ import extraits from '../components/landing/extraits.json';
 /** Le survol 3D (three.js) ouvre la page ; il est chargé à part pour ne pas alourdir le reste. */
 const VolDesMatieres = lazy(() => import('../components/landing/VolDesMatieres'));
 import { ANNEE_SCOLAIRE, BAC_YEAR, joursAvantBac } from '../config/bac';
+import { AFFICHER_PRIX } from '../config/vitrine';
 import {
   Brain, Trophy, ArrowRight, Check, Star, GraduationCap, MessageCircle, ChevronDown, Zap,
   Clock, Target, BookOpen, FlaskConical, Calculator, PenLine, BarChart3, Award, Users, Globe,
@@ -1063,7 +1064,7 @@ function SubjectsSection() {
    ════════════════════════════════════════════════════════════ */
 function FAQSection() {
   const faqs = [
-    { q: "Est-ce vraiment gratuit pour commencer ?", a: "Oui. Tu peux créer un compte, suivre des séances et passer un examen réel sans aucune carte bancaire. Une fois que tu vois la valeur, tu peux passer au plan complet." },
+    { q: "Est-ce vraiment gratuit pour commencer ?", a: "Oui. Tu peux créer un compte, suivre des séances et passer un examen réel sans aucune carte bancaire." + (AFFICHER_PRIX ? " Une fois que tu vois la valeur, tu peux passer au plan complet." : "") },
     { q: "Quelles filières sont couvertes ?", a: "Aujourd'hui : la 2ᵉ année du baccalauréat Sciences Physiques (PC) et Sciences de la Vie et de la Terre (SVT), option française (BIOF). Les filières Sciences Mathématiques et Sciences Économiques sont en préparation : inscris-toi pour être prévenu·e à leur ouverture." },
     { q: "En quoi c'est différent d'une vidéo YouTube ou d'un chatbot ?", a: "Une vidéo ne s'arrête pas quand tu ne comprends plus, et un chatbot ne dessine pas. Ici le tuteur explique à voix haute en dessinant au tableau, te pose des questions, lance les simulations avec toi et répond à ta question sur le schéma — puis il reprend là où il s'était arrêté." },
     { q: "Combien d'examens du bac sont disponibles ?", a: "60 sujets réels du national — sessions normale et rattrapage. Chaque copie est corrigée et expliquée tout de suite, question par question, avec un bilan chapitre par chapitre." },

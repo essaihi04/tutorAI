@@ -9,6 +9,7 @@ import { submitRegistrationRequest } from '../services/api';
 import MoalimShell, { MoalimLogo } from '../components/MoalimShell';
 
 import { BAC_YEAR } from '../config/bac';
+import { AFFICHER_PRIX } from '../config/vitrine';
 const WHATSAPP_NUMBER = '212641998700';
 const WHATSAPP_DISPLAY = '+212 641 998 700';
 
@@ -51,7 +52,8 @@ export default function RegisterInterest() {
     if (form.phone.replace(/\D/g, '').length < 8) return 'Numéro de téléphone invalide';
     if (form.ville.trim().length < 2) return 'Ville requise';
     if (!form.filiere) return 'Veuillez confirmer votre filière.';
-    if (!form.pack) return 'Veuillez sélectionner le pack pour continuer.';
+    // le pack n'est exigé que s'il est affiché (prix masqués : config/vitrine.ts)
+    if (AFFICHER_PRIX && !form.pack) return 'Veuillez sélectionner le pack pour continuer.';
     return null;
   };
 
@@ -68,8 +70,8 @@ export default function RegisterInterest() {
         phone: form.phone.trim(),
         ville: form.ville.trim(),
         niveau: '2BAC-PCF',
-        promo_code: form.promo_code.trim() ? form.promo_code.trim().toUpperCase() : undefined,
-        message: form.pack ? `Pack BAC ${BAC_YEAR} + Concours grandes écoles — 149 DH` : undefined,
+        promo_code: AFFICHER_PRIX && form.promo_code.trim() ? form.promo_code.trim().toUpperCase() : undefined,
+        message: AFFICHER_PRIX && form.pack ? `Pack BAC ${BAC_YEAR} + Concours grandes écoles — 149 DH` : undefined,
       });
       setSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -159,9 +161,12 @@ export default function RegisterInterest() {
 
           <Field label="Téléphone (WhatsApp de préférence)" icon={Phone} placeholder="+212 6 00 00 00 00" value={form.phone} onChange={onChange('phone')} type="tel" required />
 
-          <div className="grid sm:grid-cols-2 gap-4">
+          {/* le code promo va avec les prix : masqué avec eux (config/vitrine.ts) */}
+          <div className={AFFICHER_PRIX ? 'grid sm:grid-cols-2 gap-4' : ''}>
             <Field label="Ville" icon={MapPin} placeholder="Casablanca" value={form.ville} onChange={onChange('ville')} required />
-            <Field label="Code promo (optionnel)" icon={Sparkles} placeholder="Ex : ECOLE123" value={form.promo_code} onChange={onChange('promo_code')} />
+            {AFFICHER_PRIX && (
+              <Field label="Code promo (optionnel)" icon={Sparkles} placeholder="Ex : ECOLE123" value={form.promo_code} onChange={onChange('promo_code')} />
+            )}
           </div>
 
           {/* Filière checkbox */}
@@ -186,7 +191,8 @@ export default function RegisterInterest() {
             </div>
           </label>
 
-          {/* Pack checkbox */}
+          {/* Pack checkbox : prix et concours masqués tant que AFFICHER_PRIX est faux (config/vitrine.ts) */}
+          {AFFICHER_PRIX && (
           <label className={`flex items-start gap-3 p-4 rounded-2xl border-2 cursor-pointer transition-all ${
             form.pack
               ? 'border-emerald-400 bg-emerald-500/15'
@@ -210,6 +216,7 @@ export default function RegisterInterest() {
               </div>
             </div>
           </label>
+          )}
 
           {error && (
             <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-200 text-sm px-4 py-3">
@@ -320,7 +327,7 @@ function SuccessView({ prenom }: { prenom: string }) {
         {/* What you get */}
         <div className="mt-8 grid sm:grid-cols-2 gap-4">
           <InfoCard icon={Brain} color="indigo" title="Tuteur IA pédagogique" desc="Pose tes questions au clavier en français, arabe ou darija. L'IA t'explique étape par étape, et reformule si besoin." />
-          <InfoCard icon={Trophy} color="amber" title="60 examens réels du BAC" desc="Tous les sujets nationaux récents (sessions normale + rattrapage), corrigés et expliqués instantanément avec feedback et orientation." />
+          <InfoCard icon={Trophy} color="amber" title="60 examens réels du BAC" desc="Tous les sujets nationaux récents (sessions normale + rattrapage), corrigés et expliqués instantanément, question par question." />
           <InfoCard icon={BookOpen} color="purple" title="Cadre de référence officiel" desc="Tous les chapitres du 2BAC PC BIOF — Physique, Chimie, Mathématiques — alignés avec le référentiel du Ministère." />
           <InfoCard icon={BarChart3} color="emerald" title="Plan d'étude personnalisé" desc="Un diagnostic initial détecte tes forces et lacunes. L'app construit un planning adapté jusqu'au jour du BAC." />
         </div>

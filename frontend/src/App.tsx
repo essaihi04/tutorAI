@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AFFICHER_ORIENTATION } from './config/vitrine';
 import { lazy, Suspense, useEffect } from 'react';
 import { useAuthStore } from './stores/authStore';
 import { useLearningContextStore } from './stores/learningContextStore';
@@ -84,7 +85,8 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/inscription" element={<RegisterInterest />} />
-          <Route path="/orientation" element={<Orientation />} />
+          {/* orientation masquée (config/vitrine.ts) : l'adresse ramène à l'accueil */}
+          <Route path="/orientation" element={AFFICHER_ORIENTATION ? <Orientation /> : <Navigate to="/" replace />} />
           <Route path="/bac-diagnostic" element={<DiagnosticBac />} />
           <Route path="/bac-diagnostic/results" element={<DiagnosticBacResults />} />
 

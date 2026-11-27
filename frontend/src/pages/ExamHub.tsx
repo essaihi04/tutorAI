@@ -1,3 +1,4 @@
+import { BAC_YEAR } from '../config/bac';
 import { useState, useEffect, useMemo, useRef, forwardRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
@@ -1488,7 +1489,7 @@ const ShareableCard = forwardRef<
               معلم
             </div>
             <div style={{ fontSize: 10, color: '#c7d2fe', marginTop: 3 }}>
-              Sciences Physiques · 2026
+              Sciences Physiques · {BAC_YEAR}
             </div>
           </div>
         </div>
