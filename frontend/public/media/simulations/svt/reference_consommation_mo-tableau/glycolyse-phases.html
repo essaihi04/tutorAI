@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les trois phases de la glycolyse — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Dans le hyaloplasme peint, trois bandes colorées : activation (le glucose, chaîne de six billes jaunes, reçoit deux phosphates payés par deux ATP), scission (la chaîne est coupée en deux chaînes de trois, un taxi NAD+ se charge sur chaque branche, un phosphate entre), oxydation (chaque branche rend deux ATP et donne un acide pyruvique) ; le compte des ATP puis l'équation globale s'écrivent à la fin"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference2.js"></script>
+<script>
+/*
+ * Les trois phases de la glycolyse (cours de référence SVT, diapositives rf_g1 à rf_g4), 27 novembre 2026.
+ * Document du professeur recréé en animation peinte, dans le hyaloplasme, trois bandes :
+ *   ① Activation   glucose (C6) → glucose phosphate (C6–P) → fructose diphosphate (P–C6–P) : 2 ATP PAYÉS (→ 2 ADP) ;
+ *   ② Scission     P–C6–P coupé en deux C3–P ; sur chaque branche un NAD+ → NADH,H+ et un Pi entre : P–C3–P ;
+ *   ③ Oxydation    chaque P–C3–P rend ses 2 phosphates à 2 ADP → 2 ATP et devient un acide pyruvique CH3–CO–COOH.
+ *   Bilan : 4 ATP reçus − 2 payés = 2 ATP ; C6H12O6 + 2 ADP + 2 Pi + 2 NAD+ → 2 CH3–CO–COOH + 2 ATP + 2 NADH,H+.
+ * Lexique : glucose = chaîne droite de 6 billes jaunes, coupée en deux chaînes de 3 ; ATP = carte dorée, ADP = carte grise ;
+ * Pi = bille orange ; NAD+ / NADH,H+ = capsule cyan (taxi vide / chargé). Ce qui est transformé reste à sa place, pâli.
+ * Compter = allumer : les ATP payés (1, 2) et reçus (1 à 4) portent leur numéro dès qu'ils sont payés ou formés.
+ * Moments (dans l'ordre) : glucose_entre, atp1, atp2, fructose_dp, scission, taxi1, taxi2, pi, atp_branche1, atp_branche2,
+ * pyruvates, compte_atp, bilan. Aucune enzyme nommée ; les noms des intermédiaires sont ceux du document.
+ */
+const R2 = window.Ref2, P = window.SVTPeinture, LX = window.Lexique, { mix } = R2;
+const E = .7, PAS = 28 * E, DEMI6 = 2.5 * PAS + 12 * E, BOUT = PAS + 1;   // échelle des chaînes, demi-largeur d'une chaîne de 6, distance d'un P lié
+const Y1 = 92, Y2 = 204, Y3 = 332;
+const XB = { g: 100, gp: 350, f: 640, c: 380, ig: 320, id: 440, og: 120, od: 640, tg: 220, td: 540 };
+const BANDES = { phase1: [44, 98, [250, 170, 60]], phase2: [146, 116, [96, 165, 250]], phase3: [266, 126, [74, 222, 128]] };
+const H = LX.C.hydrogene;
+
+/** Une chaîne de carbones du lexique (6 ou 3 billes jaunes) avec ses phosphates liés (pg à gauche, pd à droite : alpha 0..1). */
+function mol(ctx, x, y, o = {}) {
+  const a = o.a ?? 1; if (a <= .02) return null;
+  const n = o.n || 6, pts = n === 3 ? LX.positionsChaine(3, x, y, { echelle: E }) : null;
+  let atomes = pts;
+  if (n === 6) {
+    const u = o.coupe || 0, ec = (o.ecart || 0) * u;
+    atomes = LX.positionsChaine(6, x, y, { echelle: E }).map(([px, py], i) => [px + (i < 3 ? -ec : ec), py]);
+  }
+  const g = atomes[0], d = atomes[atomes.length - 1];
+  if (o.pg) LX.liaison(ctx, g[0] - BOUT, y, g[0], y, { alpha: a * o.pg, epaisseur: 4.5 * E });
+  if (o.pd) LX.liaison(ctx, d[0], y, d[0] + BOUT, y, { alpha: a * o.pd, epaisseur: 4.5 * E });
+  LX.chaine(ctx, atomes, { echelle: E, alpha: a, liaisons: n === 6 ? [1, 1, 1 - (o.coupe || 0), 1, 1] : undefined });
+  if (o.pg) R2.phosphate(ctx, g[0] - BOUT, y, { alpha: a * o.pg });
+  if (o.pd) R2.phosphate(ctx, d[0] + BOUT, y, { alpha: a * o.pd });
+  return { g: g[0] - (o.pg ? BOUT + 9 : 12 * E), d: d[0] + (o.pd ? BOUT + 9 : 12 * E) };
+}
+
+function dessiner(c, t, e) {
+  const { ctx, sx, L } = e, X = {}; for (const k of Object.keys(XB)) X[k] = sx(XB[k]);
+  const leg = e.S.legendes, tt = e.taille(17), sous = (y) => y + 13 + tt * .95;
+  const m1 = (X.g + X.gp + 15) / 2, m2 = (X.gp + X.f) / 2;                 // milieu des deux flèches de la bande 1 : les ATP payés
+  const a1 = e.d('glucose_entre', 0, .3), a2 = e.d('scission', 0, .15), a3 = e.d('atp_branche1', 0, .15);
+  const ecartCoupe = (X.id - X.ig) / 2 - 1.5 * PAS;
+
+  // ── le milieu : le hyaloplasme peint, et les trois bandes ──
+  c.direct(() => {
+    P.fondHyalo(ctx, 6, 40, L - 12, 356, { arrondi: 14 });
+    [['phase1', a1], ['phase2', a2], ['phase3', a3]].forEach(([id, a]) => { const [y, h, col] = BANDES[id]; R2.bande(ctx, 10, y, L - 20, h, col, { alpha: a }); });
+  });
+  e.ecrire('hyalo', () => c.texte('dans le hyaloplasme', 14, 30, { couleur: 'vert', taille: 17 }));
+  c.repere('hyaloplasme', 10, 12, e.larg('dans le hyaloplasme', 17) + 10, 24, 'tout se passe dans le hyaloplasme');
+  const titre = (nom, a, id, s, label) => { if (e.si(nom, a, 't_' + id, () => c.texte(s, X.c, BANDES[id][0] + 21, { couleur: 'jaune', taille: 18, align: 'center' }))) c.repere(id, 10, BANDES[id][0], L - 20, BANDES[id][1], label); };
+  titre('glucose_entre', .05, 'phase1', '① Activation', 'phase 1 : l’activation du glucose');
+  titre('scission', .05, 'phase2', '② Scission', 'phase 2 : la scission (coupure en deux)');
+  titre('atp_branche1', .05, 'phase3', e.tel ? '③ Oxydation' : '③ Oxydation et formation d’énergie', 'phase 3 : l’oxydation, l’énergie récupérée');
+
+  // ── ① Activation : glucose → glucose phosphate → fructose diphosphate ; deux ATP payés ──
+  const piece = (x, y, adp, a = 1) => LX.atp(ctx, x, y, { etat: adp ? 'adp' : 'atp', alpha: a });
+  if (a1 > 0) {
+    const ag = e.d('glucose_entre', .15, .7);
+    c.direct(() => {
+      mol(ctx, mix(X.g - 70, X.g, ag), Y1, { a: ag * mix(1, .32, e.u('atp1', .55, .75)) });                       // le glucose (il reste, pâli)
+      if (e.vu('atp1', .42)) mol(ctx, mix(X.g, X.gp, e.d('atp1', .55, .92)), Y1, { pd: e.u('atp1', .5, .56), a: mix(1, .32, e.u('atp2', .55, .75)) });   // glucose phosphate
+      if (e.vu('atp2', .42)) mol(ctx, mix(X.gp, X.f, e.d('atp2', .55, .92)), Y1, { pd: 1, pg: e.u('atp2', .5, .56), a: mix(1, .32, e.u('scission', .1, .3)) });   // fructose diphosphate
+      // les ATP payés : la pièce arrive au-dessus de la flèche, donne son phosphate (éclat) et reste en ADP
+      [['atp1', m1, X.g + DEMI6 + BOUT - 12 * E, 1], ['atp2', m2, X.gp - DEMI6 - BOUT + 12 * E, 2]].forEach(([nom, xm, xp]) => {
+        if (!e.vu(nom, .08)) return;
+        const u = e.d(nom, .08, .35), adp = e.u(nom) >= .5;
+        piece(xm, mix(50, 70, u), adp, u);
+        const f = e.u(nom, .42, .55); if (f > 0 && f < 1) R2.phosphate(ctx, mix(xm, xp, f), mix(80, Y1, f), { r: 8 });
+        const fl = e.u(nom, .4, .7); if (fl > 0 && fl < 1) P.eclat(ctx, xm, 70, 10 + 18 * fl, 1 - fl);
+      });
+    });
+    if (ag > .5) c.repere('glucose', X.g - DEMI6 - 4, Y1 - 14, 2 * DEMI6 + 8, 28, 'le glucose : chaîne de 6 carbones');
+    if (leg) e.si('glucose_entre', .6, 'n_glu', () => c.texte('glucose (6 C)', X.g, sous(Y1), { couleur: 'jaune', taille: 17, align: 'center' }));
+    e.si('atp1', .05, 'fl1', () => c.fleche(X.g + DEMI6 + 8, Y1, X.gp - DEMI6 - 8, Y1, { couleur: 'blanc', largeur: 2.2 }));
+    if (leg) e.si('atp1', .88, 'n_gp', () => c.texte('glucose phosphate', X.gp, sous(Y1), { couleur: 'blanc', taille: 17, align: 'center' }));
+    e.si('atp2', .05, 'fl2', () => c.fleche(X.gp + DEMI6 + BOUT + 8, Y1, X.f - DEMI6 - BOUT - 8, Y1, { couleur: 'blanc', largeur: 2.2 }));
+    if (e.vu('atp1', .3)) c.repere('atp_paye_1', m1 - 26, 58, 52, 24, 'le 1er ATP payé');
+    if (e.vu('atp2', .3)) c.repere('atp_paye_2', m2 - 26, 58, 52, 24, 'le 2e ATP payé');
+    if (e.vu('atp1', .3)) c.repere('atp_payes', m1 - 28, 56, (e.vu('atp2', .3) ? m2 - m1 : 0) + 56, 28, 'les ATP payés pour activer le glucose');
+    if (e.vu('atp2', .9)) c.repere('fructose_dp', X.f - DEMI6 - BOUT - 12, Y1 - 14, 2 * (DEMI6 + BOUT + 12), 28, 'le fructose diphosphate : P–C6–P');
+    if (leg) e.si('fructose_dp', .1, 'n_f', () => c.texte('fructose diphosphate', X.f, sous(Y1), { couleur: 'jaune', taille: 17, align: 'center' }));
+    e.si('fructose_dp', .5, 'payes', () => c.texte('2 ATP payés', X.f, 64, { couleur: 'blanc', taille: 17, align: 'center' }));
+  }
+
+  // ── ② Scission : coupé en deux C3–P ; un taxi par branche ; un Pi entre ──
+  if (e.vu('scission', .1)) {
+    const fini = e.fait('scission'), cu = e.d('scission', .55, .95), v = e.d('scission', .1, .5);
+    const branches = [['taxi1', -1, X.ig, X.og, X.tg, 'gauche'], ['taxi2', 1, X.id, X.od, X.td, 'droite']];
+    c.direct(() => {
+      if (!fini) {
+        mol(ctx, mix(X.f, X.c, v), mix(Y1, Y2, v), { pg: 1, pd: 1, coupe: cu, ecart: ecartCoupe });
+        const f = e.u('scission', .5, .78); if (f > 0 && f < 1) P.eclat(ctx, X.c, Y2, 12 + 20 * f, 1 - f);
+      }
+      for (const [nom, s, xi, xo, xt] of branches) {
+        const pi = e.d('pi', .62, .95), aI = mix(1, .32, e.u('pi', .62, .8));
+        if (fini) mol(ctx, xi, Y2, { n: 3, pg: s < 0 ? 1 : 0, pd: s > 0 ? 1 : 0, a: aI });                         // C3–P (il reste, pâli après le Pi)
+        // le taxi : NAD+ arrive, prend deux hydrogènes, devient NADH,H+
+        if (e.vu(nom, .05)) {
+          const ua = e.d(nom, .05, .4), charge = e.u(nom) >= .72;
+          LX.nad(ctx, mix(xt + s * 110, xt, ua), mix(150, 172, ua), { etat: charge ? 'reduit' : 'oxyde', alpha: ua, echelle: .95 });
+          const h = e.u(nom, .45, .72);
+          if (h > 0 && h < 1) for (const dx of [-6, 6]) LX.bille(ctx, mix(xi + dx, xt + dx, h), mix(Y2 - 13, 172, h) - 14 * Math.sin(Math.PI * h), 4.5, H);
+        }
+        // le Pi entre, puis la molécule à deux phosphates part vers le bord
+        if (e.vu('pi', .1)) {
+          const ap = e.d('pi', .1, .3), f = e.d('pi', .35, .6), xl = xi - s * (PAS + BOUT);
+          if (f < 1) LX.pi(ctx, mix(xt, xl, f), mix(248, Y2, f), { alpha: ap, r: 9 });
+          if (f >= 1) mol(ctx, mix(xi, xo, pi), Y2, { n: 3, pg: 1, pd: 1, a: mix(1, .32, e.u(s < 0 ? 'atp_branche1' : 'atp_branche2', .3, .5)) });   // P–C3–P
+        }
+      }
+    });
+    for (const [nom, s, xi, xo, xt, cote] of branches) {
+      if (fini) c.repere('c3_' + cote, Math.min(xi, e.vu('pi', .9) ? xo : xi) - 52, Y2 - 14, Math.abs(xi - (e.vu('pi', .9) ? xo : xi)) + 104, 28, `la branche de ${cote} : une chaîne de 3 carbones`);
+      if (leg) e.si('scission', .92, 'n_c3' + cote, () => c.texte('C3–P', xi, sous(Y2), { couleur: 'blanc', taille: 17, align: 'center' }));
+      if (e.vu(nom, .3)) c.repere('taxi_' + cote, xt - 44, 158, 88, 28, e.vu(nom, .72) ? 'le taxi chargé : NADH,H+' : 'le taxi vide : NAD+');
+      e.si('pi', .05, 'flp' + cote, () => c.fleche(xi + s * (PAS + BOUT + 17), Y2, xo - s * (PAS + BOUT + 17), Y2, { couleur: 'blanc', largeur: 2.2 }));
+      if (leg) e.si('pi', .9, 'n_pc3p' + cote, () => c.texte('P–C3–P', xo, sous(Y2), { couleur: 'blanc', taille: 17, align: 'center' }));
+    }
+    if (e.vu('taxi1', .3)) c.repere('taxis', X.tg - 46, 156, (e.vu('taxi2', .3) ? X.td - X.tg : 0) + 92, 32, 'les taxis : NAD+ → NADH,H+');
+    if (e.vu('pi', .1)) c.repere('pi', X.tg - 14, 232, X.td - X.tg + 28, 28, 'un phosphate Pi entre sur chaque branche');
+  }
+
+  // ── ③ Oxydation : chaque P–C3–P rend ses deux phosphates à deux ADP → 2 ATP, et devient un acide pyruvique ──
+  const cotes = [['atp_branche1', 1, X.og, 'gauche', 0], ['atp_branche2', -1, X.od, 'droite', 2]];
+  const yPieces = [281, 308];
+  for (const [nom, s, xo, cote, n0] of cotes) {
+    if (!e.vu(nom, .1)) continue;
+    const xp = xo + s * 74, v = e.d(nom, .3, .8);
+    c.direct(() => {
+      for (let j = 0; j < 2; j++) {
+        const form = e.u(nom) >= .58 + .2 * j;
+        piece(xp, yPieces[j], !form, e.d(nom, .1, .3));
+        const f = e.u(nom, .42 + .2 * j, .58 + .2 * j);
+        if (f > 0 && f < 1) R2.phosphate(ctx, mix(xo + (j ? 1 : -1) * (PAS + BOUT), xp, f), mix(mix(Y2, Y3, e.d(nom, .3, .8)), yPieces[j], f), { r: 8 });
+        const fl = e.u(nom, .56 + .2 * j, .8 + .2 * j); if (fl > 0 && fl < 1) P.eclat(ctx, xp, yPieces[j], 10 + 18 * fl, 1 - fl);
+      }
+      if (e.vu(nom, .3)) mol(ctx, xo, mix(Y2, Y3, v), { n: 3, pg: 1 - e.u(nom, .42, .46), pd: 1 - e.u(nom, .62, .66) });   // elle descend et rend ses phosphates
+    });
+    e.si(nom, .1, 'flv' + cote, () => c.fleche(xo, sous(Y2) + 9, xo, Y3 - 20, { couleur: 'blanc', largeur: 2.2 }));
+    for (let j = 0; j < 2; j++) c.repere('atp_gagne_' + (n0 + j + 1), xp - 26, yPieces[j] - 12, 52, 24, `ATP reçu n° ${n0 + j + 1}`);
+    if (e.vu(nom, .8)) c.repere('pyruvate_' + cote, xo - PAS - 14, Y3 - 14, 2 * PAS + 28, 28, 'un acide pyruvique : 3 carbones');
+    if (leg) e.si('pyruvates', .1, 'n_pyr' + cote, () => c.texte('acide pyruvique', xo, sous(Y3), { couleur: 'jaune', taille: 17, align: 'center' }));
+    e.si('pyruvates', .5, 'f_pyr' + cote, () => c.texte('CH_{3}–CO–COOH', xo, sous(Y3) + tt * 1.25, { couleur: 'jaune', taille: 17, align: 'center' }));
+  }
+  if (e.vu('atp_branche1', .1)) c.repere('atp_gagnes', X.og + 46, 267, (e.vu('atp_branche2', .1) ? X.od - X.og - 148 : 0) + 56, 54, 'les ATP reçus');
+  if (e.vu('atp_branche2', .8)) {
+    if (e.vu('compte_atp', .01)) c.repere('pyruvates', X.og - PAS - 16, Y3 - 16, 2 * PAS + 32, 32 + (e.vu('pyruvates', .1) ? 2.4 * tt : 0), 'un des deux acides pyruviques (l’autre est à droite)');
+    else c.repere('pyruvates', X.og - PAS - 16, Y3 - 16, X.od - X.og + 2 * PAS + 32, 32, 'les deux acides pyruviques');
+  }
+
+  // ── le compte des ATP, puis l'équation globale ──
+  if (e.vu('compte_atp', .02) && !(e.tel && e.vu('bilan', .02))) {
+    const y0 = 300 + tt * .75, pas = tt * 1.32;
+    e.si('compte_atp', .05, 'recus', () => c.texte('ATP reçus : 4', X.c, y0, { couleur: 'blanc', taille: 17, align: 'center' }));
+    e.si('compte_atp', .5, 'payes2', () => c.texte('ATP payés : 2', X.c, y0 + pas, { couleur: 'blanc', taille: 17, align: 'center' }));
+    if (e.si('compte_atp', .75, 'gain', () => R2.encadre(c, 'gain : 4 − 2 = 2 ATP', X.c, y0 + 2 * pas + 5, { taille: 18 })))
+      c.repere('compte', X.c - 110, y0 - tt, 220, 2 * pas + tt * 1.6 + 6, 'le compte : 4 reçus − 2 payés = 2 ATP');
+  }
+  if (e.vu('bilan', .05)) {
+    if (e.tel) {   // téléphone : l'équation sur deux lignes, dans une carte, à la place du compte
+      c.direct(() => P.carte(ctx, 112, 284, 536, 108, { arrondi: 12 }));
+      e.ecrire('eq1', () => c.texte('C_{6}H_{12}O_{6} + 2 ADP + 2 Pi + 2 NAD+', 380, 284 + 14 + tt, { couleur: 'jaune', taille: 17, align: 'center', max: 510 }));
+      e.si('bilan', .45, 'eq2', () => c.texte('→ 2 CH_{3}–CO–COOH + 2 ATP + 2 NADH,H+', 380, 284 + 14 + tt * 2.4, { couleur: 'jaune', taille: 17, align: 'center', max: 510 }));
+      c.repere('bilan', 112, 284, 536, 108, 'l’équation globale de la glycolyse');
+    } else {
+      e.ecrire('eq', () => c.texte('C_{6}H_{12}O_{6} + 2 ADP + 2 Pi + 2 NAD+  →  2 CH_{3}–CO–COOH + 2 ATP + 2 NADH,H+', L / 2, 414, { couleur: 'jaune', taille: 17, align: 'center', max: L - 28 }));
+      c.repere('bilan', 14, 397, L - 28, 22, 'l’équation globale de la glycolyse');
+    }
+  }
+}
+
+/* Compter = allumer : les ATP payés (1, 2), les ATP reçus (1 à 4), puis le recompte au moment compte_atp. */
+function comptes(t, e) {
+  const out = [], en = e.etape, uc = e.u('compte_atp');
+  if (e.tel && e.vu('bilan', .05)) return out;   // téléphone : la carte de l’équation recouvre le compte
+  const paye = (i, nom) => { if (e.vu(nom, .5)) out.push({ id: 'atp_paye_' + i, n: i, fort: en === nom || (en === 'compte_atp' && uc >= .5 + .1 * (i - 1) && uc < .5 + .1 * i) }); };
+  paye(1, 'atp1'); paye(2, 'atp2');
+  [['atp_branche1', 0], ['atp_branche2', 2]].forEach(([nom, n0]) => { for (let j = 0; j < 2; j++) {
+    const i = n0 + j + 1;
+    if (e.vu(nom, .58 + .2 * j)) out.push({ id: 'atp_gagne_' + i, n: i, fort: (en === nom && e.u(nom) < .58 + .2 * (j + 1)) || (en === 'compte_atp' && uc >= .1 * (i - 1) && uc < .1 * i) });
+  } });
+  if (en === 'pyruvates' && e.vu('pyruvates', .1)) { out.push({ id: 'pyruvate_gauche', n: 1 }, { id: 'pyruvate_droite', n: 2, fort: true }); }
+  return out;
+}
+
+function phase(t, e) {
+  if (!e.vu('glucose_entre')) return 'Le hyaloplasme, vide : le glucose n’est pas encore là.';
+  if (!e.vu('atp1')) return 'Bande ① Activation : le glucose, chaîne de 6 billes jaunes (6 carbones), est dans le hyaloplasme.';
+  if (!e.vu('atp2')) return 'Un 1er ATP est payé : il donne un phosphate au glucose et devient ADP (pièce n° 1 allumée). Le glucose devient glucose phosphate (C6–P) ; le glucose de départ reste, pâli.';
+  if (!e.vu('fructose_dp')) return 'Un 2e ATP est payé (pièce n° 2 allumée) : le glucose phosphate reçoit un 2e phosphate.';
+  if (!e.vu('scission')) return 'Le fructose diphosphate P–C6–P est formé ; écrit : « 2 ATP payés ».';
+  if (!e.vu('taxi1')) return 'Bande ② Scission : la chaîne de 6 carbones est coupée en deux chaînes de 3 carbones portant chacune un phosphate (C3–P), une à gauche, une à droite.';
+  if (!e.vu('taxi2')) return 'Branche de gauche : un taxi vide NAD+ arrive, prend deux hydrogènes à la chaîne de 3 carbones et devient NADH,H+ (taxi chargé).';
+  if (!e.vu('pi')) return 'Branche de droite : un 2e taxi NAD+ se charge et devient NADH,H+. Deux taxis chargés en tout.';
+  if (!e.vu('atp_branche1')) return 'Un phosphate Pi entre sur chaque branche : chaque C3–P devient P–C3–P (deux phosphates).';
+  if (!e.vu('atp_branche2')) return 'Bande ③ Oxydation : à gauche, P–C3–P rend ses deux phosphates à deux ADP qui deviennent deux ATP (pièces n° 1 et 2 allumées) ; il reste une chaîne de 3 carbones.';
+  if (!e.vu('pyruvates')) return 'À droite, même chose : deux autres ATP (n° 3 et 4 allumés). Quatre ATP reçus en tout.';
+  if (!e.vu('compte_atp')) return 'Les deux chaînes de 3 carbones sont nommées : acide pyruvique, CH3–CO–COOH (deux acides pyruviques, comptés 1 et 2).';
+  if (!e.vu('bilan')) return 'Le compte, au centre : « ATP reçus : 4 », « ATP payés : 2 », encadré « gain : 4 − 2 = 2 ATP » ; les pièces se rallument une à une.';
+  return 'L’équation globale est écrite : C6H12O6 + 2 ADP + 2 Pi + 2 NAD+ → 2 CH3–CO–COOH + 2 ATP + 2 NADH,H+.';
+}
+
+R2.page({
+  id: 'svt_reference_glycolyse_phases', titre: 'Les trois phases de la glycolyse', variante: 'glycolyse_phases', graine: 23,
+  moments: [
+    ['glucose_entre', 3, 'le glucose (6 carbones) entre dans le hyaloplasme'],
+    ['atp1', 4, 'un 1er ATP est payé : le glucose reçoit un phosphate'],
+    ['atp2', 4, 'un 2e ATP est payé : un 2e phosphate s’accroche'],
+    ['fructose_dp', 2.4, 'le fructose diphosphate P–C6–P : 2 ATP payés'],
+    ['scission', 4.5, 'la chaîne de 6 carbones est coupée en deux chaînes de 3'],
+    ['taxi1', 3.6, 'à gauche, un taxi NAD+ se charge : NADH,H+'],
+    ['taxi2', 3.6, 'à droite, un 2e taxi NAD+ se charge : NADH,H+'],
+    ['pi', 3.8, 'un phosphate Pi entre sur chaque branche : P–C3–P'],
+    ['atp_branche1', 4.4, 'branche de gauche : 2 ATP reçus'],
+    ['atp_branche2', 4.4, 'branche de droite : 2 ATP reçus'],
+    ['pyruvates', 3.4, 'deux acides pyruviques : CH3–CO–COOH'],
+    ['compte_atp', 5, '4 ATP reçus − 2 payés = 2 ATP gagnés'],
+    ['bilan', 5, 'l’équation globale de la glycolyse'],
+  ],
+  dessiner, comptes, phase,
+  cadrages: {   // téléphone : la fenêtre de l'étape en cours (rapport ≈ 2,1)
+    glucose_entre: [0, 36, 470, 220], atp1: [0, 36, 470, 220], atp2: [240, 36, 500, 235], fructose_dp: [240, 36, 500, 235],
+    scission: [170, 44, 560, 262], taxi1: [50, 134, 400, 188], taxi2: [310, 134, 400, 188], pi: [50, 100, 660, 310],
+    atp_branche1: [0, 150, 520, 250], atp_branche2: [240, 150, 520, 250],
+    pyruvates: (u) => (u < .5 ? [0, 250, 380, 180] : [380, 250, 380, 180]), compte_atp: [150, 250, 460, 216], bilan: [100, 236, 560, 200],
+  },
+  accroche: 'Le glucose arrive dans le hyaloplasme : trois phases…',
+  fini: 'Glycolyse : 1 glucose → 2 acides pyruviques + 2 ATP (4 reçus − 2 payés) + 2 NADH,H+.',
+  texte: 'Les trois phases de la glycolyse, dans le hyaloplasme. ① Activation : glucose (C6) → glucose phosphate (C6–P) → fructose diphosphate (P–C6–P), 2 ATP payés. ② Scission : P–C6–P coupé en deux C3–P ; sur chaque branche NAD+ → NADH,H+ et un Pi entre : P–C3–P. ③ Oxydation et formation d’énergie : chaque P–C3–P → acide pyruvique CH3–CO–COOH avec 2 ADP → 2 ATP. Bilan : 4 ATP reçus − 2 payés = 2 ATP ; C6H12O6 + 2 ADP + 2 Pi + 2 NAD+ → 2 CH3–CO–COOH + 2 ATP + 2 NADH,H+.',
+  explication: [
+    { repere: 'phase1', texte: 'Phase 1, l’activation : la cellule paie deux ATP pour accrocher deux phosphates au glucose.' },
+    { repere: 'phase2', texte: 'Phase 2, la scission : la chaîne de six carbones est coupée en deux chaînes de trois ; un taxi NAD+ se charge sur chaque branche.' },
+    { repere: 'phase3', texte: 'Phase 3 : chaque branche rend deux ATP et donne un acide pyruvique.' },
+    { repere: 'compte', texte: 'Quatre ATP reçus, deux payés : deux ATP gagnés.' },
+    { repere: 'bilan', texte: 'L’équation globale de la glycolyse.' } ],
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
