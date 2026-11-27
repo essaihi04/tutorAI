@@ -161,7 +161,7 @@
       })[cmd]?.() });
     if (o.accueil) bulle(bulleEl, o.accueil);
     setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
-    window.__sim = { chrono, scene, M, env, lum, ordre };
+    window.__sim = { chrono, scene, M, env, lum, ordre, motifs: MOTIFS };
     return { scene, chrono, pont, M, lum, env, ecrit };
   }
 
