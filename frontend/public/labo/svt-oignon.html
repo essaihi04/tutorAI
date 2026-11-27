@@ -1,0 +1,1510 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Turgescence et plasmolyse 1BAC</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout : la paillasse occupe tout l'écran ; les consignes sont des étiquettes accrochées aux objets ; une fine barre en haut */
+:root{
+  --bg:#1a2230; --fg:#f1f4f8; --muted:#aab4c3; --glass:rgba(10,15,24,.72); --line:rgba(255,255,255,.14);
+  --accent:#ffc54d; --accent-ink:#1a1400; --good:#5fd39a; --bad:#ff7a6b;
+  --f-body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.4;overflow:hidden}
+#scene3d{position:fixed;inset:0;touch-action:none;cursor:grab}
+#scene3d canvas{display:block;width:100%!important;height:100%!important}
+#scene3d.hot{cursor:pointer}
+#scene3d.holding{cursor:grabbing}
+#top{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;display:flex;align-items:center;gap:12px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));background:linear-gradient(rgba(8,12,20,.85),rgba(8,12,20,0));pointer-events:none;z-index:5}
+#top>*{pointer-events:auto}
+#top>div:first-child{white-space:nowrap;flex:none}
+#top b{font-size:17px;letter-spacing:-.01em}
+#top .sub{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+#stepbar{margin-left:auto;display:flex;align-items:center;gap:10px;background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 8px;max-width:60vw;backdrop-filter:blur(8px)}
+#stepno{font-family:var(--f-mono);font-size:12px;font-weight:700;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:2px 8px;white-space:nowrap}
+#steptxt{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{background:var(--glass);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:14px;border-radius:999px;padding:7px 12px;cursor:pointer;backdrop-filter:blur(8px)}
+.ib:hover{border-color:var(--accent)}
+#labels{position:fixed;inset:0;pointer-events:none;z-index:4}
+.ring{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid var(--accent);box-shadow:0 0 0 4px rgba(255,197,77,.18),0 0 18px rgba(255,197,77,.55);animation:pulse 1.4s ease-in-out infinite}
+.ring.target{border-color:var(--good);box-shadow:0 0 0 4px rgba(95,211,154,.18),0 0 18px rgba(95,211,154,.5)}
+@keyframes pulse{50%{transform:scale(1.25);opacity:.6}}
+.chip{position:absolute;transform:translate(-50%,calc(-100% - 24px));background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-family:var(--f-mono);font-size:12px;color:var(--accent);white-space:nowrap;backdrop-filter:blur(8px)}
+.chip .k{color:var(--fg);font-family:var(--f-body);font-weight:700}
+.chip.lvl{position:fixed;transform:translate(26px,-50%);border-color:#6fb3ff;color:#bfe0ff;pointer-events:none;z-index:4}
+.chip.lvl::before{content:"";position:absolute;left:-22px;top:50%;width:18px;height:2px;background:#6fb3ff}
+#showGuide{position:fixed;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:6}
+#demo{position:fixed;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100vw - 28px));background:var(--glass);border:1px solid var(--line);border-left:4px solid var(--good);border-radius:14px;padding:12px 16px;backdrop-filter:blur(10px);box-shadow:0 12px 36px rgba(0,0,0,.4);z-index:6}
+#demo .dh{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+#demo .n{font-family:var(--f-mono);font-weight:700;font-size:13px;background:var(--good);color:#06200f;border-radius:999px;padding:3px 9px}
+#demo .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#demo .t{font-size:16px;line-height:1.35}
+#demo .w{font-size:13.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+#demo .w p{margin:3px 0} #demo .w .eq{font-family:var(--f-mono);font-size:12.5px;background:rgba(255,255,255,.06);padding:4px 8px;border-radius:6px;display:inline-block}
+#demo .b{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#demo .b .sb.p{border-color:var(--good);color:var(--good);font-weight:700}
+#demo .bar{height:3px;background:rgba(255,255,255,.12);border-radius:2px;margin-top:10px;overflow:hidden}
+#demo .bar i{display:block;height:100%;background:var(--good);width:0;transition:width .3s}
+#instr{position:fixed;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(430px,calc(100vw - 28px));display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:center;background:var(--glass);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:14px;padding:10px 14px;backdrop-filter:blur(10px);box-shadow:0 12px 36px rgba(0,0,0,.4);z-index:5}
+#instr .n{grid-row:span 2;font-family:var(--f-mono);font-weight:700;font-size:13px;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:3px 9px;align-self:start}
+#instr .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#instr .t{font-size:15px;line-height:1.3}
+#instr .v{grid-row:span 2;font-family:var(--f-mono);font-weight:700;font-size:20px;color:var(--accent);white-space:nowrap;text-align:right}
+#instr .v:empty{display:none}
+#instr .h{grid-column:2/4;font-size:12px;color:var(--muted)}
+#instr .h:empty{display:none}
+#instr .b{grid-column:2/4;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.sb{background:transparent;border:1px solid var(--line);color:var(--fg);font:inherit;font-size:13px;border-radius:999px;padding:4px 10px;cursor:pointer}
+.sb:hover{border-color:var(--accent)}
+#panel{position:fixed;top:calc(58px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:min(400px,calc(100vw - 24px));background:var(--glass);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(12px);box-shadow:0 20px 50px rgba(0,0,0,.45);z-index:7;display:flex;flex-direction:column;overflow:hidden}
+#panel header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+#panel header b{font-size:15px;flex:1}
+#panel .body{overflow:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:14px}
+#panel h3{margin:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.diag{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px}
+.diag b{font-family:var(--f-mono);color:var(--accent);text-align:right}
+.ev{border-left:3px solid var(--line);padding:4px 10px;font-size:14px}
+.ev.warn{border-color:var(--bad)} .ev.good{border-color:var(--good)} .ev.info{border-color:var(--accent)}
+.ev .t{color:var(--muted);font-family:var(--f-mono);font-size:11px;margin-right:6px}
+.ev button{background:none;border:0;color:var(--accent);font:inherit;font-size:13px;cursor:pointer;padding:0 0 0 6px;text-decoration:underline}
+.ev .why{display:none;margin-top:6px;color:var(--muted);font-size:13px;line-height:1.4}
+.ev.open .why{display:block}
+.why p{margin:4px 0}
+.why .eq{font-family:var(--f-mono);font-size:12.5px;background:rgba(255,255,255,.06);padding:5px 8px;border-radius:6px;display:inline-block}
+.tool-list{display:flex;flex-direction:column;gap:6px}
+.tool-list details{border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+.tool-list summary{cursor:pointer;font-weight:700}
+.tool-list p{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.4}
+#menu{position:fixed;z-index:8;min-width:220px;max-width:min(320px,calc(100vw - 24px));background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(12px);box-shadow:0 16px 40px rgba(0,0,0,.45);padding:6px;display:flex;flex-direction:column;gap:2px}
+#menu .mh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#menu .mh button{background:none;border:1px solid var(--line);color:var(--accent);border-radius:999px;font:inherit;font-size:12px;padding:1px 8px;cursor:pointer;text-transform:none;letter-spacing:0}
+#menu .mi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:var(--fg);font:inherit;font-size:15px;padding:9px 10px;border-radius:9px;cursor:pointer}
+#menu .mi:hover,#menu .mi:focus-visible{background:rgba(255,255,255,.08)}
+#menu .mi.hold{background:rgba(255,197,77,.12)} #menu .mi.hold:active{background:rgba(255,197,77,.3)}
+#menu .mi .ic{width:22px;text-align:center;flex:none}
+#menu .mi small{color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap}
+#menu .mi.danger{color:var(--bad)}
+#exao{position:fixed;inset:0;display:grid;place-items:center;background:rgba(8,12,20,.6);backdrop-filter:blur(6px);z-index:9;padding:16px}
+#toast{position:fixed;left:50%;bottom:calc(130px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:15px;max-width:min(520px,calc(100vw - 32px));opacity:0;transition:.25s;z-index:6;backdrop-filter:blur(8px)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.good{border-color:var(--good)} #toast.bad{border-color:var(--bad)}
+#overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(8,12,20,.55);backdrop-filter:blur(6px);z-index:10;padding:16px}
+.card{width:100%;max-width:520px;background:#121a27;border:1px solid var(--line);border-radius:18px;padding:22px 22px 18px;box-shadow:0 30px 70px rgba(0,0,0,.5)}
+.card h1{margin:0 0 6px;font-size:24px;line-height:1.15;letter-spacing:-.01em}
+.card p{margin:8px 0;color:var(--muted)}
+.card ul{margin:10px 0 0;padding-left:20px;color:var(--muted)}
+.card li{margin:3px 0}
+.card .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.btn{border:0;border-radius:12px;padding:12px 18px;font:inherit;font-weight:700;font-size:16px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.res{display:grid;grid-template-columns:1fr auto;gap:6px 14px;margin-top:10px;font-size:15px}
+.res b{font-family:var(--f-mono);color:var(--accent)}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (max-width:900px){#top .sub{display:none}#stepbar{display:none}}
+@media (max-width:640px){#top b{font-size:15px}#instr .t{font-size:14px}#instr .v{font-size:16px}#panel{top:auto;height:70vh;left:12px;right:12px;width:auto}}
+@media (prefers-reduced-motion:reduce){.ring{animation:none}}
+/* guide vertical à gauche, du haut vers le bas (nov. 2026) */
+#instr{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(250px,calc(100vw - 28px));display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px 14px;border-left:1px solid var(--line);border-top:4px solid var(--accent);max-height:calc(100vh - 84px);overflow:auto}#instr .n{align-self:flex-start}#instr .k{font-size:12px}#instr .v{text-align:left;font-size:22px}#instr .t{font-size:15px;line-height:1.42}#instr .b{margin-top:4px;flex-direction:column}#instr .b .sb{width:100%}#demo{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(290px,calc(100vw - 28px));display:flex;flex-direction:column;max-height:calc(100vh - 84px);overflow:auto;border-left:1px solid var(--line);border-top:4px solid var(--good)}#demo .dh{flex-direction:column;align-items:flex-start;gap:4px}#demo .b{flex-direction:column;margin-top:6px}#demo .b .sb{width:100%}#showGuide{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto}@media (max-width:640px){#instr,#demo{width:calc(100vw - 28px);bottom:auto;max-height:38vh}#instr .b,#demo .b{flex-direction:row}#instr .b .sb,#demo .b .sb{width:auto}}#instr{left:max(14px,env(safe-area-inset-left,0px));transform:none}#instr.min{bottom:auto}
+.tip{position:fixed;z-index:9;max-width:300px;background:var(--glass);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:7px 10px;font-size:13px;line-height:1.35;pointer-events:none;backdrop-filter:blur(10px);box-shadow:0 10px 28px rgba(0,0,0,.4)}.tip b{color:var(--accent)}#menu .minfo{font-size:12.5px;line-height:1.35;color:var(--muted);padding:2px 8px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}#menu .minfo b{color:var(--fg)}
+.mt{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0 10px}.mt th,.mt td{border-bottom:1px solid var(--line);padding:6px 6px;text-align:left;vertical-align:top}.mt th{color:var(--muted);font-weight:700;font-size:12px}.card{max-height:92vh;overflow:auto}
+#instr{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(250px,calc(100vw - 28px));display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px 14px;border-left:1px solid var(--line);border-top:4px solid var(--accent);max-height:calc(100vh - 84px);overflow:auto}#instr .n{align-self:flex-start}#instr .k{font-size:12px}#instr .v{text-align:left;font-size:22px}#instr .t{font-size:15px;line-height:1.42}#instr .b{margin-top:4px;flex-direction:column}#instr .b .sb{width:100%}#demo{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(290px,calc(100vw - 28px));display:flex;flex-direction:column;max-height:calc(100vh - 84px);overflow:auto;border-left:1px solid var(--line);border-top:4px solid var(--good)}#demo .dh{flex-direction:column;align-items:flex-start;gap:4px}#demo .b{flex-direction:column;margin-top:6px}#demo .b .sb{width:100%}#showGuide{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto}@media (max-width:640px){#instr,#demo{width:calc(100vw - 28px);bottom:auto;max-height:38vh}#instr .b,#demo .b{flex-direction:row}#instr .b .sb,#demo .b .sb{width:auto}}
+#exao{inset:auto;top:calc(58px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));left:auto;bottom:auto;display:block;place-items:initial;background:none;backdrop-filter:none;padding:0;z-index:6;width:min(940px,calc(100vw - 24px))}
+#exao .tc{background:var(--glass);border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:14px;padding:10px 12px;backdrop-filter:blur(12px);box-shadow:0 16px 40px rgba(0,0,0,.45);max-height:calc(100vh - 90px);overflow:auto}
+#exao .th{display:flex;align-items:center;gap:10px;flex-wrap:wrap}#exao .th span{flex:1;min-width:200px;font-size:12.5px;color:var(--muted)}#exao .tf{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:13px;color:var(--muted);font-family:var(--f-mono)}
+.mt.st{font-size:13px;margin:6px 0 8px}.mt.st th{font-size:11.5px;line-height:1.25}.mt.st th.c{color:var(--accent)}.mt.st td{vertical-align:middle;padding:5px}.mt.st td small{display:block;font-size:11px;color:var(--muted);font-family:var(--f-mono)}.mt.st td.au{font-family:var(--f-mono);color:var(--fg);white-space:nowrap}.mt.st td.na{color:var(--muted)}.mt.st td.so{font-size:12px;color:var(--muted);max-width:130px}.mt.st td.su{font-size:11.5px;line-height:1.3}
+.mt.st td.in{white-space:nowrap}.mt.st td.in input{width:84px;background:rgba(255,255,255,.06);border:1px dashed var(--accent);border-radius:8px;color:var(--fg);font:inherit;font-family:var(--f-mono);font-size:14px;padding:5px 7px;cursor:text}.mt.st td.in input:focus{outline:2px solid var(--accent);border-style:solid;background:rgba(255,197,77,.08)}.mt.st td.in input::placeholder{color:var(--muted);font-size:11.5px;font-family:var(--f-body)}.mt.st td.in button{margin-left:4px;background:transparent;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:4px 7px;cursor:pointer;font:inherit}
+.mt.st td.ok{color:var(--good);font-family:var(--f-mono);font-weight:700;font-size:14px;white-space:nowrap}.mt.st td.ok small{color:var(--good);font-family:var(--f-body);font-weight:700}
+.mt.st td.no small{color:var(--bad);font-family:var(--f-body);font-weight:700}.mt.st td.no input{border-color:var(--bad);border-style:solid;animation:shk .4s}@keyframes shk{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+@media (max-width:640px){#exao{top:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));right:8px;width:calc(100vw - 16px)}#exao .tc{max-height:55vh}.mt.st td.in input{width:70px}}
+</style>
+
+<div id="scene3d" aria-label="Paillasse en 3D. Glisse pour tourner, clique sur les objets pour manipuler."></div>
+<div id="labels"></div>
+<header id="top">
+  <div><b>Labo SVT</b> <span class="sub">· 1ʳᵉ Bac Sc. Ex. · BIOF · Absorption de l'eau</span></div>
+  <div id="stepbar"><span id="stepno">·</span><span id="steptxt"></span></div>
+  <button class="ib" id="btnDemo" type="button">▶ Démonstration</button>
+  <button class="ib" id="btnSpeed" type="button" title="Accélération du temps de l'expérience (séjour des fragments dans les solutions)">⏩ ×10</button>
+  <button class="ib" id="btnTable" type="button">Mesures</button>
+  <button class="ib" id="btnPanel" type="button">Carnet</button>
+  <button class="ib" id="btnEval" type="button" hidden>Évaluer</button>
+  <button class="ib" id="reset" type="button" title="Tout remettre en ordre">↺</button>
+</header>
+<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnSkip" type="button" title="Le guide ne proposera plus cette étape">Passer l'étape ⏭</button><button class="sb" id="btnGuide" type="button">Masquer</button><button class="sb" id="btnUnskip" type="button" hidden>↺ Rétablir</button></span></div>
+<aside id="panel" hidden aria-label="Carnet de manipulation">
+  <header><b>Carnet de manip</b><button class="ib" id="closePanel" type="button">✕</button></header>
+  <div class="body">
+    <section><h3>État réel de la paillasse</h3><div class="diag" id="diag"></div></section>
+    <section><h3>Journal des gestes</h3><div id="events"></div></section>
+    <section><h3>Le matériel et son usage</h3><div class="tool-list" id="toolHelp"></div></section>
+  </div>
+</aside>
+<div id="demo" hidden><div class="dh"><span class="n">Démo 1/14</span><span class="k"></span></div><div class="t"></div><div class="w"></div><div class="b"><button class="sb p" id="dPause" type="button">⏸ Pause</button><button class="sb" id="dNext" type="button" title="Termine l'étape en cours en accéléré">Étape suivante ⏭</button><button class="sb" id="dSpeed" type="button" title="Vitesse de la démonstration">Vitesse ×1</button><button class="sb" id="dMin" type="button">Masquer</button><button class="sb" id="dQuit" type="button" title="Arrête la démo et garde la paillasse dans son état">✋ Continuer moi-même</button></div><div class="bar"><i></i></div></div>
+<button class="ib" id="showGuide" type="button" hidden>Afficher le guide ▸</button>
+<div id="menu" hidden role="menu"></div>
+<div id="toast" role="status"></div>
+<div id="exao" hidden><div class="tc"><div class="th"><b>Tableau des observations</b><span>Les observations s'écrivent seules · à toi de calculer G (clavier, puis Entrée) et de choisir ce que tu vois</span><button class="sb" id="closeExao" type="button">Masquer</button></div><div id="tbl"></div><div class="tf"><span>G = G(objectif) × G(oculaire)</span><button class="sb p" id="exaoEval" type="button">Évaluer</button></div></div></div>
+<div id="overlay">
+  <div class="card">
+    <p class="sub" style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)">SVT · 1ʳᵉ Bac Sciences expérimentales · Absorption de l'eau chez les plantes</p>
+    <h1>Turgescence et plasmolyse</h1>
+    <p>Les cellules de l'épiderme d'une écaille d'oignon violet ont une vacuole colorée. Prélève deux fragments d'épiderme : l'un reste <b>3 min</b> dans NaCl à <b>2 g/L</b> (verre A), l'autre dans NaCl à <b>50 g/L</b> (verre B). Monte chacun entre lame et lamelle dans une goutte de la même solution, puis observe-les au <b>microscope</b> : au faible grossissement d'abord, puis au moyen et au fort grossissement.</p>
+    <ul>
+      <li>Clique sur un objet : s'il n'a qu'un usage, le geste se fait aussitôt ; sinon un menu te laisse choisir. Tout est permis, dans l'ordre que tu veux.</li>
+      <li>Dans l'oculaire : change d'objectif (×4, ×10, ×40) et d'oculaire (×10, ×15), règle la netteté avec les vis macrométrique et micrométrique, la lumière et le diaphragme, et déplace la lame en faisant glisser l'image.</li>
+      <li>Le temps est accéléré (⏩ en haut). Le guide à gauche conseille la prochaine étape ; le <b>Carnet</b> explique chaque geste ; <b>Mesures</b> rassemble tes observations.</li>
+    </ul>
+    <div class="row"><button class="btn" id="start" type="button">Entrer au labo →</button><button class="btn ghost" id="startDemo" type="button">▶ Voir la démonstration</button></div>
+  </div>
+</div>
+
+<!--labnav--><style>
+.labnav{position:relative;display:flex;align-items:center;gap:6px;margin-left:6px}
+.labnav select{appearance:none;-webkit-appearance:none;background:var(--glass) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23ffc54d' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--line);color:var(--fg);font:inherit;font-size:13.5px;border-radius:999px;padding:6px 28px 6px 12px;max-width:min(330px,42vw);cursor:pointer;backdrop-filter:blur(8px)}
+.labnav select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.labnav select optgroup{background:#121a27;color:var(--accent);font-style:normal}
+.labnav select option{background:#121a27;color:var(--fg)}
+.labnav{flex:none}.labnav select{max-width:250px}
+#top>*{flex:none}#top #stepbar{flex:1 1 0;min-width:0;max-width:none}#top #steptxt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+@media (max-width:1500px){#top .sub{display:none}}
+@media (max-width:640px){.labnav select{max-width:40vw;font-size:12.5px}}
+</style>
+<script>
+/* navigation entre les manips : une liste déroulante classée par matière et niveau, dans la barre du haut.
+   Pour une nouvelle manip : ajouter une ligne ici, relancer inject-nav.py, régénérer les manips des sols, republier toutes les manips. */
+(function () {
+  "use strict";
+  const LABS = [
+    { g: "Physique-Chimie · 2ᵉ Bac PC BIOF", t: "Labo Sciences 2BAC", n: "Préparer 100 mL de NaOH à 0,10 mol/L (conductimètre)", u: "solution-naoh.html" },
+    { g: "Physique-Chimie · 2ᵉ Bac PC BIOF", t: "Dosage acide-base 2BAC", n: "Dosage acide éthanoïque / soude (indicateur, pH-métrie)", u: "chimie-dosage-acide-base.html" },
+    { g: "SVT · 2ᵉ Bac PC BIOF", t: "Labo SVT ExAO 2BAC", n: "Respiration et fermentation des levures (ExAO)", u: "svt-exao-levures.html" },
+    { g: "Physique-Chimie · Tronc commun", t: "Synthèse de l'acétate de linalyle TC", n: "Synthèse de l'acétate de linalyle : reflux, ampoule à décanter, NaHCO₃, filtration", u: "chimie-linalyle.html" },
+    { g: "SVT · Tronc commun", t: "Rétention et perméabilité des sols", n: "Facteurs édaphiques (1) : rétention en eau et perméabilité", u: "svt-sol-retention.html" },
+    { g: "SVT · Tronc commun", t: "Le pH du sol", n: "Facteurs édaphiques (2) : pH du sol (papier pH, pH-mètre)", u: "svt-sol-ph.html" },
+    { g: "SVT · Tronc commun", t: "Le calcaire du sol", n: "Facteurs édaphiques (3) : calcaire du sol (test au HCl)", u: "svt-sol-calcaire.html" },
+    { g: "SVT · Tronc commun", t: "Le complexe argilo-humique", n: "Facteurs édaphiques (4) : complexe argilo-humique (floculation, électrophorèse)", u: "svt-sol-cah.html" },
+    { g: "SVT · Tronc commun", t: "Fixation des cations par le sol", n: "Facteurs édaphiques (5) : fixation des cations (bleu de méthylène, éosine)", u: "svt-sol-cations.html" },
+    { g: "SVT · Tronc commun", t: "Les trois formes d'eau du sol", n: "Facteurs édaphiques (6) : eau de gravité, capillaire, hygroscopique", u: "svt-sol-eau.html" },
+    { g: "SVT · Tronc commun", t: "Rôle de la faune du sol", n: "Facteurs édaphiques (7) : rôle de la faune du sol (lombrics)", u: "svt-sol-lombrics.html" },
+    { g: "SVT · 1ʳᵉ Bac Sc. Ex.", t: "Turgescence et plasmolyse 1BAC", n: "Absorption de l'eau : épiderme d'oignon dans NaCl 2 g/L et 50 g/L, microscope", u: "svt-oignon.html" },
+  ];
+  function mount() {
+    const top = document.getElementById("top"); if (!top || top.querySelector(".labnav")) return;
+    const wrap = document.createElement("label"); wrap.className = "labnav"; wrap.title = "Changer de manip";
+    const sel = document.createElement("select"); sel.setAttribute("aria-label", "Changer de manip");
+    const cur = LABS.findIndex((l) => l.t === document.title), head = document.createElement("option");
+    head.textContent = "📚 Manips…"; head.value = ""; if (cur < 0) head.selected = true; sel.append(head); const home = document.createElement("option"); home.value = "home"; home.textContent = "🏠 Toutes les manips"; sel.append(home);
+    const groups = {};
+    LABS.forEach((l, i) => { let og = groups[l.g]; if (!og) { og = groups[l.g] = document.createElement("optgroup"); og.label = l.g; sel.append(og); } const o = document.createElement("option"); o.value = String(i); o.textContent = (i === cur ? "✓ " : "") + l.n; if (i === cur) o.selected = true; og.append(o); });
+    sel.addEventListener("change", () => {
+      if (sel.value === "home") { location.href = "./"; return; } const l = LABS[+sel.value]; if (!l || +sel.value === cur) return;
+      location.href = l.u;
+      sel.value = cur >= 0 ? String(cur) : "";
+    });
+    wrap.append(sel); const first = top.firstElementChild; if (first) first.after(wrap); else top.prepend(wrap);
+  }
+  if (document.getElementById("top")) mount(); else document.addEventListener("DOMContentLoaded", mount);
+})();
+</script><!--/labnav-->
+<script src="vendor/three-r128.min.js"></script>
+<script src="vendor/OrbitControls-r128.js"></script>
+<script>
+/* secours : contrôle d'orbite minimal si aucun CDN n'a fourni OrbitControls */
+if (window.THREE && !THREE.OrbitControls) THREE.OrbitControls = class {
+  constructor(cam, el) { this.object = cam; this.el = el; this.target = new THREE.Vector3(); this.enabled = true; this.enableDamping = false; this.minDistance = 0.1; this.maxDistance = 10; this.maxPolarAngle = Math.PI; this.rotateSpeed = 1; this.panSpeed = 1;
+    let drag = null; el.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, b: e.button }; el.setPointerCapture(e.pointerId); });
+    el.addEventListener("pointermove", (e) => { if (!drag || !this.enabled) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; const o = this.object.position.clone().sub(this.target), s = new THREE.Spherical().setFromVector3(o); s.theta -= dx * 0.005 * this.rotateSpeed; s.phi = Math.max(0.05, Math.min(this.maxPolarAngle, s.phi - dy * 0.005 * this.rotateSpeed)); this.object.position.copy(this.target).add(o.setFromSpherical(s)); });
+    const up = () => (drag = null); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    el.addEventListener("wheel", (e) => { if (!this.enabled) return; e.preventDefault(); const o = this.object.position.clone().sub(this.target), d = Math.max(this.minDistance, Math.min(this.maxDistance, o.length() * (e.deltaY > 0 ? 1.1 : 0.9))); this.object.position.copy(this.target).add(o.setLength(d)); }, { passive: false });
+  }
+  update() { this.object.lookAt(this.target); }
+};
+</script>
+<script>
+(function(){
+"use strict";
+const $ = (s) => document.querySelector(s);
+const fmt = (x, d = 2) => (Math.round(x * 10 ** d) / 10 ** d).toFixed(d).replace(".", ",");
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const BENCH = 0.92;
+const T3 = {}, M = {};
+
+/* ------------------------------------------------------------ briques 3D */
+const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+function mesh(geo, mat, parent, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; if (parent) parent.add(m); return m; }
+function box(w, h, d, mat, parent, x, y, z) { return mesh(new THREE.BoxGeometry(w, h, d), mat, parent, x, y, z); }
+function cyl(rt, rb, h, mat, parent, x, y, z, seg = 28, open = false) { return mesh(new THREE.CylinderGeometry(rt, rb, h, seg, 1, open), mat, parent, x, y, z); }
+function sph(r, mat, parent, x, y, z) { return mesh(new THREE.SphereGeometry(r, 20, 14), mat, parent, x, y, z); }
+function rod(a, b, r, mat, parent) { const A = V3(a), B = V3(b), d = B.clone().sub(A), m = cyl(r, r, d.length(), mat, parent, 0, 0, 0, 16); m.position.copy(A).add(B).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return m; }
+function std(color, rough = 0.5, metal = 0, extra = {}) { return new THREE.MeshStandardMaterial(Object.assign({ color, roughness: rough, metalness: metal }, extra)); }
+function canvasTex(w, h, draw, rep) { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); } return t; }
+function grain(ctx, w, h, amp) { const d = ctx.getImageData(0, 0, w, h); for (let i = 0; i < d.data.length; i += 4) { const n = (Math.random() - 0.5) * amp; d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; } ctx.putImageData(d, 0, 0); }
+function wire(a, b, mat, parent, drop = 0.05, r = 0.0021) { const pts = []; for (let i = 0; i <= 8; i++) { const s = i / 8; pts.push(new THREE.Vector3(a[0] + (b[0] - a[0]) * s, Math.max(r + 0.001, a[1] + (b[1] - a[1]) * s - drop * Math.sin(Math.PI * s)), a[2] + (b[2] - a[2]) * s + 0.02 * Math.sin(Math.PI * s))); } return mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, r, 8, false), mat, parent); }
+function lcd(w, h, parent, x, y, z, fg = "#8ef58b", bg = "#07110a") {
+  const cw = 256, ch = Math.max(40, Math.round((cw * h) / w)), c = document.createElement("canvas"); c.width = cw; c.height = ch;
+  const ctx = c.getContext("2d"), t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: t, roughness: 0.2 }));
+  m.position.set(x, y, z); parent.add(m); let last = "";
+  m.set = (a, b = "") => {
+    const k = a + "|" + b; if (k === last) return; last = k;
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); ctx.fillStyle = fg; ctx.textBaseline = "middle";
+    const us = Math.min(ch * 0.32, 34), uw = b ? us * b.length * 0.62 + 10 : 0, fs = Math.min(ch * 0.62, (cw - 24 - uw) / (a.length * 0.62));
+    ctx.font = `700 ${Math.round(fs)}px "JetBrains Mono", Consolas, monospace`; ctx.textAlign = "right"; ctx.fillText(a, cw - 12 - uw, ch * 0.55);
+    if (b) { ctx.font = `700 ${Math.round(us)}px Arial, sans-serif`; ctx.textAlign = "left"; ctx.fillText(b, cw - uw - 2, ch * 0.6); }
+    t.needsUpdate = true;
+  };
+  return m;
+}
+function print(w, h, parent, x, y, z, lines, bg = null, fg = "#f1f1ee") {
+  const cw = 512, ch = Math.round((cw * h) / w), c = document.createElement("canvas"); c.width = cw; c.height = ch; const ctx = c.getContext("2d");
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); } ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => { ctx.font = `${l.b ? 700 : 500} ${Math.round(ch * (l.s || 0.42))}px Arial, sans-serif`; ctx.fillStyle = l.c || fg; ctx.fillText(l.t, cw / 2, ch * (l.y != null ? l.y : (i + 0.5) / lines.length)); });
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, transparent: !bg, roughness: 0.6 })); m.position.set(x, y, z); m.receiveShadow = true; parent.add(m); return m;
+}
+function wrapLabel(r, h, parent, x, y, z, lines, bg) {
+  const c = document.createElement("canvas"); c.width = 512; c.height = Math.round(512 * h / (2.4 * r)); const ctx = c.getContext("2d");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => { ctx.font = `${l.b ? 700 : 500} ${Math.round(c.height * (l.s || 0.2))}px Arial, sans-serif`; ctx.fillStyle = l.c || "#1b1b1b"; ctx.fillText(l.t, c.width / 2, c.height * (i + 0.5) / lines.length); });
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  return mesh(new THREE.CylinderGeometry(r, r, h, 32, 1, true, -1.2, 2.4), std(0xffffff, 0.7, 0, { map: t }), parent, x, y, z);
+}
+function knob(parent, x, y, z, r = 0.01, mat = M.black) { const k = cyl(r, r * 1.08, r * 1.2, mat, parent, x, y, z, 24); k.rotation.x = Math.PI / 2; box(r * 0.25, r * 0.9, 0.002, M.white, k, 0, r * 0.62, r * 0.55).rotation.x = -Math.PI / 2; return k; }
+function liquidMat(color, op = 0.42) { /*liquide-mat*/ const m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.6, reflectivity: 0.05, envMapIntensity: 0.15, transparent: true, opacity: op, clearcoat: 0, depthWrite: false }); (window.__LIQS || (window.__LIQS = [])).push(m); return m; }
+
+function initMats() {
+  T3.epoxy = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#2a2d31"; x.fillRect(0, 0, w, h); grain(x, w, h, 22); for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`; x.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); } }, [8, 1]);
+  T3.floor = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#9aa1a8"; x.fillRect(0, 0, w, h); for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { x.fillStyle = `hsl(210,7%,${66 + Math.random() * 7}%)`; x.fillRect(i * 256 + 2, j * 256 + 2, 252, 252); } grain(x, w, h, 16); }, [24, 24]);
+  T3.tiles = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#1b1f24"; x.fillRect(0, 0, w, h); const s = w / 4; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.fillStyle = `hsl(210,9%,${24 + Math.random() * 4}%)`; x.fillRect(i * s + 3, j * s + 3, s - 6, s - 6); } grain(x, w, h, 5); }, [30, 2.4]);
+  T3.sky = canvasTex(512, 320, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#7fb0e6"); g.addColorStop(0.65, "#d8e8f6"); g.addColorStop(1, "#e9f0f5"); x.fillStyle = g; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 5; i++) { x.fillStyle = "rgba(255,255,255,.55)"; x.beginPath(); x.ellipse(Math.random() * w, 40 + Math.random() * 80, 50 + Math.random() * 40, 12, 0, 0, 7); x.fill(); }
+    x.fillStyle = "#9db7a1"; x.beginPath(); x.moveTo(0, h * 0.78); for (let i = 0; i <= 10; i++) x.lineTo((w * i) / 10, h * (0.7 + Math.random() * 0.06)); x.lineTo(w, h); x.lineTo(0, h); x.fill();
+    for (let i = 0; i < 14; i++) { x.fillStyle = `hsl(${120 + Math.random() * 25},30%,${30 + Math.random() * 12}%)`; x.beginPath(); x.ellipse(Math.random() * w, h * 0.78, 18 + Math.random() * 16, 30 + Math.random() * 20, 0, 0, 7); x.fill(); }
+    x.fillStyle = "#c9c2b5"; x.fillRect(0, h * 0.86, w, h * 0.14);
+  });
+  T3.beaker = canvasTex(256, 256, (x, w, h) => { x.clearRect(0, 0, w, h); x.fillStyle = "#1d2b3a"; x.strokeStyle = "rgba(255,255,255,.9)"; x.lineWidth = 5; x.lineJoin = "round"; x.font = "bold 22px Arial"; x.textAlign = "left"; for (let i = 1; i <= 5; i++) { const y = h - i * 40; x.fillRect(90, y, i % 2 ? 30 : 46, 3); x.strokeText(String(i * 50), 142, y + 8); x.fillText(String(i * 50), 142, y + 8); } x.font = "bold 20px Arial"; x.strokeText("250 mL", 92, 26); x.fillText("250 mL", 92, 26); });
+  T3.poster = canvasTex(1024, 640, (x, w, h) => {
+    x.fillStyle = "#fbfbf8"; x.fillRect(0, 0, w, h); x.fillStyle = "#1d2b44"; x.font = "bold 38px Arial"; x.textAlign = "center"; x.fillText("Tableau périodique des éléments", w / 2, 52);
+    const cols = ["#f4a7a3", "#f7cf8f", "#fdf1a2", "#b8e3b0", "#a9d4f2", "#cdbcf0", "#e6e6e6"], s = 50, ox = 62, oy = 90, shape = [[0, 17], [0, 1, 12, 13, 14, 15, 16, 17], [0, 1, 12, 13, 14, 15, 16, 17]];
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 18; c++) { if (r < 3 && !shape[r].includes(c)) continue; x.fillStyle = cols[(c < 2 ? 0 : c < 12 ? 1 + (r % 2) : c < 17 ? 3 + (c % 2) : 5)]; x.fillRect(ox + c * s, oy + r * s, s - 4, s - 4); }
+    for (let r = 0; r < 2; r++) for (let c = 2; c < 17; c++) { x.fillStyle = cols[6]; x.fillRect(ox + c * s, oy + 380 + r * s, s - 4, s - 4); }
+  });
+  T3.safety = canvasTex(512, 640, (x, w, h) => {
+    x.fillStyle = "#fff4d6"; x.fillRect(0, 0, w, h); x.fillStyle = "#c8302b"; x.fillRect(0, 0, w, 70); x.fillStyle = "#fff"; x.font = "bold 40px Arial"; x.textAlign = "center"; x.fillText("SÉCURITÉ AU LABO", w / 2, 48);
+    x.fillStyle = "#222"; x.font = "bold 28px Arial"; x.textAlign = "left"; ["Lunettes et blouse obligatoires", "Soude : corrosif, gants", "Lames et lamelles : verre fragile", "Rincer à l'eau en cas de projection", "Déchets dans le bac prévu"].forEach((t, i) => { x.fillStyle = "#c8302b"; x.beginPath(); x.arc(44, 130 + i * 90, 12, 0, 7); x.fill(); x.fillStyle = "#222"; x.fillText(t, 72, 140 + i * 90); });
+  });
+  M.epoxy = std(0xffffff, 0.55, 0, { map: T3.epoxy }); M.cabinet = std(0xeef1f4, 0.55); M.gap = std(0x8b939b, 0.7);
+  M.steel = std(0xd9dde2, 0.22, 1); M.alu = std(0xbcc3cb, 0.35, 0.9); M.chrome = std(0xffffff, 0.08, 1);
+  M.black = std(0x1b1d20, 0.42); M.dark = std(0x30353b, 0.5); M.grey = std(0x8a9199, 0.5); M.white = std(0xf3f3ef, 0.38); M.beige = std(0xdcd4c3, 0.5);
+  M.blue = std(0x2b59aa, 0.4); M.red = std(0xc42f29, 0.42); M.standPaint = std(0x3a4a57, 0.45, 0.2); M.wireB = std(0x161616, 0.5); M.ptfe = std(0xf4f4f0, 0.35);
+  M.glass = new THREE.MeshPhysicalMaterial({ color: 0xe6f4ff, roughness: 0.03, transparent: true, opacity: 0.17, clearcoat: 1, clearcoatRoughness: 0.02, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 1.8 });
+  M.pellet = std(0xf7f7f2, 0.55); M.plasticW = std(0xf4f6f8, 0.3, 0, { transparent: true, opacity: 0.9 });
+}
+function envScene() {
+  const s = new THREE.Scene(), bright = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), side: THREE.DoubleSide });
+  const room = new THREE.Mesh(new THREE.BoxGeometry(14, 4, 10), new THREE.MeshBasicMaterial({ color: 0x9aa0a8, side: THREE.BackSide })); room.position.y = 1.6; s.add(room);
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), new THREE.MeshBasicMaterial({ color: 0x4a4e54 })); fl.rotation.x = -Math.PI / 2; fl.position.y = -0.39; s.add(fl);
+  for (const x of [-4, -1.3, 1.3, 4]) for (const z of [-2, 1.5]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.7), bright(7, 7, 6.6)); p.rotation.x = Math.PI / 2; p.position.set(x, 3.55, z); s.add(p); }
+  for (const x of [-2, 2]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), bright(2.6, 3, 3.6)); w.position.set(x, 2, -4.95); s.add(w); }
+  return s;
+}
+function buildRoom(scene) {
+  const floor = mesh(new THREE.PlaneGeometry(24, 24), std(0xffffff, 0.72, 0, { map: T3.floor }), scene); floor.rotation.x = -Math.PI / 2; floor.castShadow = false;
+  const wz = -0.64;
+  mesh(new THREE.PlaneGeometry(18, 1.45), std(0xffffff, 0.35, 0, { map: T3.tiles }), scene, 0, 0.725, wz).castShadow = false;
+  mesh(new THREE.PlaneGeometry(18, 2.0), std(0x3e444b, 0.9), scene, 0, 2.45, wz).castShadow = false;
+  const ceil = mesh(new THREE.PlaneGeometry(24, 24), std(0xf2f3f4, 0.9), scene, 0, 3.4, 0); ceil.rotation.x = Math.PI / 2; ceil.castShadow = false;
+  for (const x of [-3.3, -1.1, 1.1, 3.3]) box(1.2, 0.02, 0.6, new THREE.MeshBasicMaterial({ color: 0xffffff }), scene, x, 3.39, 0.2).castShadow = false;
+  for (const wx of [-1.1, 1.1, 3.3, -3.3]) {
+    mesh(new THREE.PlaneGeometry(1.5, 1.05), new THREE.MeshBasicMaterial({ map: T3.sky }), scene, wx, 2.05, wz + 0.004).castShadow = false;
+    for (const [w, h, x, y] of [[1.6, 0.05, 0, 0.55], [1.6, 0.05, 0, -0.55], [0.05, 1.15, -0.78, 0], [0.05, 1.15, 0.78, 0], [0.035, 1.05, 0, 0]]) box(w, h, 0.05, M.white, scene, wx + x, 2.05 + y, wz + 0.02);
+    box(1.7, 0.035, 0.14, M.white, scene, wx, 1.47, wz + 0.06);
+  }
+  const bl = 7.6;
+  box(bl, 0.04, 0.84, M.epoxy, scene, 0, BENCH - 0.02, -0.22);
+  box(bl - 0.08, BENCH - 0.14, 0.74, M.cabinet, scene, 0, (BENCH - 0.14) / 2 + 0.1, -0.25);
+  box(bl - 0.1, 0.1, 0.7, M.dark, scene, 0, 0.05, -0.28);
+  for (let i = 0; i <= 12; i++) { const x = -bl / 2 + 0.05 + i * ((bl - 0.1) / 12); box(0.006, BENCH - 0.16, 0.004, M.gap, scene, x, (BENCH - 0.14) / 2 + 0.1, 0.122); if (i < 12) box(0.18, 0.014, 0.02, M.steel, scene, x + (bl - 0.1) / 24, BENCH - 0.14, 0.135); }
+  box(bl, 0.14, 0.05, std(0x3e444b, 0.5), scene, 0, BENCH + 0.07, -0.6);
+  for (let x = -3.4; x <= 3.4; x += 0.85) { box(0.08, 0.08, 0.012, M.white, scene, x, BENCH + 0.07, -0.57); for (const dx of [-0.012, 0.012]) cyl(0.004, 0.004, 0.004, M.black, scene, x + dx, BENCH + 0.07, -0.5635, 10).rotation.x = Math.PI / 2; }
+  mesh(new THREE.PlaneGeometry(1.5, 0.94), std(0xffffff, 0.7, 0, { map: T3.poster }), scene, -2.2, 2.25, wz + 0.006).castShadow = false;
+  mesh(new THREE.PlaneGeometry(0.5, 0.62), std(0xffffff, 0.7, 0, { map: T3.safety }), scene, 1.0, 2.15, wz + 0.006).castShadow = false;
+  // paillasse voisine : verrerie en attente, pour donner de la vie à la salle
+  for (const [x, r, h, m] of [[-1.6, 0.04, 0.11, M.glass], [-1.48, 0.03, 0.09, M.glass], [1.9, 0.035, 0.13, M.glass], [2.05, 0.02, 0.2, M.glass]]) cyl(r, r, h, m, scene, x, BENCH + h / 2, -0.35, 28, true).castShadow = false;
+}
+
+/* ------------------------------------------------------------ matériel de la manip (tout dans le groupe g, origine = dessus de la paillasse) */
+const TOOLS = {};
+function tool(name, obj, anchor = [0, 0, 0], grab = false) { obj.userData.tool = name; obj.traverse((o) => (o.userData.tool = name)); TOOLS[name] = { obj, anchor: V3(anchor), grab, home: obj.position.clone(), homeRot: obj.rotation.clone() }; return obj; }
+const X = {};
+function rboxGeo(w, h, d, r, seg = 3) {
+  r = Math.min(r, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4);
+  const s = new THREE.Shape(), x = -w / 2 + r, y = -h / 2 + r, W = w - 2 * r, H = h - 2 * r, c = Math.min(r, W / 2, H / 2);
+  s.moveTo(x + c, y); s.lineTo(x + W - c, y); s.quadraticCurveTo(x + W, y, x + W, y + c); s.lineTo(x + W, y + H - c); s.quadraticCurveTo(x + W, y + H, x + W - c, y + H);
+  s.lineTo(x + c, y + H); s.quadraticCurveTo(x, y + H, x, y + H - c); s.lineTo(x, y + c); s.quadraticCurveTo(x, y, x + c, y);
+  const g = new THREE.ExtrudeGeometry(s, { depth: d - 2 * r, bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelSegments: seg, curveSegments: 6 }); g.center(); return g;
+}
+function rbox(w, h, d, r, mat, parent, x, y, z) { return mesh(rboxGeo(w, h, d, r), mat, parent, x, y, z); }
+function knurlCap(parent, r, h, mat, x, y, z, n = 28) { const cap = cyl(r, r, h, mat, parent, x, y, z, 48); for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, b = box(0.0024, h * 0.86, 0.0022, mat, cap, Math.cos(a) * r, 0, Math.sin(a) * r); b.rotation.y = -a; } cyl(r * 0.92, r * 0.92, 0.0015, mat, cap, 0, h / 2 + 0.0007, 0, 48); return cap; }
+function lathe(prof, mat, parent, x, y, z, seg = 48) { return mesh(new THREE.LatheGeometry(prof.map((p) => new THREE.Vector2(p[0], p[1])), seg), mat, parent, x, y, z); }
+function feet(parent, w, d, y = 0, r = 0.006) { for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(r, r * 1.1, 0.006, M.rubber, parent, (sx * w) / 2, y + 0.003, (sz * d) / 2, 16); }
+function key(parent, w, h, x, y, z, label, mat = M.keyGrey, fg = "#f1f1ee") { const k = rbox(w, h, 0.006, 0.0015, mat, parent, x, y, z); if (label) print(w * 0.9, h * 0.6, k, 0, 0, 0.0032, [{ t: label, b: true, s: 0.95, c: fg }]); return k; }
+function knobDial(parent, x, y, z, r, mat = M.black) {
+  const k = cyl(r, r * 1.06, r * 1.1, mat, parent, x, y, z, 32); k.rotation.x = Math.PI / 2; box(r * 0.22, r * 0.85, 0.0015, M.white, k, 0, r * 0.5, r * 0.56).rotation.x = -Math.PI / 2;
+  const tex = canvasTex(256, 256, (c, w) => { c.clearRect(0, 0, w, w); c.strokeStyle = "#e9e9e4"; c.lineWidth = 6; for (let i = 0; i <= 10; i++) { const a = -Math.PI * 0.75 + (i / 10) * Math.PI * 1.5; c.beginPath(); c.moveTo(128 + Math.cos(a) * 92, 128 + Math.sin(a) * 92); c.lineTo(128 + Math.cos(a) * (i % 5 ? 104 : 114), 128 + Math.sin(a) * (i % 5 ? 104 : 114)); c.stroke(); } });
+  mesh(new THREE.PlaneGeometry(r * 3.2, r * 3.2), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.6 }), parent, x, y, z + 0.0005).castShadow = false; return k;
+}
+function labelTex(title, lines, band = "#1e4f9c", w = 768, h = 384, ghs = false) {
+  return canvasTex(w, h, (x) => {
+    x.fillStyle = "#fbfbf8"; x.fillRect(0, 0, w, h); x.fillStyle = band; x.fillRect(0, 0, w, 54); x.fillRect(0, h - 26, w, 26);
+    x.fillStyle = "#fff"; x.font = "bold 28px Arial"; x.textAlign = "left"; x.fillText("LABOCHEM · réactif pour analyses", 24, 38);
+    x.fillStyle = "#111"; x.font = "bold 70px Arial"; x.fillText(title, 28, 140); x.font = "30px Arial"; x.fillStyle = "#333"; lines.forEach((l, i) => x.fillText(l, 28, 192 + i * 40));
+    if (ghs) { const cx = w - 120, cy = 200, s = 85; x.save(); x.translate(cx, cy); x.rotate(Math.PI / 4); x.fillStyle = "#d81e1e"; x.fillRect(-s, -s, 2 * s, 2 * s); x.fillStyle = "#fff"; x.fillRect(-s + 10, -s + 10, 2 * s - 20, 2 * s - 20); x.restore(); x.strokeStyle = "#111"; x.lineWidth = 7; x.lineCap = "round"; x.beginPath(); x.moveTo(cx - 55, cy - 35); x.lineTo(cx - 18, cy - 62); x.moveTo(cx - 55, cy - 35); x.lineTo(cx - 36, cy - 4); x.moveTo(cx + 18, cy - 62); x.lineTo(cx + 55, cy - 35); x.lineTo(cx + 36, cy - 4); x.stroke(); x.fillStyle = "#111"; x.fillRect(cx - 62, cy + 10, 52, 34); x.fillRect(cx + 10, cy + 10, 52, 34); }
+  });
+}
+function dropper(parent, x, z, color, name, zone, liq = 0xeef3f8) {
+  const d = new THREE.Group(); d.position.set(x, 0, z); parent.add(d);
+  lathe([[0, 0], [0.014, 0], [0.016, 0.003], [0.016, 0.05], [0.013, 0.056], [0.008, 0.06], [0.008, 0.066], [0, 0.066]], dropper.amber || (dropper.amber = new THREE.MeshPhysicalMaterial({ color: 0x7a3a0c, roughness: 0.08, transparent: true, opacity: 0.85, clearcoat: 1, clearcoatRoughness: 0.05 })), d, 0, 0, 0, 36).castShadow = false;
+  const dp = new THREE.Group(); d.add(dp); d.userData.dp = dp; dp.userData.liq = liq;
+  knurlCap(dp, 0.0095, 0.012, M.black, 0, 0.072, 0, 20); dp.userData.teat = lathe([[0, 0], [0.0052, 0], [0.006, 0.004], [0.0074, 0.012], [0.0077, 0.02], [0.0064, 0.027], [0.003, 0.031], [0, 0.032]], std(0x1c1c1e, 0.75), dp, 0, 0.077, 0, 24); // tétine
+  cyl(0.0026, 0.0013, 0.062, M.glass, dp, 0, 0.035, 0, 12).castShadow = false; cyl(0.0017, 0.0011, 0.02, liquidMat(liq, 0.85), dp, 0, 0.016, 0, 10).castShadow = false; // pipette compte-gouttes
+  mesh(new THREE.CylinderGeometry(0.0163, 0.0163, 0.03, 36, 1, true, -1.3, 2.6), std(0xffffff, 0.6, 0, { map: canvasTex(512, 200, (c, w, h) => { c.fillStyle = "#fff"; c.fillRect(0, 0, w, h); c.fillStyle = color; c.fillRect(0, 0, w, 36); c.fillStyle = "#111"; c.font = "bold 46px Arial"; c.textAlign = "center"; c.fillText(name, w / 2, 100); c.font = "30px Arial"; c.fillText("zone de virage " + zone, w / 2, 150); }) }), d, 0, 0.03, 0).castShadow = false;
+  return d;
+}
+
+// verre lisible : liseré sombre sur les bords vus en rasant (réfraction), comme une vraie paroi de verre
+// couleurs fidèles : les codes hexadécimaux des matériaux sont pensés en sRGB (comme sur une photo) ; three r128 les lit en linéaire, ce qui délave tout
+function linColors(root) {
+  const seen = new Set();
+  root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) { if (seen.has(m) || m.isShaderMaterial || !m.color || m.userData.lin) continue; seen.add(m); m.userData.lin = true; m.color.convertSRGBToLinear(); if (m.sheenColor) m.sheenColor.convertSRGBToLinear(); } });
+}
+
+function glassEdges(root) {
+  const mat = new THREE.ShaderMaterial({ uniforms: { c: { value: new THREE.Color(0x3d5468) }, a: { value: 0.75 } }, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    vertexShader: "varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
+    fragmentShader: "uniform vec3 c; uniform float a; varying vec3 vN; varying vec3 vV; void main(){ float r = 1.0 - abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(c, a * pow(r, 2.5)); }" });
+  const list = []; root.traverse((o) => { if (o.isMesh && o.material === M.glass) list.push(o); });
+  for (const o of list) { const e = new THREE.Mesh(o.geometry, mat); e.renderOrder = (o.renderOrder || 0) + 1; e.castShadow = false; e.raycast = () => {}; o.add(e); }
+}
+
+/* ============================================================ Turgescence et plasmolyse : épiderme d'écaille d'oignon violet
+   1ʳᵉ Bac Sciences expérimentales · SVT · « Mécanismes d'absorption de l'eau et des sels minéraux chez les plantes vertes »
+   (diapo du cours : TP « échanges d'eau entre les cellules et leur milieu de vie »).
+     • Prélever deux fragments de l'épiderme d'une écaille d'oignon violet (cellules à vacuole colorée par les anthocyanes).
+     • Placer chaque fragment 3 min dans un verre de montre : l'un contient NaCl à 2 g/L, l'autre NaCl à 50 g/L.
+     • Monter chaque fragment entre lame et lamelle dans une goutte de la solution correspondante.
+     • Observer au microscope optique au faible puis au moyen et au fort grossissement (G = objectif × oculaire).
+   Résultats : 2 g/L (milieu hypotonique par rapport au suc vacuolaire) → l'eau entre, la vacuole occupe toute la cellule : turgescence.
+               50 g/L (milieu hypertonique) → l'eau sort de la vacuole, elle rétrécit, la membrane cytoplasmique se décolle
+               de la paroi (membrane squelettique) : plasmolyse. L'eau va du milieu hypotonique vers le milieu hypertonique : osmose.
+   Modèle (temps accéléré, signalé dans WHY) : suc vacuolaire de l'oignon ≈ isotonique à NaCl 7 g/L (≈ 0,24 osmol/L).
+     Degré de plasmolyse p (0 = turgescente, 1 = plasmolyse nette) → cible pc = ((c − 7) / 18)^0,8 bornée à [0, 1],
+     constante de temps 0,7 min pour la sortie d'eau, 1,8 min pour le retour (déplasmolyse). Chaque cellule a son propre seuil
+     (les cellules ne se plasmolysent pas toutes en même temps, comme sur une vraie préparation).
+   Microscope : objectifs ×4, ×10, ×40 (parfocaux), oculaires ×10 (indice de champ 18 mm) et ×15 (12 mm) : G de ×40 à ×600 ;
+     profondeur de champ ≈ 60 µm (×4), 15 µm (×10), 3 µm (×40) ; distance de travail du ×40 ≈ 0,4 mm : la vis macrométrique
+     avec le ×40 écrase la lamelle. */
+const CC_ISO = 7; // g/L de NaCl : isotonique au suc vacuolaire (modèle)
+const MIC = [0.24, 0, -0.17]; // microscope (axe optique au-dessus de la platine)
+const MAX_Z = 14500, ZF = { 4: 12000, 10: 12012, 40: 12005 }, DOF = { 4: 60, 10: 15, 40: 3 }, OBJS = [4, 10, 40];
+const STAGE_Y0 = 0.1363; // dessus de la platine à z = 0 (repère du microscope) ; z en µm
+const WG = { A: [-0.2, 0, 0.05], B: [-0.085, 0, 0.05] }; // verres de montre
+const SL = [[-0.005, 0, 0.175], [0.085, 0, 0.175]]; // lames 1 et 2
+const clk = (min) => { const s = Math.max(0, Math.round(min * 60)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+const setCol = (mat, hex) => { mat.color.set(hex).convertSRGBToLinear(); };
+const g1 = (x) => fmt(x, 1);
+const LIQS = [];
+const tiltOff = (p, th) => [p[0] * Math.cos(th) - p[1] * Math.sin(th), p[0] * Math.sin(th) + p[1] * Math.cos(th)];
+const WG_A = 4.02, wgH = (V) => Math.sqrt((2 * WG_A * V * 1e-6) / Math.PI); // verre de montre ≈ paraboloïde y = a r² (fond intérieur)
+function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return (s % 1000003) / 1000003; }; }
+
+/* fragment d'épiderme : contour déchiré (forme commune à la 3D et à la vue au microscope) */
+function fragOutline(seed, n = 48) {
+  const R = rng(seed * 7 + 3), a = 2500 + R() * 500, b = 1600 + R() * 400, f1 = R() * 6.28, f2 = R() * 6.28, rot = (R() - 0.5) * 0.5, pts = [];
+  for (let i = 0; i < n; i++) { const t = (i / n) * Math.PI * 2, k = 1 + 0.09 * Math.sin(3 * t + f1) + 0.05 * Math.sin(7 * t + f2) + (R() - 0.5) * 0.06; const x = Math.cos(t) * a * k, y = Math.sin(t) * b * k; pts.push([x * Math.cos(rot) - y * Math.sin(rot), x * Math.sin(rot) + y * Math.cos(rot)]); }
+  return pts;
+}
+function filmGeo(seed, thick) { const o = fragOutline(seed, 40), sc = thick ? 1.6e-6 : 1.5e-6, sh = new THREE.Shape(); o.forEach((p, i) => (i ? sh.lineTo(p[0] * sc, -p[1] * sc) : sh.moveTo(p[0] * sc, -p[1] * sc))); return thick ? new THREE.ExtrudeGeometry(sh, { depth: 0.0022, bevelEnabled: false }) : new THREE.ShapeGeometry(sh); }
+
+/* ------------------------------------------------------------ matériel */
+function buildBench(g) {
+  Object.assign(M.glass, { opacity: 0.17, roughness: 0.02, color: new THREE.Color(0xe6f4ff), envMapIntensity: 1.4, clearcoat: 1, clearcoatRoughness: 0.02 });
+  M.rubber = std(0x15171a, 0.9); M.keyGrey = std(0x4b525b, 0.5); M.hdpe = new THREE.MeshPhysicalMaterial({ color: 0xf6f7f5, roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.3 });
+  M.lcdBezel = std(0x111317, 0.35); M.pp = new THREE.MeshPhysicalMaterial({ color: 0x8e98a3, roughness: 0.55, clearcoat: 0.2 });
+  M.enamel = new THREE.MeshPhysicalMaterial({ color: 0xf1efe8, roughness: 0.3, clearcoat: 0.7, clearcoatRoughness: 0.18 }); M.mDark = std(0x2b2f35, 0.42, 0.35); M.knurl = std(0x1d2024, 0.7);
+  M.slide = new THREE.MeshPhysicalMaterial({ color: 0xd8f0ea, roughness: 0.04, transparent: true, opacity: 0.38, clearcoat: 1, clearcoatRoughness: 0.03, depthWrite: false, side: THREE.DoubleSide });
+  const noShadow = (m, ro) => { m.castShadow = false; if (ro) m.renderOrder = ro; return m; };
+  const liq = (hex, op) => { const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: 0.25, reflectivity: 0.1, envMapIntensity: 0.3, transparent: true, opacity: op, clearcoat: 0, depthWrite: false }); LIQS.push(m); return m; };
+  X.noShadow = noShadow; X.liq = liq;
+  X.filmM = new THREE.MeshPhysicalMaterial({ color: 0xa3376f, roughness: 0.5, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false, clearcoat: 0.4 });
+  X.thickM = std(0xe8cfd8, 0.6, 0, { side: THREE.DoubleSide });
+
+  // --- planche, demi-oignon violet coupé, écaille détachée
+  const bd = new THREE.Group(); bd.position.set(-0.47, 0, 0.03); g.add(bd); X.board = bd;
+  rbox(0.24, 0.012, 0.17, 0.004, std(0xf3f1ea, 0.55), bd, 0, 0.006, 0);
+  const on = new THREE.Group(); on.position.set(-0.05, 0.012, -0.02); bd.add(on); X.onion = on;
+  const OP = [[0.001, 0], [0.018, 0.002], [0.036, 0.011], [0.047, 0.028], [0.047, 0.047], [0.039, 0.064], [0.025, 0.078], [0.011, 0.09], [0.004, 0.102], [0.001, 0.106]];
+  const layer = (s, mat, dz) => { const p = OP.map((q) => new THREE.Vector2(q[0] * s, q[1] * (0.55 + 0.45 * s))); const m = mesh(new THREE.LatheGeometry(p, 40, Math.PI / 2, Math.PI), mat, on, 0, 0, dz); m.material.side = THREE.DoubleSide; return m; };
+  layer(1.02, std(0x7e2c46, 0.75), 0); // peau sèche
+  const face = (s, hex, dz) => { const sh = new THREE.Shape(); OP.forEach((q, i) => (i ? sh.lineTo(q[0] * s, q[1] * (0.55 + 0.45 * s)) : sh.moveTo(q[0] * s, q[1] * (0.55 + 0.45 * s)))); for (let i = OP.length - 1; i >= 0; i--) sh.lineTo(-OP[i][0] * s, OP[i][1] * (0.55 + 0.45 * s)); const m = mesh(new THREE.ShapeGeometry(sh), std(hex, 0.6), on, 0, 0, dz); m.castShadow = false; return m; };
+  [1.0, 0.82, 0.64, 0.47, 0.31, 0.16].forEach((s, i) => { face(s, 0x9a2f63, 0.0004 + i * 0.0004); face(s - 0.035, i === 5 ? 0xf1e6ea : 0xf6eef0, 0.0006 + i * 0.0004); });
+  const ec = new THREE.Group(); ec.position.set(0.055, 0.012, 0.035); ec.rotation.y = 0.35; bd.add(ec); X.ecaille = ec;
+  const r = 0.034, th0 = Math.PI / 2 - 0.62;
+  const outS = mesh(new THREE.CylinderGeometry(r, r, 0.07, 24, 1, true, th0, 1.24), std(0xa23a6c, 0.5, 0, { side: THREE.DoubleSide }), ec, 0, 0, 0); outS.rotation.z = Math.PI / 2;
+  const inS = mesh(new THREE.CylinderGeometry(r - 0.004, r - 0.004, 0.07, 24, 1, true, th0, 1.24), std(0xf4ecef, 0.6, 0, { side: THREE.DoubleSide }), ec, 0, 0, 0); inS.rotation.z = Math.PI / 2;
+  [-0.035, 0.035].forEach((x) => { const sh = new THREE.Shape(); for (let i = 0; i <= 12; i++) { const a = th0 + (1.24 * i) / 12; sh[i ? "lineTo" : "moveTo"](Math.sin(a) * r, Math.cos(a) * r); } for (let i = 12; i >= 0; i--) { const a = th0 + (1.24 * i) / 12; sh.lineTo(Math.sin(a) * (r - 0.004), Math.cos(a) * (r - 0.004)); } const m = mesh(new THREE.ShapeGeometry(sh), std(0xf2e4ea, 0.6, 0, { side: THREE.DoubleSide }), ec, x, 0, 0); m.rotation.y = Math.PI / 2; m.rotation.z = Math.PI / 2; m.rotation.x = 0; });
+  ec.children.forEach((m) => (m.position.y -= r * Math.cos(0.62) - 0.0005));
+  ec.position.y = 0.012 - (r - 0.004) * 0 + 0.0;
+  X.ecTop = () => gpos(X.ecaille, [0, r - r * Math.cos(0.62) + 0.0015, 0]);
+  X.peel = mesh(new THREE.PlaneGeometry(0.012, 0.016), new THREE.MeshBasicMaterial({ color: 0xf6eef2, transparent: true, opacity: 0.9, side: THREE.DoubleSide }), g, 0, 0, 0); X.peel.visible = false; X.peel.castShadow = false; // zone déjà pelée
+  tool("oignon", bd, [-0.0, 0.11, 0]);
+
+  // --- scalpel et pince fine
+  const sc = new THREE.Group(); sc.position.set(-0.33, 0.0025, 0.16); g.add(sc); X.scalpel = sc;
+  rbox(0.085, 0.004, 0.009, 0.0015, M.steel, sc, -0.0, 0, 0);
+  const bsh = new THREE.Shape(); bsh.moveTo(0.04, -0.004); bsh.lineTo(0.067, -0.0005); bsh.lineTo(0.062, 0.0035); bsh.lineTo(0.04, 0.0035); const bl = mesh(new THREE.ShapeGeometry(bsh), std(0xe9edf1, 0.15, 1, { side: THREE.DoubleSide }), sc, 0, 0, 0); bl.rotation.x = -Math.PI / 2;
+  tool("scalpel", sc, [0, 0.03, 0]); const scz = box(0.12, 0.02, 0.03, new THREE.MeshBasicMaterial({ visible: false }), sc, 0.01, 0, 0); scz.userData.tool = "scalpel";
+  const pi = new THREE.Group(); pi.position.set(-0.32, 0.003, 0.205); g.add(pi); X.pince = pi;
+  for (const s of [-1, 1]) { const arm = rbox(0.11, 0.0022, 0.0045, 0.001, M.steel, pi, 0, 0, s * 0.0034); arm.rotation.y = s * 0.045; }
+  rbox(0.012, 0.004, 0.012, 0.002, M.steel, pi, -0.054, 0, 0);
+  tool("pince", pi, [0, 0.03, 0]); const piz = box(0.12, 0.02, 0.03, new THREE.MeshBasicMaterial({ visible: false }), pi, 0, 0, 0); piz.userData.tool = "pince";
+
+  // --- flacons de NaCl 2 g/L et 50 g/L
+  const bottle = (x, z, capHex, tex, name, rr = 0.03) => {
+    const b = new THREE.Group(); b.position.set(x, 0, z); g.add(b);
+    noShadow(lathe([[0, 0], [rr - 0.003, 0], [rr, 0.004], [rr, 0.1], [rr - 0.004, 0.11], [0.016, 0.122], [0.0155, 0.134], [0, 0.134]], M.glass, b, 0, 0, 0, 48));
+    const lm = liq(0xdcecf6, 0.45); b.userData.liq = noShadow(cyl(rr - 0.003, rr - 0.003, 0.085, lm, b, 0, 0.047, 0, 32), 2);
+    b.userData.cap = knurlCap(b, 0.0175, 0.018, std(capHex, 0.45), 0, 0.143, 0, 24);
+    noShadow(mesh(new THREE.CylinderGeometry(rr + 0.0005, rr + 0.0005, 0.058, 48, 1, true, -1.3, 2.6), std(0xffffff, 0.6, 0, { map: tex }), b, 0, 0.055, 0));
+    tool(name, b, [0, 0.16, 0]); return b;
+  };
+  X.b2 = bottle(-0.235, -0.12, 0x2b6fc0, labelTex("NaCl 2 g/L", ["chlorure de sodium (Na⁺ + Cl⁻)", "C = 2 g/L"], "#2b6fc0"), "nacl2");
+  X.b50 = bottle(-0.115, -0.15, 0xb2342a, labelTex("NaCl 50 g/L", ["chlorure de sodium (Na⁺ + Cl⁻)", "C = 50 g/L"], "#b2342a"), "nacl50");
+  X.arcPour = noShadow(mesh(new THREE.BufferGeometry(), liq(0xd6e9f7, 0.8), g), 3); X.arcPour.visible = false;
+
+  // --- verres de montre A et B (cartons devant)
+  for (const k of ["A", "B"]) {
+    const w = new THREE.Group(); w.position.set(...WG[k]); g.add(w); X["wg" + k] = w;
+    const out = [[0, 0], [0.015, 0.0006], [0.028, 0.003], [0.037, 0.007], [0.04, 0.0092]], inn = out.map((p) => [p[0], p[1] + 0.0012]).reverse();
+    noShadow(lathe([...out, [0.0405, 0.0102], ...inn], M.glass, w, 0, 0, 0, 56), 3);
+    const lm = liq(0xd9ebf7, 0.5); X["wgLiq" + k] = noShadow(mesh(new THREE.BufferGeometry(), lm, w), 3.5); X["wgLiq" + k].visible = false;
+    const card = print(0.075, 0.03, g, WG[k][0], 0.0008, WG[k][2] + 0.062, [{ t: "Verre " + k, b: true, s: 0.42, y: 0.32 }, { t: k === "A" ? "NaCl 2 g/L" : "NaCl 50 g/L", s: 0.36, y: 0.74, c: k === "A" ? "#1f5fae" : "#a32b22" }], "#fffdf6", "#1b2430"); card.rotation.x = -Math.PI / 2;
+    tool("wg" + k, w, [0, 0.03, 0]); const z = cyl(0.042, 0.042, 0.02, new THREE.MeshBasicMaterial({ visible: false }), w, 0, 0.008, 0, 16); z.userData.tool = "wg" + k;
+  }
+
+  // --- pipettes compte-gouttes (une par verre) dans leur portoir
+  const rk = new THREE.Group(); rk.position.set(0.03, 0, -0.05); g.add(rk);
+  rbox(0.06, 0.03, 0.03, 0.004, std(0xdfe3e8, 0.45), rk, 0, 0.015, 0); for (const s of [-1, 1]) cyl(0.0045, 0.0045, 0.002, M.black, rk, s * 0.015, 0.0305, 0, 16);
+  print(0.05, 0.012, rk, 0, 0.016, 0.0152, [{ t: "PIPETTES COMPTE-GOUTTES", b: true, s: 0.5, c: "#33404d" }]);
+  const pip = (k, x, col) => {
+    const p = new THREE.Group(); p.position.set(x, 0.008, -0.05); g.add(p); X["pip" + k] = p;
+    noShadow(cyl(0.0013, 0.0028, 0.085, M.plasticW || std(0xf4f6f8, 0.3), p, 0, 0.0425, 0, 14), 3);
+    const bulb = sph(1, std(0xf7f8f6, 0.35, 0, { transparent: true, opacity: 0.92 }), p, 0, 0.1, 0); bulb.scale.set(0.0062, 0.013, 0.0062); p.userData.bulb = bulb;
+    cyl(0.0031, 0.0031, 0.006, std(col, 0.45), p, 0, 0.083, 0, 16); // bague de couleur
+    const ll = noShadow(cyl(0.0011, 0.0011, 1, liq(0xd6e9f7, 0.85), p, 0, 0, 0, 8), 3.5); ll.visible = false; p.userData.liq = ll;
+    print(0.012, 0.006, p, 0, 0.083, 0.0034, [{ t: k, b: true, s: 0.9, c: "#ffffff" }]);
+    tool("pip" + k, p, [0, 0.12, 0]); const z = cyl(0.008, 0.008, 0.12, new THREE.MeshBasicMaterial({ visible: false }), p, 0, 0.06, 0, 8); z.userData.tool = "pip" + k;
+  };
+  pip("A", 0.015, 0x2b6fc0); pip("B", 0.045, 0xb2342a);
+  X.drop = noShadow(sph(0.0016, liq(0xd6e9f7, 0.85), g, 0, 0, 0), 3.5); X.drop.visible = false;
+
+  // --- lames porte-objet (bord dépoli numéroté) et boîte de lamelles
+  for (let i = 0; i < 2; i++) {
+    const s = new THREE.Group(); s.position.set(SL[i][0], 0.00055, SL[i][2]); g.add(s); X["lame" + i] = s;
+    noShadow(rbox(0.076, 0.0011, 0.026, 0.0004, M.slide, s, 0, 0, 0), 3);
+    const fr = print(0.019, 0.024, s, 0.027, 0.0006, 0, [{ t: String(i + 1), b: true, s: 0.5, c: "#33404d" }], "#eef0ee", "#222"); fr.rotation.x = -Math.PI / 2; fr.rotation.z = Math.PI / 2;
+    const dr = noShadow(sph(1, liq(0xd6e9f7, 0.6), s, -0.004, 0.0006, 0), 3.5); dr.scale.set(0.0001, 0.0001, 0.0001); dr.visible = false; s.userData.drop = dr;
+    const lp = new THREE.Group(); lp.position.set(-0.004 - 0.011, 0.0008, 0); s.add(lp); lp.visible = false; s.userData.lamP = lp; // charnière de la lamelle (côté gauche)
+    noShadow(box(0.022, 0.00022, 0.022, M.slide, lp, 0.011, 0, 0), 4);
+    tool("lame" + (i + 1), s, [0, 0.02, 0]); const z = box(0.08, 0.012, 0.03, new THREE.MeshBasicMaterial({ visible: false }), s, 0, 0.004, 0); z.userData.tool = "lame" + (i + 1);
+  }
+  const lb = new THREE.Group(); lb.position.set(0.16, 0, 0.2); g.add(lb);
+  rbox(0.034, 0.008, 0.034, 0.002, std(0x3c4a5a, 0.5), lb, 0, 0.004, 0); for (let i = 0; i < 6; i++) noShadow(box(0.022, 0.00025, 0.022, M.slide, lb, 0, 0.0085 + i * 0.0004, 0), 3);
+  noShadow(rbox(0.034, 0.006, 0.034, 0.002, std(0xe8eef2, 0.1, 0, { transparent: true, opacity: 0.3, depthWrite: false }), lb, 0, 0.0115, 0), 3);
+  const lbl = print(0.03, 0.01, lb, 0, 0.0146, 0.008, [{ t: "Lamelles 22 × 22", b: true, s: 0.55, c: "#1b2430" }], "#ffffff"); lbl.rotation.x = -Math.PI / 2;
+  tool("lamelles", lb, [0, 0.03, 0]); X.lamBox = lb;
+
+  // --- microscope optique monoculaire (émail blanc, revolver à 3 objectifs, platine à valets, vis macro/micrométriques)
+  const mc = new THREE.Group(); mc.position.set(...MIC); g.add(mc); X.mic = mc;
+  rbox(0.15, 0.032, 0.2, 0.012, M.enamel, mc, 0, 0.016, -0.005); feet(mc, 0.12, 0.17);
+  rbox(0.11, 0.004, 0.13, 0.003, M.mDark, mc, 0, 0.0335, 0.0);
+  cyl(0.02, 0.022, 0.006, M.mDark, mc, 0, 0.035, 0.025, 32); X.lampM = std(0xfff7e0, 0.2, 0, { emissive: 0xfff2c8, emissiveIntensity: 0.02 }); cyl(0.013, 0.013, 0.0025, X.lampM, mc, 0, 0.0385, 0.025, 28); // lampe
+  rbox(0.042, 0.2, 0.036, 0.01, M.enamel, mc, 0, 0.13, -0.08); // potence
+  { const arm = mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([[0, 0.2, -0.085], [0, 0.245, -0.075], [0, 0.262, -0.04], [0, 0.258, -0.01]].map(V3)), 24, 0.017, 16, false), M.enamel, mc); arm.castShadow = true; }
+  rbox(0.05, 0.034, 0.075, 0.01, M.enamel, mc, 0, 0.245, -0.02); // tête
+  const tube = cyl(0.0105, 0.0105, 0.07, M.mDark, mc, 0, 0.285, 0.008, 24); tube.rotation.x = 0.62;
+  const ocG = new THREE.Group(); ocG.position.set(0, 0.315, 0.03); ocG.rotation.x = 0.62; mc.add(ocG); X.ocG = ocG;
+  cyl(0.0112, 0.0112, 0.022, M.black, ocG, 0, 0.0, 0, 24); cyl(0.0125, 0.0118, 0.012, M.rubber, ocG, 0, 0.016, 0, 24); X.ocLbl = print(0.018, 0.007, ocG, 0, -0.002, 0.0114, [{ t: "10×", b: true, s: 0.8, c: "#ffffff" }]);
+  print(0.06, 0.01, mc, 0, 0.245, 0.0181, [{ t: "BIOSCOPE 40×–600×", b: true, s: 0.62, c: "#2b3440" }]);
+  // revolver : l'objectif actif est à l'avant, sur l'axe optique (x = 0, z = 0.025)
+  const rv = new THREE.Group(); rv.position.set(0, 0.214, 0.003); mc.add(rv); X.rev = rv;
+  cyl(0.03, 0.026, 0.012, M.chrome, rv, 0, 0, 0, 40); cyl(0.024, 0.03, 0.006, M.mDark, rv, 0, 0.008, 0, 40);
+  const objCol = { 4: 0xd0302a, 10: 0xe4c022, 40: 0x2b7fd6 }, objLen = { 4: 0.03, 10: 0.036, 40: 0.044 };
+  X.objs = {}; OBJS.forEach((o, i) => { const a = (i * 2 * Math.PI) / 3, og = new THREE.Group(); og.position.set(Math.sin(a) * 0.022, -0.006, Math.cos(a) * 0.022); rv.add(og); X.objs[o] = og; og.userData.a = a;
+    const Lh = objLen[o]; cyl(0.0085, 0.0095, Lh * 0.7, M.chrome, og, 0, -Lh * 0.35, 0, 24); cyl(0.0096, 0.0096, 0.0035, std(objCol[o], 0.35), og, 0, -Lh * 0.25, 0, 24); cyl(o === 40 ? 0.0045 : 0.0065, 0.0075, Lh * 0.3, M.chrome, og, 0, -Lh * 0.85, 0, 24); cyl(0.0022, 0.0022, 0.0006, std(0x223344, 0.05, 0.5), og, 0, -Lh - 0.0003, 0, 16);
+    const lb2 = print(0.012, 0.0045, og, 0, -Lh * 0.48, 0.0089, [{ t: o + "×", b: true, s: 0.9, c: "#222222" }]); lb2.userData.o = o; });
+  // platine mobile (monte / descend avec les vis), valets, condenseur et diaphragme
+  const stg = new THREE.Group(); stg.position.set(0, STAGE_Y0 - 0.0045, 0.025); mc.add(stg); X.stage = stg;
+  rbox(0.12, 0.009, 0.11, 0.004, M.mDark, stg, 0, 0, -0.005); cyl(0.009, 0.009, 0.0092, M.black, stg, 0, 0, 0, 24);
+  rbox(0.03, 0.03, 0.03, 0.005, M.mDark, stg, 0, -0.016, -0.075);
+  X.clips = []; for (const s of [-1, 1]) { const c = new THREE.Group(); c.position.set(s * 0.03, 0.0052, -0.03); stg.add(c); cyl(0.003, 0.003, 0.004, M.chrome, c, 0, 0.001, 0, 12); const rd = rod([0, 0.0025, 0], [0, 0.0016, 0.034], 0.0011, M.chrome, c); rd.castShadow = false; X.clips.push(c); }
+  cyl(0.016, 0.014, 0.022, M.mDark, mc, 0, 0.11, 0.025, 28); cyl(0.012, 0.012, 0.002, std(0xcfe2f2, 0.05, 0.3), mc, 0, 0.1215, 0.025, 24); X.diaphLever = rod([0.016, 0.104, 0.025], [0.03, 0.104, 0.04], 0.0012, M.chrome, mc);
+  // vis : macrométrique (grande) et micrométrique (petite), des deux côtés
+  X.knobM_macro = std(0x1d2024, 0.7, 0, { emissive: 0x000000 }); X.knobM_micro = std(0x2a2e33, 0.6, 0, { emissive: 0x000000 }); X.knobs = []; for (const s of [-1, 1]) { const k1 = cyl(0.019, 0.019, 0.012, X.knobM_macro, mc, s * 0.028, 0.105, -0.075, 36); k1.rotation.z = Math.PI / 2; const k2 = cyl(0.011, 0.011, 0.012, X.knobM_micro, mc, s * 0.04, 0.105, -0.075, 30); k2.rotation.z = Math.PI / 2; X.knobs.push(k1, k2); for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; box(0.012, 0.0016, 0.0016, M.rubber, k1, 0, Math.cos(a) * 0.019, Math.sin(a) * 0.019).rotation.x = a; } }
+  rbox(0.004, 0.012, 0.02, 0.0015, M.mDark, mc, 0.0755, 0.017, 0.05); X.dimmer = cyl(0.008, 0.008, 0.006, M.knurl, mc, 0.077, 0.017, 0.02, 24); X.dimmer.rotation.z = Math.PI / 2;
+  tool("micro", mc, [0, 0.34, 0.03]);
+
+  // --- minuteur (temps passé par chaque fragment dans son verre)
+  const tm = new THREE.Group(); tm.position.set(0.36, 0, 0.17); tm.rotation.y = -0.25; g.add(tm); X.timer = tm;
+  rbox(0.07, 0.045, 0.024, 0.006, std(0xf2f2ee, 0.4), tm, 0, 0.0225, 0); rbox(0.06, 0.03, 0.002, 0.002, M.lcdBezel, tm, 0, 0.026, 0.012);
+  X.lcdA = lcd(0.052, 0.012, tm, 0, 0.033, 0.0132, "#bfe8ff", "#0a1420"); X.lcdB = lcd(0.052, 0.012, tm, 0, 0.019, 0.0132, "#ffc9c0", "#140a0a"); X.lcdA.set("A --:--"); X.lcdB.set("B --:--");
+  print(0.06, 0.006, tm, 0, 0.0055, 0.0122, [{ t: "MINUTEUR · temps dans le verre", b: true, s: 0.75, c: "#33404d" }]);
+  tool("minuteur", tm, [0, 0.06, 0]);
+
+  // --- bac à déchets et fiche du TP
+  const bin = new THREE.Group(); bin.position.set(-0.62, 0, -0.36); g.add(bin);
+  noShadow(lathe([[0, 0], [0.04, 0], [0.042, 0.003], [0.046, 0.088], [0.049, 0.09], [0.049, 0.094], [0.044, 0.094], [0.044, 0.09], [0.04, 0.004], [0, 0.004]], M.pp, bin, 0, 0, 0, 40));
+  noShadow(mesh(new THREE.CylinderGeometry(0.0465, 0.044, 0.03, 40, 1, true, -1.2, 2.4), std(0xffffff, 0.6, 0, { map: canvasTex(512, 160, (x, w, h) => { x.fillStyle = "#f2b728"; x.fillRect(0, 0, w, h); x.fillStyle = "#111"; x.font = "bold 44px Arial"; x.textAlign = "center"; x.fillText("DÉCHETS", w / 2, 62); x.font = "bold 30px Arial"; x.fillText("verre, végétaux", w / 2, 108); x.fillRect(0, 140, w, 8); }) }), bin, 0, 0.06, 0));
+  tool("bin", bin, [0, 0.105, 0]);
+  const cah = rbox(0.17, 0.008, 0.23, 0.002, std(0x2b4f7a, 0.6), g, 0.6, 0.004, 0.1); cah.rotation.y = -0.1;
+  print(0.155, 0.215, cah, 0, 0.0045, 0, [{ t: "TP · Échanges d'eau", b: true, s: 0.05, y: 0.08 }, { t: "épiderme d'oignon violet", s: 0.038, y: 0.16 }, { t: "1) un fragment 3 min dans", s: 0.036, y: 0.25 }, { t: "   NaCl 2 g/L, l'autre 50 g/L", s: 0.036, y: 0.31 }, { t: "2) lame + goutte de la même", s: 0.036, y: 0.4 }, { t: "   solution + lamelle", s: 0.036, y: 0.46 }, { t: "3) microscope : ×4 puis ×10", s: 0.036, y: 0.55 }, { t: "   puis ×40 (vis micrométrique)", s: 0.036, y: 0.61 }, { t: "G = objectif × oculaire", b: true, s: 0.038, y: 0.71 }], "#f6f3ea", "#223").rotation.x = -Math.PI / 2;
+  glassEdges(g);
+}
+
+/* ------------------------------------------------------------ état */
+const ST = {};
+const MV = { open: false, obj: 4, oc: 10, z: 2000, light: 0.75, diaph: 0.7, pan: [0, 0], hold: null, dirty: true, last: 0, drag: null };
+function resetState(keepAttempt) { /*fini-reset*/ ST.fini = false;
+  if (STEP) { STEP.skip.clear(); STEP.focus = null; }
+  const att = keepAttempt ? ST.attempts + 1 : 1;
+  if (ST.frags) for (const f of ST.frags) if (f.mesh && f.mesh.parent) f.mesh.parent.remove(f.mesh);
+  Object.assign(ST, {
+    q: [], busy: false, guide: ST.guide === undefined ? true : ST.guide, attempts: att, ev: keepAttempt ? ST.ev : [], flags: {}, simT: 0, acc: ST.acc || 10,
+    gl: { A: { v: 0, c: 0, frag: null, pours: [] }, B: { v: 0, c: 0, frag: null, pours: [] } }, frags: [], seed: 1 + Math.floor(Math.random() * 9e5),
+    sl: [0, 1].map((i) => ({ drop: 0, c: 0, srcG: null, frag: null, lam: 0, bubbles: [], on: false, broken: false, wet: false, dz: (Math.random() - 0.5) * 60, seen: {}, cracks: null })),
+    lamp: false, obs: [null, null], pourArc: null, fall: null, squeeze: null, ans: {}, ansK: {}, miss: 0, tblShown: false, cur: null, peels: 0,
+  });
+  Object.assign(MV, { open: false, obj: 4, oc: 10, z: 2000, light: 0.75, diaph: 0.7, pan: [0, 0], hold: null, dirty: true });
+  for (const k in TOOLS) { const t = TOOLS[k]; if (!t || !t.home) continue; if (t.obj.parent !== L.g && (k === "lame1" || k === "lame2")) L.g.attach(t.obj); t.obj.position.copy(t.home); t.obj.rotation.copy(t.homeRot); t.obj.scale.set(1, 1, 1); }
+  for (const c of [X.b2.userData.cap, X.b50.userData.cap]) { const u = c.userData; if (u.off && u.par) { u.par.attach(c); c.position.copy(u.p); c.rotation.copy(u.r); u.off = false; } }
+  for (let i = 0; i < 2; i++) { const s = X["lame" + i]; s.userData.drop.visible = false; s.userData.lamP.visible = false; s.userData.lamP.rotation.set(0, 0, 0); }
+  X.wgLiqA.visible = X.wgLiqB.visible = false; X.arcPour.visible = false; X.drop.visible = false; X.peel.visible = false; X.pipA.userData.liq.visible = X.pipB.userData.liq.visible = false;
+  X.lampM.emissiveIntensity = 0.02; X.lcdA.set("A --:--"); X.lcdB.set("B --:--"); setObj3d(4); stage3d(); ocular3d();
+  if (!keepAttempt) $("#events").innerHTML = ""; $("#btnEval").hidden = true; const sp = $("#btnSpeed"); if (sp) sp.textContent = "⏩ ×" + ST.acc;
+  closeView(true); if (typeof renderTable === "function") renderTable();
+}
+const fragOn = (si) => (ST.sl[si].frag != null ? ST.frags[ST.sl[si].frag] : null);
+const onStage = () => ST.sl.findIndex((s) => s.on);
+/* concentration qui baigne un fragment ; null = à l'air (pas de goutte) */
+function bathOf(f) { if (f.at === "A" || f.at === "B") { const G = ST.gl[f.at]; return G.v > 0.2 ? G.c : null; } if (f.at === 0 || f.at === 1) { const s = ST.sl[f.at]; return s.drop > 0 ? s.c : null; } return f.lastC; }
+const pTarget = (c) => (c == null ? 0.75 : clamp(Math.pow(Math.max(0, c - CC_ISO) / 18, 0.8), 0, 1));
+const stateWord = (p) => (p < 0.3 ? "turg" : p > 0.6 ? "plasm" : "mid");
+
+const WHY = {
+  oignon: `<p>Les cellules de l'<b>épiderme de l'écaille d'oignon violet</b> ont une <b>vacuole colorée</b> (pigments violets, les anthocyanes) : on voit sa taille sans colorant. L'épiderme est une seule couche de cellules : on le <b>pèle</b> avec la pince après une petite incision au scalpel.</p>`,
+  thick: `<p>Un morceau d'écaille entier est <b>trop épais</b> : plusieurs couches de cellules se superposent, la lumière passe mal et l'image est sombre et floue. On ne prélève que l'<b>épiderme</b>, une pellicule fine et transparente.</p>`,
+  verre: `<p>Chaque fragment baigne <b>3 min</b> dans un <b>verre de montre</b> : le verre A contient NaCl à 2 g/L, le verre B NaCl à 50 g/L. Les échanges d'eau entre les cellules et la solution ont le temps de se faire. Ici le temps est <b>accéléré</b> (⏩ en haut).</p>`,
+  mixup: `<p>Le verre ne contient pas la solution prévue sur son carton : le fragment baigne dans une autre concentration, l'observation ne correspond plus au protocole.</p>`,
+  wait: `<p>Il faut laisser le temps à l'eau de traverser les membranes : <b>3 min</b> dans la solution. Observé trop tôt, le fragment de 50 g/L n'est que partiellement plasmolysé.</p>`,
+  drop: `<p>Le fragment est monté dans une <b>goutte de la même solution</b> que celle du verre : il continue à baigner dans le même milieu. Une goutte de l'autre solution changerait le milieu, et l'état des cellules changerait sous le microscope.</p>`,
+  noDrop: `<p>Sans goutte, le fragment est à l'air : il se dessèche, de grosses <b>bulles d'air</b> se forment sous la lamelle et gênent l'observation.</p>`,
+  wrongDrop: `<p>Goutte d'une autre solution que celle du verre : le milieu change. Un fragment plasmolysé (50 g/L) monté dans 2 g/L reprend de l'eau : c'est la <b>déplasmolyse</b>.</p>`,
+  lamelle: `<p>On pose la <b>lamelle</b> inclinée à 45° : un bord touche la goutte, puis on la laisse descendre doucement. Le liquide chasse l'air : <b>pas de bulles</b>. La lamelle aplatit le fragment et protège l'objectif.</p>`,
+  lamFlat: `<p>Lamelle lâchée à plat : de l'air reste piégé, des <b>bulles d'air</b> (cercles à bord noir épais) apparaissent dans le champ du microscope.</p>`,
+  stage: `<p>La lame se place sur la <b>platine</b>, la préparation au-dessus du trou, tenue par les <b>valets</b>.</p>`,
+  lamp: `<p>La lampe éclaire la préparation par-dessous ; le <b>diaphragme</b> règle le contraste (plus fermé : image plus contrastée mais plus sombre).</p>`,
+  low: `<p>On commence toujours par le <b>plus faible grossissement</b> (objectif ×4) : le champ est large, on trouve facilement la préparation et on fait la mise au point avec la <b>vis macrométrique</b>.</p>`,
+  micro: `<p>Aux grossissements plus forts, on règle la netteté avec la <b>vis micrométrique</b> seulement. Les objectifs sont <b>parfocaux</b> : en passant de ×10 à ×40, l'image reste presque nette.</p>`,
+  crash: `<p>Avec l'objectif ×40, la distance entre l'objectif et la lamelle n'est que de 0,4 mm : la <b>vis macrométrique</b> fait monter la platine trop vite et l'objectif <b>écrase la lamelle</b>. Avec le ×40, on ne touche qu'à la vis micrométrique.</p>`,
+  wet: `<p>Sans lamelle, l'objectif ×40 plonge dans la goutte : la lentille est mouillée, l'image devient laiteuse. Il faut une lamelle, et nettoyer l'objectif avec du papier optique.</p>`,
+  G: `<p>Le <b>grossissement</b> du microscope est le produit des grossissements de l'objectif et de l'oculaire.</p><p class="eq">G = G(objectif) × G(oculaire)</p><p>Exemple : objectif ×40 et oculaire ×15 → G = ×600.</p>`,
+  turg: `<p>Dans NaCl à 2 g/L, le milieu extérieur est <b>hypotonique</b> (moins concentré) par rapport au suc vacuolaire : l'eau <b>entre</b> dans la vacuole, qui occupe toute la cellule et presse la membrane squelettique. La cellule est <b>turgescente</b>.</p>`,
+  plasm: `<p>Dans NaCl à 50 g/L, le milieu est <b>hypertonique</b> (plus concentré) : l'eau <b>sort</b> de la vacuole, qui rétrécit ; la membrane cytoplasmique se <b>décolle</b> de la paroi. La cellule est <b>plasmolysée</b>.</p>`,
+  osmose: `<p>L'eau traverse la membrane du milieu <b>hypotonique</b> vers le milieu <b>hypertonique</b> : c'est l'<b>osmose</b>. La paroi (membrane squelettique) laisse passer l'eau et la solution ; la membrane cytoplasmique est semi-perméable.</p>`,
+  qs: `<p>Réponds d'après ce que tu as vraiment observé au microscope.</p>`,
+  bilan: `<p>Le bilan compare ce que tu as fait au protocole et ce que montrent tes préparations.</p>`,
+  dust: `<p>Des taches qui restent immobiles quand on déplace la lame sont des poussières sur l'<b>oculaire</b>, pas dans la préparation.</p>`,
+};
+const TOOL_HELP = [
+  ["Oignon violet", "Clique pour prélever un fragment d'épiderme (incision au scalpel, la pince pèle une pellicule violette)."],
+  ["Flacons NaCl 2 g/L et 50 g/L", "Versent ≈ 4 mL de solution dans un verre de montre."],
+  ["Verres de montre A et B", "A : NaCl 2 g/L · B : NaCl 50 g/L. Chaque fragment y reste 3 min (minuteur)."],
+  ["Pipettes compte-gouttes A et B", "Prennent une goutte dans leur verre et la déposent au centre d'une lame."],
+  ["Pince fine", "Pèle l'épiderme et transporte le fragment du verre à la lame."],
+  ["Lames et lamelles", "Goutte, fragment bien étalé, lamelle posée inclinée à 45° pour chasser l'air."],
+  ["Microscope", "Lame sur la platine sous les valets, lampe, objectif ×4 et vis macrométrique ; puis ×10 et ×40 avec la vis micrométrique. G = objectif × oculaire."],
+  ["Minuteur", "Affiche le temps passé par chaque fragment dans son verre (3 min conseillées)."],
+  ["Bac à déchets", "Tout vider pour recommencer un essai."],
+];
+function log(kind, txt, why) { const w = why ? WHY[why] : ""; ST.ev.push({ kind, txt }); const d = document.createElement("div"); d.className = "ev " + kind; d.innerHTML = `<span class="t">${clk(ST.simT)}</span>${txt}${w ? '<button type="button">Pourquoi ?</button><div class="why">' + w + "</div>" : ""}`; if (w) d.querySelector("button").onclick = () => d.classList.toggle("open"); $("#events").prepend(d); }
+function once(flag, kind, txt, why) { if (ST.flags[flag]) return; ST.flags[flag] = true; log(kind, txt, why); }
+function toast(msg, kind = "") { const t = $("#toast"); t.textContent = msg; t.className = "show " + kind; clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 3200); }
+
+const CAMS = {
+  wide: { p: [0.0, 0.66, 0.92], t: [-0.02, 0.1, -0.04] }, oignon: { p: [-0.36, 0.3, 0.38], t: [-0.47, 0.03, 0.04] },
+  verres: { p: [-0.12, 0.27, 0.36], t: [-0.14, 0.01, 0.05] }, flac: { p: [-0.08, 0.3, 0.32], t: [-0.17, 0.07, -0.08] },
+  lames: { p: [0.05, 0.22, 0.38], t: [0.04, 0.0, 0.17] }, lame0: { p: [-0.005, 0.1, 0.27], t: [-0.005, 0.0, 0.175] }, lame1: { p: [0.085, 0.1, 0.27], t: [0.085, 0.0, 0.175] },
+  micro: { p: [0.5, 0.45, 0.32], t: [0.22, 0.17, -0.15] }, mview: { p: [0.5, 0.38, 0.38], t: [0.235, 0.165, -0.17] }, stage: { p: [0.33, 0.25, 0.04], t: [0.24, 0.14, -0.145] },
+  timer: { p: [0.38, 0.19, 0.38], t: [0.35, 0.03, 0.17] }, bin: { p: [-0.42, 0.4, 0.2], t: [-0.6, 0.06, -0.34] },
+};
+let camFocus = null, camBusy = false;
+const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "function" ? c() : c); };
+/*legende*/ /* légende d'une vue d'observation : chaque objet ou résultat est nommé (étiquette + trait de rappel), sans donner la réponse attendue dans le tableau */
+const RESVIEW = {};
+const LEGS = {};
+/*leg-btn*/ /* bouton « Masquer / Afficher la légende » : visible dès qu'une légende existe pour la vue (ici aussi dans l'oculaire) ; le choix est gardé d'une manip à l'autre */
+function legBtn(avail) {
+  let b = document.getElementById("legBtn");
+  if (!b) {
+    window.__legOff = true; try { window.__legOff = localStorage.getItem("labLegOn") !== "1"; } catch (e) {} // légende masquée jusqu'à ce que l'élève la demande (demande de l'enseignant)
+    const st = document.createElement("style"); st.textContent = '#legBtn{position:fixed;left:50%;top:100px;transform:translateX(-50%);z-index:9;font:700 13px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;border:1px solid #c9d2dc;background:#fff;color:#1d2836;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer}#legBtn:hover{background:#eef3f8}#legBtn.off{top:62px}#legBtn[hidden]{display:none}body.mvon #legBtn{left:auto;right:24px;top:70px;transform:none}@media (max-width:640px){#legBtn,#legBtn.off{top:auto;bottom:86px}}'; document.head.appendChild(st);
+    b = document.createElement("button"); b.id = "legBtn"; b.type = "button"; document.body.appendChild(b);
+    b.onclick = (e) => { e.stopPropagation(); window.__legOff = !window.__legOff; try { localStorage.setItem("labLegOn", window.__legOff ? "0" : "1"); } catch (er) {} legBtn(true); MV.dirty = true; };
+  }
+  if (b.hidden !== !avail) b.hidden = !avail;
+  const t = window.__legOff ? "🏷 Afficher la légende" : "🏷 Masquer la légende"; if (b.textContent !== t) { b.textContent = t; b.classList.toggle("off", !!window.__legOff); }
+}
+function legendTick() {
+  let el = document.getElementById("labLeg");
+  if (!el) {
+    el = document.createElement("div"); el.id = "labLeg"; el.innerHTML = '<svg></svg><div class="ttl">Légende</div><div class="tags"></div>'; document.body.appendChild(el);
+    const st = document.createElement("style"); st.textContent = '#labLeg{position:fixed;inset:0;pointer-events:none;z-index:4}#labLeg[hidden]{display:none}#labLeg svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}#labLeg .tag,#mvLeg .tag{position:absolute;transform:translateY(-50%);background:rgba(255,255,255,.96);color:#18202b;font:700 13px/1.25 "Atkinson Hyperlegible",Arial,sans-serif;padding:5px 9px;border-radius:7px;border-left:5px solid var(--c);box-shadow:0 2px 10px rgba(0,0,0,.28);max-width:min(280px,38vw)}#labLeg .tag small,#mvLeg .tag small{display:block;font-weight:400;font-size:12px;color:#3c4652}#labLeg .tag.L,#mvLeg .tag.L{transform:translate(-100%,-50%);border-left:0;border-right:5px solid var(--c);text-align:right}#labLeg .ttl{position:absolute;left:50%;top:62px;transform:translateX(-50%);background:#1d2836;color:#fff;font:700 14px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3)}@media (max-width:640px){#labLeg .tag,#mvLeg .tag{font-size:11px;padding:3px 6px}#labLeg .tag small,#mvLeg .tag small{font-size:10px}}';
+    document.head.appendChild(st);
+  }
+  const Wv = MV.open && window.innerWidth >= 760 ? $("#mv").getBoundingClientRect().left : window.innerWidth, X0 = MV.open && window.innerWidth >= 1100 ? 290 : 0; // dans l'oculaire : seules les pièces de la mise au point sont nommées sur le microscope, à gauche du panneau
+  if (MV.open && window.innerWidth < 760) { el.hidden = true; legBtn(mvLegAvail()); return; }
+  const list = ((MV.open ? LEGS.mview : LEGS[camFocus]) || []).filter((i) => (!i.on || i.on()) && (!i.fin || ST.fini)), ov = document.getElementById("overlay");
+  const can = list.length > 0 && !L.tw && !ST.q.length && !(ov && ov.hidden === false); legBtn(can || mvLegAvail()); const show = can && !window.__legOff;
+  el.hidden = !show; if (!show) return; el.querySelector(".ttl").textContent = list.some((i) => i.fin) ? "Résultat de l'expérience" : "Légende"; el.querySelector(".ttl").hidden = MV.open;
+  const W = window.innerWidth, H = window.innerHeight, P = (a) => { const v = L.g.localToWorld(new THREE.Vector3(a[0], a[1], a[2])).project(L.cam); return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H, v.z]; };
+  const val = (v) => (typeof v === "function" ? v() : v), it = list.map((i) => { const a = P(i.at()); return { ...i, t: val(i.t), m: val(i.m), a, s: a[0] < (X0 + Wv) / 2 ? "L" : "R" }; }).filter((i) => i.a[2] < 1 && i.a[0] < Wv);
+  for (const side of ["L", "R"]) { const g = it.filter((i) => i.s === side).sort((a, b) => a.a[1] - b.a[1]); g.forEach((i, k) => { i.x = side === "L" ? Math.min(...g.map((j) => j.a[0])) - 60 : Math.max(...g.map((j) => j.a[0])) + 60; i.y = i.a[1]; if (k && i.y - g[k - 1].y < 46) i.y = g[k - 1].y + 46; }); }
+  const tags = el.querySelector(".tags"); tags.innerHTML = it.map((i) => `<div class="tag ${i.s}" style="--c:${i.c || "#5d6670"};left:${i.x}px;top:${i.y}px">${i.t}${i.m ? "<small>" + i.m + "</small>" : ""}</div>`).join("");
+  [...tags.children].forEach((t, k) => { const i = it[k], w = t.offsetWidth; if (i.s === "L" && i.x - w < 8) i.x = w + 8; if (i.s === "R" && i.x + w > Wv - 8) i.x = Wv - 8 - w; if (i.s === "L" && i.x - w < X0 + 8) i.x = X0 + 8 + w; t.style.left = i.x + "px"; });
+  el.querySelector("svg").innerHTML = it.map((i) => `<line x1="${i.a[0]}" y1="${i.a[1]}" x2="${i.x}" y2="${i.y}" stroke="${i.c || "#5d6670"}" stroke-width="2"/><circle cx="${i.a[0]}" cy="${i.a[1]}" r="4" fill="none" stroke="${i.c || "#5d6670"}" stroke-width="2"/>`).join("");
+}
+/*camera-produit*/ /* produit utilisé : la caméra montre d'abord son étiquette (nom lisible), puis le geste en entier */
+const CAM_FIX = new Set(["@lbl", "@pour", "@obs"]);
+function camLabel(obj, side = null, up = 0.55) {
+  const b = new THREE.Box3().setFromObject(obj), c = b.getCenter(new THREE.Vector3()), sz = b.getSize(new THREE.Vector3()); L.g.worldToLocal(c);
+  const d = Math.max(sz.y, sz.x) * 1.5 + 0.11; c.y -= sz.y * 0.1;
+  const at = (s) => ({ p: [c.x + Math.sin(s) * d * 0.9, c.y + d * up, c.z + Math.cos(s) * d * 0.9], t: [c.x, c.y, c.z] });
+  if (side != null) return at(side);
+  const mine = new Set(); obj.traverse((o) => mine.add(o)); const rc = new THREE.Raycaster(), W = (a) => L.g.localToWorld(new THREE.Vector3(a[0], a[1], a[2]));
+  for (const s of [0, 0.55, -0.55, 0.95, -0.95, 1.35, -1.35]) {
+    const k = at(s), p = W(k.p), t = W(k.t), dir = t.clone().sub(p), dist = dir.length(); rc.set(p, dir.normalize()); rc.far = dist - 0.01;
+    const hit = rc.intersectObjects(L.g.children, true).find((h) => { const o = h.object, m = o.material; if (mine.has(o) || !o.visible || !m || m.visible === false) return false; let q = o; while (q) { if (!q.visible) return false; q = q.parent; } return !(m.transparent && m.opacity < 0.5); });
+    if (!hit) return k;
+  }
+  return at(0);
+}
+const camPour = (N, k = 1) => ({ p: [N.x - 0.01, N.y + 0.12 - 0.07 * (k - 1), N.z + 0.44 * k], t: [N.x - 0.045, N.y - 0.03 - 0.07 * (k - 1), N.z] });
+function showProduct(obj, after, trigger, side, up, wait = 0.9) { CAMS["@lbl"] = camLabel(obj, side, up); look("@lbl"); if (wait > 0) ST.q.push({ obj: new THREE.Object3D(), to: [0, 0, 0], dur: wait, up: 0 }); ST.camNext = after ? { obj: trigger || obj, cam: after } : null; }
+function lookAt(key, cam) { CAMS[key] = cam; look(key); }
+
+/* ------------------------------------------------------------ étapes libres (passer, rétablir, suivre l'élève) */
+var STEP = { list: null, first: false, found: null, skip: new Set(), focus: null };
+const STEP_STOP = {}, stepKey = (g) => g.k + "|" + g.on, skipKey = (g) => g.why || g.k, stepSkipped = (g) => STEP.skip.has(skipKey(g));
+function __step(g) {
+  if (!g) return;
+  if (STEP.first) { if (!stepSkipped(g)) { STEP.found = g; throw STEP_STOP; } return; }
+  if (STEP.list && !STEP.list.some((h) => stepKey(h) === stepKey(g))) STEP.list.push(g);
+}
+function allSteps() { STEP.list = []; try { suggestAll(); } catch (e) { console.error(e); } const l = STEP.list; STEP.list = null; return l; }
+function firstStep() { STEP.first = true; STEP.found = null; try { suggestAll(); } catch (e) { if (e !== STEP_STOP) console.error(e); } STEP.first = false; return STEP.found; }
+function suggest() {
+  const all = allSteps(), last = all[all.length - 1]; let g = firstStep() || last;
+  if (STEP.focus) { const f = all.slice(0, -1).find((s) => s.on === STEP.focus && !stepSkipped(s)); if (f) g = f; else { STEP.focus = null; if (g) g = Object.assign({}, g, { cam: null }); } }
+  const u = $("#btnUnskip"); if (u) { u.hidden = !STEP.skip.size; u.textContent = "↺ Rétablir les étapes passées (" + STEP.skip.size + ")"; }
+  const sk = $("#btnSkip"); if (sk) sk.hidden = !g || !last || stepKey(g) === stepKey(last);
+  if (g && STEP.quiet > performance.now()) g = Object.assign({}, g, { cam: null });
+  return g || { on: null, k: "Libre", t: "Manipule librement, puis clique sur Évaluer.", why: "" };
+}
+function stepFollow(name) {
+  if (!name || ST.demo) return; const g = firstStep(); if (g && g.on === name) { STEP.focus = null; return; }
+  STEP.focus = allSteps().slice(0, -1).some((s) => s.on === name && !stepSkipped(s)) ? name : null;
+}
+function stepButtons() {
+  const sk = $("#btnSkip"), u = $("#btnUnskip"); if (!sk || sk.dataset.on) return; sk.dataset.on = "1";
+  sk.onclick = () => { const g = ST.cur; if (!g || !g.on) return; STEP.skip.add(skipKey(g)); if (STEP.focus === g.on) STEP.focus = null; log("info", "Étape passée : « " + g.k + " ». Le guide ne la propose plus (« Rétablir » la fait revenir).", WHY[g.why] ? g.why : undefined); toast("Étape passée : " + g.k + ". Tu restes libre de la faire quand tu veux.", ""); };
+  u.onclick = () => { STEP.skip.clear(); STEP.focus = null; toast("Le guide reprend toutes les étapes.", ""); };
+}
+function frameOf(obj, k = 2.6) {
+  const b = new THREE.Box3(), bb = new THREE.Box3(); obj.updateWorldMatrix(true, true);
+  obj.traverseVisible((o) => { if (!o.isMesh || !o.geometry) return; if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); b.union(bb.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld)); });
+  if (b.isEmpty()) { obj.getWorldPosition(b.min); b.max.copy(b.min); }
+  const c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3()), d = clamp(Math.max(s.x, s.y, s.z) * k, 0.22, 0.8);
+  const dir = L.cam.position.clone().sub(L.ctl.target); dir.y = Math.max(dir.y, 0.5 * Math.hypot(dir.x, dir.z)); dir.normalize();
+  const p = c.clone().addScaledVector(dir, d); return { p: [p.x, p.y - BENCH, p.z], t: [c.x, c.y - BENCH, c.z] };
+}
+function cadrages() {}
+function focusTool(name) {
+  /*resultat*/ if (ST.fini && RESVIEW[name] && !ST.demo) { STEP.quiet = performance.now() + 4000; look(RESVIEW[name]); return; }
+  if (!name || ST.demo || !TOOLS[name]) return;
+  STEP.quiet = performance.now() + 1500; const s = allSteps().slice(0, -1).find((g) => g.on === name && g.cam && CAMS[g.cam]); if (s) { look(s.cam); return; }
+  CAMS.__obj = frameOf(TOOLS[name].obj); look("__obj");
+}
+
+/* ------------------------------------------------------------ guide : prochaine étape conseillée, calculée depuis l'état */
+const fragIn = (k) => (ST.gl[k].frag != null ? ST.frags[ST.gl[k].frag] : null);
+const slideReady = (i) => { const s = ST.sl[i]; return s.frag != null && s.lam > 0; };
+function suggestAll() {
+  const G = ST.gl, S = ST.sl, gS = { A: 0, B: 1 }, n = { A: "2 g/L", B: "50 g/L" };
+  for (const k of ["A", "B"]) {
+    const used = ST.frags.some((f) => f.from === k && f.at !== k);
+    if (G[k].v < 1 && !used) __step({ on: k === "A" ? "nacl2" : "nacl50", k: "Verre " + k, t: "Verse la solution de NaCl à " + n[k] + " dans le verre de montre " + k + ".", why: "verre", cam: "verres" });
+    if (G[k].frag == null && !used) __step({ on: "oignon", k: "Fragment " + k, t: "Prélève un fragment de l'épiderme de l'écaille violette et place-le dans le verre " + k + ".", why: "oignon", cam: "oignon" });
+  }
+  const fa = fragIn("A"), fb = fragIn("B"), wt = [fa, fb].filter((f) => f && f.tG < 3);
+  if (wt.length) __step({ on: "minuteur", k: "3 minutes", t: "Laisse les fragments 3 min dans leur solution (temps accéléré, ⏩ en haut).", why: "wait", cam: "timer", v: (fa ? "A " + clk(fa.tG) : "") + (fa && fb ? " · " : "") + (fb ? "B " + clk(fb.tG) : "") });
+  for (const k of ["A", "B"]) {
+    const i = gS[k], s = S[i], f = fragIn(k);
+    if (s.frag != null) continue; if (!f && !ST.frags.some((x) => x.from === k)) continue;
+    if (!s.drop) __step({ on: "lame" + (i + 1), k: "Lame " + (i + 1), t: "Dépose une goutte de la solution du verre " + k + " au centre de la lame " + (i + 1) + " (pipette " + k + ").", why: "drop", cam: "lames" });
+    if (f) __step({ on: "lame" + (i + 1), k: "Lame " + (i + 1), t: "Place le fragment du verre " + k + " sur la goutte, bien étalé (pince fine).", why: "drop", cam: "lames" });
+  }
+  for (let i = 0; i < 2; i++) { const s = S[i]; if (s.frag != null && !s.lam) __step({ on: "lame" + (i + 1), k: "Lamelle", t: "Pose la lamelle sur la lame " + (i + 1) + " : inclinée à 45°, on la laisse descendre doucement.", why: "lamelle", cam: "lame" + i }); }
+  const st = onStage();
+  for (const i of st === 1 ? [1, 0] : [0, 1]) {
+    const s = S[i]; if (!slideReady(i)) continue; const o = ST.obs[i];
+    if (o && o.G >= 400) continue;
+    if (st !== i) { __step({ on: st >= 0 ? "lame" + (st + 1) : "lame" + (i + 1), k: st >= 0 ? "Changer de lame" : "Platine", t: st >= 0 ? "Retire la lame " + (st + 1) + " de la platine, puis place la lame " + (i + 1) + "." : "Place la lame " + (i + 1) + " sur la platine du microscope, sous les valets.", why: "stage", cam: "stage" }); break; }
+    if (!ST.lamp) __step({ on: "micro", k: "Lampe", t: "Allume la lampe du microscope.", why: "lamp", cam: "micro" });
+    if (!MV.open) __step({ on: "micro", k: "Oculaire", t: "Regarde dans l'oculaire du microscope.", why: "low", cam: "micro" });
+    const sharp = focusQ() < 1.6;
+    if (!s.seen[4] && !s.seen[10]) __step({ on: "micro", k: "Objectif ×4", t: MV.obj !== 4 ? "Mets l'objectif ×4 (faible grossissement) en tournant le revolver." : "Fais la mise au point avec la vis macrométrique : monte la platine jusqu'à voir les cellules nettes.", why: "low", cam: "micro" });
+    else if (!s.seen[10] && !s.seen[40]) __step({ on: "micro", k: "Objectif ×10", t: MV.obj !== 10 ? "Passe à l'objectif ×10 (moyen grossissement)." : "Affine la netteté avec la vis micrométrique.", why: "micro", cam: "micro" });
+    else __step({ on: "micro", k: "Objectif ×40", t: MV.obj !== 40 ? "Passe à l'objectif ×40 (fort grossissement) ; l'oculaire ×15 donne G = ×600." : sharp ? "Observe une cellule : vacuole, membranes, noyau. Note ce que tu vois dans « Mesures »." : "Avec le ×40, uniquement la vis micrométrique (ou la molette de la souris sur l'image).", why: MV.obj === 40 && !sharp ? "crash" : "micro", cam: "micro" });
+    break;
+  }
+  const rows = [0, 1].filter((i) => ST.obs[i]);
+  if (rows.some((i) => ST.ans["g" + i] == null || ST.ans["e" + i] == null || ST.ans["m" + i] == null)) __step({ on: "micro", k: "Mesures", t: "Ouvre « Mesures » : calcule G, puis note l'état des cellules de chaque préparation.", why: "G", cam: null });
+  if (Object.keys(QS).some((k) => ST.ans[k] == null)) __step({ on: "micro", k: "Questions", t: "Dans « Mesures », réponds aux questions sur les échanges d'eau.", why: "osmose", cam: null });
+  __step({ on: "micro", k: "Bilan", t: "Clique sur Évaluer pour voir le bilan de tes deux préparations.", why: "bilan", cam: "wide" });
+}
+let lastKey = "";
+function updGuide() {
+  const g = suggest(), el = $("#instr"); ST.cur = g;
+  $("#instr .v").textContent = g.v || ""; $("#stepno").textContent = g.k; $("#steptxt").textContent = g.t;
+  $("#btnEval").hidden = !ST.obs.some(Boolean);
+  const key = g.on + g.t.slice(0, 24); if (key === lastKey) return; lastKey = key;
+  el.querySelector(".n").textContent = "Guide"; el.querySelector(".k").textContent = g.k; el.querySelector(".t").textContent = g.t; el.querySelector(".h").textContent = g.h || "";
+  const camHeld = CAM_FIX.has(camFocus) && (isBusy() || ST.camNext);
+  if (g.cam && ST.guide && !ST.demo && !camHeld && !MV.open) look(g.cam);
+}
+
+/* ------------------------------------------------------------ file de gestes */
+function go(obj, steps) { for (const s of steps) ST.q.push(Object.assign({ obj, dur: 0.5, up: 0.05 }, s)); }
+function runQueue(dt) {
+  const a = ST.q[0]; if (!a) { ST.busy = false; return; } ST.busy = true;
+  if (a.t === undefined) { if (a.pre) a.pre(); a.t = 0; a.p0 = a.obj.position.clone(); a.r0 = a.obj.rotation.clone(); const to = typeof a.to === "function" ? a.to() : a.to, rot = typeof a.rot === "function" ? a.rot() : a.rot; a.p1 = to ? V3(to) : a.p0.clone(); a.r1 = rot ? new THREE.Euler(rot[0], rot[1], rot[2]) : a.r0.clone(); }
+  a.t += window.__fast ? 9 : dt; const k = Math.min(1, a.t / a.dur), e = k * k * (3 - 2 * k);
+  a.obj.position.lerpVectors(a.p0, a.p1, e); a.obj.position.y += a.up * Math.sin(Math.PI * e); a.obj.rotation.set(lerp(a.r0.x, a.r1.x, e), lerp(a.r0.y, a.r1.y, e), lerp(a.r0.z, a.r1.z, e));
+  if (a.tick) a.tick(k);
+  if (k >= 1) { ST.q.shift(); if (a.at) a.at(); }
+}
+const homeOf = (n) => { const t = TOOLS[n]; return { to: [t.home.x, t.home.y, t.home.z], rot: [t.homeRot.x, t.homeRot.y, t.homeRot.z] }; };
+const isBusy = () => ST.busy || ST.q.length > 0;
+const busyToast = () => { toast("Attends la fin du geste."); return true; };
+function gpos(obj, local = [0, 0, 0]) { const v = obj.localToWorld(V3(local)); return L.g.worldToLocal(v); }
+function capOff(cap, spot) {
+  const u = cap.userData; if (u.off) return; u.off = true;
+  go(cap, [
+    { pre: () => { u.par = cap.parent; u.p = cap.position.clone(); u.r = cap.rotation.clone(); L.g.attach(cap); }, to: () => cap.position.clone().add(new THREE.Vector3(0, 0.022, 0)).toArray(), rot: () => [cap.rotation.x, cap.rotation.y - 4 * Math.PI, cap.rotation.z], dur: 0.7, up: 0 },
+    { to: spot, rot: () => [Math.PI, cap.rotation.y, 0], dur: 0.55, up: 0.05 },
+  ]);
+}
+function capOn(cap) {
+  const u = cap.userData; if (!u.off) return;
+  const target = (dy) => () => { const v = u.par.localToWorld(u.p.clone()); L.g.worldToLocal(v); v.y += dy; return v.toArray(); };
+  go(cap, [
+    { to: target(0.022), rot: () => [0, cap.rotation.y, 0], dur: 0.55, up: 0.05 },
+    { to: target(0), rot: () => [0, cap.rotation.y + 4 * Math.PI, 0], dur: 0.7, up: 0, at: () => { u.par.attach(cap); cap.position.copy(u.p); cap.rotation.copy(u.r); u.off = false; } },
+  ]);
+}
+function arcPour(m, a, b, r = 0.0016, k = 0.3) {
+  const c = new THREE.Vector3(a.x + (b.x - a.x) * k, a.y, a.z + (b.z - a.z) * k);
+  if (m.geometry) m.geometry.dispose(); m.geometry = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, c, b), 20, r, 8, false); m.visible = true;
+}
+const pose = (tx, ty, th, len) => [tx + len * Math.sin(th), ty - len * Math.cos(th)];
+/* outil tenu incliné de th (rotation z) : origine pour que son point local p arrive en T */
+const toolAt = (T, p, th) => { const o = tiltOff(p, th); return [T.x - o[0], T.y - o[1], T.z]; };
+
+/* ------------------------------------------------------------ actions : solutions et verres de montre */
+const wgSurf = (k) => { const G = ST.gl[k]; return gpos(X["wg" + k], [0, 0.0012 + (G.v > 0.05 ? wgH(G.v) : 0) + 0.0003, 0]); };
+function pourGlass(k, sol) {
+  if (isBusy()) return busyToast(); const G = ST.gl[k]; if (G.v >= 7) return toast("Le verre de montre " + k + " est assez rempli.");
+  const j = sol === 2 ? X.b2 : X.b50, t = wgSurf(k); showProduct(j, camPour(t, 0.8));
+  capOff(j.userData.cap, [j.position.x + 0.05, 0.009, j.position.z + 0.045]);
+  const th = -1.72, o = pose(t.x - 0.016, t.y + 0.045, th, 0.136);
+  go(j, [{ to: [o[0] - 0.02, o[1] + 0.06, t.z], dur: 0.8, up: 0.06 }, { to: [o[0], o[1], t.z], rot: [0, 0, th], dur: 0.6, up: 0, at: () => { ST.pourArc = { sol, k, t: 1.2 }; } },
+    { to: [o[0], o[1], t.z], dur: 1.3, up: 0, at: () => { const dv = 4; G.c = (G.c * G.v + sol * dv) / (G.v + dv); G.v += dv; G.pours.push(sol); log("good", "≈ 4 mL de NaCl à " + sol + " g/L versés dans le verre de montre " + k + ".", "verre"); if ((k === "A") !== (sol === 2)) once("mix" + k, "warn", "Le carton du verre " + k + " indique NaCl " + (k === "A" ? "2" : "50") + " g/L, mais tu y as versé NaCl " + sol + " g/L.", "mixup"); } },
+    Object.assign(homeOf(sol === 2 ? "nacl2" : "nacl50"), { dur: 0.9, up: 0.06 })]);
+  capOn(j.userData.cap);
+}
+function emptyGlass(k) {
+  if (isBusy()) return busyToast(); const G = ST.gl[k]; if (G.v < 0.1 && G.frag == null) return toast("Le verre " + k + " est vide.");
+  const w = X["wg" + k], h = homeOf("wg" + k);
+  go(w, [{ to: [-0.56, 0.13, -0.34], dur: 1.0, up: 0.08 }, { to: [-0.58, 0.12, -0.34], rot: [0, 0, 1.4], dur: 0.6, up: 0, at: () => { if (G.frag != null) { const f = ST.frags[G.frag]; f.at = "bin"; if (f.mesh.parent) f.mesh.parent.remove(f.mesh); G.frag = null; } G.v = 0; G.c = 0; G.pours = []; log("info", "Verre " + k + " vidé dans les déchets.", null); } }, Object.assign(h, { dur: 1.0, up: 0.08 })]);
+}
+
+/* ------------------------------------------------------------ actions : prélèvement de l'épiderme */
+function newFilm(f) { const m = new THREE.Mesh(filmGeo(f.seed, f.thick), f.thick ? X.thickM : X.filmM); m.castShadow = false; m.renderOrder = 4; f.mesh = m; return m; }
+function prelever(k, thick = false) {
+  if (isBusy()) return busyToast(); const G = ST.gl[k];
+  if (G.frag != null) return toast("Le verre " + k + " contient déjà un fragment.");
+  const sc = X.scalpel, pi = X.pince, e = X.ecTop(), dz = (ST.peels % 4) * 0.012 - 0.018; e.x += dz * 0.35; e.z += dz;
+  const f = { id: ST.frags.length, seed: ST.seed + ST.frags.length * 101, thick, at: "pince", from: k, p: 0, tG: 0, lastC: null, ox: (Math.random() - 0.5) * 900, oy: (Math.random() - 0.5) * 700 }; ST.frags.push(f); newFilm(f); ST.peels++;
+  look("oignon"); const thS = -0.75, tipS = [0.066, -0.0005];
+  go(sc, [
+    { to: toolAt({ x: e.x - 0.004, y: e.y + 0.03, z: e.z - 0.008 }, tipS, thS), rot: [0, 0.35, thS], dur: 0.8, up: 0.05 },
+    { to: toolAt({ x: e.x - 0.004, y: e.y + 0.0012, z: e.z - 0.008 }, tipS, thS), dur: 0.35, up: 0 },
+    { to: toolAt({ x: e.x - 0.004, y: e.y + 0.0012, z: e.z + 0.008 }, tipS, thS), dur: 0.5, up: 0 },
+    { to: toolAt({ x: e.x + 0.006, y: e.y + 0.0012, z: e.z + 0.008 }, tipS, thS), dur: 0.35, up: 0.004 },
+    { to: toolAt({ x: e.x + 0.006, y: e.y + 0.0012, z: e.z - 0.008 }, tipS, thS), dur: 0.5, up: 0 },
+    Object.assign(homeOf("scalpel"), { dur: 0.8, up: 0.05 }),
+  ]);
+  const thP = -0.55, tipP = [0.055, 0];
+  const film = f.mesh;
+  go(pi, [
+    { to: toolAt({ x: e.x - 0.004, y: e.y + 0.03, z: e.z }, tipP, thP), rot: [0, 0.2, thP], dur: 0.7, up: 0.05 },
+    { to: toolAt({ x: e.x - 0.004, y: e.y + 0.001, z: e.z }, tipP, thP), dur: 0.4, up: 0, at: () => { pi.add(film); film.position.set(tipP[0] + 0.004, -0.004, 0); film.rotation.set(0, Math.PI / 2, -0.4 - thP); film.scale.setScalar(0.25); } },
+    { to: toolAt({ x: e.x + 0.012, y: e.y + 0.012, z: e.z }, tipP, thP), dur: 0.8, up: 0, tick: (kk) => { film.scale.setScalar(0.25 + 0.75 * kk); X.peel.visible = true; X.peel.position.set(e.x + 0.003, e.y + 0.0004, e.z); X.peel.rotation.set(-Math.PI / 2, 0, 0.35); X.peel.scale.set(kk, kk, 1); }, at: () => { log("good", thick ? "Un morceau épais d'écaille est coupé (plusieurs couches de cellules)." : "Une pellicule violette, fine et transparente, est pelée : l'épiderme de l'écaille.", thick ? "thick" : "oignon"); if (thick) once("thick", "warn", "Fragment trop épais : il ne laissera pas passer la lumière.", "thick"); } },
+    { to: () => { const s = wgSurf(k); return toolAt({ x: s.x - 0.003, y: s.y + 0.03, z: s.z }, tipP, thP); }, dur: 1.0, up: 0.05, pre: () => look("verres") },
+    { to: () => { const s = wgSurf(k); return toolAt({ x: s.x - 0.003, y: s.y + 0.006, z: s.z }, tipP, thP); }, dur: 0.5, up: 0, at: () => placeFilmGlass(f, k) },
+    Object.assign(homeOf("pince"), { dur: 0.9, up: 0.06 }),
+  ]);
+}
+function placeFilmGlass(f, k) {
+  const G = ST.gl[k], w = X["wg" + k], m = f.mesh; w.add(m); m.scale.setScalar(1); m.rotation.set(-Math.PI / 2, 0, Math.random() * 6.28); m.position.set(0, 0.0012 + (G.v > 0.05 ? wgH(G.v) : 0) + 0.0004, 0);
+  f.at = k; f.tG = 0; G.frag = f.id; ST.flags.anyFrag = true;
+  if (G.v < 0.5) once("dryGlass" + k, "warn", "Le verre " + k + " est vide : le fragment se dessèche à l'air.", "noDrop");
+  log("info", "Fragment placé dans le verre " + k + " : le minuteur " + k + " démarre.", "verre"); look("timer");
+}
+/* fragment du verre vers une lame (pince) */
+function fragToSlide(k, i) {
+  if (isBusy()) return busyToast(); const G = ST.gl[k], s = ST.sl[i]; if (G.frag == null) return toast("Pas de fragment dans le verre " + k + ".");
+  if (s.frag != null) return toast("La lame " + (i + 1) + " porte déjà un fragment."); if (s.on) return toast("Retire d'abord la lame de la platine.");
+  const f = ST.frags[G.frag], pi = X.pince, thP = -0.55, tipP = [0.055, 0], film = f.mesh; look("verres");
+  const sl = X["lame" + i], top = () => gpos(sl, [-0.004, 0.0012, 0]);
+  go(pi, [
+    { to: () => { const p = wgSurf(k); return toolAt({ x: p.x - 0.003, y: p.y + 0.03, z: p.z }, tipP, thP); }, rot: [0, 0.2, thP], dur: 0.8, up: 0.05 },
+    { to: () => { const p = wgSurf(k); return toolAt({ x: p.x - 0.003, y: p.y + 0.002, z: p.z }, tipP, thP); }, dur: 0.45, up: 0, at: () => { pi.attach(film); G.frag = null; f.at = "pince"; f.lastC = G.v > 0.2 ? G.c : null; } },
+    { to: () => { const p = top(); return toolAt({ x: p.x - 0.003, y: p.y + 0.03, z: p.z }, tipP, thP); }, dur: 1.0, up: 0.05, pre: () => look("lame" + i) },
+    { to: () => { const p = top(); return toolAt({ x: p.x - 0.003, y: p.y + 0.004, z: p.z }, tipP, thP); }, dur: 0.5, up: 0, at: () => { sl.add(film); film.position.set(-0.004, 0.0008 + (s.drop ? 0.0004 : 0), 0); film.rotation.set(-Math.PI / 2, 0, Math.random() * 6.28); film.scale.setScalar(1); f.at = i; s.frag = f.id; f.tSlide = 0;
+      log("good", "Fragment du verre " + k + " (" + clk(f.tG) + " dans la solution) étalé sur la lame " + (i + 1) + ".", "drop");
+      if (f.tG < 2.5) once("early" + i, "warn", "Le fragment n'est resté que " + clk(f.tG) + " dans le verre " + k + " (3 min conseillées).", "wait");
+      if (!s.drop) once("noDrop" + i, "warn", "Pas de goutte sur la lame " + (i + 1) + " : le fragment est à l'air.", "noDrop");
+      else if (s.srcG && s.srcG !== k) once("wrongDrop" + i, "warn", "La goutte de la lame " + (i + 1) + " vient du verre " + s.srcG + ", le fragment du verre " + k + ".", "wrongDrop"); } },
+    Object.assign(homeOf("pince"), { dur: 0.9, up: 0.06 }),
+  ]);
+}
+
+/* ------------------------------------------------------------ actions : goutte, lamelle, platine */
+function dropOn(k, i) {
+  if (isBusy()) return busyToast(); const G = ST.gl[k], s = ST.sl[i]; if (G.v < 0.3) return toast("Le verre " + k + " est vide : verse d'abord la solution.");
+  if (s.lam) return toast("La lamelle est déjà posée."); if (s.on) return toast("Retire d'abord la lame de la platine.");
+  const p = X["pip" + k], sl = X["lame" + i], h = homeOf("pip" + k); look("verres");
+  const sq = (on) => ({ to: null, dur: 0.35, up: 0, tick: (kk) => { const v = on ? 1 - 0.35 * Math.sin(Math.PI * kk) : 1; p.userData.bulb.scale.set(0.0062 * (2 - v), 0.013 * v, 0.0062 * (2 - v)); } });
+  go(p, [
+    { to: () => { const t = wgSurf(k); return [t.x + 0.012, t.y + 0.03, t.z]; }, dur: 0.8, up: 0.08 },
+    { to: () => { const t = wgSurf(k); return [t.x + 0.012, t.y - 0.0008, t.z]; }, dur: 0.4, up: 0 },
+    Object.assign(sq(true), { at: () => { const l = p.userData.liq; l.visible = true; l.scale.y = 0.012; l.position.y = 0.006; } }),
+    { to: () => { const t = gpos(sl, [-0.004, 0.0006, 0]); return [t.x, t.y + 0.012, t.z]; }, dur: 1.0, up: 0.06, pre: () => look("lame" + i) },
+    Object.assign(sq(true), { at: () => { const a = gpos(p, [0, 0, 0]), b = gpos(sl, [-0.004, 0.0008, 0]); ST.fall = { t: 0, a, b, dur: 0.35 }; p.userData.liq.visible = false; } }),
+    { to: null, dur: 0.45, up: 0, at: () => { s.c = s.drop ? (s.c * s.drop + G.c) / (s.drop + 1) : G.c; if (s.srcG && s.srcG !== k) s.srcG = "AB"; else s.srcG = k; s.drop++; drop3d(i); log("good", "Une goutte de la solution du verre " + k + " (NaCl " + fmt(G.c, 0) + " g/L) au centre de la lame " + (i + 1) + ".", "drop"); const f = fragOn(i); if (f && f.from !== k) once("wrongDrop" + i, "warn", "Goutte du verre " + k + " sur le fragment du verre " + f.from + " : le milieu change.", "wrongDrop"); } },
+    Object.assign(h, { dur: 0.9, up: 0.08 }),
+  ]);
+}
+function drop3d(i) { const s = ST.sl[i], d = X["lame" + i].userData.drop, r = Math.min(0.0075, 0.0042 * Math.cbrt(Math.max(1, s.drop))); d.visible = s.drop > 0; if (!d.visible) return; if (s.lam) { d.scale.set(0.0105, 0.0003, 0.0105); d.position.y = 0.00062; } else { d.scale.set(r, r * 0.32, r); d.position.y = 0.00055; } }
+function lamelle(i, flat) {
+  if (isBusy()) return busyToast(); const s = ST.sl[i]; if (s.lam) return toast("La lamelle est déjà posée."); if (s.on) return toast("Retire d'abord la lame de la platine.");
+  const sl = X["lame" + i], lp = sl.userData.lamP; look("lame" + i);
+  const R = rng(ST.seed + 77 + i * 13 + ST.attempts * 5), bub = (n, r0, r1, spread) => { for (let k = 0; k < n; k++) s.bubbles.push({ x: (R() - 0.5) * spread, y: (R() - 0.5) * spread * 0.7, r: r0 + R() * (r1 - r0) }); };
+  lp.visible = true; lp.position.set(-0.015, 0.0008 + 0.04, 0); lp.rotation.set(0, 0, flat ? 0 : 0.8);
+  go(lp, [{ to: [-0.015, flat ? 0.012 : 0.0014, 0], rot: [0, 0, flat ? 0 : 0.8], dur: 0.7, up: 0 }, flat ? { to: [-0.015, 0.0009, 0], rot: [0, 0, 0], dur: 0.12, up: 0 } : { to: [-0.015, 0.0009, 0], rot: [0, 0, 0], dur: 1.6, up: 0 }]);
+  ST.q.push({ obj: new THREE.Object3D(), to: [0, 0, 0], dur: 0.05, up: 0, at: () => {
+    s.lam = flat ? 2 : 1; drop3d(i); const f = fragOn(i);
+    if (!s.drop) bub(9, 250, 900, 5200); else if (flat) bub(4 + Math.floor(R() * 3), 90, 520, 3600); else if (R() < 0.35) bub(1, 40, 110, 3000);
+    if (f) f.mesh.position.y = 0.00066;
+    log(flat ? "warn" : "good", flat ? "Lamelle lâchée à plat sur la lame " + (i + 1) + " : de l'air reste piégé." : "Lamelle posée inclinée puis descendue doucement sur la lame " + (i + 1) + " : le liquide chasse l'air.", flat ? "lamFlat" : "lamelle");
+    if (!f) once("lamNoFrag" + i, "warn", "Lamelle posée sans fragment sur la lame " + (i + 1) + ".", "lamelle");
+  } });
+}
+const stageTop = () => gpos(X.stage, [0, 0.0045, 0]);
+function slideToStage(i) {
+  if (isBusy()) return busyToast(); const s = ST.sl[i], cur = onStage(); if (cur === i) return; if (cur >= 0) return toast("Retire d'abord la lame " + (cur + 1) + " de la platine.");
+  const sl = X["lame" + i]; look("stage"); if (MV.obj === 40 && MV.z > ZF[40] - 1500) once("highStage", "warn", "Platine haute avec l'objectif ×40 : on baisse la platine et on revient au ×4 avant de changer de lame.", "low");
+  go(sl, [{ to: () => { const t = stageTop(); return [t.x - 0.004, t.y + 0.04, t.z + 0.02]; }, dur: 1.1, up: 0.06 }, { to: () => { const t = stageTop(); return [t.x + 0.004, t.y + 0.00056, t.z]; }, dur: 0.6, up: 0, at: () => { X.stage.attach(sl); s.on = true; MV.pan = [0, 0]; MV.dirty = true; clips3d(true); log("info", "Lame " + (i + 1) + " sur la platine, tenue par les valets.", "stage"); } }]);
+}
+function slideBack(i) {
+  if (isBusy()) return busyToast(); const s = ST.sl[i]; if (!s.on) return; const sl = X["lame" + i]; if (MV.open) closeView();
+  go(sl, [{ pre: () => { L.g.attach(sl); s.on = false; clips3d(false); MV.dirty = true; }, to: () => [sl.position.x, sl.position.y + 0.03, sl.position.z + 0.03], dur: 0.6, up: 0 }, Object.assign(homeOf("lame" + (i + 1)), { dur: 1.0, up: 0.04 })]);
+}
+function trashSlide(i) {
+  if (isBusy()) return busyToast(); const s = ST.sl[i]; if (s.on) return toast("Retire d'abord la lame de la platine."); const sl = X["lame" + i];
+  go(sl, [{ to: [-0.6, 0.12, -0.36], dur: 1.1, up: 0.08 }, { to: [-0.6, 0.1, -0.36], rot: [0, 0, 1.2], dur: 0.4, up: 0, at: () => { const f = fragOn(i); if (f) { f.at = "bin"; if (f.mesh.parent) f.mesh.parent.remove(f.mesh); } Object.assign(s, { drop: 0, c: 0, srcG: null, frag: null, lam: 0, bubbles: [], broken: false, wet: false, seen: {}, cracks: null }); ST.obs[i] = null; ["e", "m", "g"].forEach((p) => delete ST.ans[p + i]); sl.userData.lamP.visible = false; drop3d(i); log("info", "Préparation " + (i + 1) + " jetée ; une lame propre la remplace.", null); renderTable(); } }, Object.assign(homeOf("lame" + (i + 1)), { dur: 1.0, up: 0.06 })]);
+}
+function setLamp(on) { ST.lamp = on; X.lampM.emissiveIntensity = on ? 0.9 * (0.4 + 0.6 * MV.light) : 0.02; MV.dirty = true; log("info", on ? "Lampe du microscope allumée." : "Lampe éteinte.", "lamp"); }
+
+/* ------------------------------------------------------------ microscope : 3D (revolver, platine, valets, oculaire) */
+function setObj3d(o) { const a = X.objs[o].userData.a; X.rev.rotation.y = -a; }
+function stage3d() { X.stage.position.y = STAGE_Y0 - 0.0045 + MV.z * 1e-6; X.knobs.forEach((k, i) => (k.rotation.x = MV.z * (i % 2 ? 0.12 : 0.0012))); }
+function clips3d(on) { X.clips.forEach((c, i) => (c.rotation.y = on ? 0 : (i ? -0.5 : 0.5))); }
+function ocular3d() { if (X.ocLbl && X.ocLbl.material.map) { const c = X.ocLbl.material.map.image, x = c.getContext("2d"); x.clearRect(0, 0, c.width, c.height); x.fillStyle = "#fff"; x.font = `700 ${Math.round(c.height * 0.8)}px Arial`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(MV.oc + "×", c.width / 2, c.height / 2); X.ocLbl.material.map.needsUpdate = true; } }
+function setObj(o) {
+  if (MV.obj === o) return; const prev = MV.obj; MV.obj = o; MV.dirty = true; ST.q.push({ obj: X.rev, to: null, rot: [0, -X.objs[o].userData.a, 0], dur: 0.6, up: 0 });
+  log("info", "Revolver tourné : objectif ×" + o + " (G = ×" + o * MV.oc + ").", o > prev ? "micro" : "low");
+  const st = onStage(); if (o === 40 && st >= 0 && MV.z > zf() + 380) crash(st);
+}
+function setOc(c) { if (MV.oc === c) return; MV.oc = c; MV.dirty = true; ocular3d(); log("info", "Oculaire ×" + c + " : G = ×" + MV.obj * c + ".", "G"); }
+const zf = () => { const st = onStage(); return ZF[MV.obj] + (st >= 0 ? ST.sl[st].dz + (ST.sl[st].lam ? 0 : -160) : 0); };
+const focusQ = () => (onStage() < 0 ? 99 : Math.abs(MV.z - zf()) / DOF[MV.obj]); // écart à la mise au point, en profondeurs de champ
+function crash(i) {
+  const s = ST.sl[i]; MV.hold = null;
+  if (s.lam && !s.broken) { s.broken = true; const R = rng(ST.seed + 999); s.cracks = []; for (let k = 0; k < 3; k++) { const pts = [], a = R() * 6.28; let x = (R() - 0.5) * 300, y = (R() - 0.5) * 300; for (let j = 0; j < 9; j++) { pts.push([x, y]); x += Math.cos(a + (R() - 0.5) * 0.9) * 260; y += Math.sin(a + (R() - 0.5) * 0.9) * 260; } s.cracks.push(pts); } log("bad", "Crac ! L'objectif ×40 a touché la lamelle : elle est fêlée (vis macrométrique au fort grossissement).", "crash"); toast("L'objectif a écrasé la lamelle !", "bad"); ST.flags.crash = true; }
+  else if (!s.lam && !s.wet) { s.wet = true; log("bad", "Sans lamelle, l'objectif ×40 plonge dans la goutte : lentille mouillée, image laiteuse.", "wet"); toast("L'objectif est mouillé !", "bad"); ST.flags.wet = true; }
+  MV.z = zf() + 380; stage3d(); MV.dirty = true;
+}
+
+/* ------------------------------------------------------------ vue dans l'oculaire : image calculée d'après l'état réel de la préparation
+   Épiderme : rangées de cellules allongées à parois obliques (comme l'épiderme d'écaille d'oignon), une seule couche ;
+   chaque cellule : paroi (membrane squelettique), membrane cytoplasmique, cytoplasme pariétal, vacuole violette, noyau.
+   Plasmolyse : le protoplaste se rétracte (forme propre à chaque cellule, filaments de cytoplasme vers la paroi),
+   la vacuole devient plus petite et plus foncée (anthocyanes plus concentrées). Flou = écart à la mise au point / profondeur de champ. */
+const fovUm = () => (MV.oc === 15 ? 12000 : 18000) / MV.obj;
+const Gnow = () => MV.obj * MV.oc;
+function pipIn(P, x, y) { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const a = P[i], b = P[j]; if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
+function resample(P, N) {
+  const n = P.length, L = [0]; for (let i = 1; i <= n; i++) { const a = P[i - 1], b = P[i % n]; L.push(L[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+  const out = []; let j = 0; for (let k = 0; k < N; k++) { const s = (L[n] * k) / N; while (L[j + 1] < s) j++; const a = P[j], b = P[(j + 1) % n], t = (s - L[j]) / Math.max(1e-6, L[j + 1] - L[j]); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); } return out;
+}
+function inset(P, d) {
+  const n = P.length; let A = 0; for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n]; A += a[0] * b[1] - b[0] * a[1]; } const sg = A > 0 ? 1 : -1;
+  return P.map((b, i) => { const a = P[(i - 1 + n) % n], c = P[(i + 1) % n]; let n1 = [b[1] - a[1], -(b[0] - a[0])], n2 = [c[1] - b[1], -(c[0] - b[0])]; const l1 = Math.hypot(...n1) || 1, l2 = Math.hypot(...n2) || 1; let nx = n1[0] / l1 + n2[0] / l2, ny = n1[1] / l1 + n2[1] / l2; const l = Math.hypot(nx, ny) || 1; return [b[0] - (sg * nx * d) / l, b[1] - (sg * ny * d) / l]; });
+}
+function smoothNoise(N, R, amp) { let v = Array.from({ length: N }, () => (R() - 0.5) * 2 * amp); for (let k = 0; k < 3; k++) v = v.map((x, i) => (v[(i - 1 + N) % N] + 2 * x + v[(i + 1) % N]) / 4); const m = Math.max(...v.map(Math.abs)) || 1; return v.map((x) => (x / m) * amp); }
+function mkCell(P, cx, cy, R) {
+  const N = 40, rs = resample(P, N), pp = inset(rs, 1.2); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const p of P) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+  const sxb = 0.5 + R() * 0.2, syb = 0.6 + R() * 0.17, nx = smoothNoise(N, R, 0.08), ny = smoothNoise(N, R, 0.07);
+  return { P, cx, cy, hl: (x1 - x0) / 2, hw: (y1 - y0) / 2, bb: [x0, y0, x1, y1], pp, sx: nx.map((v) => clamp(sxb + v, 0.4, 0.78)), sy: ny.map((v) => clamp(syb + v, 0.5, 0.82)), shx: (R() - 0.5) * 0.34, shy: (R() - 0.5) * 0.14, k: (R() < 0.12 ? 0.45 : 0.72) + R() * 0.28, d: R() * 0.28, ni: Math.floor(R() * N), nr: R(), st: [Math.floor(R() * N), Math.floor(R() * N)], hue: (R() - 0.5) * 16 };
+}
+function genCells(f) {
+  if (f.cells) return f.cells;
+  const R = rng(f.seed), out = fragOutline(f.seed, 64), H = 54, NR = 92, rows = [];
+  for (let j = 0; j <= NR; j++) rows.push({ y: (j - NR / 2) * H + (R() - 0.5) * 12, a: 3 + R() * 7, l: 300 + R() * 400, ph: R() * 6.28, a2: 1.5 + R() * 2.5, l2: 80 + R() * 60, ph2: R() * 6.28 });
+  const yr = (j, x) => { const r = rows[j]; return r.y + r.a * Math.sin(x / r.l + r.ph) + r.a2 * Math.sin(x / r.l2 + r.ph2); };
+  const cells = [], big = out.map((p) => [p[0] * 1.08, p[1] * 1.08]);
+  for (let j = 0; j < NR; j++) {
+    let pt = -3900 - R() * 300, pb = pt + (R() - 0.5) * 40;
+    while (Math.min(pt, pb) < 3900) {
+      const Lc = 140 + R() * 240, s = (R() - 0.5) * 46, xm = (pt + pb) / 2 + Lc, nt = xm + s, nb = xm - s, P = [];
+      const n1 = Math.max(2, Math.ceil((nt - pt) / 36)), n2 = Math.max(2, Math.ceil((nb - pb) / 36));
+      for (let i = 0; i <= n1; i++) { const x = pt + ((nt - pt) * i) / n1; P.push([x, yr(j, x)]); }
+      for (let i = n2; i >= 0; i--) { const x = pb + ((nb - pb) * i) / n2; P.push([x, yr(j + 1, x)]); }
+      const cx = (pt + pb + nt + nb) / 4, cy = (yr(j, cx) + yr(j + 1, cx)) / 2;
+      if (pipIn(big, cx, cy)) cells.push(mkCell(P, cx, cy, R));
+      pt = nt; pb = nb;
+    }
+  }
+  f.cells = cells; f.out = out; return cells;
+}
+const cellQ = (c, p) => { const q = clamp((p - c.d) / (1 - c.d), 0, 1); return q * q * (3 - 2 * q); };
+function protoOf(c, q) { // protoplaste : la forme de la cellule rétrécit et s'arrondit (plasmolyse convexe), chaque cellule à sa façon
+  const cx = c.cx + q * c.shx * c.hl * 0.5, cy = c.cy + q * c.shy * c.hw * 0.5, A = c.hl * lerp(1, 0.62, q), B = c.hw * lerp(1, 0.72, q), m = 0.6 * q;
+  return { cx, cy, P: c.pp.map((p, i) => { const dx = (p[0] - c.cx) * lerp(1, c.sx[i], q), dy = (p[1] - c.cy) * lerp(1, c.sy[i], q), k = 1 / Math.max(1e-6, Math.hypot(dx / A, dy / B)), e = (c.sx[i] + c.sy[i]) / 1.3; return [cx + lerp(dx, dx * k * Math.min(1, e), m), cy + lerp(dy, dy * k * Math.min(1, e), m)]; }) };
+}
+function vacOf(pr, c, q) { const cyt = 2.2 + 1.6 * q, a = Math.max(8, c.hl * lerp(1, 0.6, q)), b = Math.max(5, c.hw * lerp(1, 0.7, q)), fx = 1 - cyt / a, fy = 1 - cyt / b; return pr.P.map((p) => [pr.cx + (p[0] - pr.cx) * fx, pr.cy + (p[1] - pr.cy) * fy]); }
+function smoothPath(ctx, P, tx) { const n = P.length, m = (i) => { const a = P[i % n], b = P[(i + 1) % n]; return tx([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]); }; const s = m(n - 1); ctx.moveTo(s[0], s[1]); for (let i = 0; i < n; i++) { const c = tx(P[i]), e = m(i); ctx.quadraticCurveTo(c[0], c[1], e[0], e[1]); } ctx.closePath(); }
+function nucOf(c, pr, q) { const p = pr.P[c.ni], dx = pr.cx - p[0], dy = pr.cy - p[1], l = Math.hypot(dx, dy) || 1, k = 6 + 2 * q; return [p[0] + (dx / l) * k, p[1] + (dy / l) * k]; }
+
+let MVV = null; // éléments de la vue (canvas, tampon, légende)
+function buildView() {
+  const st = document.createElement("style");
+  st.textContent = `#mv{position:fixed;top:calc(58px + env(safe-area-inset-top,0px));left:max(600px,47vw);right:12px;bottom:12px;z-index:7;display:flex;gap:14px;align-items:center;justify-content:center;background:radial-gradient(circle at 40% 50%,#15191f,#07090c 70%);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgba(0,0,0,.55);padding:12px}#mv[hidden]{display:none}
+#mv .mvw{position:relative;flex:0 0 auto}#mvc{display:block;border-radius:50%;cursor:grab;touch-action:none;box-shadow:0 0 0 6px #050608,0 0 0 8px #2a2f36}#mvc:active{cursor:grabbing}
+#mvLeg{position:absolute;inset:0;pointer-events:none}#mvLeg svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}#mvLeg .ttl{position:absolute;left:50%;top:-6px;transform:translate(-50%,-100%);background:#1d2836;color:#fff;font:700 14px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;white-space:nowrap}#mvLeg .ttl:empty{display:none}
+#mv .mvc{width:250px;flex:0 0 250px;display:flex;flex-direction:column;gap:9px;color:var(--fg);font-size:13px;max-height:100%;overflow:auto}
+#mv .mvh{display:flex;justify-content:space-between;align-items:center;gap:8px}#mv .mvh b{font-size:15px}
+#mv .mvg{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:12px;padding:8px 10px}#mv .mvg b{display:block;font-family:var(--f-mono);font-size:26px;color:var(--accent)}#mv .mvg small{color:var(--muted);font-size:12px}
+#mv .mvr span{display:block;font-size:11.5px;color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+#mv .seg{display:flex;gap:5px;flex-wrap:wrap}#mv .seg button{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--fg);border-radius:9px;padding:7px 6px;font:inherit;font-weight:700;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none}#mv .seg button.on{border-color:var(--accent);color:var(--accent);background:rgba(255,197,77,.1)}#mv .seg button:active{background:rgba(255,197,77,.2)}
+#mv .seg button i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:0}
+#mv input[type=range]{width:100%}#mv .mvt{font-size:12px;color:var(--muted);line-height:1.35}
+body.mvon #exao{z-index:9}#mv .mvz{display:flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:12.5px;color:var(--muted)}#mv .mvz i{flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.08);position:relative;overflow:hidden}#mv .mvz i b{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#3f6fa3,#ffc54d);border-radius:4px}
+@media (max-width:1100px){#mv{left:45vw}}@media (max-width:760px){#mv{flex-direction:column;left:8px;right:8px;bottom:8px;overflow:auto;justify-content:flex-start}#mv .mvc{width:100%;flex:none}}`;
+  document.head.appendChild(st);
+  const d = document.createElement("div"); d.id = "mv"; d.hidden = true;
+  d.innerHTML = `<div class="mvw"><canvas id="mvc"></canvas><div id="mvLeg"><svg></svg><div class="ttl"></div><div class="tags"></div></div></div>
+  <div class="mvc"><div class="mvh"><b>🔬 Dans l'oculaire</b><button class="sb" id="mvClose" type="button">✕ Quitter</button></div>
+  <div class="mvg"><small>Grossissement G = objectif × oculaire</small><b id="mvG">×40</b><small id="mvF"></small></div>
+  <div class="mvr"><span>Objectif (revolver)</span><div class="seg" id="mvObj">${OBJS.map((o) => `<button type="button" data-o="${o}"><i style="background:${{ 4: "#d0302a", 10: "#e4c022", 40: "#2b7fd6" }[o]}"></i>×${o}</button>`).join("")}</div></div>
+  <div class="mvr"><span>Oculaire</span><div class="seg" id="mvOc"><button type="button" data-c="10">×10</button><button type="button" data-c="15">×15</button></div></div>
+  <div class="mvr"><span>Vis macrométrique (rapide)</span><div class="seg"><button type="button" data-h="macro,1">▲ monter</button><button type="button" data-h="macro,-1">▼ descendre</button></div></div>
+  <div class="mvr"><span>Vis micrométrique (fine)</span><div class="seg"><button type="button" data-h="micro,1">▲ monter</button><button type="button" data-h="micro,-1">▼ descendre</button></div></div>
+  <div class="mvr"><span>Hauteur de la platine</span><div class="mvz"><i><b id="mvZb"></b></i><em id="mvZ"></em></div></div>
+  <div class="mvr"><span>Lumière</span><input type="range" id="mvL" min="0" max="100" value="75" aria-label="Intensité de la lampe"></div>
+  <div class="mvr"><span>Diaphragme (contraste)</span><input type="range" id="mvD" min="0" max="100" value="70" aria-label="Ouverture du diaphragme"></div>
+  <div class="mvt" id="mvT">Fais glisser l'image pour déplacer la lame. Molette de la souris sur l'image : vis micrométrique.</div></div>`;
+  document.body.appendChild(d);
+  const cv = $("#mvc"), buf = document.createElement("canvas"); MVV = { cv, buf, leg: $("#mvLeg"), size: 0 };
+  $("#mvClose").onclick = () => closeView();
+  d.querySelectorAll("#mvObj button").forEach((b) => (b.onclick = () => { stepFollow("micro"); setObj(+b.dataset.o); }));
+  d.querySelectorAll("#mvOc button").forEach((b) => (b.onclick = () => setOc(+b.dataset.c)));
+  d.querySelectorAll("[data-h]").forEach((b) => { const [k, s] = b.dataset.h.split(","), on = (e) => { e.preventDefault(); MV.hold = { kind: k, dir: +s }; MV.goal = null; if (k === "macro" && +s > 0 && MV.obj === 40) once("macro40", "warn", "Vis macrométrique avec l'objectif ×40 : la platine monte vite vers l'objectif.", "crash"); }, off = () => { if (MV.hold && MV.hold.kind === k) MV.hold = null; }; b.addEventListener("pointerdown", on); b.addEventListener("pointerup", off); b.addEventListener("pointerleave", off); b.addEventListener("pointercancel", off); });
+  $("#mvL").oninput = (e) => { MV.light = e.target.value / 100; MV.dirty = true; if (ST.lamp) X.lampM.emissiveIntensity = 0.9 * (0.4 + 0.6 * MV.light); };
+  $("#mvD").oninput = (e) => { MV.diaph = e.target.value / 100; MV.dirty = true; X.diaphLever.rotation.y = (MV.diaph - 0.5) * 0.8; };
+  cv.addEventListener("pointerdown", (e) => { MV.drag = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", (e) => { if (!MV.drag) return; const k = fovUm() / (MVV.size || 1); MV.pan[0] = clamp(MV.pan[0] - (e.clientX - MV.drag.x) * k, -12000, 12000); MV.pan[1] = clamp(MV.pan[1] - (e.clientY - MV.drag.y) * k, -9000, 9000); MV.drag = { x: e.clientX, y: e.clientY }; MV.dirty = true; });
+  const up = () => { MV.drag = null; }; cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  cv.addEventListener("wheel", (e) => { e.preventDefault(); moveZ(-Math.sign(e.deltaY) * 2); }, { passive: false });
+}
+function moveZ(dz) { const st = onStage(); MV.z = clamp(MV.z + dz, 0, MAX_Z); if (st >= 0 && MV.obj === 40 && MV.z > zf() + 380) crash(st); stage3d(); MV.dirty = true; }
+function openView() {
+  if (!MVV) buildView(); MV.open = true; MV.dirty = true; $("#mv").hidden = false; document.body.classList.add("mvon"); closeMenu(); showTip(null); look("mview"); // le microscope reste visible à gauche de l'oculaire : on voit la platine monter et les vis tourner
+  if (!ST.lamp) toast("Tout est noir : allume la lampe du microscope.", "bad");
+  once("view", "info", "Œil à l'oculaire. On commence au plus faible grossissement (objectif ×4).", "low");
+}
+function closeView(silent) { const was = MV.open; MV.open = false; MV.hold = null; MV.goal = null; if (MVV) $("#mv").hidden = true; document.body.classList.remove("mvon"); knobGlow(null); if (was && !silent && L.cam) look("micro"); if (ST.tblPend) { ST.tblPend = false; showTable(); } }
+function viewOffset() { // cadre la paillasse dans la partie visible à gauche du panneau de l'oculaire
+  const W = window.innerWidth, H = window.innerHeight;
+  if (MV.open && W >= 760 && MVV) { const left = $("#mv").getBoundingClientRect().left, l0 = W >= 1100 && !$("#instr").hidden ? 290 : W >= 1100 && !$("#demo").hidden ? 320 : 0, cx = (l0 + left) / 2; L.cam.setViewOffset(W, H, W / 2 - cx, 0, W, H); }
+  else if (L.cam.view && L.cam.view.enabled) L.cam.clearViewOffset();
+}
+function knobGlow(kind) { for (const k of ["macro", "micro"]) { const m = X["knobM_" + k]; if (m) { m.emissive.setHex(0xffb020); m.emissiveIntensity = kind === k ? 0.55 : 0; } } }
+function mvLegAvail() { return !!(MV.open && MVV && MVV.legN); }
+
+function drawMicro() {
+  const V = MVV; if (!V) return; const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+  const pr0 = $("#mv").getBoundingClientRect(), avW = window.innerWidth < 760 ? window.innerWidth - 40 : pr0.width - 250 - 14 - 26, avH = window.innerWidth < 760 ? window.innerHeight - 330 : pr0.height - 60;
+  $("#mvZ").textContent = fmt(MV.z / 1000, 2) + " mm"; $("#mvZb").style.width = (100 * MV.z) / MAX_Z + "%";
+  const css = Math.round(clamp(Math.min(avW, avH), 220, 720)); if (V.size !== css) { V.size = css; V.cv.style.width = V.cv.style.height = css + "px"; V.cv.width = V.cv.height = V.buf.width = V.buf.height = Math.round(css * dpr); }
+  const D = V.cv.width, R0 = D / 2, b = V.buf.getContext("2d"), ctx = V.cv.getContext("2d");
+  const st = onStage(), s = st >= 0 ? ST.sl[st] : null, f = s ? fragOn(st) : null, fov = fovUm(), sc = D / fov, cx0 = MV.pan[0], cy0 = MV.pan[1];
+  const tx = (p) => [R0 + (p[0] - cx0) * sc, R0 + (p[1] - cy0) * sc];
+  b.setTransform(1, 0, 0, 1, 0, 0); b.fillStyle = s ? (s.drop ? "#f6f3e8" : "#f2efe6") : "#fbfaf4"; b.fillRect(0, 0, D, D);
+  let legCell = null;
+  if (f) legCell = drawFrag(b, f, s, sc, cx0, cy0, fov, tx, D);
+  if (s) {
+    for (const bu of s.bubbles) { const c = tx([bu.x, bu.y]), r = bu.r * sc; if (c[0] + r < 0 || c[0] - r > D || c[1] + r < 0 || c[1] - r > D) continue; const g = b.createRadialGradient(c[0], c[1], r * 0.5, c[0], c[1], r); g.addColorStop(0, "rgba(255,255,255,0.25)"); g.addColorStop(0.72, "rgba(90,90,90,0.12)"); g.addColorStop(0.86, "rgba(25,25,25,0.85)"); g.addColorStop(0.95, "rgba(40,40,40,0.5)"); g.addColorStop(1, "rgba(255,255,255,0)"); b.fillStyle = g; b.beginPath(); b.arc(c[0], c[1], r, 0, 7); b.fill(); b.fillStyle = "rgba(255,255,255,.7)"; b.beginPath(); b.arc(c[0] - r * 0.25, c[1] - r * 0.25, Math.max(1, r * 0.08), 0, 7); b.fill(); }
+    if (s.cracks) { b.strokeStyle = "rgba(30,30,30,.8)"; b.lineWidth = Math.max(1.2, 3 * sc); for (const cr of s.cracks) { b.beginPath(); cr.forEach((p, i) => { const c = tx(p); i ? b.lineTo(c[0], c[1]) : b.moveTo(c[0], c[1]); }); b.stroke(); } b.strokeStyle = "rgba(255,255,255,.6)"; b.lineWidth = Math.max(0.6, 1 * sc); for (const cr of s.cracks) { b.beginPath(); cr.forEach((p, i) => { const c = tx([p[0] + 4, p[1] + 4]); i ? b.lineTo(c[0], c[1]) : b.moveTo(c[0], c[1]); }); b.stroke(); } }
+  }
+  // composition : flou de mise au point, lumière et diaphragme, poussières de l'oculaire, vignetage
+  const fq = focusQ(), blur = s ? Math.min(18, Math.max(0, fq - 0.45) * 1.5) * dpr + (s.wet ? 7 * dpr : 0) + (f && f.thick ? 2.2 * dpr : 0) + (!s.lam && MV.obj >= 10 ? 1.2 * dpr : 0) : 0;
+  const br = ST.lamp ? (0.3 + 0.85 * MV.light) * (0.5 + 0.5 * MV.diaph) * (f && f.thick ? 0.72 : 1) * (s && s.wet ? 1.1 : 1) : 0, ct = (0.82 + (1 - MV.diaph) * 0.65) * (s && s.wet ? 0.6 : 1);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, D, D); ctx.save(); ctx.beginPath(); ctx.arc(R0, R0, R0, 0, 7); ctx.clip(); ctx.fillStyle = "#020203"; ctx.fillRect(0, 0, D, D);
+  if (br > 0.02) { ctx.filter = `blur(${blur.toFixed(1)}px) brightness(${br.toFixed(3)}) contrast(${ct.toFixed(3)})`; ctx.drawImage(V.buf, 0, 0); ctx.filter = "none";
+    for (const [x, y, r] of [[0.32, 0.27, 0.012], [0.71, 0.62, 0.008], [0.58, 0.18, 0.006]]) { const g = ctx.createRadialGradient(x * D, y * D, 0, x * D, y * D, r * D); g.addColorStop(0, `rgba(60,55,50,${0.28 * br})`); g.addColorStop(1, "rgba(60,55,50,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x * D, y * D, r * D, 0, 7); ctx.fill(); } }
+  const vg = ctx.createRadialGradient(R0, R0, R0 * 0.55, R0, R0, R0); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(0.85, "rgba(0,0,0,.18)"); vg.addColorStop(1, "rgba(0,0,0,.85)"); ctx.fillStyle = vg; ctx.fillRect(0, 0, D, D); ctx.restore();
+  // panneau : grossissement, champ, boutons actifs
+  $("#mvG").textContent = "×" + Gnow(); $("#mvF").textContent = "objectif ×" + MV.obj + " · oculaire ×" + MV.oc + " · champ ≈ " + (fov >= 1000 ? fmt(fov / 1000, 1) + " mm" : Math.round(fov) + " µm");
+  document.querySelectorAll("#mvObj button").forEach((x) => x.classList.toggle("on", +x.dataset.o === MV.obj)); document.querySelectorAll("#mvOc button").forEach((x) => x.classList.toggle("on", +x.dataset.c === MV.oc));
+  $("#mvT").textContent = !ST.lamp ? "Lampe éteinte : allume-la (menu du microscope)." : !s ? "Aucune lame sur la platine." : "Fais glisser l'image pour déplacer la lame. Molette de la souris sur l'image : vis micrométrique.";
+  drawMvLegend(legCell, f, s, sc, tx, dpr, fq, br);
+}
+function drawFrag(b, f, s, sc, cx0, cy0, fov, tx0, D) {
+  const cells = genCells(f), ox = f.ox, oy = f.oy, tx = (p) => tx0([p[0] + ox, p[1] + oy]), p = f.p, half = fov / 2 + 60;
+  const wx0 = cx0 - ox - half, wx1 = cx0 - ox + half, wy0 = cy0 - oy - half, wy1 = cy0 - oy + half;
+  b.save(); b.beginPath(); f.out.forEach((q, i) => { const c = tx(q); i ? b.lineTo(c[0], c[1]) : b.moveTo(c[0], c[1]); }); b.closePath();
+  b.fillStyle = "rgba(236,228,214,.55)"; b.fill(); b.clip();
+  const vis = cells.filter((c) => c.bb[2] > wx0 && c.bb[0] < wx1 && c.bb[3] > wy0 && c.bb[1] < wy1);
+  const detail = sc * 10, nuc = sc * 12 > 2.4, mem = sc > 0.22;
+  const T = (x, y) => tx([x, y]);
+  let best = null, bd = 1e9; const R0 = D / 2;
+  for (const c of vis) {
+    const q = cellQ(c, p), pr = protoOf(c, q), vac = vacOf(pr, c, q), k = c.k;
+    b.beginPath(); smoothPath(b, pr.P, tx); b.fillStyle = `rgba(238,232,222,${0.5 + 0.2 * q})`; b.fill();
+    const r = Math.round(lerp(214, 150, q) + c.hue), gg = Math.round(lerp(96, 22, q)), bl = Math.round(lerp(168, 98, q)), a = lerp(0.36 + 0.36 * k, 0.72 + 0.24 * k, q);
+    b.beginPath(); smoothPath(b, vac, tx); b.fillStyle = `rgba(${r},${gg},${bl},${a.toFixed(3)})`; b.fill();
+    if (mem) { b.beginPath(); smoothPath(b, pr.P, tx); b.strokeStyle = `rgba(110,80,100,${0.35 + 0.3 * q})`; b.lineWidth = Math.max(0.5, 0.7 * sc); b.stroke(); }
+    if (q > 0.2 && detail > 1.5) { b.strokeStyle = `rgba(150,130,135,${0.5 * q})`; b.lineWidth = Math.max(0.4, 0.5 * sc); for (const i of c.st) { const a1 = tx(pr.P[i]), a2 = tx(c.pp[i]); b.beginPath(); b.moveTo(a1[0], a1[1]); b.quadraticCurveTo((a1[0] + a2[0]) / 2 + 2, (a1[1] + a2[1]) / 2 - 2, a2[0], a2[1]); b.stroke(); } }
+    if (nuc) { const n = tx(nucOf(c, pr, q)), rx = 7.5 * sc, ry = 5 * sc; b.beginPath(); b.ellipse(n[0], n[1], rx, ry, 0.1, 0, 7); b.fillStyle = "rgba(205,196,200,.75)"; b.fill(); b.strokeStyle = "rgba(95,85,95,.7)"; b.lineWidth = Math.max(0.5, 0.6 * sc); b.stroke(); b.beginPath(); b.arc(n[0] + rx * 0.2, n[1], Math.max(0.6, 1.6 * sc), 0, 7); b.fillStyle = "rgba(90,70,90,.8)"; b.fill(); }
+    const sc0 = tx([c.cx, c.cy]), dd = Math.hypot(sc0[0] - R0, sc0[1] - R0); if (dd < bd && dd < R0 * 0.45 && c.k > 0.6) { bd = dd; best = { c, q, pr, vac }; }
+  }
+  // parois (membrane squelettique) : un seul tracé, puis un reflet clair (paroi vue en épaisseur)
+  b.beginPath(); for (const c of vis) { c.P.forEach((q, i) => { const t = tx(q); i ? b.lineTo(t[0], t[1]) : b.moveTo(t[0], t[1]); }); b.closePath(); }
+  b.strokeStyle = "rgba(108,100,86,.85)"; b.lineWidth = Math.max(0.7, 2.3 * sc); b.lineJoin = "round"; b.stroke(); if (sc > 0.35) { b.strokeStyle = "rgba(255,253,245,.5)"; b.lineWidth = Math.max(0.35, 0.7 * sc); b.stroke(); }
+  if (f.thick) { const R = rng(f.seed + 5); for (let i = 0; i < 160; i++) { const x = (R() - 0.5) * 6000, y = (R() - 0.5) * 4000, c = tx([x, y]), r = (80 + R() * 160) * sc; b.fillStyle = `rgba(${120 + R() * 40},${70 + R() * 30},${90 + R() * 30},${0.18 + R() * 0.2})`; b.beginPath(); b.ellipse(c[0], c[1], r * 1.4, r, R() * 3, 0, 7); b.fill(); } b.fillStyle = "rgba(90,60,70,.28)"; b.fillRect(-1e4, -1e4, 3e4, 3e4); }
+  b.restore();
+  b.beginPath(); f.out.forEach((q, i) => { const c = tx(q); i ? b.lineTo(c[0], c[1]) : b.moveTo(c[0], c[1]); }); b.closePath(); b.strokeStyle = "rgba(120,70,95,.45)"; b.lineWidth = Math.max(1, 7 * sc); b.stroke(); // bord déchiré, un peu enroulé
+  if (best) { best.tx = tx; best.near = (u) => tx(u); }
+  return best;
+}
+function drawMvLegend(L0, f, s, sc, tx, dpr, fq, br) {
+  const V = MVV, el = V.leg, show = !window.__legOff; V.legN = 0;
+  const items = []; const k = 1 / dpr;
+  if (f && L0 && br > 0.15 && fq < 2.2) {
+    const { c, q, pr, vac } = L0, T = (p) => { const t = L0.tx(p); return [t[0] * k, t[1] * k]; };
+    if (Gnow() >= 100) {
+      const S0 = V.size / 2, dC = (p) => { const t = T(p); return Math.hypot(t[0] - S0, t[1] - S0); }, arg = (arr, f) => arr.reduce((b, p, i) => (f(p) < f(arr[b]) ? i : b), 0);
+      const wallP = c.P[arg(c.P, (p) => dC(p) + (p[1] > c.cy ? 1e6 : 0))], memI = arg(pr.P, (p) => dC(p) + (p[1] < pr.cy ? 1e6 : 0)), cytI = (arg(pr.P, (p) => dC(p) + (p[0] < pr.cx ? 1e6 : 0)) + 2) % pr.P.length; // repères pris dans le champ : paroi en haut, membrane en bas, cytoplasme à droite
+      items.push({ a: T(wallP), t: "membrane squelettique", m: "paroi cellulosique", c: "#8a7a5a" });
+      items.push({ a: T(pr.P[memI]), t: "membrane cytoplasmique", c: "#7a4a6a" });
+      const cp = pr.P[cytI], cv = vac[cytI]; items.push({ a: T([(cp[0] + cv[0]) / 2, (cp[1] + cv[1]) / 2]), t: "cytoplasme", c: "#9a8f80" });
+      items.push({ a: T([pr.cx + (vac[0][0] - pr.cx) * 0.3, pr.cy]), t: "vacuole", m: "suc vacuolaire coloré", c: "#a3306f" });
+      if (sc * 12 > 2.4) items.push({ a: T(nucOf(c, pr, q)), t: "noyau", c: "#5d5560" });
+      if (q > 0.35) { const i = c.st[0], a = pr.P[i], w = c.pp[i]; items.push({ a: T([(a[0] + w[0]) / 2, (a[1] + w[1]) / 2]), t: "filament de cytoplasme", c: "#8a8085" }); const j = Math.floor(c.pp.length / 2), wa = c.pp[j], pa = pr.P[j]; items.push({ a: T([(wa[0] * 0.65 + pa[0] * 0.35), (wa[1] * 0.65 + pa[1] * 0.35)]), t: ST.fini ? "solution extérieure" : "espace incolore", m: ST.fini ? "remplit l'espace laissé par l'eau sortie" : "entre la paroi et la membrane", c: "#3f6fa3" }); }
+    } else items.push({ a: T([c.cx, c.cy]), t: "une cellule de l'épiderme", m: "grossis davantage pour voir ses parties", c: "#a3306f" });
+  }
+  if (s && br > 0.15) { const bu = s.bubbles.find((b) => { const t = tx([b.x, b.y]), D = V.cv.width; return Math.hypot(t[0] - D / 2, t[1] - D / 2) < D * 0.42; }); if (bu) { const t = tx([bu.x + bu.r * 0.7, bu.y]); items.push({ a: [t[0] * k, t[1] * k], t: "bulle d'air", m: "cercle à bord noir épais", c: "#33404d" }); } }
+  { const S0 = V.size / 2; for (let n = items.length - 1; n >= 0; n--) { const a = items[n].a; if (Math.hypot(a[0] - S0, a[1] - S0) > S0 * 0.93) items.splice(n, 1); } } // repère hors du champ : pas d'étiquette
+  V.legN = items.length; const svg = el.querySelector("svg"), tags = el.querySelector(".tags"), ttl = el.querySelector(".ttl");
+  if (!show || !items.length) { svg.innerHTML = ""; tags.innerHTML = ""; ttl.textContent = ""; return; }
+  const S = V.size; items.forEach((i) => (i.s = i.a[0] < S / 2 ? "L" : "R"));
+  for (const side of ["L", "R"]) { const g = items.filter((i) => i.s === side).sort((a, b) => a.a[1] - b.a[1]); g.forEach((i, n) => { i.x = side === "L" ? 10 : S - 10; i.y = clamp(i.a[1], 20, S - 20); if (n && i.y - g[n - 1].y < 44) i.y = g[n - 1].y + 44; }); }
+  ttl.textContent = ST.fini && L0 && Gnow() >= 100 ? (L0.q > 0.5 ? "Cellule plasmolysée" : L0.q < 0.2 ? "Cellule turgescente" : "Cellule en cours de plasmolyse") : "";
+  tags.innerHTML = items.map((i) => `<div class="tag ${i.s === "L" ? "" : "L"}" style="--c:${i.c};left:${i.x}px;top:${i.y}px">${i.t}${i.m ? "<small>" + i.m + "</small>" : ""}</div>`).join("");
+  svg.innerHTML = items.map((i) => `<line x1="${i.a[0]}" y1="${i.a[1]}" x2="${i.x}" y2="${i.y}" stroke="#ffffff" stroke-width="3.5" opacity=".75"/><line x1="${i.a[0]}" y1="${i.a[1]}" x2="${i.x}" y2="${i.y}" stroke="${i.c}" stroke-width="2"/><circle cx="${i.a[0]}" cy="${i.a[1]}" r="4" fill="none" stroke="${i.c}" stroke-width="2"/>`).join("");
+}
+
+/* ------------------------------------------------------------ rendu, caméra, souris */
+const L = {};
+function init3d() {
+  const el = $("#scene3d");
+  const R = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: !!window.__shots });
+  R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); R.outputEncoding = THREE.sRGBEncoding; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.05; R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap; el.append(R.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xd9dee4); const pm = new THREE.PMREMGenerator(R); scene.environment = pm.fromScene(envScene(), 0.04).texture; pm.dispose();
+  const cam = new THREE.PerspectiveCamera(40, 1.6, 0.02, 40); cam.position.set(0.1, BENCH + 0.9, 1.6);
+  const ctl = new THREE.OrbitControls(cam, R.domElement); Object.assign(ctl, { enableDamping: true, dampingFactor: 0.08, minDistance: 0.06, maxDistance: 2.6, maxPolarAngle: Math.PI * 0.48, enablePan: true, screenSpacePanning: true, panSpeed: 0.5, rotateSpeed: 0.6 }); ctl.target.set(0, BENCH + 0.15, -0.15);
+  scene.add(new THREE.HemisphereLight(0xf2f6ff, 0x6f6b66, 0.55));
+  const sun = new THREE.DirectionalLight(0xfff3e4, 1.25); sun.position.set(1.8, 4.4, 2.0); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.2, bottom: -1.2, near: 1, far: 9 }); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.012; sun.shadow.radius = 4; sun.target.position.set(0, BENCH, -0.2); scene.add(sun, sun.target);
+  const back = new THREE.DirectionalLight(0xdbe7ff, 0.35); back.position.set(0, 2.6, -3); scene.add(back);
+  initMats(); buildRoom(scene); const g = new THREE.Group(); g.position.set(0, BENCH, 0); scene.add(g); Object.assign(L, { g }); buildBench(g); linColors(scene); g.updateMatrixWorld(true);
+  Object.assign(L, { R, scene, cam, ctl, el, g, tw: null, ray: new THREE.Raycaster(), ptr: new THREE.Vector2() });
+  const fit = () => { R.setSize(window.innerWidth, window.innerHeight, false); cam.aspect = window.innerWidth / window.innerHeight; cam.updateProjectionMatrix(); MV.dirty = true; }; window.addEventListener("resize", fit); fit();
+  let down = null; const pick = (ev) => { L.ptr.set((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1); L.ray.setFromCamera(L.ptr, cam); for (const h of L.ray.intersectObjects(g.children, true)) { let o = h.object, vis = true; while (o) { if (o.visible === false) { vis = false; break; } o = o.parent; } if (!vis) continue; if (h.object.userData.tool) return h.object.userData.tool; } return null; };
+  L.pick = pick;
+  R.domElement.addEventListener("pointerdown", (ev) => { closeMenu(); showTip(null); down = { x: ev.clientX, y: ev.clientY, t: performance.now() }; });
+  R.domElement.addEventListener("pointermove", (ev) => { if (down) return; const n = pick(ev); el.classList.toggle("hot", !!n); showTip(n, ev.clientX, ev.clientY); });
+  R.domElement.addEventListener("pointerleave", () => showTip(null));
+  const up = (ev) => { if (!down) return; const short = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 8 && performance.now() - down.t < 400; if (short) onClick(pick(ev), ev.clientX, ev.clientY); down = null; };
+  R.domElement.addEventListener("pointerup", up); R.domElement.addEventListener("pointercancel", () => { down = null; });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMenu(); if (MV.open) closeView(); else $("#exao").hidden = true; } });
+  R.domElement.addEventListener("dblclick", () => { if (ST.cur && ST.cur.cam) look(ST.cur.cam); });
+  let pend = false; const raf = (f) => { if (pend) return; pend = true; requestAnimationFrame((t) => { pend = false; f(t); }); };
+  let prev = performance.now(); const loop = (now) => { raf(loop); const dt = Math.min(0.05, (now - prev) / 1000); prev = now; tick(dt * demoMul(), dt); ctl.update(); viewOffset(); R.render(scene, cam); placeLabels(); }; raf(loop); setInterval(() => { if (performance.now() - prev > 250) loop(performance.now()); }, 120);
+}
+function focusCam(c) { if (!c) return; const p1 = new THREE.Vector3(c.p[0], BENCH + c.p[1], c.p[2]), q1 = new THREE.Vector3(c.t[0], BENCH + c.t[1], c.t[2]); if (L.cam.position.distanceTo(p1) < 0.03 && L.ctl.target.distanceTo(q1) < 0.03) return; L.tw = { t0: performance.now(), p0: L.cam.position.clone(), p1, q0: L.ctl.target.clone(), q1 }; }
+
+/* ------------------------------------------------------------ simulation : chaque image */
+function wgMesh(k) {
+  const G = ST.gl[k], m = X["wgLiq" + k], key = Math.round(G.v * 20); if (m.userData.k === key) return; m.userData.k = key; m.visible = G.v > 0.05; if (!m.visible) return;
+  const h = wgH(G.v), r = Math.sqrt(h / WG_A), pts = []; for (let i = 0; i <= 10; i++) { const rr = (r * i) / 10; pts.push(new THREE.Vector2(rr * 0.985, 0.0012 + WG_A * rr * rr)); } pts.push(new THREE.Vector2(0, 0.0012 + h));
+  if (m.geometry) m.geometry.dispose(); m.geometry = new THREE.LatheGeometry(pts, 40);
+  const fr = G.frag != null ? ST.frags[G.frag] : null; if (fr && fr.mesh.parent === X["wg" + k]) fr.mesh.position.y = 0.0012 + h + 0.0004;
+}
+function tick(dt, rdt = dt) {
+  L.g.updateMatrixWorld();
+  try { legendTick(); } catch (e) { console.error(e); }
+  if ($("#overlay").hidden === false) { if (MV.open && MV.dirty) { MV.dirty = false; drawMicro(); } return; }
+  if (L.tw) { const k = Math.min(1, (performance.now() - L.tw.t0) / 1200), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; L.cam.position.lerpVectors(L.tw.p0, L.tw.p1, e); L.ctl.target.lerpVectors(L.tw.q0, L.tw.q1, e); if (k >= 1) L.tw = null; }
+  runQueue(dt);
+  if (ST.camNext && ST.q[0] && ST.q[0].obj === ST.camNext.obj) { CAMS["@pour"] = ST.camNext.cam; ST.camNext = null; look("@pour"); } else if (ST.camNext && !ST.q.length) ST.camNext = null;
+  if (ST.q[0] && ST.q[0].obj && ST.q[0].obj.parent && !L.tw && !CAM_FIX.has(camFocus) && !MV.open) { const wp = new THREE.Vector3(); ST.q[0].obj.getWorldPosition(wp); wp.y -= 0.03; const d = wp.sub(L.ctl.target).multiplyScalar(Math.min(1, dt * 3)); L.ctl.target.add(d); L.cam.position.add(d); } if (ST.q.length) camBusy = true; else if (camBusy) { camBusy = false; if (camFocus) look(camFocus); }
+  for (const m of LIQS) m.emissive.copy(m.color).multiplyScalar(0.35);
+  L.g.updateMatrixWorld();
+  // --- versement des flacons dans les verres de montre
+  X.arcPour.visible = false;
+  if (ST.pourArc) { const P = ST.pourArc; P.t -= dt; const j = P.sol === 2 ? X.b2 : X.b50; if (P.t > 0) arcPour(X.arcPour, gpos(j, [0, 0.136, 0]), wgSurf(P.k), 0.0014, 0.2); else ST.pourArc = null; }
+  for (const bt of [X.b2, X.b50]) { const u = bt.userData, kk = clamp((Math.abs(bt.rotation.z) - 1.15) / 0.5, 0, 1); u.liq.scale.y = 1 - 0.25 * kk; u.liq.position.y = lerp(0.047, 0.1 - (0.085 * 0.75) / 2, kk); }
+  if (ST.fall) { const f = ST.fall; f.t += dt; const k = clamp(f.t / f.dur, 0, 1); X.drop.visible = k < 1; X.drop.position.lerpVectors(f.a, f.b, k); X.drop.position.y = lerp(f.a.y, f.b.y, k * k); if (k >= 1) ST.fall = null; }
+  wgMesh("A"); wgMesh("B");
+  // --- temps de l'expérience (accéléré) : échanges d'eau dans chaque fragment
+  const dtm = (dt * ST.acc) / 60; if (ST.frags.some((f) => f.at !== "bin")) ST.simT += dtm;
+  const st = onStage(), fOn = st >= 0 ? fragOn(st) : null;
+  for (const f of ST.frags) {
+    if (f.at === "bin") continue; const c = bathOf(f); if (f.at === "A" || f.at === "B") f.tG += dtm; else if (f.at === 0 || f.at === 1) f.tSlide = (f.tSlide || 0) + dtm;
+    const pt = pTarget(c), tau = c == null ? 3 : pt > f.p ? 0.7 : 1.8, p0 = f.p; f.p += (pt - f.p) * (1 - Math.exp(-dtm / tau)); if (f === fOn && Math.abs(f.p - p0) > 1e-5) MV.dirty = true;
+    if (f.mesh && f.mesh.material === X.filmM) { /* le fragment plasmolysé paraît plus pâle (vacuoles réduites) */ }
+  }
+  { const fa = fragIn("A"), fb = fragIn("B"); X.lcdA.set("A " + (fa ? clk(fa.tG) : "--:--")); X.lcdB.set("B " + (fb ? clk(fb.tG) : "--:--")); }
+  // --- microscope : vis maintenues, mise au point automatique de la démo, observation enregistrée
+  knobGlow(MV.hold ? MV.hold.kind : MV.goal ? MV.goal.kind : null);
+  if (MV.hold) { const rate = MV.hold.kind === "macro" ? 1500 : 9; moveZ(MV.hold.dir * rate * rdt * (ST.demo ? demoMul() : 1)); }
+  if (MV.goal) { const G = MV.goal, rate = (G.kind === "macro" ? 1500 : 9) * rdt * demoMul(), d = G.z - MV.z; if (Math.abs(d) <= rate) { MV.z = G.z; MV.goal = null; } else MV.z += Math.sign(d) * rate; stage3d(); MV.dirty = true; }
+  if (MV.open && st >= 0 && fOn && ST.lamp && MV.light > 0.15 && focusQ() < 1.6 && !ST.sl[st].wet) {
+    const s = ST.sl[st]; if (!s.seen[MV.obj]) { s.seen[MV.obj] = true; if (MV.obj === 40 && !s.seen[4] && !s.seen[10]) once("skipLow" + st, "warn", "Observation directe au fort grossissement : on commence par l'objectif ×4 pour trouver la préparation.", "low"); log("good", "Image nette de la préparation " + (st + 1) + " à G = ×" + Gnow() + ".", MV.obj === 4 ? "low" : "micro"); }
+    if (MV.obj >= 10) { const o = ST.obs[st] || { G: 0 }; ST.obs[st] = { G: Math.max(o.G, Gnow()), obj: Gnow() >= o.G ? MV.obj : o.obj, oc: Gnow() >= o.G ? MV.oc : o.oc, p: fOn.p, c: bathOf(fOn), from: fOn.from, tG: fOn.tG, thick: fOn.thick }; if (!ST.tblShown && ST.obs[st].G >= 100) ST.tblPend = true; }
+  }
+  if (MV.open && (MV.dirty || performance.now() - MV.last > 1000)) { MV.dirty = false; MV.last = performance.now(); drawMicro(); }
+  const sp = $("#btnSpeed"); if (sp && sp.dataset.v !== String(ST.acc)) { sp.dataset.v = String(ST.acc); sp.textContent = "⏩ ×" + ST.acc; }
+  if (ST.obs.some(Boolean) && (tick.n = (tick.n || 0) + 1) % 20 === 0) renderTable(true);
+  updGuide();
+}
+function placeLabels() {
+  const box = $("#labels"), g = ST.cur, overlayUp = $("#overlay").hidden === false, showMain = g && ST.guide && !ST.demo && !overlayUp && !MV.open;
+  if (!showMain) { box.innerHTML = ""; return; }
+  if (!box.firstChild) box.innerHTML = '<div class="ring"></div><div class="chip"><span class="k"></span> <span class="v"></span></div>';
+  const [ring, chip] = box.children, t = TOOLS[g.on], v = t ? t.anchor.clone() : null; if (t) { t.obj.localToWorld(v); v.project(L.cam); }
+  if (!t || v.z > 1) ring.style.display = chip.style.display = "none";
+  else { const x = ((v.x + 1) / 2) * window.innerWidth, y = ((1 - v.y) / 2) * window.innerHeight; ring.style.display = chip.style.display = ""; ring.style.left = chip.style.left = x + "px"; ring.style.top = chip.style.top = y + "px"; chip.querySelector(".k").textContent = g.k; chip.querySelector(".v").textContent = g.v ? "· " + g.v : ""; }
+}
+function openPanel() {
+  const G = ST.gl, gl = (k) => (G[k].v > 0.05 ? g1(G[k].v) + " mL de NaCl " + fmt(G[k].c, 0) + " g/L" : "vide") + (fragIn(k) ? " · fragment depuis " + clk(fragIn(k).tG) : "");
+  const sl = (i) => { const s = ST.sl[i], f = fragOn(i); return (s.drop ? s.drop + " goutte(s) NaCl " + fmt(s.c, 0) + " g/L" : "pas de goutte") + " · " + (f ? "fragment du verre " + f.from + (f.thick ? " (épais)" : "") : "pas de fragment") + " · " + (s.lam === 1 ? "lamelle" : s.lam === 2 ? "lamelle à plat (bulles)" : "sans lamelle") + (s.on ? " · sur la platine" : "") + (s.broken ? " · lamelle fêlée" : ""); };
+  const rows = [["Verre A", gl("A")], ["Verre B", gl("B")], ["Lame 1", sl(0)], ["Lame 2", sl(1)], ["Microscope", (ST.lamp ? "lampe allumée" : "lampe éteinte") + " · objectif ×" + MV.obj + " · oculaire ×" + MV.oc + " · G = ×" + Gnow()], ["Essai nº", String(ST.attempts)]];
+  $("#diag").innerHTML = rows.map((r) => `<span>${r[0]}</span><b>${r[1]}</b>`).join(""); if (!$("#toolHelp").firstChild) $("#toolHelp").innerHTML = TOOL_HELP.map((t) => `<details><summary>${t[0]}</summary><p>${t[1]}</p></details>`).join(""); $("#panel").hidden = false;
+}
+
+/* ------------------------------------------------------------ menus */
+function menuFor(name) {
+  const items = [], I = (ic, t, run, o = {}) => items.push(Object.assign({ ic, t, run }, o));
+  const freeG = ["A", "B"].filter((k) => ST.gl[k].frag == null);
+  if (name === "oignon" || name === "scalpel") { for (const k of freeG) I("🔪", "Prélever un fragment d'épiderme → verre " + k, () => prelever(k)); if (freeG.length) I("🔪", "Couper un morceau épais d'écaille → verre " + freeG[0], () => prelever(freeG[0], true), { d: true }); if (!freeG.length) I("ℹ", "Les deux verres ont déjà un fragment", () => toast("Transfère d'abord les fragments sur les lames, ou vide un verre.")); }
+  if (name === "nacl2" || name === "nacl50") { const sol = name === "nacl2" ? 2 : 50, best = sol === 2 ? "A" : "B"; for (const k of [best, best === "A" ? "B" : "A"]) I("⬇", "Verser ≈ 4 mL dans le verre de montre " + k, () => pourGlass(k, sol), { s: k === best ? "" : "carton : NaCl " + (k === "A" ? 2 : 50) + " g/L" }); }
+  if (name === "wgA" || name === "wgB") { const k = name.slice(2), G = ST.gl[k]; if (G.frag != null) for (let i = 0; i < 2; i++) if (ST.sl[i].frag == null && !ST.sl[i].on) I("🥢", "Fragment → lame " + (i + 1) + " (pince)", () => fragToSlide(k, i), { s: "depuis " + clk(fragIn(k).tG) }); if (G.v > 0.1 || G.frag != null) I("🗑", "Vider le verre " + k + " (déchets)", () => emptyGlass(k), { d: true }); if (!items.length) I("ℹ", "Verre vide", () => toast("Verse d'abord la solution prévue sur le carton.")); }
+  if (name === "pince") { for (const k of ["A", "B"]) if (ST.gl[k].frag != null) for (let i = 0; i < 2; i++) if (ST.sl[i].frag == null && !ST.sl[i].on) I("🥢", "Fragment du verre " + k + " → lame " + (i + 1), () => fragToSlide(k, i)); for (const k of freeG) I("🔪", "Prélever un fragment d'épiderme → verre " + k, () => prelever(k)); }
+  if (name === "pipA" || name === "pipB") { const k = name.slice(3); for (let i = 0; i < 2; i++) if (!ST.sl[i].lam && !ST.sl[i].on) I("💧", "Une goutte du verre " + k + " sur la lame " + (i + 1), () => dropOn(k, i)); }
+  if (name === "lame1" || name === "lame2") {
+    const i = +name.slice(4) - 1, s = ST.sl[i];
+    if (!s.on) {
+      if (!s.lam) for (const k of ["A", "B"]) if (ST.gl[k].v > 0.3) I("💧", "Déposer une goutte du verre " + k, () => dropOn(k, i), { s: "pipette " + k });
+      if (s.frag == null) for (const k of ["A", "B"]) if (ST.gl[k].frag != null) I("🥢", "Y placer le fragment du verre " + k, () => fragToSlide(k, i), { s: clk(fragIn(k).tG) + " dans la solution" });
+      if (!s.lam && (s.frag != null || s.drop)) { I("🔲", "Poser la lamelle (inclinée à 45°, descendue doucement)", () => lamelle(i, false)); I("🔲", "Lâcher la lamelle à plat", () => lamelle(i, true), { d: true }); }
+      if (s.frag != null) I("🔬", "Placer sur la platine du microscope", () => slideToStage(i));
+      if (s.frag != null || s.drop) I("🗑", "Jeter la préparation", () => trashSlide(i), { d: true });
+    } else { I("🔬", "Regarder dans l'oculaire", openView); I("⬆", "Retirer de la platine", () => slideBack(i)); }
+    if (!items.length) I("ℹ", "Lame propre", () => toast("Une goutte de solution, le fragment, puis la lamelle."));
+  }
+  if (name === "lamelles") I("ℹ", "Lamelles 22 × 22 mm", () => toast("Elles se posent depuis le menu de chaque lame."));
+  if (name === "micro") {
+    const st = onStage();
+    I(ST.lamp ? "⏻" : "💡", ST.lamp ? "Éteindre la lampe" : "Allumer la lampe", () => setLamp(!ST.lamp));
+    I("🔬", "Regarder dans l'oculaire", openView);
+    if (st < 0) for (let i = 0; i < 2; i++) if (ST.sl[i].frag != null) I("⬇", "Placer la lame " + (i + 1) + " sur la platine", () => slideToStage(i));
+    if (st >= 0) I("⬆", "Retirer la lame " + (st + 1), () => slideBack(st));
+  }
+  if (name === "minuteur") I("⏱", "Temps dans les verres", () => toast("A : " + (fragIn("A") ? clk(fragIn("A").tG) : "pas de fragment") + " · B : " + (fragIn("B") ? clk(fragIn("B").tG) : "pas de fragment") + " (3 min conseillées)."));
+  if (name === "bin") I("🗑", "Tout vider et recommencer (nouvel essai)", emptyAll, { d: true });
+  return items;
+}
+function emptyAll() { if (isBusy()) return busyToast(); closeView(); resetState(true); look("wide"); log("info", "Paillasse vidée et nettoyée : essai nº " + ST.attempts + ".", null); }
+const NAMES = { oignon: "Oignon violet", scalpel: "Scalpel", pince: "Pince fine", nacl2: "NaCl 2 g/L", nacl50: "NaCl 50 g/L", wgA: "Verre de montre A", wgB: "Verre de montre B", pipA: "Pipette A", pipB: "Pipette B", lame1: "Lame 1", lame2: "Lame 2", lamelles: "Lamelles", micro: "Microscope optique", minuteur: "Minuteur", bin: "Déchets" };
+const INFO = {
+  oignon: "<b>Écaille d'oignon violet</b> : son épiderme est une seule couche de cellules dont la vacuole est colorée en violet (anthocyanes).",
+  scalpel: "<b>Scalpel</b> : petite incision dans l'écaille, pour peler l'épiderme avec la pince.",
+  pince: "<b>Pince fine</b> : pèle l'épiderme et transporte le fragment du verre de montre à la lame.",
+  nacl2: "<b>Solution de NaCl à 2 g/L</b> (ions Na⁺ et Cl⁻) : moins concentrée que le suc vacuolaire.",
+  nacl50: "<b>Solution de NaCl à 50 g/L</b> (ions Na⁺ et Cl⁻) : beaucoup plus concentrée que le suc vacuolaire.",
+  wgA: "<b>Verre de montre A</b> : NaCl 2 g/L ; le fragment y reste 3 min.",
+  wgB: "<b>Verre de montre B</b> : NaCl 50 g/L ; le fragment y reste 3 min.",
+  pipA: "<b>Pipette compte-gouttes A</b> : une goutte de la solution du verre A sur la lame.",
+  pipB: "<b>Pipette compte-gouttes B</b> : une goutte de la solution du verre B sur la lame.",
+  lame1: "<b>Lame 1</b> : goutte de solution, fragment étalé, lamelle.", lame2: "<b>Lame 2</b> : goutte de solution, fragment étalé, lamelle.",
+  lamelles: "<b>Lamelles</b> : fines plaques de verre qui couvrent la préparation.",
+  micro: "<b>Microscope optique</b> : objectifs ×4, ×10, ×40 sur le revolver, oculaire ×10 ou ×15. G = objectif × oculaire.",
+  minuteur: "<b>Minuteur</b> : temps passé par chaque fragment dans son verre de montre.",
+  bin: "<b>Déchets</b> : lames, lamelles et végétaux usagés.",
+};
+function showTip(name, x, y) {
+  let t = $("#tip"); if (!t) { t = document.createElement("div"); t.id = "tip"; t.className = "tip"; document.body.append(t); }
+  if (!name || !INFO[name] || !$("#menu").hidden || $("#overlay").hidden === false || MV.open) { t.hidden = true; return; }
+  if (t.dataset.n !== name) { t.dataset.n = name; t.innerHTML = INFO[name]; }
+  t.hidden = false; const r = t.getBoundingClientRect(), lim = (v, a, b) => Math.max(a, Math.min(b, v));
+  t.style.left = lim(x + 16, 8, window.innerWidth - r.width - 8) + "px"; t.style.top = lim(y + 18, 8, window.innerHeight - r.height - 8) + "px";
+}
+const HELP_KEY = { oignon: 0, scalpel: 0, nacl2: 1, nacl50: 1, wgA: 2, wgB: 2, pipA: 3, pipB: 3, pince: 4, lame1: 5, lame2: 5, lamelles: 5, micro: 6, minuteur: 7, bin: 8 };
+function closeMenu() { $("#menu").hidden = true; }
+function openMenu(name, x, y) {
+  const items = menuFor(name); if (!items.length) return;
+  if (items.length === 1 && !items[0].hold) { closeMenu(); stepFollow(name); items[0].run(); return; }
+  const m = $("#menu"); m.innerHTML = `<div class="mh"><span>${NAMES[name] || name}</span><button type="button" class="mq">? aide</button></div>${INFO[name] ? `<div class="minfo">${INFO[name]}</div>` : ""}`;
+  m.querySelector(".mq").onclick = () => { closeMenu(); openPanel(); const d = $("#toolHelp").children[HELP_KEY[name]]; if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } };
+  for (const it of items) { const b = document.createElement("button"); b.type = "button"; b.className = "mi" + (it.d ? " danger" : ""); b.innerHTML = `<span class="ic">${it.ic}</span><span>${it.t}</span>${it.s ? "<small>" + it.s + "</small>" : ""}`; b.onclick = () => { closeMenu(); stepFollow(name); it.run(); }; m.append(b); }
+  m.hidden = false; const r = m.getBoundingClientRect(); m.style.left = clamp(x + 12, 8, window.innerWidth - r.width - 8) + "px"; m.style.top = clamp(y - 20, 8, window.innerHeight - r.height - 8) + "px";
+}
+function onClick(name, x, y) { /*resultat-clic*/ if (name && ST.fini && RESVIEW[name] && camFocus !== RESVIEW[name]) { focusTool(name); return; } if (!name) return; focusTool(name); openMenu(name, x || window.innerWidth / 2, y || window.innerHeight / 2); }
+
+/* ------------------------------------------------------------ tableau : observations notées seules, G calculé par l'élève, état des cellules choisi */
+const QS = {
+  q1: { t: "Dans la solution à 50 g/L, l'eau…", o: ["sort de la vacuole vers le milieu extérieur", "entre dans la vacuole"], ok: 0, need: () => ST.obs.some((o) => o && o.p > 0.6), why: "plasm" },
+  q2: { t: "Ce passage de l'eau à travers les membranes s'appelle…", o: ["la diffusion", "l'osmose", "le transport actif"], ok: 1, need: () => ST.obs.some((o) => o && o.p > 0.6) && ST.obs.some((o) => o && o.p < 0.3), why: "osmose" },
+  q3: { t: "L'eau se déplace…", o: ["du milieu hypotonique vers le milieu hypertonique", "du milieu hypertonique vers le milieu hypotonique"], ok: 0, need: () => ST.obs.some((o) => o && o.p > 0.6) && ST.obs.some((o) => o && o.p < 0.3), why: "osmose" },
+};
+const ETATS = ["turgescentes : la vacuole occupe toute la cellule", "plasmolysées : vacuole réduite, membrane décollée de la paroi"], MILIEUX = ["hypotonique (moins concentré)", "hypertonique (plus concentré)"];
+function rowKey(i) { const o = ST.obs[i]; return o ? [o.G, o.c, stateWord(o.p)].join("|") : ""; }
+function checkG(i, txt) {
+  const o = ST.obs[i], v = parseFloat(String(txt).replace(/[\s×x]/gi, "").replace(",", "."));
+  if (!o) { toast("Observe d'abord cette préparation au microscope.", "bad"); return false; } if (isNaN(v)) { toast("Écris un nombre, par exemple 400.", "bad"); return false; }
+  if (Math.abs(v - o.G) < 0.5) { ST.ans["g" + i] = o.G; log("good", "Grossissement juste : G = " + o.obj + " × " + o.oc + " = ×" + o.G + ". Bravo !", "G"); toast("Bravo ! G = ×" + o.G, "good"); renderTable(); return true; }
+  ST.miss++; log("warn", "Grossissement refusé : " + String(txt).trim() + ".", "G"); toast("Faux, refusé : G = grossissement de l'objectif × grossissement de l'oculaire.", "bad"); return false;
+}
+function checkSel(kind, i, v) {
+  const o = ST.obs[i]; if (!o) return toast("Observe d'abord cette préparation.", "bad");
+  if (kind === "e") { const w = stateWord(o.p); if (w === "mid") { toast("Les cellules sont en train de changer : observe encore un peu.", ""); renderTable(); return; } const ok = w === "turg" ? 0 : 1; if (v === ok) { ST.ans["e" + i] = v; log("good", "Préparation " + (i + 1) + " : cellules " + (ok ? "plasmolysées" : "turgescentes") + ". Bravo !", ok ? "plasm" : "turg"); toast("Bravo !", "good"); } else { ST.miss++; log("warn", "Réponse refusée : état des cellules de la préparation " + (i + 1) + ".", ok ? "plasm" : "turg"); toast("Ce n'est pas ce que montre le microscope : regarde la vacuole et la paroi.", "bad"); } }
+  if (kind === "m") { if (o.c == null) return toast("Cette préparation n'a pas de goutte de solution.", "bad"); const ok = o.c < CC_ISO ? 0 : 1; if (v === ok) { ST.ans["m" + i] = v; log("good", "NaCl " + fmt(o.c, 0) + " g/L : milieu " + (ok ? "hypertonique" : "hypotonique") + " par rapport au suc vacuolaire. Bravo !", ok ? "plasm" : "turg"); toast("Bravo !", "good"); } else { ST.miss++; log("warn", "Réponse refusée : milieu de la préparation " + (i + 1) + ".", "osmose"); toast("Compare la concentration de la solution à celle du suc vacuolaire (≈ 7 g/L).", "bad"); } }
+  renderTable();
+}
+const qOk = (q) => (typeof q.ok === "function" ? q.ok() : q.ok);
+function checkQ(k, i) {
+  const q = QS[k]; if (!q.need()) { toast("Observe d'abord les deux préparations nettement.", "bad"); return false; }
+  if (i === qOk(q)) { ST.ans[k] = i; log("good", "Réponse juste : " + q.t + " " + q.o[i] + ".", q.why); toast("Bravo ! " + q.o[i], "good"); renderTable(); return true; }
+  ST.miss++; log("warn", "Réponse refusée : " + q.t, q.why); toast("Ce n'est pas ce que montre l'expérience : regarde de nouveau.", "bad"); renderTable(); return false;
+}
+function renderTable(soft) {
+  const box = $("#tbl"); if (!box || !ST.ans) return;
+  for (let i = 0; i < 2; i++) { const k = rowKey(i); if (ST.ansK[i] !== k) { if (ST.ansK[i] !== undefined) ["g", "e", "m"].forEach((p) => delete ST.ans[p + i]); ST.ansK[i] = k; } }
+  const sig = JSON.stringify([ST.obs.map((o) => o && [o.G, o.obj, o.oc, o.c, stateWord(o.p), Math.round(o.tG * 6)]), ST.ans]); if (soft && box.dataset.sig === sig) return; box.dataset.sig = sig;
+  if (soft && box.contains(document.activeElement)) return;
+  const na = '<td class="na">—</td>', au = (x) => `<td class="au">${x}</td>`, sel = (k, i, opts, a) => (a != null ? `<td class="ok">${opts[a].split(" :")[0].split(" (")[0]}<small>✓ Bravo !</small></td>` : `<td class="in"><select data-k="${k}" data-i="${i}" aria-label="${k}"><option value="">choisis…</option>${opts.map((o, j) => `<option value="${j}">${o}</option>`).join("")}</select></td>`);
+  const row = (i) => { const o = ST.obs[i]; if (!o) return `<tr><td><b>Préparation ${i + 1}</b><small>lame ${i + 1}</small></td>${na}${na}${na}<td class="na">— (à observer)</td>${na}${na}</tr>`;
+    const gc = ST.ans["g" + i] != null ? `<td class="ok">×${o.G}<small>✓ Bravo !</small></td>` : `<td class="in"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-g="${i}" placeholder="G = ?" aria-label="Grossissement"><button type="button" title="Valider">✓</button></td>`;
+    return `<tr><td><b>Préparation ${i + 1}</b><small>fragment du verre ${o.from}${o.thick ? " (épais)" : ""}</small></td>${au(o.c == null ? "aucune" : "NaCl " + fmt(o.c, 0) + " g/L")}${au(clk(o.tG))}${au("×" + o.obj + " · ×" + o.oc)}${gc}${sel("e", i, ETATS, ST.ans["e" + i])}${o.c == null ? na : sel("m", i, MILIEUX, ST.ans["m" + i])}</tr>`; };
+  const qrow = (k) => { const q = QS[k]; const cell = ST.ans[k] != null ? `<td class="ok">${q.o[ST.ans[k]]}<small>✓ Bravo !</small></td>` : !q.need() ? '<td class="na">— (à observer)</td>' : `<td class="in"><select data-q="${k}" aria-label="${q.t}"><option value="">choisis…</option>${q.o.map((o, i) => `<option value="${i}">${o}</option>`).join("")}</select></td>`; return `<tr><td><b>${q.t}</b></td>${cell}</tr>`; };
+  box.innerHTML = `<table class="mt st"><tr><th>Préparation</th><th>Solution<br>de montage</th><th>Durée dans<br>le verre</th><th>Objectif ·<br>oculaire</th><th class="c">Grossissement<br>G</th><th class="c">État des<br>cellules</th><th class="c">Milieu / suc<br>vacuolaire</th></tr>${row(0)}${row(1)}</table><table class="mt st"><tr><th>Question</th><th>Ta réponse</th></tr>${Object.keys(QS).map(qrow).join("")}</table>`;
+  box.querySelectorAll("input[data-g]").forEach((inp) => { const i = +inp.dataset.g, go1 = () => { if (!inp.value.trim()) return; if (!checkG(i, inp.value)) { inp.value = ""; const td = inp.parentElement; td.classList.remove("no"); void td.offsetWidth; td.classList.add("no"); let m = td.querySelector("small"); if (!m) { m = document.createElement("small"); td.append(m); } m.textContent = "✗ faux, refusé : recalcule"; inp.focus(); } }; inp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") go1(); }); inp.nextElementSibling.onclick = go1; });
+  box.querySelectorAll("select[data-k]").forEach((s) => (s.onchange = () => { if (s.value !== "") checkSel(s.dataset.k, +s.dataset.i, +s.value); }));
+  box.querySelectorAll("select[data-q]").forEach((s) => (s.onchange = () => { if (s.value !== "") checkQ(s.dataset.q, +s.value); }));
+}
+function showTable() { if (ST.tblShown) return; ST.tblShown = true; $("#exao").hidden = false; renderTable(); }
+function openTable() { const e = $("#exao"); e.hidden = !e.hidden; ST.tblShown = true; renderTable(); }
+
+/* ------------------------------------------------------------ bilan */
+function evaluate() { /*fini*/
+  if (!ST.obs.some(Boolean)) { toast("Observe d'abord au moins une préparation nettement au microscope (objectif ×10 ou ×40).", "bad"); return; }
+  ST.fini = true; MV.dirty = true; setTimeout(() => toast("Expérience finie : clique sur un objet pour voir son résultat légendé ; dans l'oculaire, la légende nomme l'état des cellules.", "good"), 1200);
+  const pts = [], O = ST.obs, desc = (i) => { const o = O[i]; if (!o) return "non observée"; const w = stateWord(o.p); return (w === "turg" ? "cellules turgescentes" : w === "plasm" ? "cellules plasmolysées" : "plasmolyse en cours") + " (NaCl " + (o.c == null ? "—" : fmt(o.c, 0)) + " g/L, G = ×" + o.G + ")"; };
+  for (const k of ["A", "B"]) { const want = k === "A" ? 2 : 50, f = ST.frags.find((x) => x.from === k && x.at !== "bin"); if (ST.flags["mix" + k]) pts.push("Verre " + k + " : solution différente de celle du carton (NaCl " + want + " g/L attendu)."); if (f && f.at !== k && f.tG < 2.5) pts.push("Fragment " + k + " resté seulement " + clk(f.tG) + " dans son verre (3 min conseillées) : les échanges d'eau n'étaient pas terminés."); }
+  if (ST.frags.some((f) => f.thick)) pts.push("Un fragment trop épais (morceau d'écaille) : plusieurs couches de cellules, image sombre et floue. On ne prélève que l'épiderme.");
+  for (let i = 0; i < 2; i++) { const s = ST.sl[i], f = fragOn(i); if (!f) continue; if (!s.drop) pts.push("Lame " + (i + 1) + " sans goutte : fragment à l'air, bulles d'air, cellules desséchées."); else if (s.srcG && s.srcG !== f.from) pts.push("Lame " + (i + 1) + " : goutte d'une autre solution que celle du verre du fragment : le milieu a changé sous la lamelle."); if (s.lam === 2) pts.push("Lame " + (i + 1) + " : lamelle lâchée à plat, " + s.bubbles.length + " bulle(s) d'air dans la préparation."); if (!s.lam) pts.push("Lame " + (i + 1) + " sans lamelle."); }
+  if (ST.flags.crash) pts.push("Lamelle écrasée par l'objectif ×40 : la vis macrométrique ne s'utilise qu'au faible grossissement.");
+  if (ST.flags.wet) pts.push("Objectif ×40 plongé dans la goutte (pas de lamelle) : image laiteuse.");
+  if (ST.flags.skipLow0 || ST.flags.skipLow1) pts.push("Observation commencée directement au fort grossissement : on commence par l'objectif ×4.");
+  if (!O.some((o) => o && o.G >= 400)) pts.push("Pas d'observation au fort grossissement (objectif ×40) : le noyau et la membrane se voient mal.");
+  if (ST.miss) pts.push(ST.miss + " réponse(s) refusée(s) dans le tableau.");
+  const turg = O.some((o) => o && o.p < 0.3), plas = O.some((o) => o && o.p > 0.6), ok = turg && plas, nAns = Object.keys(QS).filter((k) => ST.ans[k] != null).length;
+  const o = $("#overlay"); o.hidden = false;
+  o.innerHTML = `<div class="card"><p class="sub" style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)">Bilan · essai nº ${ST.attempts}</p><h1>${ok ? "Turgescence et plasmolyse observées" : "Observation à compléter"}</h1>
+  <div class="res"><span>Préparation 1</span><b>${desc(0)}</b><span>Préparation 2</span><b>${desc(1)}</b><span>Plus fort grossissement utilisé</span><b>×${Math.max(0, ...O.map((x) => (x ? x.G : 0)))}</b><span>Questions justes</span><b>${nAns} / ${Object.keys(QS).length}</b></div>
+  <p>${ok ? "Dans NaCl à 2 g/L (milieu hypotonique), l'eau est entrée dans les vacuoles : cellules turgescentes. Dans NaCl à 50 g/L (milieu hypertonique), l'eau est sortie des vacuoles, qui ont rétréci, et la membrane cytoplasmique s'est décollée de la paroi : cellules plasmolysées. L'eau va du milieu hypotonique vers le milieu hypertonique : c'est l'osmose." : "Il te manque l'observation " + (turg ? "de cellules plasmolysées (fragment dans NaCl à 50 g/L)." : plas ? "de cellules turgescentes (fragment dans NaCl à 2 g/L)." : "nette des deux états des cellules.")}</p>
+  ${pts.length ? "<p><b>Ce qui a influencé le résultat :</b></p><ul>" + pts.map((p) => "<li>" + p + "</li>").join("") + "</ul>" : "<p>Aucune erreur de manipulation relevée.</p>"}
+  <div class="row"><button class="btn" id="again" type="button">Vider et recommencer</button><button class="btn ghost" id="look" type="button">Continuer à explorer</button><button class="btn ghost" id="seeLog" type="button">Voir le carnet</button></div></div>`;
+  $("#again").onclick = () => { o.hidden = true; emptyAll(); }; $("#look").onclick = () => { o.hidden = true; }; $("#seeLog").onclick = () => { o.hidden = true; openPanel(); };
+}
+
+/* ------------------------------------------------------------ démonstration : les mêmes gestes que l'élève, cadrés et expliqués */
+const until = async (cond) => { while (!cond()) await demoTick(); };
+const fast = async (cond) => { const a = ST.acc; ST.acc = 30; await until(cond); ST.acc = a; };
+async function focusTo(kind, off = 0) { MV.goal = { z: zf() + off, kind }; await until(() => !MV.goal); }
+async function demoLook(i) { // trouver la préparation au ×4, puis ×10 et ×40 à la vis micrométrique
+  if (!MV.open) openView(); setObj(4); setOc(10); MV.z = 6000; stage3d(); MV.pan = [0, 0]; await demoWait(0.8);
+  await focusTo("macro", 25); await demoWait(1.2); await focusTo("micro"); await demoWait(1.5);
+}
+const DEMO = [
+  { k: "Verre A", t: "On verse la solution de NaCl à 2 g/L dans le verre de montre A.", why: "verre", cam: "verres", run: () => pourGlass("A", 2), wait: 0.6 },
+  { k: "Verre B", t: "On verse la solution de NaCl à 50 g/L dans le verre de montre B.", why: "verre", cam: "verres", run: () => pourGlass("B", 50), wait: 0.6 },
+  { k: "Épiderme", t: "Petite incision au scalpel dans l'écaille violette ; la pince pèle une pellicule fine et transparente : l'épiderme. Le fragment va dans le verre A.", why: "oignon", cam: "oignon", run: () => prelever("A"), wait: 0.6 },
+  { k: "Épiderme", t: "Un deuxième fragment, de la même écaille, va dans le verre B.", why: "oignon", cam: "oignon", run: () => prelever("B"), wait: 0.6 },
+  { k: "3 minutes", t: "Les fragments baignent 3 min dans leur solution (temps accéléré) : le minuteur compte pour chaque verre.", why: "wait", cam: "timer", run: () => fast(() => fragIn("A").tG >= 3.05 && fragIn("B").tG >= 3.05), wait: 0.8 },
+  { k: "Lame 1", t: "Pipette A : une goutte de la solution du verre A au centre de la lame 1.", why: "drop", cam: "lames", run: () => dropOn("A", 0), wait: 0.5 },
+  { k: "Lame 1", t: "Avec la pince, le fragment du verre A est étalé dans la goutte.", why: "drop", cam: "lames", run: () => fragToSlide("A", 0), wait: 0.5 },
+  { k: "Lamelle", t: "La lamelle touche la goutte inclinée à 45°, puis on la laisse descendre : le liquide chasse l'air.", why: "lamelle", cam: "lame0", run: () => lamelle(0, false), wait: 0.8 },
+  { k: "Lame 2", t: "Même montage pour le fragment B, dans une goutte de la solution du verre B.", why: "drop", cam: "lames", run: async () => { dropOn("B", 1); await until(() => !isBusy()); fragToSlide("B", 1); }, wait: 0.5 },
+  { k: "Lamelle", t: "Lamelle inclinée, descendue doucement.", why: "lamelle", cam: "lame1", run: () => lamelle(1, false), wait: 0.8 },
+  { k: "Platine", t: "La lame 1 se place sur la platine, la préparation au-dessus du trou, tenue par les valets.", why: "stage", cam: "stage", run: () => slideToStage(0), wait: 0.8 },
+  { k: "Lampe", t: "On allume la lampe ; le diaphragme règle le contraste.", why: "lamp", cam: "micro", run: () => setLamp(true), wait: 0.8 },
+  { k: "Objectif ×4", t: "Faible grossissement (G = 4 × 10 = ×40) : on trouve le fragment et on fait la mise au point à la vis macrométrique, puis à la vis micrométrique.", why: "low", cam: "micro", run: () => demoLook(0), wait: 2 },
+  { k: "Objectif ×10", t: "Moyen grossissement (G = ×100) : les objectifs sont parfocaux, la vis micrométrique suffit.", why: "micro", cam: "micro", run: async () => { setObj(10); await demoWait(0.6); await focusTo("micro"); }, wait: 2.5 },
+  { k: "Objectif ×40", t: "Fort grossissement : objectif ×40 et oculaire ×15, G = 40 × 15 = ×600. Vis micrométrique seulement. Dans NaCl à 2 g/L, la vacuole violette occupe toute la cellule.", why: "turg", cam: "micro", run: async () => { setObj(40); setOc(15); await demoWait(0.6); await focusTo("micro"); }, wait: 6 },
+  { k: "Lame 2", t: "On revient au ×4, on retire la lame 1 et on place la lame 2.", why: "stage", cam: "stage", run: async () => { setObj(4); await until(() => !isBusy()); closeView(); slideBack(0); await until(() => !isBusy()); slideToStage(1); }, wait: 0.6 },
+  { k: "Préparation 2", t: "Même méthode : ×4 et vis macrométrique, puis ×10 à la vis micrométrique.", why: "low", cam: "micro", run: async () => { await demoLook(1); setObj(10); await demoWait(0.6); await focusTo("micro"); }, wait: 2 },
+  { k: "Plasmolyse", t: "Objectif ×40, G = ×600 : dans NaCl à 50 g/L, la vacuole a rétréci et la membrane cytoplasmique s'est décollée de la paroi. Le bouton « 🏷 Afficher la légende » nomme chaque partie de la cellule.", why: "plasm", cam: "micro", run: async () => { setObj(40); setOc(15); await demoWait(0.6); await focusTo("micro"); }, wait: 7 },
+  { k: "Mesures", t: "Dans le tableau : G = objectif × oculaire, l'état des cellules et le milieu (hypotonique ou hypertonique) pour chaque préparation, puis l'osmose.", why: "osmose", cam: "micro", run: () => { for (let i = 0; i < 2; i++) { const o = ST.obs[i]; if (!o) continue; ST.ans["g" + i] = o.G; ST.ans["e" + i] = stateWord(o.p) === "plasm" ? 1 : 0; if (o.c != null) ST.ans["m" + i] = o.c < CC_ISO ? 0 : 1; } for (const k in QS) if (QS[k].need()) ST.ans[k] = qOk(QS[k]); renderTable(); showTable(); }, wait: 3 },
+  { k: "Bilan", t: "Fin de la démonstration : à toi de refaire les deux préparations, avec ou sans erreurs.", why: null, cam: "wide", run: () => { closeView(); evaluate(); }, wait: 0.5 },
+];
+const demoTick = () => new Promise((r) => setTimeout(r, 100)).then(async () => { while (ST.demo && ST.demoPaused) await new Promise((r) => setTimeout(r, 100)); if (!ST.demo) throw DEMO_STOP; });
+async function demoWait(s) { const t0 = performance.now(); while (ST.demo && ((performance.now() - t0) * demoMul() < s * 1000 || ST.busy || ST.q.length)) { await demoTick(); if (ST.demoSkip) { ST.demoSkip = false; break; } } if (!ST.demo) throw DEMO_STOP; }
+const DEMO_STOP = {};
+function demoMul() { return ST.demo ? (ST.demoFF ? 12 : ST.demoSpeed || 1) : 1; }
+function demoButtons() {
+  const b = $("#dSpeed"); if (!b || b.dataset.on) return; b.dataset.on = "1"; b.textContent = "Vitesse ×" + (ST.demoSpeed || 1);
+  b.onclick = () => { const v = [1, 2, 4], k = (v.indexOf(ST.demoSpeed || 1) + 1) % v.length; ST.demoSpeed = v[k]; b.textContent = "Vitesse ×" + ST.demoSpeed; toast("Démonstration ×" + ST.demoSpeed + ".", ""); };
+}
+function stopFlows() { MV.hold = null; MV.goal = null; }
+async function runDemo() {
+  resetState(); $("#overlay").hidden = true; $("#panel").hidden = true; closeMenu(); ST.demo = true; ST.demoPaused = false; const d = $("#demo"); setGuide(true);
+  try { for (let i = 0; i < DEMO.length && ST.demo; i++) {
+    ST.demoFF = false;
+    const s = DEMO[i]; d.querySelector(".n").textContent = "Démo " + (i + 1) + "/" + DEMO.length; d.querySelector(".k").textContent = s.k; d.querySelector(".t").textContent = s.t; d.querySelector(".w").innerHTML = s.why ? WHY[s.why] : ""; d.querySelector(".bar i").style.width = ((i + 1) / DEMO.length) * 100 + "%";
+    if (!MV.open || s.cam !== "micro") look(s.cam); await demoWait(1.2); if (!ST.demo) break;
+    while (ST.demo && isBusy()) await demoTick(); if (!ST.demo) break;
+    await s.run(); if (!ST.demo) break; while (ST.demo && (ST.q.length || ST.busy)) await demoTick(); await demoWait(s.wait);
+  } } catch (e) { if (e !== DEMO_STOP) console.error(e); }
+  if (ST.demo) { ST.demo = false; setGuide(ST.guide); }
+}
+function stopDemo() { ST.demo = false; ST.demoPaused = false; stopFlows(); setGuide(ST.guide); ST.demoFF = false; toast("Démo arrêtée : continue toi-même, la paillasse est dans l'état où la démo l'a laissée.", ""); }
+$("#btnDemo").onclick = () => { if (ST.demo) stopDemo(); else runDemo(); };
+$("#startDemo").onclick = runDemo;
+$("#dPause").onclick = () => { ST.demoPaused = !ST.demoPaused; if (ST.demoPaused) stopFlows(); $("#dPause").textContent = ST.demoPaused ? "▶ Lecture" : "⏸ Pause"; };
+$("#dNext").onclick = () => { ST.demoPaused = false; $("#dPause").textContent = "⏸ Pause"; ST.demoSkip = true; ST.demoFF = true; toast("Étape terminée en accéléré…", ""); };
+$("#dQuit").onclick = stopDemo;
+$("#start").onclick = () => { $("#overlay").hidden = true; setGuide(ST.guide); log("info", "Entrée au labo. Objectif : observer les échanges d'eau entre les cellules de l'épiderme d'oignon et deux solutions de NaCl.", "oignon"); };
+$("#reset").onclick = () => { if (isBusy()) return busyToast(); ST.q = []; resetState(); $("#panel").hidden = true; toast("Paillasse remise en ordre."); };
+$("#btnPanel").onclick = openPanel; $("#closePanel").onclick = () => ($("#panel").hidden = true); $("#btnEval").onclick = evaluate; $("#closeExao").onclick = () => ($("#exao").hidden = true); $("#exaoEval").onclick = () => { $("#exao").hidden = true; evaluate(); };
+$("#btnTable").onclick = openTable;
+$("#btnSpeed").onclick = () => { const v = [1, 5, 10, 30], k = (v.indexOf(ST.acc) + 1) % v.length; ST.acc = v[k]; toast("Temps de l'expérience accéléré ×" + ST.acc + " (séjour dans les solutions, échanges d'eau).", ""); };
+$("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] || ""; openPanel(); const d = document.createElement("div"); d.className = "ev info open"; d.innerHTML = `<b>${ST.cur.k}</b><div class="why">${w}</div>`; $("#events").prepend(d); };
+function setGuide(on) { ST.guide = on; const demo = !!ST.demo; $("#instr").hidden = demo || !on; $("#demo").hidden = !demo || !on; $("#showGuide").hidden = on; $("#showGuide").textContent = demo ? "Afficher la démo ▸" : "Afficher le guide ▸"; }
+$("#btnGuide").onclick = () => setGuide(false); $("#dMin").onclick = () => setGuide(false); $("#showGuide").onclick = () => setGuide(true);
+init3d(); buildView(); resetState(); stepButtons(); demoButtons();
+/*legendes-oignon*/ /* légendes des vues de la paillasse ; dans l'oculaire, la légende est dessinée sur l'image (drawMvLegend) */
+{
+  const P = (o, a) => () => gpos(o, a).toArray(), lamOn = () => onStage() >= 0;
+  LEGS.micro = [
+    { at: P(X.ocG, [0, 0.012, 0]), t: "oculaire", m: () => "×" + MV.oc, c: "#2b3440" },
+    { at: P(X.rev, [-0.028, 0, 0]), t: "revolver", m: "porte les objectifs ×4, ×10, ×40", c: "#5d6670" },
+    { at: () => gpos(X.objs[MV.obj], [0.009, -0.02, 0]).toArray(), t: () => "objectif ×" + MV.obj, m: "sur l'axe optique", c: { 4: "#d0302a", 10: "#b8961a", 40: "#2b7fd6" }[MV.obj] },
+    { at: P(X.stage, [0.055, 0.004, 0.03]), t: "platine", m: "monte et descend avec les vis", c: "#33404d" },
+    { at: P(X.clips[1], [0, 0.002, 0.03]), t: "valets", m: "tiennent la lame", c: "#7a8899" },
+    { at: P(X.mic, [0.018, 0.11, 0.025]), t: "condenseur et diaphragme", m: "concentrent la lumière, règlent le contraste", c: "#5d6670" },
+    { at: P(X.mic, [0, 0.038, 0.04]), t: "lampe", m: () => (ST.lamp ? "allumée" : "éteinte"), c: "#c99a1a" },
+    { at: P(X.mic, [-0.034, 0.105, -0.075]), t: "vis macrométrique", m: "mise au point rapide (faible grossissement)", c: "#1d2024" },
+    { at: P(X.mic, [0.046, 0.105, -0.075]), t: "vis micrométrique", m: "mise au point fine (fort grossissement)", c: "#1d2024" },
+    { at: P(X.mic, [0, 0.16, -0.098]), t: "potence", c: "#9aa3ad" },
+  ];
+  LEGS.mview = [
+    { at: P(X.mic, [-0.034, 0.105, -0.075]), t: "vis macrométrique", m: () => (MV.hold && MV.hold.kind === "macro" ? "en train de tourner" : "grande vis : mise au point rapide"), c: "#b07a10" },
+    { at: P(X.mic, [0.046, 0.105, -0.075]), t: "vis micrométrique", m: () => (MV.hold && MV.hold.kind === "micro" ? "en train de tourner" : "petite vis : mise au point fine"), c: "#b07a10" },
+    { at: P(X.stage, [0.055, 0.004, 0.03]), t: "platine", m: () => "monte et descend · " + fmt(MV.z / 1000, 2) + " mm", c: "#33404d" },
+    { at: () => gpos(X.objs[MV.obj], [0.009, -0.02, 0]).toArray(), t: () => "objectif ×" + MV.obj, c: { 4: "#d0302a", 10: "#b8961a", 40: "#2b7fd6" }[MV.obj] },
+    { at: P(X.ocG, [0, 0.012, 0]), t: () => "oculaire ×" + MV.oc, c: "#2b3440" },
+  ];
+  LEGS.stage = [
+    { at: () => { const st = onStage(); return gpos(X["lame" + st], [-0.004, 0.001, 0]).toArray(); }, t: () => "préparation " + (onStage() + 1), m: "au-dessus du trou de la platine", c: "#a3306f", on: lamOn },
+    { at: P(X.clips[0], [0, 0.002, 0.03]), t: "valet", c: "#7a8899" },
+    { at: () => gpos(X.objs[MV.obj], [0.009, -0.03, 0]).toArray(), t: () => "objectif ×" + MV.obj, c: "#2b7fd6" },
+    { at: P(X.stage, [-0.05, 0.004, 0.03]), t: "platine", c: "#33404d" },
+  ];
+  const wgLeg = (k) => [
+    { at: P(X["wg" + k], [0.03, 0.006, 0]), t: () => "verre de montre " + k, m: () => (ST.gl[k].v > 0.05 ? "NaCl " + fmt(ST.gl[k].c, 0) + " g/L" : "vide"), c: k === "A" ? "#1f5fae" : "#a32b22" },
+    { at: () => gpos(X["wg" + k], [0, 0.0012 + (ST.gl[k].v > 0.05 ? wgH(ST.gl[k].v) : 0), 0]).toArray(), t: () => "fragment " + k, m: () => (fragIn(k) ? clk(fragIn(k).tG) + " dans la solution" : ""), c: "#a3306f", on: () => !!fragIn(k) },
+  ];
+  LEGS.verres = [...wgLeg("A"), ...wgLeg("B")];
+  const slLeg = (i) => [
+    { at: P(X["lame" + i], [0.03, 0.001, 0]), t: () => "lame " + (i + 1), m: () => { const f = fragOn(i); return f ? "fragment du verre " + f.from : "lame porte-objet"; }, c: "#5d6670", on: () => !ST.sl[i].on },
+    { at: P(X["lame" + i], [-0.004, 0.0012, 0.006]), t: "goutte de solution", m: () => "NaCl " + fmt(ST.sl[i].c, 0) + " g/L", c: "#3f6fa3", on: () => ST.sl[i].drop > 0 && !ST.sl[i].lam && !ST.sl[i].on },
+    { at: P(X["lame" + i], [-0.004, 0.001, -0.004]), t: "épiderme d'oignon", m: "une seule couche de cellules", c: "#a3306f", on: () => ST.sl[i].frag != null && !ST.sl[i].on },
+    { at: P(X["lame" + i], [-0.014, 0.001, 0.009]), t: "lamelle", m: () => (ST.sl[i].lam === 2 ? "lâchée à plat : bulles d'air" : "posée inclinée à 45°"), c: "#7a8899", on: () => ST.sl[i].lam > 0 && !ST.sl[i].on },
+  ];
+  LEGS.lames = [...slLeg(0), ...slLeg(1)]; LEGS.lame0 = slLeg(0); LEGS.lame1 = slLeg(1);
+  LEGS.oignon = [
+    { at: P(X.ecaille, [0, 0.01, 0]), t: "écaille d'oignon violet", m: "l'épiderme se pèle sur sa face violette", c: "#a3306f" },
+    { at: P(X.onion, [0.02, 0.05, 0.002]), t: "bulbe coupé", m: "écailles emboîtées", c: "#7e2c46" },
+    { at: P(X.scalpel, [0.05, 0, 0]), t: "scalpel", c: "#5d6670" },
+    { at: P(X.pince, [0.04, 0, 0]), t: "pince fine", c: "#5d6670" },
+  ];
+  LEGS.timer = [{ at: P(X.timer, [0, 0.03, 0.013]), t: "minuteur", m: "temps de chaque fragment dans son verre", c: "#33404d" }];
+  Object.assign(RESVIEW, { micro: "micro", lame1: "lames", lame2: "lames", wgA: "verres", wgB: "verres", oignon: "oignon", minuteur: "timer" });
+}
+window.__lab = { /*lab-test*/ tick, CAMS, LEGS, RESVIEW, camKey: () => camFocus, placeLabels, onClick, ST, MV, evaluate, TOOLS, X, suggest, L, look, menuFor, pourGlass, prelever, fragToSlide, dropOn, lamelle, slideToStage, slideBack, trashSlide, setLamp, setObj, setOc, openView, closeView, moveZ, zf, focusQ, drawMicro, genCells, checkG, checkSel, checkQ, renderTable, runDemo, stopDemo, runQueue, emptyAll, QS };
+/* pas de mains gantées (comme l'acétate de linalyle) */
+
+})();
+</script>
