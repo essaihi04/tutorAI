@@ -255,10 +255,10 @@ def pistes(deck):
     def p(typ, dossier, ident, texte):
         out.append({"type": typ, "dossier": dossier, "id": ident, "texte": texte})
 
-    def reactions(prefixe, rep):
+    def reactions(prefixe, rep, typ="reaction"):
         for o, qr in (rep or {}).items():
             for quoi, r in qr.items():
-                p("reaction", "reponses", f"{prefixe}_{o}_{quoi}", r["parole"])
+                p(typ, "reponses", f"{prefixe}_{o}_{quoi}", r["parole"])
 
     for a in deck["activities"]:
         for s in a["slides"]:
@@ -288,7 +288,7 @@ def pistes(deck):
     for c in deck["competences"]:
         for r in c["rappels"]:
             p("rappel", "reponses", f"enonce_rappel_{r['id']}", r["enonce_dit"])
-            reactions(f"rappel_{r['id']}", r.get("reponses"))
+            reactions(f"rappel_{r['id']}", r.get("reponses"), "rappel")
     for se in deck["seances"]:
         for b in se["blocs"]:
             if b.get("retrouver"):
@@ -296,8 +296,32 @@ def pistes(deck):
             ex = b.get("exercice")
             if ex:
                 p("bloc", "reponses", f"enonce_bloc_{b['id']}_exercice", ex["enonce_dit"])
-                reactions(f"bloc_{b['id']}__ex", ex["reponses"])
+                reactions(f"bloc_{b['id']}__ex", ex["reponses"], "bloc")
     return out
+
+
+def parties(liste):
+    """Lots d'environ 50 pistes et 12 000 caractères (skill voix-du-cours, § 3 ter) : les diapositives d'abord,
+    les pistes de fin de bloc (non jouées aujourd'hui) en dernier."""
+    ordre = {"diapositive": 0, "reaction": 2, "rappel": 3, "bloc": 4}
+    tri = sorted(liste, key=lambda x: ordre.get(x["type"], 1))
+    lots, lot, n = [], [], 0
+    for x in tri:
+        if lot and (n + len(x["texte"]) > 12000 or len(lot) >= 50):
+            lots.append(lot)
+            lot, n = [], 0
+        lot.append(x)
+        n += len(x["texte"])
+    lots.append(lot)
+    dossier = VOIX.parent / "voix_parties"
+    dossier.mkdir(exist_ok=True)
+    for f in dossier.glob("partie_*.json"):
+        f.unlink()
+    for i, lot in enumerate(lots, 1):
+        (dossier / f"partie_{i:02d}.json").write_text(json.dumps(
+            {"deck": DECK, "partie": i, "sur": len(lots), "pistes": lot}, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8")
+        print(f"  partie {i} : {len(lot)} pistes, {sum(len(x['texte']) for x in lot)} caractères")
 
 
 # ───────────────────────── Contrôles ─────────────────────────
@@ -360,6 +384,7 @@ def main():
                  "scripts/reference/construire_cours.py.",
         "pistes": liste}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(len(liste), "pistes :", dict(collections.Counter(p["type"] for p in liste)))
+    parties(liste)
     print("écrit :", SORTIE.relative_to(RACINE), "et", VOIX.relative_to(RACINE))
     return 0 if ok else 1
 
