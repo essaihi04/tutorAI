@@ -91,8 +91,6 @@
       const tel = W < 640 || H < 290;
       const L = tel ? 760 : scene.L, k = L / 760;
       let bouge = false;
-      // le fil de la démarche (en haut à droite), dans le cadre entier ; au téléphone la caméra le recouvrirait : il est omis
-      if (!tel && window.Demarche && window.Demarche.dessiner) { try { c.direct(() => window.Demarche.dessiner(c, scene)); } catch (e) { console.warn('[demarche]', e); } }
       ctx.save();
       if (tel) {
         const cible = cadrage(t), now = performance.now();
@@ -114,6 +112,8 @@
       scene.s = s0;
       const fini = c.fin();
       ctx.restore();
+      // le fil de la démarche (demarche.js) : posé à la fin, en pixels de l'écran, dans le coin haut droit du canvas
+      if (window.Demarche && window.Demarche.dessiner) { try { window.Demarche.dessiner(c); } catch (err) { console.warn('[demarche]', err); } }
       return fini && !bouge;
     }, { large: true });
     ecrit = Apparitions(scene);
