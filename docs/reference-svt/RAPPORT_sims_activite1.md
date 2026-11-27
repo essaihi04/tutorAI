@@ -35,7 +35,8 @@ dans un navigateur, pas recopiés du contrat).
   arrive figé sur l'instant exact ; `highlight` entoure les repères ; `set_parameters {demarche}` est pris ; `reset`
   revient au départ ; `?depart=<moment>` ouvre figé ; un `play_until` vers un moment passé ne rembobine pas. 0 écart.
 - Cohérence avec le cours (`backend/data/courses/svt_ch1_reference_consommation_mo.json`) : tous les moments, repères et
-  `depart=` que les diapos appellent sur ces pages existent (0 nom inconnu).
+  `depart=` que les diapos appellent sur ces pages existent : 19 diapos, 76 appels (`play_until`, `highlight`…), 0 nom
+  inconnu.
 - Données du § 2 : les courbes passent exactement par les points du document (5,3 mg/L et 0,16 mmol/L avant 1,8 min ;
   O₂ nul à 6,8 min ; 0,31 mmol/L ; 190 s ; 44 et 34 mg/mL à 700 s ; tableau du ¹⁴C case par case).
 
