@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Respiration ou fermentation : le tableau bilan — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css">
+<style>@media (max-height: 340px) { .scene { padding-bottom: .2em; } .tableau { padding: .2em .5em; } }</style></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche, deux vignettes animées et peintes, une pour la respiration et une pour la fermentation ; à droite, le tableau bilan à deux colonnes qui se remplit ligne par ligne : milieu, gaz, glucose, énergie, lieu. À la fin, les deux définitions s’écrivent à la place des vignettes."></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference.js"></script>
+<script>
+/*
+ * Respiration / fermentation : le tableau bilan construit en animation — cours de référence SVT
+ * (docs/reference-svt/ARCHITECTURE.md § 3 ; diapos rf_a2_tableau, puis rf_a2_definitions avec ?depart=lieu), 27 novembre 2026.
+ *
+ * Règle 35 : l'animation d'abord, puis le tableau. Pour chaque ligne (milieu, gaz, glucose, énergie, lieu), trois moments :
+ *   <ligne>_respiration  : la vignette « Respiration » joue l'idée ;
+ *   <ligne>_fermentation : la vignette « Fermentation » joue la sienne ;
+ *   <ligne>              : les mots volent de chaque vignette vers leur case du tableau.
+ * Puis definition_respiration et definitions : les deux définitions s'écrivent à la place des vignettes ; pendant qu'un
+ * morceau de phrase s'écrit, la case du tableau d'où il vient s'allume.
+ * Téléphone : la ligne en cours seule (ses deux vignettes et ses deux cases) ; les définitions passent par le bandeau.
+ * Tous les objets viennent du lexique (glucose = 6 billes jaunes, O2, CO2, H2O, éthanol, levure, cellule, mitochondrie,
+ * éclat) et le bocal est la cuve de verre des pages ExAO (Ref.cuve) : ouverte = aérobie, bouchée = anaérobie.
+ */
+const R = window.Ref, LX = window.Lexique, { doux, mix, borne, rgba, TAU } = R;
+const plat = (s) => s.replace(/_\{([^}]*)\}/g, '$1');
+const COL = { r: { nom: 'Respiration', craie: 'orange', rgb: [251, 146, 60] }, f: { nom: 'Fermentation', craie: 'cyan', rgb: [34, 211, 238] } };
+const LIGNES = [
+  { id: 'milieu', nom: 'milieu', r: ['aérobie', '(avec O_{2})'], f: ['anaérobie', '(sans O_{2})'], cr: 'aérobie (avec O_{2})', cf: 'anaérobie (sans O_{2})' },
+  { id: 'gaz', nom: 'gaz', r: ['O_{2} absorbé', 'CO_{2} rejeté'], f: ['pas d’O_{2} absorbé', 'CO_{2} rejeté'], cr: 'O_{2} absorbé, CO_{2} rejeté', cf: 'pas d’O_{2} ; CO_{2} rejeté' },
+  { id: 'glucose', nom: 'glucose', r: ['dégradation complète', 'reste CO_{2}, H_{2}O (minéral)'], f: ['dégradation incomplète', 'reste l’éthanol (organique)'], cr: 'dégradation complète', cf: 'incomplète : reste l’éthanol' },
+  { id: 'energie', nom: 'énergie', r: ['beaucoup', 'd’énergie'], f: ['peu d’énergie', '(l’éthanol en garde)'], cr: 'beaucoup d’énergie', cf: 'peu d’énergie' },
+  { id: 'lieu', nom: 'lieu', r: ['hyaloplasme,', 'puis mitochondries'], f: ['hyaloplasme', 'seulement'], cr: 'hyaloplasme, mitochondries', cf: 'hyaloplasme seulement' },
+];
+const MOTIFS = {
+  milieu: ['milieu aérobie : bocal ouvert, O2 présent', 'milieu anaérobie : bocal fermé, pas d’O2', 'ligne « milieu » : aérobie / anaérobie'],
+  gaz: ['O2 absorbé, CO2 rejeté', 'pas d’O2 absorbé, CO2 rejeté', 'ligne « gaz »'],
+  glucose: ['dégradation complète : il ne reste que CO2 et H2O', 'dégradation incomplète : il reste l’éthanol', 'ligne « glucose » : complète / incomplète'],
+  energie: ['beaucoup d’énergie', 'peu d’énergie : l’éthanol en garde', 'ligne « énergie » : beaucoup / peu'],
+  lieu: ['hyaloplasme puis mitochondries', 'hyaloplasme seulement', 'ligne « lieu »'],
+};
+const DUREES = { milieu: [4, 4, 3], gaz: [4, 4, 3], glucose: [5, 5, 3], energie: [4, 4, 3], lieu: [5, 4, 3] };
+const MOMENTS = []; { let t = 0; for (const l of LIGNES) ['_respiration', '_fermentation', ''].forEach((s, i) => { t += DUREES[l.id][i]; MOMENTS.push([l.id + s, t, MOTIFS[l.id][i]]); });
+  MOMENTS.push(['definition_respiration', t + 9, 'la définition de la respiration'], ['definitions', t + 21, 'les deux définitions : respiration, fermentation']); }
+const DEF = {
+  r: [['oxydation complète du glucose, ', 'glucose'], ['en milieu aérobie, ', 'milieu'], ['dans les mitochondries ; ', 'lieu'], ['elle libère beaucoup d’énergie.', 'energie']],
+  f: [['oxydation incomplète du glucose, ', 'glucose'], ['en milieu anaérobie, ', 'milieu'], ['dans le hyaloplasme ; ', 'lieu'], ['elle libère peu d’énergie, ', 'energie'], ['il reste un déchet organique encore riche en énergie.', 'glucose']],
+};
+const texteDef = (k) => DEF[k].map(s => s[0]).join('');
+const phraseDef = (k) => `${COL[k].nom} : ${texteDef(k)}`;
+
+/* ── La géométrie ── */
+function geo(e) {
+  if (e.compact) return { cp: true, VR: { x: 4, y: 38, w: 200, h: 138 }, VF: { x: 210, y: 38, w: 200, h: 138 }, yNom: 194, cellule: (i, k) => ({ x: k ? 210 : 4, y: 201, w: 200, h: 54 }) };
+  const L = e.L, A = borne(.4 * L, 300, 430), T0 = A + 12, T1 = L - 6, c0 = L >= 950 ? 104 : 76, cw = (T1 - T0 - c0) / 2, y0 = 36, hh = 40, rh = (406 - y0 - hh) / 5;
+  return { A, VR: { x: 8, y: 8, w: A - 8, h: 194 }, VF: { x: 8, y: 210, w: A - 8, h: 194 }, T0, T1, c0, cw, y0, hh, rh, bas: y0 + hh + 5 * rh,
+    cellule: (i, k) => ({ x: T0 + c0 + (k ? cw : 0), y: y0 + hh + i * rh, w: cw, h: rh }) };
+}
+
+/* ── Peinture commune ── */
+function flechePeinte(ctx, x1, y1, x2, y2, coul = 'rgba(226,232,240,.9)', l = 2.6) {
+  const a = Math.atan2(y2 - y1, x2 - x1), t = 8;
+  ctx.save(); ctx.strokeStyle = coul; ctx.fillStyle = coul; ctx.lineWidth = l; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - Math.cos(a) * t * .6, y2 - Math.sin(a) * t * .6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - Math.cos(a - .5) * t, y2 - Math.sin(a - .5) * t); ctx.lineTo(x2 - Math.cos(a + .5) * t, y2 - Math.sin(a + .5) * t); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+/** L'éclat d'énergie (le même que sur la page des équations) : halo du lexique, rayons fins, étincelles. */
+function energie(ctx, x, y, r, a, h, grand) {
+  if (a <= 0 || r <= 1) return;
+  const n = grand ? 12 : 6;
+  ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(h * .12);
+  for (let i = 0; i < n; i++) {
+    const l = r * (i % 2 ? .78 : 1.12) * (1 + .06 * Math.sin(h * 3 + i * 1.7)), w = r * .075;
+    const g = ctx.createLinearGradient(0, 0, l, 0); g.addColorStop(0, 'rgba(255,246,190,.85)'); g.addColorStop(1, 'rgba(250,204,21,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0, -w); ctx.lineTo(l, 0); ctx.lineTo(0, w); ctx.closePath(); ctx.fill(); ctx.rotate(TAU / n);
+  }
+  ctx.restore();
+  LX.eclat(ctx, x, y, r * (.86 + .04 * Math.sin(h * 2.6)), a);
+  LX.eclat(ctx, x, y, r * .4, a);
+  for (let i = 0; i < (grand ? 7 : 3); i++) {
+    const an = i * 2.4 + h * .35, d = r * (.62 + .22 * Math.sin(h * 1.7 + i * 2.1));
+    LX.eclat(ctx, x + Math.cos(an) * d, y + Math.sin(an) * d, r * (grand ? .16 : .2), a * (.5 + .5 * Math.sin(h * 4 + i * 1.3) ** 2));
+  }
+}
+const pas = (u, a, b) => borne((u - a) / (b - a));
+
+/* ── Les vignettes : dessinées dans un repère W × 194 (W ≥ 270), F = vignette de la fermentation, u = avancement 0..1.
+ *    Chacune renvoie ses petites légendes [texte, x, y, couleur, align] (écrites à la craie par la page, hors téléphone). ── */
+const VIGNETTES = {
+  /* le milieu : le bocal de levures, ouvert (le dioxygène de l'air entre) ou bouché (le dioxygène s'épuise) */
+  milieu(ctx, W, F, u, h) {
+    const jw = 104, jh = 112, jx = W * .42 - jw / 2, jy = 60, ferme = F ? doux(pas(u, .05, .35)) : 0, n = F ? 6 : 7;
+    const dedans = (cx, g) => {
+      [[.24, .5, 10, 3], [.7, .36, 9, 7], [.5, .8, 10, 12]].forEach(([a, b, r, gr]) => LX.levure(cx, g.x0 + (g.x1 - g.x0) * a, g.surface + (g.fond - g.surface) * b + Math.sin(h * .8 + gr) * 1.5, r, { graine: gr, mitos: 2, angle: gr * .4 }));
+      for (let k = 0; k < n; k++) {
+        const fx = (k * .37 + .15) % 1, fy = (k * .53 + .22) % 1, al = F ? 1 - pas(u, .4 + k * .08, .5 + k * .08) : pas(u, .1 + k * .11, .2 + k * .11);
+        LX.o2(cx, g.x0 + 12 + (g.x1 - g.x0 - 24) * fx + Math.sin(h * .9 + k * 1.7) * 2.5, g.surface + 12 + (g.fond - g.surface - 26) * fy + Math.cos(h * .7 + k * 2.3) * 2.5, { echelle: .8, alpha: al });
+      }
+    };
+    const opt = { niveau: .62, teinte: [205, 186, 140], alpha: .5, trouble: .8, phase: h * .3, graduations: false, graine: F ? 43 : 41 };
+    R.cuve(ctx, jx, jy, jw, jh, opt, dedans);
+    if (ferme > 0) {   // le bouchon descend sur le bocal
+      ctx.save(); ctx.beginPath(); ctx.rect(jx - 14, jy - 70, jw + 28, 81); ctx.clip(); ctx.translate(0, -(1 - ferme) * 30); ctx.globalAlpha = Math.min(1, ferme * 2.5);
+      R.cuve(ctx, jx, jy, jw, jh, { niveau: .001, alpha: 0, graduations: false, bouchon: true }); ctx.restore();
+    }
+    // le dioxygène de l'air : il entre dans le bocal ouvert ; il reste dehors quand le bocal est bouché
+    for (let k = 0; k < 3; k++) {
+      if (F) { if (k < 2) LX.o2(ctx, jx + jw * (.78 + .36 * k) + Math.sin(h * .8 + k * 2) * 5, 24 + Math.abs(Math.sin(h * 1.3 + k * 1.4)) * 8, { echelle: .8, alpha: .95 }); continue; }
+      const ph = (h * .2 + k / 3) % 1;
+      LX.o2(ctx, jx + jw * (.3 + .22 * k) + Math.sin(h + k * 2) * 3, mix(34, jy + jh * .38 + 6, ph), { echelle: .8, alpha: Math.min(1, ph * 5, (1 - ph) * 5) * pas(u, .02, .2) });
+    }
+    const tx = jx + jw + 16;
+    return F ? [['bocal fermé', tx, 98, 'blanc'], u > .92 ? ['pas d’O_{2}', tx, 124, 'rouge'] : null] : [['bocal ouvert', tx, 98, 'blanc'], u > .5 ? ['O_{2} présent', tx, 124, 'rouge'] : null];
+  },
+  /* les gaz : une levure ; le dioxygène entre (ou non), le dioxyde de carbone sort */
+  gaz(ctx, W, F, u, h) {
+    const cx = W * .5, cy = 108, r = 40, gche = cx - r - 6, dte = cx + r + 6;
+    LX.levure(ctx, cx, cy, r, { graine: 22, mitos: F ? 1 : 4, angle: -.2, bourgeon: false });
+    const aIn = pas(u, .05, .3), aOut = pas(u, .45, .7);
+    if (!F) {
+      for (let k = 0; k < 4; k++) { const ph = (h * .26 + k / 4) % 1; LX.o2(ctx, mix(14, cx - r * .45, ph), cy - 15 + (k % 2) * 30 + Math.sin(h * 1.2 + k) * 2, { echelle: .9, alpha: Math.min(1, ph * 6, (1 - ph) * 3.5) * aIn }); }
+      if (aIn > .5) flechePeinte(ctx, 18, cy + 46, gche - 4, cy + 46, rgba([248, 113, 113], .95));
+    } else if (aIn > 0) {
+      const x = gche - 44, y = cy + Math.sin(h * 1.1) * 3;
+      LX.o2(ctx, x, y, { echelle: 1, alpha: .4 * aIn });
+      ctx.save(); ctx.globalAlpha = aIn; ctx.strokeStyle = '#f87171'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x - 14, y - 12); ctx.lineTo(x + 14, y + 12); ctx.moveTo(x + 14, y - 12); ctx.lineTo(x - 14, y + 12); ctx.stroke(); ctx.restore();
+    }
+    for (let k = 0; k < 4; k++) { const ph = (h * .24 + k / 4) % 1; LX.co2(ctx, mix(cx + r * .5, W - 22, ph), cy - 15 + (k % 2) * 30 - ph * 5 + Math.sin(h * 1.1 + k * 2) * 2, { echelle: .9, alpha: Math.min(1, ph * 4, (1 - ph) * 4) * aOut }); }
+    if (aOut > .5) flechePeinte(ctx, dte + 4, cy + 46, W - 16, cy + 46, rgba([192, 132, 252], .95));
+    return [aIn > .5 ? [F ? 'pas d’O_{2}' : 'O_{2}', gche / 2 + 4, 58, 'rouge', 'center'] : null, aOut > .5 ? ['CO_{2}', (dte + W) / 2, 58, 'violet', 'center'] : null, ['levure', cx, 178, 'blanc', 'center']];
+  },
+  /* le glucose : dégradé en entier (6 CO2, de l'eau) ou en partie (il reste 2 éthanols) */
+  glucose(ctx, W, F, u, h) {
+    const gs = .72, gx = 16 + 2.5 * LX.PAS * gs + 9, gy = 86, rC = LX.R.C * gs, pts = LX.positionsChaine(6, gx, gy, { echelle: gs }), parti = [0, 0, 0, 0, 0, 0];
+    const xa = gx + 2.5 * LX.PAS * gs + rC + 8, px = Math.max(xa + 78, W * .72);
+    const vole = (de, vers, t, r0, r1) => LX.bille(ctx, mix(de[0], vers[0], t), mix(de[1], vers[1], t) - Math.sin(Math.PI * t) * 16, mix(r0, r1, t), LX.C.carbone);
+    const apres = [];
+    if (!F) {
+      for (let k = 0; k < 6; k++) {
+        const t = doux(pas(u, .04 + k * .1, .2 + k * .1)), v = pas(u, .2 + k * .1, .26 + k * .1), p = [px + ((k % 3) - 1) * 33, 50 + (k / 3 | 0) * 27]; parti[5 - k] = t;
+        if (t > 0 && t < 1) apres.push(() => vole(pts[5 - k], p, t, rC, 4.8)); else if (t >= 1) apres.push(() => { LX.bille(ctx, p[0], p[1], 4.8, LX.C.carbone, { alpha: 1 - v }); LX.co2(ctx, p[0], p[1], { echelle: .86, alpha: v }); });
+        const w = pas(u, .76 + k * .03, .84 + k * .03); if (w > 0) apres.push(() => LX.h2o(ctx, px + ((k % 3) - 1) * 33, 110 + (k / 3 | 0) * 27, { echelle: 1, alpha: w }));
+      }
+    } else {
+      const ex = Math.max(xa + 64, W * .64), cxx = Math.min(W - 26, ex + 74), se = .95;
+      for (let j = 0; j < 2; j++) {
+        const t = doux(pas(u, .05 + j * .36, .27 + j * .36)), v = pas(u, .27 + j * .36, .35 + j * .36), y = 68 + j * 62, cible = LX.positionsChaine(2, ex, y, { echelle: se }), src = j ? [pts[4], pts[5]] : [pts[0], pts[1]];
+        parti[j ? 4 : 0] = parti[j ? 5 : 1] = t;
+        if (t > 0 && t < 1) apres.push(() => LX.chaine(ctx, [0, 1].map(i => [mix(src[i][0], cible[i][0], t), mix(src[i][1], cible[i][1], t) - Math.sin(Math.PI * t) * 14]), { echelle: mix(gs, se, t) }));
+        else if (t >= 1) apres.push(() => { if (v < 1) LX.chaine(ctx, cible, { echelle: se, alpha: 1 - v }); LX.ethanol(ctx, ex, y, { echelle: se, alpha: v }); });
+        const t2 = doux(pas(u, .2 + j * .36, .38 + j * .36)), v2 = pas(u, .38 + j * .36, .44 + j * .36), p = [cxx, y]; parti[2 + j] = t2;
+        if (t2 > 0 && t2 < 1) apres.push(() => vole(pts[2 + j], p, t2, rC, 5.4)); else if (t2 >= 1) apres.push(() => { LX.bille(ctx, p[0], p[1], 5.4, LX.C.carbone, { alpha: 1 - v2 }); LX.co2(ctx, p[0], p[1], { echelle: .9, alpha: v2 }); });
+      }
+    }
+    const al = parti.map(v => 1 - .68 * v);
+    LX.chaine(ctx, pts, { echelle: gs, alphas: al, liaisons: [0, 1, 2, 3, 4].map(i => Math.min(al[i], al[i + 1])) });
+    if (pas(u, .02, .12) > 0) flechePeinte(ctx, xa, gy, xa + 26, gy);
+    apres.forEach(f => f());
+    const fin = parti.every(v => v >= 1);
+    return [['glucose', gx, gy - 22, 'jaune', 'center'], fin ? ['(dégradé)', gx, gy + 32, 'blanc', 'center'] : null,
+      F ? (u > .9 ? ['déchet organique', Math.min(W - 62, Math.max(xa + 64, W * .64) + 30), 178, 'cyan', 'center'] : null) : (u > .95 ? ['matière minérale', px, 178, 'blanc', 'center'] : null)];
+  },
+  /* l'énergie : un grand éclat, ou un petit (les deux éthanols gardent le reste) */
+  energie(ctx, W, F, u, h) {
+    const gs = .6, gx = 14 + 2.5 * LX.PAS * gs + 8, gy = 104, xa = gx + 2.5 * LX.PAS * gs + 16;
+    LX.glucose(ctx, gx, gy, { echelle: gs, alpha: mix(1, .32, pas(u, .05, .4)) });
+    if (pas(u, .05, .2) > 0) flechePeinte(ctx, xa, gy, xa + 24, gy);
+    const p = doux(pas(u, .15, .75));
+    if (!F) { energie(ctx, (xa + 24 + W) / 2 + 4, gy, 58 * p, Math.min(1, p * 2), h, true); return [['glucose', gx, gy - 20, 'jaune', 'center']]; }
+    const ex = Math.max(xa + 60, W * .52), tx = Math.max(ex + 62, W * .8), g = pas(u, .5, .9);
+    energie(ctx, ex, gy, 19 * p, Math.min(1, p * 2), h, false);
+    for (let j = 0; j < 2; j++) { const y = 74 + j * 62; LX.eclat(ctx, tx, y - 5, 36 * (.94 + .06 * Math.sin(h * 2.4 + j)), .6 * g); LX.ethanol(ctx, tx, y, { echelle: .9, alpha: pas(u, .3, .5) }); }
+    return [['glucose', gx, gy - 20, 'jaune', 'center'], g > .5 ? ['éthanol', tx, 178, 'cyan', 'center'] : null];
+  },
+  /* le lieu : une cellule ; le hyaloplasme s'allume, puis (respiration seulement) la mitochondrie */
+  lieu(ctx, W, F, u, h) {
+    const cx = W * .5, cy = 100, rx = Math.min(W * .44, 160), ry = 62, mx = cx + rx * .4, my = cy + 8;
+    const a1 = pas(u, .08, .35) * (F ? 1 : 1 - .55 * pas(u, .55, .75)), a2 = F ? 0 : pas(u, .55, .8);
+    LX.cellule(ctx, cx, cy, rx, ry, { noyau: { x: cx - rx * .5, y: cy - 10, r: 19 }, graine: 5, grains: 70 });
+    if (a1 > 0) {   // le hyaloplasme allumé
+      ctx.save(); ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, TAU); ctx.clip();
+      const g = ctx.createRadialGradient(cx, cy + 10, 6, cx, cy, rx); g.addColorStop(0, `rgba(215,255,190,${.42 * a1})`); g.addColorStop(1, `rgba(170,255,200,${.2 * a1})`); ctx.fillStyle = g; ctx.fillRect(cx - rx, cy - ry, 2 * rx, 2 * ry); ctx.restore();
+      ctx.save(); ctx.shadowColor = 'rgba(190,255,170,.95)'; ctx.shadowBlur = 14; ctx.strokeStyle = `rgba(215,255,190,${.9 * a1})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, TAU); ctx.stroke(); ctx.restore();
+    }
+    if (a2 > 0) LX.eclat(ctx, mx, my, 66 * (.95 + .05 * Math.sin(h * 2.2)), .7 * a2);
+    ctx.save(); ctx.globalAlpha = F ? .3 : mix(.55, 1, a2); LX.mitochondrie(ctx, mx, my, 47, 21, { angle: -.22, graine: 9 }); ctx.restore();
+    // le glucose entre dans le hyaloplasme ; en respiration, la suite se passe dans la mitochondrie
+    const e1 = doux(pas(u, .05, .4)), e2 = F ? 0 : doux(pas(u, .5, .78)), hx = cx - rx * .1, hy = cy + 34;
+    const x = mix(mix(cx - rx - 46, hx, e1), mx, e2), y = mix(mix(cy + 44, hy, e1), my, e2);
+    if (e2 < 1) LX.glucose(ctx, x, y, { echelle: mix(.42, .26, e2), alpha: Math.min(1, pas(u, .02, .1)) * (1 - e2 * e2), angle: -.1 });
+    if (!F && u > .8) for (let i = 0; i < 3; i++) LX.eclat(ctx, mx + Math.cos(h * .7 + i * 2.1) * 34, my + Math.sin(h * .9 + i * 2.1) * 20, 9, .5 + .5 * Math.sin(h * 4 + i * 1.3) ** 2);
+    return [pas(u, .08, .35) > .5 ? ['hyaloplasme', cx - rx * .34, 186, 'vert', 'center'] : null, a2 > .5 ? ['mitochondrie', mx + 6, 186, 'orange', 'center'] : null];
+  },
+};
+
+/* ── L'état des vignettes et du tableau à l'instant t ── */
+function etat(e) {
+  const S = { ir: -1, iF: -1 };
+  LIGNES.forEach((l, i) => { if (e.des(l.id + '_respiration')) S.ir = i; if (e.des(l.id + '_fermentation')) S.iF = i; });
+  S.cache = e.d('definition_respiration', 0, .07);                 // les vignettes s'effacent pour laisser la place aux définitions
+  S.ur = S.ir >= 0 ? e.p(LIGNES[S.ir].id + '_respiration', .04, .96) : 0;
+  S.uf = S.iF >= 0 && S.iF === S.ir ? e.p(LIGNES[S.iF].id + '_fermentation', .04, .96) : 0;
+  S.vol = (i, k) => { const id = LIGNES[i].id; return { a: e.p(id, k ? .34 : 0, k ? .42 : .08), f: e.d(id, k ? .46 : .12, k ? .92 : .58) }; };
+  S.pdr = e.p('definition_respiration', .1, .96); S.pdf = e.p('definitions', .04, .96);
+  return S;
+}
+/** Le morceau de définition en cours d'écriture : { k: 'r' | 'f', ligne } ou null. */
+function morceau(S) {
+  for (const [k, p] of [['f', S.pdf], ['r', S.pdr]]) {
+    if (p <= 0 || p >= 1) continue;
+    let n = p * texteDef(k).length; for (const [s, ligne] of DEF[k]) { if (n < s.length) return { k, ligne }; n -= s.length; }
+  }
+  return null;
+}
+
+function bloc(c, lignes, cx, cy, t, o = {}) {
+  const tt = Math.max(t, o.tf || 0), pasL = tt * 1.24;
+  lignes.forEach((s, i) => c.texte(s, cx, cy + (i - (lignes.length - 1) / 2) * pasL + tt * .34, { couleur: o.couleur || 'blanc', taille: t, align: 'center', alpha: o.alpha ?? 1, gras: o.gras }));
+}
+const largeurBloc = (c, lignes, t) => Math.max(...lignes.map(s => c.largeurTexte(plat(s), t)));
+
+function vignette(c, e, V, k, i, u, alpha, legendes) {
+  const ctx = c.ctx, F = k === 'f', col = COL[k], s = V.h / 194, W = V.w / s;
+  ctx.save(); ctx.globalAlpha = alpha;
+  R.rr(ctx, V.x, V.y, V.w, V.h, 12); const g = ctx.createLinearGradient(0, V.y, 0, V.y + V.h); g.addColorStop(0, 'rgba(10,30,26,.5)'); g.addColorStop(1, 'rgba(4,16,14,.5)'); ctx.fillStyle = g; ctx.fill();
+  if (i >= 0) {
+    ctx.save(); R.rr(ctx, V.x + 1, V.y + 1, V.w - 2, V.h - 2, 11); ctx.clip(); ctx.translate(V.x, V.y); ctx.scale(s, s);
+    const leg = VIGNETTES[LIGNES[i].id](ctx, W, F, u, e.horloge) || [];
+    ctx.restore();
+    if (!e.compact) leg.filter(Boolean).forEach(([txt, x, y, coul, align]) => legendes.push([`leg_${LIGNES[i].id}_${k}_${txt}`, txt, V.x + x * s, V.y + y * s, coul, align]));
+  }
+  ctx.strokeStyle = rgba(col.rgb, .85); ctx.lineWidth = 2; R.rr(ctx, V.x, V.y, V.w, V.h, 12); ctx.stroke();
+  ctx.restore();
+  if (alpha > .02) {
+    c.texte(col.nom, V.x + 10, V.y + e.tf(17) + 3, { couleur: col.craie, taille: 17, gras: true, alpha });
+    c.repere('vignette_' + (F ? 'fermentation' : 'respiration'), V.x, V.y, V.w, V.h, `la vignette « ${col.nom} »${i >= 0 ? ' : ' + MOTIFS[LIGNES[i].id][F ? 1 : 0] : ' (vide)'}`);
+  }
+}
+
+function dessiner(c, e) {
+  const G = geo(e), S = etat(e), ctx = c.ctx, tf = e.tf(17), tC = !G.cp && e.L >= 950 ? 19 : 17, legendes = [], M = morceau(S);
+  const iCour = Math.max(0, S.ir);                       // la ligne en cours (téléphone : la seule montrée)
+  const def = e.des('definition_respiration');
+  c.direct(() => {
+    /* ── le tableau ── */
+    if (!G.cp) {
+      const { T0, T1, c0, cw, y0, hh, rh, bas } = G, xr = T0 + c0, xf = xr + cw;
+      ctx.save();
+      R.rr(ctx, T0, y0, T1 - T0, bas - y0, 10); ctx.fillStyle = 'rgba(6,22,18,.42)'; ctx.fill();
+      ctx.save(); R.rr(ctx, T0, y0, T1 - T0, bas - y0, 10); ctx.clip();
+      for (const [x, k] of [[xr, 'r'], [xf, 'f']]) { const g = ctx.createLinearGradient(0, y0, 0, y0 + hh); g.addColorStop(0, rgba(COL[k].rgb, .34)); g.addColorStop(1, rgba(COL[k].rgb, .16)); ctx.fillStyle = g; ctx.fillRect(x, y0, cw, hh); ctx.fillStyle = rgba(COL[k].rgb, .045); ctx.fillRect(x, y0 + hh, cw, bas - y0 - hh); }
+      LIGNES.forEach((l, i) => {       // la ligne en cours de construction, doucement éclairée
+        if (!e.des(l.id + '_respiration') || e.vu(l.id)) return;
+        ctx.fillStyle = 'rgba(250,204,21,.09)'; ctx.fillRect(T0, y0 + hh + i * rh, T1 - T0, rh);
+      });
+      if (M) { const i = LIGNES.findIndex(l => l.id === M.ligne), q = G.cellule(i, M.k === 'f' ? 1 : 0); ctx.fillStyle = 'rgba(250,204,21,.2)'; ctx.fillRect(q.x, q.y, q.w, q.h); }
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(226,232,240,.5)'; ctx.lineWidth = 1.3;
+      ctx.beginPath(); for (let i = 0; i < 5; i++) { const y = y0 + hh + i * rh; ctx.moveTo(T0, y); ctx.lineTo(T1, y); } ctx.moveTo(xr, y0); ctx.lineTo(xr, bas); ctx.moveTo(xf, y0); ctx.lineTo(xf, bas); ctx.stroke();
+      ctx.strokeStyle = 'rgba(226,232,240,.75)'; ctx.lineWidth = 1.8; R.rr(ctx, T0, y0, T1 - T0, bas - y0, 10); ctx.stroke();
+      if (M) { const i = LIGNES.findIndex(l => l.id === M.ligne), q = G.cellule(i, M.k === 'f' ? 1 : 0); ctx.shadowColor = 'rgba(255,220,100,.95)'; ctx.shadowBlur = 12; ctx.strokeStyle = 'rgba(255,232,130,.95)'; ctx.lineWidth = 2.4; ctx.strokeRect(q.x + 2, q.y + 2, q.w - 4, q.h - 4); }
+      ctx.restore();
+      c.texte('Respiration', xr + cw / 2, y0 + hh / 2 + 7, { couleur: 'orange', taille: 20, gras: true, align: 'center' });
+      c.texte('Fermentation', xf + cw / 2, y0 + hh / 2 + 7, { couleur: 'cyan', taille: 20, gras: true, align: 'center' });
+      c.repere('colonne_respiration', xr, y0, cw, bas - y0, 'la colonne « Respiration »');
+      c.repere('colonne_fermentation', xf, y0, cw, bas - y0, 'la colonne « Fermentation »');
+      c.repere('tableau', T0, y0, T1 - T0, bas - y0, 'le tableau bilan : respiration / fermentation');
+    } else if (!def) {
+      for (const k of [0, 1]) { const q = G.cellule(iCour, k), col = COL[k ? 'f' : 'r']; R.rr(ctx, q.x, q.y, q.w, q.h, 8); ctx.fillStyle = rgba(col.rgb, .1); ctx.fill(); ctx.strokeStyle = rgba(col.rgb, .7); ctx.lineWidth = 1.5; ctx.stroke(); }
+    }
+
+    /* ── les deux vignettes ── */
+    if (S.cache < 1 && !(G.cp && def)) {
+      vignette(c, e, G.VR, 'r', S.ir, S.ur, 1 - S.cache, legendes);
+      vignette(c, e, G.VF, 'f', S.iF === S.ir ? S.iF : -1, S.uf, 1 - S.cache, legendes);
+    }
+
+    /* ── les mots : sur la vignette, en vol, puis dans leur case ── */
+    LIGNES.forEach((l, i) => {
+      if (G.cp && (i !== iCour || def)) return;
+      if (!e.des(l.id)) return;
+      [0, 1].forEach(k => {
+        const v = S.vol(i, k), q = G.cellule(i, k), V = k ? G.VF : G.VR, lignes = k ? l.f : l.r; if (v.a <= 0) return;
+        const x1 = q.x + q.w / 2, y1 = q.y + q.h / 2, x0 = V.x + V.w / 2, y0 = V.y + V.h - (G.cp ? 30 : 40);
+        const x = mix(x0, x1, v.f), y = mix(y0, y1, v.f) - Math.sin(Math.PI * v.f) * 26;
+        if (v.f < 1) { const w = largeurBloc(c, lignes, Math.max(tC, tf)) + 20, hb = lignes.length * Math.max(tC, tf) * 1.24 + 10; ctx.save(); ctx.globalAlpha = v.a * (1 - v.f) * .9; R.rr(ctx, x - w / 2, y - hb / 2, w, hb, 8); ctx.fillStyle = 'rgba(4,16,14,.88)'; ctx.fill(); ctx.strokeStyle = rgba(COL[k ? 'f' : 'r'].rgb, .8); ctx.lineWidth = 1.4; ctx.stroke(); ctx.restore(); }
+        bloc(c, lignes, x, y, tC, { alpha: v.a, tf });
+        if (v.f >= 1) c.repere(`case_${l.id}_${k ? 'fermentation' : 'respiration'}`, q.x, q.y, q.w, q.h, `${l.nom}, ${COL[k ? 'f' : 'r'].nom.toLowerCase()} : ${plat(lignes.join(' '))}`);
+      });
+    });
+
+    /* ── téléphone, définitions : la colonne du tableau dont on lit la définition ── */
+    if (G.cp && def) {
+      const k = e.des('definitions') ? 'f' : 'r', col = COL[k], x = 4, w = 406, y = 38, hh = 30, rh = 32, c0 = 84;
+      R.rr(ctx, x, y, w, hh + 5 * rh, 8); ctx.fillStyle = 'rgba(6,22,18,.42)'; ctx.fill();
+      ctx.save(); R.rr(ctx, x, y, w, hh + 5 * rh, 8); ctx.clip(); ctx.fillStyle = rgba(col.rgb, .28); ctx.fillRect(x, y, w, hh);
+      if (M) { const i = LIGNES.findIndex(l => l.id === M.ligne); ctx.fillStyle = 'rgba(250,204,21,.22)'; ctx.fillRect(x, y + hh + i * rh, w, rh); }
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(226,232,240,.5)'; ctx.lineWidth = 1.2; ctx.beginPath(); for (let i = 0; i < 5; i++) { ctx.moveTo(x, y + hh + i * rh); ctx.lineTo(x + w, y + hh + i * rh); } ctx.moveTo(x + c0, y + hh); ctx.lineTo(x + c0, y + hh + 5 * rh); ctx.stroke();
+      ctx.strokeStyle = rgba(col.rgb, .8); ctx.lineWidth = 1.8; R.rr(ctx, x, y, w, hh + 5 * rh, 8); ctx.stroke();
+      c.texte(col.nom, x + w / 2, y + hh / 2 + 6, { couleur: col.craie, taille: 18, gras: true, align: 'center' });
+      LIGNES.forEach((l, i) => { const yy = y + hh + i * rh + rh / 2 + 6; c.texte(l.nom, x + c0 / 2, yy, { couleur: 'jaune', taille: 17, gras: true, align: 'center' }); c.texte(k === 'f' ? l.cf : l.cr, x + c0 + 10, yy, { couleur: 'blanc', taille: 17 }); c.repere('ligne_' + l.id, x, y + hh + i * rh, w, rh, `la ligne « ${l.nom} »`); });
+      c.repere('colonne_' + (k === 'f' ? 'fermentation' : 'respiration'), x, y, w, hh + 5 * rh, `la colonne « ${col.nom} »`);
+    }
+  });
+
+  /* ── les noms des lignes (à la craie, quand la ligne commence) ── */
+  LIGNES.forEach((l, i) => {
+    if (!e.des(l.id + '_respiration')) return;
+    if (G.cp) {
+      if (i !== iCour || def) return;
+      e.ecrire(c, 'nom_' + l.id, () => c.texte(l.nom, 207, G.yNom, { couleur: 'jaune', taille: 17, gras: true, align: 'center' }));
+      c.repere('ligne_' + l.id, 4, G.yNom - tf, 406, 255 - G.yNom + tf, `la ligne « ${l.nom} »`);
+      c.repere('colonne_respiration', 4, 38, 200, 217, 'la colonne « Respiration »'); c.repere('colonne_fermentation', 210, 38, 200, 217, 'la colonne « Fermentation »');
+      return;
+    }
+    const y = G.y0 + G.hh + i * G.rh;
+    e.ecrire(c, 'nom_' + l.id, () => c.texte(l.nom, G.T0 + G.c0 / 2, y + G.rh / 2 + 6, { couleur: 'jaune', taille: tC, gras: true, align: 'center' }));
+    c.repere('ligne_' + l.id, G.T0, y, G.T1 - G.T0, G.rh, `la ligne « ${l.nom} »${e.vu(l.id) ? ` : ${plat(l.cr)} / ${plat(l.cf)}` : ''}`);
+  });
+  if (S.cache < .5) for (const [cle, txt, x, y, coul, align] of legendes) e.ecrire(c, cle, () => c.texte(txt, x, y, { couleur: coul, taille: 17, align: align || 'left' }));
+
+  /* ── les deux définitions, à la place des vignettes ── */
+  if (def) {
+    if (G.cp) { const k = e.des('definitions') ? 'f' : 'r'; e.bandeau = { texte: phraseDef(k), couleur: 'blanc', repere: 'definition_' + (k === 'f' ? 'fermentation' : 'respiration'), label: phraseDef(k) }; return; }
+    const tD = e.L >= 950 ? 21 : 20, tt = Math.max(tD, tf), pasL = tt * 1.3, x = 8, w = G.A - 8, wi = w - 24;
+    let y = 10;
+    for (const k of ['r', 'f']) {
+      const p = k === 'r' ? S.pdr : S.pdf, full = texteDef(k), rangs = []; let cur = '';
+      for (const m of full.split(' ')) { const essai = cur ? cur + ' ' + m : m; if (cur && c.largeurTexte(essai, tt) > wi) { rangs.push(cur); cur = m; } else cur = essai; }
+      if (cur) rangs.push(cur);
+      const hB = (rangs.length + 1) * pasL + 18, y0 = y;
+      if ((k === 'r' ? e.p('definition_respiration', .06, 1) : e.p('definitions')) > 0) {
+        e.ecrire(c, 'def_cadre_' + k, () => { c.rect(x, y0, w, hB, { couleur: 'vert', largeur: 2, arrondi: 12, fond: 'vert', fondAlpha: .07 }); c.texte(COL[k].nom + ' :', x + 12, y0 + pasL + 2, { couleur: COL[k].craie, taille: tD + 2, gras: true }); });
+        c.direct(() => { let n = Math.round(p * full.length); rangs.forEach((s, i) => { if (n > 0) c.texte(s.slice(0, n), x + 12, y0 + (i + 2) * pasL + 2, { couleur: 'blanc', taille: tD }); n -= s.length + 1; }); });
+        c.repere('definition_' + (k === 'f' ? 'fermentation' : 'respiration'), x, y0, w, hB, phraseDef(k));
+      }
+      y += hB + 12;
+    }
+  }
+}
+
+/* ── Téléphone : la ligne en cours (deux vignettes, deux cases) ; pour les définitions, la colonne lue ── */
+function foyer(e) { return e.des('definition_respiration') ? { x: 0, y: 34, w: 414, h: 198 } : { x: 0, y: 34, w: 414, h: 226 }; }
+
+/* ── Ce qui se voit ── */
+function voit(e) {
+  const S = etat(e), faites = LIGNES.filter(l => e.vu(l.id)), out = [];
+  const ligneTxt = (l) => `${l.nom} : ${plat(l.r.join(' '))} / ${plat(l.f.join(' '))}`;
+  out.push(`Le tableau bilan à deux colonnes « Respiration » (orange) et « Fermentation » (bleu clair) : ${faites.length ? `${faites.length} ligne${faites.length > 1 ? 's' : ''} sur 5 remplie${faites.length > 1 ? 's' : ''} — ${faites.map(ligneTxt).join(' ; ')}` : 'encore vide'}.`);
+  if (e.des('definition_respiration')) {
+    const n = (k, p) => { const t = phraseDef(k); return p >= 1 ? `« ${t} »` : `« ${COL[k].nom} : ${texteDef(k).slice(0, Math.round(p * texteDef(k).length))}… » (en train de s’écrire)`; };
+    out.push(`À la place des vignettes, les définitions encadrées en vert : ${n('r', S.pdr)}${e.des('definitions') ? ' ' + n('f', S.pdf) : ''}`);
+    const M = morceau(S); if (M) out.push(`La case « ${M.ligne} » de la colonne ${COL[M.k].nom} est allumée.`);
+    return out.join(' ');
+  }
+  if (S.ir < 0) { out.push('À gauche, deux vignettes vides : « Respiration » en haut, « Fermentation » en bas.'); return out.join(' '); }
+  const l = LIGNES[S.ir], D = {
+    milieu: ['un bocal de levures ouvert : le dioxygène de l’air (deux billes rouges) entre, O2 présent', 'un bocal fermé par un bouchon : les molécules de dioxygène disparaissent une à une, plus d’O2 dedans'],
+    gaz: ['une levure : des O2 entrent (flèche rouge), des CO2 sortent (flèche violette)', 'une levure : un O2 barré d’une croix (pas d’O2 absorbé), des CO2 sortent'],
+    glucose: ['le glucose (6 billes jaunes) : ses 6 carbones partent un à un en 6 CO2, puis 6 H2O ; il reste pâli, « (dégradé) » ; matière minérale', 'le glucose donne 2 éthanols (2 billes jaunes chacun) et 2 CO2 : il reste un déchet organique'],
+    energie: ['le glucose pâli, puis un grand éclat', 'le glucose pâli, un petit éclat, et deux éthanols entourés d’un halo (ils gardent de l’énergie)'],
+    lieu: ['une cellule : le hyaloplasme s’allume, puis le glucose va vers la mitochondrie qui s’allume', 'une cellule : seul le hyaloplasme est allumé, la mitochondrie reste éteinte'],
+  }[l.id];
+  out.push(`Ligne en cours : « ${l.nom} ». Vignette Respiration (en haut) : ${D[0]}${S.ur < 1 ? ' (en cours)' : ''}.`);
+  out.push(S.iF === S.ir ? `Vignette Fermentation (en bas) : ${D[1]}${S.uf < 1 ? ' (en cours)' : ''}.` : 'La vignette Fermentation est encore vide.');
+  if (e.des(l.id) && !e.vu(l.id)) out.push('Les mots volent des vignettes vers leurs cases du tableau.');
+  return out.join(' ');
+}
+
+R.page({
+  id: 'svt_reference_comparer', vue: 'comparer', titre: 'Respiration ou fermentation : le tableau bilan', moments: MOMENTS, dessiner, foyer, voit,
+  vivant: (e) => e.p('definition_respiration') < .1 || (e.des('definition_respiration') && !e.vu('definitions') && !!morceau(etat(e))),
+  texte: 'Tableau bilan. Milieu : respiration = aérobie (avec O2) ; fermentation = anaérobie (sans O2). Gaz : respiration = O2 absorbé, CO2 rejeté ; fermentation = pas d’O2 absorbé, CO2 rejeté. Glucose : respiration = dégradation complète, il ne reste que CO2 et H2O (matière minérale) ; fermentation = dégradation incomplète, il reste un déchet organique, l’éthanol. Énergie : respiration = beaucoup ; fermentation = peu (l’éthanol en garde). Lieu : respiration = hyaloplasme puis mitochondries ; fermentation = hyaloplasme seulement. '
+    + phraseDef('r') + ' ' + phraseDef('f'),
+  explications: [{ repere: 'ligne_milieu', texte: 'Le milieu : aérobie pour la respiration, anaérobie pour la fermentation.' }, { repere: 'ligne_gaz', texte: 'Les gaz : seule la respiration absorbe du dioxygène ; les deux rejettent du CO2.' },
+    { repere: 'ligne_glucose', texte: 'Le glucose : dégradation complète ou incomplète.' }, { repere: 'ligne_energie', texte: 'L’énergie : beaucoup, ou peu.' }, { repere: 'ligne_lieu', texte: 'Le lieu : hyaloplasme puis mitochondries, ou hyaloplasme seulement.' },
+    { repere: 'colonne_respiration', texte: 'La colonne de la respiration.' }, { repere: 'colonne_fermentation', texte: 'La colonne de la fermentation.' }],
+  accueil: 'Respiration ou fermentation : on compare, ligne par ligne…',
+  fini: 'Respiration : oxydation complète. Fermentation : oxydation incomplète.',
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

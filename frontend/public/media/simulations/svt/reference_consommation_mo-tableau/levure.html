@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La levure : une seule cellule — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css">
+<style>@media (max-height: 340px) { .scene { padding-bottom: .2em; } .tableau { padding: .2em .5em; } }</style></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Trois tableaux peints qui se suivent. D’abord un microscope optique, une lame avec une goutte de suspension de levures, et le champ rond du microscope : des levures bourgeonnantes avec une barre d’échelle. Ensuite une levure agrandie, en coupe : paroi, membrane, noyau, vacuole, hyaloplasme, mitochondries. Enfin deux bocaux : un bocal ouvert (milieu aérobie, avec dioxygène) et un bocal fermé (milieu anaérobie, sans dioxygène), avec les deux mots découpés."></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference.js"></script>
+<script>
+/*
+ * La levure : une seule cellule — cours de référence SVT (docs/reference-svt/ARCHITECTURE.md § 3, diapo rf_r3_levure),
+ * 27 novembre 2026. Trois tableaux peints qui se remplacent :
+ *   1. microscope, champ : un microscope optique (pied, potence, platine, lame et valets, tourelle d'objectifs, tube,
+ *      oculaire, vis de mise au point, lampe) ; une goutte de suspension est déposée sur la lame, la lame va sur la platine ;
+ *      puis le champ rond : des levures bourgeonnantes (Lexique.levure) et la barre d'échelle « 1,5 µm ».
+ *   2. leg_paroi, leg_membrane, leg_noyau, leg_vacuole, leg_hyaloplasme, leg_mitochondrie, une_cellule : UNE levure
+ *      agrandie, en coupe et en couleur ; chaque nom s'écrit à côté avec son trait de rappel, un par moment ; le tableau 1
+ *      est rangé, en petit, en bas à gauche. Couleurs du lexique : hyaloplasme vert d'eau, membrane dorée, noyau violet,
+ *      vacuole gris-bleu (celle de Lexique.levure), mitochondries = Lexique.mitochondrie, paroi beige-brun de la levure.
+ *   3. aerobie, anaerobie : deux bocaux côte à côte (ouvert : le dioxygène de l'air entre ; fermé par un couvercle : il ne
+ *      peut plus entrer) et les deux mots découpés : aéro·bie (air, vie), an·aéro·bie (sans, air, vie).
+ * Repères : microscope, lame, champ, echelle, cellule, paroi, membrane, noyau, vacuole, hyaloplasme, mitochondrie,
+ *           unicellulaire, bocal_ouvert, bocal_ferme, mot_aerobie, mot_anaerobie.
+ */
+const R = window.Ref, LX = window.Lexique, { doux, mix, borne, rgba, TAU, rr, graine } = R;
+const MOMENTS = [
+  ['microscope', 9, 'le microscope optique ; une goutte de suspension de levures sur la lame'],
+  ['champ', 15, 'le champ du microscope : des levures bourgeonnantes ; barre d’échelle 1,5 µm'],
+  ['leg_paroi', 21, 'une levure agrandie, en coupe : la paroi'],
+  ['leg_membrane', 24.5, 'la membrane'], ['leg_noyau', 28, 'le noyau'], ['leg_vacuole', 31.5, 'la vacuole'],
+  ['leg_hyaloplasme', 35, 'le hyaloplasme'], ['leg_mitochondrie', 39, 'les mitochondries'],
+  ['une_cellule', 43, 'la levure : une seule cellule (unicellulaire)'],
+  ['aerobie', 52, 'bocal ouvert : aéro·bie, vit avec dioxygène'],
+  ['anaerobie', 61, 'bocal fermé : an·aéro·bie, vit sans dioxygène'] ];
+const LEGS = ['paroi', 'membrane', 'noyau', 'vacuole', 'hyaloplasme', 'mitochondrie'];
+const COUL = { paroi: '#e2bd7c', membrane: '#fad468', noyau: '#c4a2ff', vacuole: '#bcd6e6', hyaloplasme: '#7fe0b0', mitochondrie: '#ff9a6a', levure: '#f0d69a' };
+const NOMS = { paroi: 'paroi', membrane: 'membrane', noyau: 'noyau', vacuole: 'vacuole', hyaloplasme: 'hyaloplasme', mitochondrie: 'mitochondries' };
+const UNI = 'une seule cellule : la levure est unicellulaire';
+const CAP1 = 'sur la lame : une goutte de suspension de levures', CAP2 = 'au microscope : des levures ; certaines portent un bourgeon';
+const CONCL = ['vit avec dioxygène', 'vit sans dioxygène'];
+
+/* ── La géométrie ── */
+function geo(L, compact) {
+  const g = { table: 336, s: 1 };
+  g.mx = Math.max(118, L * .155); g.my = 334;
+  g.rF = Math.min(140, 132 + (L - 760) * .04); g.cxF = Math.min(L * .71, L - g.rF - 94); g.cyF = 190;
+  g.ocu = [g.mx + 73, g.my - 288];
+  g.lameT = [g.mx + 204 + 62, g.my - 5]; g.lameP = [g.mx + 204 - 135, g.my - 117];
+  // la cellule
+  const k = Math.min(1.1, 1 + (L - 760) / 2600);
+  g.k = k; g.X = L / 2; g.Y = 206; g.rx = 170 * k; g.ry = 132 * k;
+  g.xl = g.X - g.rx - 24; g.xr = g.X + g.rx + 24;
+  g.vig = { f: .3, x: 8 - (g.mx - 8) * .3, y: 410 - 336 * .3 };
+  // les deux bocaux
+  const demi = L / 2;
+  g.boc = [0, 1].map(i => {
+    const x0 = i * demi, xc = x0 + demi / 2;
+    if (compact) return { x0, xc, jar: { x: x0 + 14, y: 64, w: 112, h: 146 }, mot: { x: x0 + 132 + (demi - 132) / 2, y: 104, t: 32 }, sens: [0, 1, 2].map(j => ({ x: x0 + 132 + (demi - 132) / 2, y: 138 + j * 25 })), colonne: true };
+    const w = 146 * k, e3 = Math.min(118, (demi - 96) / 2);
+    return { x0, xc, jar: { x: xc - w / 2 + 14, y: 52, w, h: 170 }, mot: { x: xc, y: 278, t: 40 }, sens: i ? [-1, 0, 1].map(j => ({ x: xc + j * e3, y: 323 })) : [-.55, .55].map(j => ({ x: xc + j * e3 * 1.2, y: 323 })), concl: { x: xc, y: 376 } };
+  });
+  return g;
+}
+
+/* ════════════════════════════ Tableau 1 : le microscope ════════════════════════════ */
+/* Dessiné dans un repère local (origine : coin bas du pied, 204 × 290), puis retourné : platine à gauche, potence à droite. */
+function microscope(ctx, mx, my, s, o = {}) {
+  const l = o.lumiere || 0;
+  ctx.save(); ctx.globalAlpha *= o.alpha ?? 1; ctx.translate(mx + 204 * s, my); ctx.scale(-s, s); ctx.lineJoin = 'round';
+  const email = (x0, x1) => { const g = ctx.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, 'rgb(140,149,165)'); g.addColorStop(.5, 'rgb(218,224,233)'); g.addColorStop(.84, 'rgb(252,253,255)'); g.addColorStop(1, 'rgb(190,198,211)'); return g; };
+  const chrome = (x0, x1) => { const g = ctx.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, 'rgb(84,90,104)'); g.addColorStop(.3, 'rgb(176,182,194)'); g.addColorStop(.62, 'rgb(250,251,253)'); g.addColorStop(.8, 'rgb(150,157,170)'); g.addColorStop(1, 'rgb(94,100,114)'); return g; };
+  const noir = (x0, x1) => { const g = ctx.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, 'rgb(16,18,24)'); g.addColorStop(.66, 'rgb(86,92,106)'); g.addColorStop(.8, 'rgb(120,126,140)'); g.addColorStop(1, 'rgb(34,36,44)'); return g; };
+  const bloc = (x, y, w, h, r, style, bordure = 'rgba(20,24,34,.7)') => { rr(ctx, x, y, w, h, r); ctx.fillStyle = style; ctx.fill(); if (bordure) { ctx.strokeStyle = bordure; ctx.lineWidth = .9; ctx.stroke(); } };
+  // l'ombre posée
+  ctx.fillStyle = 'rgba(0,0,0,.36)'; ctx.beginPath(); ctx.ellipse(96, 3, 108, 6.5, 0, 0, TAU); ctx.fill();
+  // la potence (le bras courbe qui porte le tube)
+  const bras = () => { ctx.beginPath(); ctx.moveTo(40, -24); ctx.bezierCurveTo(24, -92, 28, -172, 58, -206); ctx.quadraticCurveTo(78, -226, 114, -218); };
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgb(88,96,112)'; ctx.lineWidth = 39; bras(); ctx.stroke();
+  ctx.strokeStyle = 'rgb(212,218,228)'; ctx.lineWidth = 36.5; bras(); ctx.stroke();
+  ctx.save(); ctx.translate(8, -2); ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 8; bras(); ctx.stroke(); ctx.restore();
+  ctx.save(); ctx.translate(-10, 3); ctx.strokeStyle = 'rgba(80,90,112,.38)'; ctx.lineWidth = 11; bras(); ctx.stroke(); ctx.restore();
+  ctx.lineCap = 'butt';
+  // le pied (lourd, émaillé) et la colonne où s'attache la potence
+  bloc(12, -46, 62, 30, 7, email(12, 74));
+  const gp = ctx.createLinearGradient(0, -20, 0, 0); gp.addColorStop(0, 'rgb(240,243,248)'); gp.addColorStop(.3, 'rgb(206,212,222)'); gp.addColorStop(1, 'rgb(128,136,152)');
+  bloc(0, -20, 188, 20, [10, 10, 3, 3], gp);
+  ctx.fillStyle = 'rgba(255,255,255,.75)'; rr(ctx, 6, -18.5, 176, 2.4, 1.2); ctx.fill();
+  ctx.fillStyle = 'rgb(18,20,26)'; ctx.fillRect(14, 0, 28, 3.4); ctx.fillRect(146, 0, 28, 3.4);
+  bloc(66, -13, 40, 7, 2, 'rgb(64,72,92)', null);
+  ctx.fillStyle = l > .3 ? '#86efac' : '#3c4a44'; ctx.beginPath(); ctx.arc(28, -10, 2.8, 0, TAU); ctx.fill();
+  // la lampe dans le pied, son faisceau
+  bloc(112, -37, 38, 18, [5, 5, 0, 0], noir(112, 150));
+  if (l > 0) {
+    const gf = ctx.createLinearGradient(0, -36, 0, -112); gf.addColorStop(0, `rgba(255,244,180,${.6 * l})`); gf.addColorStop(1, `rgba(255,244,180,${.22 * l})`);
+    ctx.fillStyle = gf; ctx.beginPath(); ctx.moveTo(120, -37); ctx.lineTo(142, -37); ctx.lineTo(138, -112); ctx.lineTo(124, -112); ctx.closePath(); ctx.fill();
+    const gl = ctx.createRadialGradient(131, -37, 0, 131, -37, 26); gl.addColorStop(0, `rgba(255,246,190,${.85 * l})`); gl.addColorStop(1, 'rgba(255,246,190,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(131, -37, 26, 0, TAU); ctx.fill();
+  }
+  ctx.fillStyle = l > 0 ? rgba([mix(70, 255, l), mix(76, 248, l), mix(88, 200, l)], 1) : 'rgb(70,76,88)'; ctx.beginPath(); ctx.ellipse(131, -37, 13, 3.6, 0, 0, TAU); ctx.fill();
+  // le support de la platine, le condenseur et son diaphragme
+  bloc(50, -116, 44, 14, 3, email(50, 94));
+  bloc(119, -104, 24, 17, 2, chrome(119, 143)); bloc(114, -92, 34, 5.5, 2, noir(114, 148)); ctx.fillStyle = 'rgb(30,32,40)'; ctx.fillRect(148, -91, 9, 2.6);
+  // la platine : le dessus (vu un peu de haut), le chant, le côté
+  const gpl = ctx.createLinearGradient(74, 0, 204, 0); gpl.addColorStop(0, 'rgb(40,44,54)'); gpl.addColorStop(.75, 'rgb(84,90,104)'); gpl.addColorStop(1, 'rgb(56,60,72)');
+  ctx.fillStyle = gpl; ctx.beginPath(); ctx.moveTo(74, -112); ctx.lineTo(196, -112); ctx.lineTo(204, -123); ctx.lineTo(82, -123); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgb(20,22,28)'; ctx.fillRect(74, -112, 122, 8.5);
+  ctx.fillStyle = 'rgb(44,48,58)'; ctx.beginPath(); ctx.moveTo(196, -112); ctx.lineTo(204, -123); ctx.lineTo(204, -114.5); ctx.lineTo(196, -103.5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(74, -112.6, 122, 1.2);
+  ctx.fillStyle = l > 0 ? `rgba(255,246,196,${.35 + .65 * l})` : 'rgb(12,13,18)'; ctx.beginPath(); ctx.ellipse(135, -117.5, 9, 3.2, 0, 0, TAU); ctx.fill();
+  // la lame sous ses deux valets
+  if (o.lame) { ctx.save(); ctx.translate(135, -117.5); lameDessin(ctx, o.goutte, l); ctx.restore(); }
+  for (const [px, tx] of [[100, 114], [172, 157]]) {
+    ctx.lineCap = 'round'; ctx.strokeStyle = 'rgb(40,44,54)'; ctx.lineWidth = 4.6; ctx.beginPath(); ctx.moveTo(px, -121.5); ctx.lineTo(tx, -116.5); ctx.stroke();
+    ctx.strokeStyle = 'rgb(224,229,237)'; ctx.lineWidth = 3; ctx.stroke(); ctx.lineCap = 'butt';
+    const gv = ctx.createRadialGradient(px + .8, -122.3, .3, px, -121.5, 3.4); gv.addColorStop(0, '#ffffff'); gv.addColorStop(1, 'rgb(96,102,116)'); ctx.fillStyle = gv; ctx.beginPath(); ctx.arc(px, -121.5, 3.2, 0, TAU); ctx.fill();
+  }
+  // la tourelle (revolver) et ses trois objectifs ; celui du milieu est en service, au-dessus de la lame
+  const objectif = (ang, len, bague) => {
+    ctx.save(); ctx.translate(131, -186); ctx.rotate(ang);
+    ctx.fillStyle = chrome(-8, 8); ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.lineTo(8, len - 12); ctx.lineTo(4.4, len); ctx.lineTo(-4.4, len); ctx.lineTo(-8, len - 12); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(20,24,34,.75)'; ctx.lineWidth = .9; ctx.stroke();
+    ctx.fillStyle = 'rgb(28,30,38)'; ctx.fillRect(-8, 5, 16, 6); ctx.fillStyle = bague; ctx.fillRect(-8, len * .5, 16, 4.2);
+    ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(2.4, 11, 2, len - 24);
+    ctx.restore();
+  };
+  objectif(.62, 40, 'rgb(226,58,50)'); objectif(-.62, 46, 'rgb(246,200,40)'); objectif(0, 58, 'rgb(52,120,232)');
+  ctx.fillStyle = noir(104, 158); ctx.beginPath(); ctx.moveTo(104, -186); ctx.lineTo(158, -186); ctx.lineTo(151, -202); ctx.lineTo(111, -202); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(131, -186, 27, 7.5, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(150,158,172,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(131, -186, 27, 7.5, 0, 0, Math.PI); ctx.stroke();
+  // la tête, le tube optique, l'oculaire et son œilleton
+  bloc(119, -266, 24, 34, 2, noir(119, 143));
+  bloc(98, -236, 68, 37, 11, email(98, 166));
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; rr(ctx, 106, -233, 52, 3, 1.5); ctx.fill();
+  bloc(116.5, -241, 29, 6, 2, chrome(116.5, 145.5));
+  bloc(122, -283, 18, 18, 2, chrome(122, 140)); bloc(118.5, -291, 25, 9.5, 3.5, noir(118.5, 143.5));
+  // les deux vis de mise au point (la grosse et la fine), sur la potence
+  const kx = 40, ky = -88;
+  const gk = ctx.createRadialGradient(kx + 5, ky - 6, 1, kx, ky, 18); gk.addColorStop(0, 'rgb(128,136,152)'); gk.addColorStop(1, 'rgb(26,28,36)');
+  ctx.fillStyle = gk; ctx.beginPath(); ctx.arc(kx, ky, 17.5, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(10,12,18,.9)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = 'rgba(200,206,218,.5)'; ctx.lineWidth = 1; for (let i = 0; i < 28; i++) { const a = i / 28 * TAU; ctx.beginPath(); ctx.moveTo(kx + Math.cos(a) * 14.4, ky + Math.sin(a) * 14.4); ctx.lineTo(kx + Math.cos(a) * 17, ky + Math.sin(a) * 17); ctx.stroke(); }
+  const gk2 = ctx.createRadialGradient(kx + 3, ky - 3, .5, kx, ky, 9); gk2.addColorStop(0, '#ffffff'); gk2.addColorStop(1, 'rgb(108,114,128)');
+  ctx.fillStyle = gk2; ctx.beginPath(); ctx.arc(kx, ky, 8.6, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(20,24,34,.8)'; ctx.stroke();
+  ctx.restore();
+}
+/** La lame de verre (vue un peu de haut), centrée à l'origine ; goutte 0..1 : la goutte de suspension posée dessus. */
+function lameDessin(ctx, goutte = 0, lum = 0) {
+  ctx.beginPath(); ctx.moveTo(-36, 3.6); ctx.lineTo(32, 3.6); ctx.lineTo(38, -3.6); ctx.lineTo(-30, -3.6); ctx.closePath();
+  ctx.fillStyle = 'rgba(196,230,248,.62)'; ctx.fill(); ctx.strokeStyle = 'rgba(244,251,255,.95)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.moveTo(-28, 2.4); ctx.lineTo(-14, 2.4); ctx.lineTo(-9, -2.6); ctx.lineTo(-23, -2.6); ctx.closePath(); ctx.fill();
+  if (goutte > 0) {
+    const r = 8.5 * goutte, g = ctx.createRadialGradient(1.5, -1.4, .4, 0, 0, r); g.addColorStop(0, `rgba(255,${246 + 4 * lum},${214 + 20 * lum},.98)`); g.addColorStop(1, 'rgba(206,172,104,.92)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, r, r * .42, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(120,90,40,.6)'; ctx.lineWidth = .8; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.ellipse(2.4, -1.2, r * .22, r * .1, 0, 0, TAU); ctx.fill();
+  }
+}
+/** Le compte-gouttes : tube de verre effilé, poire en caoutchouc, un peu de suspension ; `pend` : la goutte au bout. */
+function pipette(ctx, x, y, a, pend) {
+  ctx.save(); ctx.globalAlpha *= a; ctx.translate(x, y);
+  ctx.fillStyle = 'rgba(214,186,124,.85)'; ctx.beginPath(); ctx.moveTo(-1.2, -2); ctx.lineTo(1.2, -2); ctx.lineTo(3.4, -26); ctx.lineTo(3.4, -52); ctx.lineTo(-3.4, -52); ctx.lineTo(-3.4, -26); ctx.closePath(); ctx.fill();
+  const gv = ctx.createLinearGradient(-5, 0, 5, 0); gv.addColorStop(0, 'rgba(240,250,255,.6)'); gv.addColorStop(.4, 'rgba(255,255,255,.12)'); gv.addColorStop(1, 'rgba(240,250,255,.45)');
+  ctx.fillStyle = gv; ctx.beginPath(); ctx.moveTo(-1.6, 0); ctx.lineTo(1.6, 0); ctx.lineTo(4.6, -26); ctx.lineTo(4.6, -88); ctx.lineTo(-4.6, -88); ctx.lineTo(-4.6, -26); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(236,246,252,.9)'; ctx.lineWidth = 1.1; ctx.stroke();
+  const gb = ctx.createRadialGradient(-3, -106, 1, 0, -102, 16); gb.addColorStop(0, 'rgb(236,120,96)'); gb.addColorStop(1, 'rgb(128,36,30)');
+  ctx.fillStyle = gb; ctx.beginPath(); ctx.ellipse(0, -102, 9.5, 16, 0, 0, TAU); ctx.fill(); ctx.fillRect(-6, -90, 12, 5);
+  if (pend > 0) { ctx.fillStyle = 'rgba(226,198,134,.95)'; ctx.beginPath(); ctx.ellipse(0, 2 + pend * 2, 2.6 * pend + .6, 3.4 * pend + .6, 0, 0, TAU); ctx.fill(); }
+  ctx.restore();
+}
+
+/* ── Le champ rond du microscope ── */
+const graineLevure = (i, bourgeon) => { for (let s = 300 + i * 41; ; s++) if ((graine(s)() > .45) === bourgeon) return s; };
+const CHAMP = [[-.56, -.44, .112, 1, -.9], [-.12, -.64, .098, 1, .4], [.34, -.5, .118, 0, .2], [.64, -.16, .1, 1, 2.2], [.04, -.16, .128, 1, -.3], [-.44, .04, .108, 0, 1],
+  [-.72, .3, .092, 1, 3.4], [-.2, .36, .112, 1, 1.9], [.34, .22, .11, 1, .6], [.68, .3, .088, 0, 0], [-.3, -.26, .07, 0, 0], [.42, .58, .08, 0, 1.2], [-.5, .62, .086, 1, -2.4]]
+  .map((l, i) => [...l, graineLevure(i, !!l[3])]);
+function champ(ctx, cx, cy, r, e, o) {
+  const h = e.horloge, a = o.alpha ?? 1;
+  ctx.save(); ctx.globalAlpha *= a;
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 5; ctx.fillStyle = 'rgb(8,10,14)'; ctx.beginPath(); ctx.arc(cx, cy, r + 7, 0, TAU); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.clip();
+  const g = ctx.createRadialGradient(cx, cy, r * .15, cx, cy, r); g.addColorStop(0, 'rgb(236,244,250)'); g.addColorStop(.72, 'rgb(212,228,240)'); g.addColorStop(1, 'rgb(140,164,186)');
+  ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+  if (o.net > 0) {
+    ctx.save(); ctx.globalAlpha *= o.net; if (o.net < 1 && 'filter' in ctx) ctx.filter = `blur(${((1 - o.net) * 5).toFixed(1)}px)`;
+    CHAMP.forEach(([x, y, q, b, an, gr], i) => {
+      const dx = Math.sin(h * .5 + i * 1.9) * 1.6, dy = Math.cos(h * .42 + i * 2.7) * 1.6;
+      LX.levure(ctx, cx + x * r + dx, cy + y * r + dy, q * r, { angle: an + Math.sin(h * .2 + i) * .05, graine: gr, bourgeon: !!b });
+    });
+    ctx.restore();
+  }
+  if (o.echelle > 0) {
+    const lb = r * .24, bx = cx + r * .06, by = cy + r * .74;
+    ctx.save(); ctx.globalAlpha *= o.echelle; ctx.strokeStyle = '#0b1f2a'; ctx.lineWidth = Math.max(2.4, r * .022); ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.moveTo(bx - lb / 2, by); ctx.lineTo(bx - lb / 2 + lb * Math.min(1, o.echelle * 1.4), by); ctx.moveTo(bx - lb / 2, by - 5); ctx.lineTo(bx - lb / 2, by + 5); if (o.echelle > .7) { ctx.moveTo(bx + lb / 2, by - 5); ctx.lineTo(bx + lb / 2, by + 5); } ctx.stroke();
+    if (o.texte !== false) LX.etiquette(ctx, '1,5 µm', bx, by - 15, { taille: o.taille || 17 });
+    ctx.restore();
+  }
+  ctx.restore();
+  const gm = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); gm.addColorStop(0, 'rgb(120,128,144)'); gm.addColorStop(1, 'rgb(34,38,48)');
+  ctx.strokeStyle = gm; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, r + 5.5, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(cx, cy, r - 8, Math.PI * 1.1, Math.PI * 1.4); ctx.stroke();
+  ctx.restore();
+}
+
+/* ════════════════════════════ Tableau 2 : UNE levure, en coupe ════════════════════════════ */
+const ORG = { vac: [-62, 18, 54, 50], noy: [58, -32, 35], mitos: [[116, 14, 1.38, 33, 14.5, 21], [52, 68, -.26, 37, 15.5, 22], [-38, -78, .12, 37, 15.5, 23]], bg: [118, -106, 48, 42, -.5] };
+const GRAINS = (() => { const r = graine(91), o = []; for (let i = 0; i < 230; i++) o.push([r() * 2 - 1, r() * 2 - 1, r(), r()]); return o; })();
+function levureCoupe(ctx, X, Y, k, o = {}) {
+  const hl = o.hl || {}, rx = 170 * k, ry = 132 * k, [bx, by, brx, bry, ba] = ORG.bg, a = o.alpha ?? 1;
+  const union = (dr) => { ctx.beginPath(); ctx.ellipse(X, Y, rx - dr * k, ry - dr * k, 0, 0, TAU); ctx.moveTo(X + bx * k + (brx - dr) * k * Math.cos(ba), Y + by * k + (brx - dr) * k * Math.sin(ba)); ctx.ellipse(X + bx * k, Y + by * k, (brx - dr) * k, (bry - dr) * k, ba, 0, TAU); };
+  const I = (id) => hl[id] || 0;
+  ctx.save(); ctx.globalAlpha *= a;
+  // l'ombre, puis la paroi (épaisse), en couches
+  ctx.save(); ctx.shadowColor = I('paroi') > 0 ? `rgba(255,226,120,${.5 + .5 * I('paroi')})` : 'rgba(0,0,0,.5)'; ctx.shadowBlur = I('paroi') > 0 ? 26 : 18; ctx.shadowOffsetY = I('paroi') > 0 ? 0 : 6;
+  union(0); ctx.fillStyle = 'rgb(112,82,42)'; ctx.fill(); ctx.restore();
+  const gw = ctx.createRadialGradient(X - rx * .3, Y - ry * .4, rx * .4, X, Y, rx * 1.05);
+  const pw = I('paroi'); gw.addColorStop(0, rgba([mix(232, 255, pw), mix(200, 236, pw), mix(140, 170, pw)], 1)); gw.addColorStop(1, rgba([mix(176, 236, pw), mix(138, 196, pw), mix(82, 120, pw)], 1));
+  union(1.6); ctx.fillStyle = gw; ctx.fill();
+  // les strates de la paroi
+  ctx.save(); union(1.6); ctx.clip(); ctx.strokeStyle = 'rgba(120,86,40,.35)'; ctx.lineWidth = 1; for (const d of [5, 8.4]) { ctx.beginPath(); ctx.ellipse(X, Y, rx - d * k, ry - d * k, 0, 0, TAU); ctx.stroke(); ctx.beginPath(); ctx.ellipse(X + bx * k, Y + by * k, (brx - d) * k, (bry - d) * k, ba, 0, TAU); ctx.stroke(); } ctx.restore();
+  union(12); ctx.fillStyle = 'rgb(74,58,34)'; ctx.fill();
+  // la membrane plasmique : un liseré doré, juste sous la paroi
+  const pm = I('membrane'); union(13.2); ctx.fillStyle = rgba([mix(250, 255, pm), mix(204, 246, pm), mix(96, 170, pm)], 1);
+  if (pm > 0) { ctx.save(); ctx.shadowColor = `rgba(255,236,140,${pm})`; ctx.shadowBlur = 14; ctx.fill(); ctx.restore(); } else ctx.fill();
+  // le hyaloplasme
+  const dh = 16.6 + pm * 1.6; union(dh); ctx.fillStyle = 'rgb(30,84,70)'; ctx.fill();
+  ctx.save(); union(dh); ctx.clip();
+  const ph = I('hyaloplasme'), gh = ctx.createRadialGradient(X - rx * .25, Y - ry * .3, 6, X, Y, rx * 1.1);
+  gh.addColorStop(0, rgba([mix(168, 214, ph), mix(236, 255, ph), mix(200, 226, ph)], 1)); gh.addColorStop(.55, rgba([mix(96, 140, ph), mix(200, 236, ph), mix(150, 186, ph)], 1)); gh.addColorStop(1, rgba([mix(52, 84, ph), mix(146, 186, ph), mix(116, 150, ph)], 1));
+  ctx.fillStyle = gh; ctx.fillRect(X - rx - 4, Y - ry * 1.9, 2 * rx + 8, ry * 2.9);
+  for (const [u, v, s, q] of GRAINS) { ctx.fillStyle = q > .82 ? `rgba(22,84,66,${.35 + .3 * s})` : `rgba(226,255,236,${.2 + .26 * s})`; ctx.beginPath(); ctx.arc(X + u * rx * 1.02, Y + (v * 1.32 - .3) * ry * 1.02, (q > .82 ? 1.2 : .8) + s * 1.4 * k, 0, TAU); ctx.fill(); }
+  // quelques gouttelettes de réserve (non légendées)
+  for (const [x, y, r] of [[8, 24, 5], [22, 12, 3.4], [-112, 78, 4.4], [100, -84, 4], [126, -112, 5]]) { const gg = ctx.createRadialGradient(X + (x - 1.4) * k, Y + (y - 1.4) * k, .5, X + x * k, Y + y * k, r * k); gg.addColorStop(0, 'rgba(255,250,214,.95)'); gg.addColorStop(1, 'rgba(226,200,120,.8)'); ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(X + x * k, Y + y * k, r * k, 0, TAU); ctx.fill(); }
+  // le relief : plus sombre au bord
+  const gr2 = ctx.createRadialGradient(X, Y, rx * .55, X, Y, rx * 1.02); gr2.addColorStop(0, 'rgba(10,50,40,0)'); gr2.addColorStop(1, 'rgba(10,50,40,.3)'); ctx.fillStyle = gr2; ctx.fillRect(X - rx, Y - ry * 1.9, 2 * rx, ry * 2.9);
+  ctx.restore();
+  const halo = (dessin, id) => { const v = I(id); if (v <= 0) return; ctx.save(); ctx.shadowColor = `rgba(255,232,120,${v})`; ctx.shadowBlur = 24; ctx.strokeStyle = `rgba(255,240,160,${.9 * v})`; ctx.lineWidth = 3.2; dessin(); ctx.stroke(); ctx.restore(); };
+  // la vacuole
+  const [vx, vy, vrx, vry] = ORG.vac, VX = X + vx * k, VY = Y + vy * k;
+  halo(() => { ctx.beginPath(); ctx.ellipse(VX, VY, vrx * k + 3, vry * k + 3, -.2, 0, TAU); }, 'vacuole');
+  const gv = ctx.createRadialGradient(VX - vrx * k * .35, VY - vry * k * .4, 3, VX, VY, vrx * k * 1.05); gv.addColorStop(0, 'rgb(236,246,252)'); gv.addColorStop(.6, 'rgb(182,206,222)'); gv.addColorStop(1, 'rgb(116,148,172)');
+  ctx.fillStyle = gv; ctx.beginPath(); ctx.ellipse(VX, VY, vrx * k, vry * k, -.2, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(244,250,255,.95)'; ctx.lineWidth = 1.8; ctx.stroke();
+  ctx.strokeStyle = 'rgba(70,100,124,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(VX, VY, vrx * k + 1.6, vry * k + 1.6, -.2, 0, TAU); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.ellipse(VX - vrx * k * .34, VY - vry * k * .46, vrx * k * .3, vry * k * .13, -.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgb(182,206,222)'; ctx.strokeStyle = 'rgba(244,250,255,.9)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(X + 104 * k, Y - 118 * k, 11 * k, 0, TAU); ctx.fill(); ctx.stroke();
+  // le noyau : enveloppe double percée de pores, chromatine, nucléole
+  const [nx, ny, nr] = ORG.noy, NX = X + nx * k, NY = Y + ny * k, NR = nr * k;
+  halo(() => { ctx.beginPath(); ctx.arc(NX, NY, NR + 3, 0, TAU); }, 'noyau');
+  const gn = ctx.createRadialGradient(NX - NR * .3, NY - NR * .35, 2, NX, NY, NR); gn.addColorStop(0, 'rgb(224,204,255)'); gn.addColorStop(.6, 'rgb(150,110,220)'); gn.addColorStop(1, 'rgb(88,58,160)');
+  ctx.fillStyle = gn; ctx.beginPath(); ctx.arc(NX, NY, NR, 0, TAU); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(NX, NY, NR - 3, 0, TAU); ctx.clip(); const rn = graine(17); ctx.fillStyle = 'rgba(70,40,130,.3)'; for (let i = 0; i < 9; i++) { ctx.beginPath(); ctx.ellipse(NX + (rn() * 2 - 1) * NR * .8, NY + (rn() * 2 - 1) * NR * .8, 4 + rn() * 6, 2.5 + rn() * 3, rn() * 3, 0, TAU); ctx.fill(); } ctx.restore();
+  ctx.strokeStyle = 'rgb(236,222,255)'; ctx.lineWidth = 2.6; ctx.setLineDash([10 * k, 2.6]); ctx.beginPath(); ctx.arc(NX, NY, NR, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(70,40,130,.75)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(NX, NY, NR - 3.4, 0, TAU); ctx.stroke();
+  const gnu = ctx.createRadialGradient(NX + NR * .2, NY + NR * .12, 1, NX + NR * .26, NY + NR * .18, NR * .32); gnu.addColorStop(0, 'rgb(112,70,180)'); gnu.addColorStop(1, 'rgb(54,26,110)'); ctx.fillStyle = gnu; ctx.beginPath(); ctx.arc(NX + NR * .26, NY + NR * .18, NR * .3, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(NX - NR * .36, NY - NR * .44, NR * .28, NR * .13, -.6, 0, TAU); ctx.fill();
+  // les mitochondries (le dessin du lexique : deux membranes, crêtes, matrice)
+  const pmi = I('mitochondrie');
+  for (const [x, y, an, mrx, mry, gr] of ORG.mitos) {
+    if (pmi > 0) { ctx.save(); ctx.translate(X + x * k, Y + y * k); ctx.rotate(an); ctx.shadowColor = `rgba(255,232,120,${pmi})`; ctx.shadowBlur = 24; ctx.strokeStyle = `rgba(255,240,160,${.9 * pmi})`; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.ellipse(0, 0, mrx * k + 3, mry * k + 3, 0, 0, TAU); ctx.stroke(); ctx.restore(); }
+    LX.mitochondrie(ctx, X + x * k, Y + y * k, mrx * k, mry * k, { angle: an, cretes: 6, graine: gr });
+  }
+  // le brillant de la paroi
+  ctx.strokeStyle = 'rgba(255,250,230,.4)'; ctx.lineWidth = 3 * k; ctx.lineCap = 'round'; ctx.beginPath(); ctx.ellipse(X, Y, rx - 5 * k, ry - 5 * k, 0, Math.PI * 1.08, Math.PI * 1.4); ctx.stroke();
+  ctx.restore();
+}
+/* Où va chaque nom, et ce qu'il désigne (unités de la cellule : rx = 170, ry = 132) : [côté, y du nom, x et y de la cible] */
+const PLACES = { paroi: [-1, -88, -152, -54], hyaloplasme: [-1, -24, -116, -44], vacuole: [-1, 44, -106, 26],
+  noyau: [1, -56, 90, -40], mitochondrie: [1, 14, 131, 12], membrane: [1, 84, 126, 68] };
+
+/* ════════════════════════════ Tableau 3 : les deux bocaux ════════════════════════════ */
+const LEV_BOCAL = (() => { const r = graine(63), o = []; for (let i = 0; i < 9; i++) o.push([r(), r(), 5.5 + r() * 2.6, r() * 6, i]); return o; })();
+function bocal(ctx, J, e, o = {}) {
+  const { x, y, w, h } = J, a = o.alpha ?? 1, hh = e.horloge, col = w * .13, yc = y + 15, ep = y + 34, niveau = y + h * .42;
+  const corps = (d = 0) => { ctx.beginPath(); ctx.moveTo(x + col + d, y); ctx.lineTo(x + col + d, yc); ctx.quadraticCurveTo(x + d, yc + 4, x + d, ep + 4); ctx.lineTo(x + d, y + h - 16); ctx.quadraticCurveTo(x + d, y + h - d, x + 16, y + h - d); ctx.lineTo(x + w - 16, y + h - d); ctx.quadraticCurveTo(x + w - d, y + h - d, x + w - d, y + h - 16); ctx.lineTo(x + w - d, ep + 4); ctx.quadraticCurveTo(x + w - d, yc + 4, x + w - col - d, yc); ctx.lineTo(x + w - col - d, y); };
+  ctx.save(); ctx.globalAlpha *= a;
+  ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 4, y + h + 2, w * .54, 6, 0, 0, TAU); ctx.fill();
+  corps(); ctx.closePath(); ctx.fillStyle = 'rgba(210,235,245,.07)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(225,240,250,.3)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(x + w / 2, y, w / 2 - col, 5, 0, Math.PI, TAU); ctx.stroke();
+  // la suspension de levures
+  ctx.save(); corps(4); ctx.closePath(); ctx.clip();
+  const gl = ctx.createLinearGradient(0, niveau, 0, y + h); gl.addColorStop(0, 'rgba(244,232,196,.82)'); gl.addColorStop(.5, 'rgba(226,208,164,.84)'); gl.addColorStop(1, 'rgba(176,154,112,.9)');
+  ctx.fillStyle = gl; ctx.fillRect(x, niveau, w, y + h - niveau);
+  const zone = { x0: x + 10, x1: x + w - 10, haut: niveau + 8, bas: y + h - 12 };
+  for (const [u, v, r, ph, i] of LEV_BOCAL) LX.levure(ctx, zone.x0 + 6 + ((u + hh * .008 * (1 + (i % 3))) % 1) * (zone.x1 - zone.x0 - 12), zone.haut + 6 + v * (zone.bas - zone.haut - 12) + Math.sin(hh * .7 + ph) * 3, r * (w / 132), { angle: ph + hh * .1, graine: 5 + i });
+  if (o.dedans) o.dedans(ctx, zone);
+  ctx.restore();
+  ctx.fillStyle = 'rgba(248,238,206,.4)'; ctx.beginPath(); ctx.ellipse(x + w / 2, niveau, w / 2 - 5, 5, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(250,252,255,.65)'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.ellipse(x + w / 2, niveau, w / 2 - 5, 5, 0, 0, Math.PI); ctx.stroke();
+  // le verre : parois, pas de vis, reflets
+  const gp = ctx.createLinearGradient(x, 0, x + w, 0); gp.addColorStop(0, 'rgba(235,246,252,.9)'); gp.addColorStop(.5, 'rgba(235,246,252,.5)'); gp.addColorStop(1, 'rgba(235,246,252,.85)');
+  ctx.strokeStyle = gp; ctx.lineWidth = 2.6; corps(); ctx.stroke();
+  ctx.strokeStyle = 'rgba(235,246,252,.3)'; ctx.lineWidth = 1; corps(4); ctx.stroke();
+  ctx.strokeStyle = 'rgba(240,248,252,.7)'; ctx.lineWidth = 1.6; for (const d of [4.5, 9.5]) { ctx.beginPath(); ctx.moveTo(x + col - 1.5, y + d + 1.5); ctx.lineTo(x + w - col + 1.5, y + d - 1.5); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(244,250,254,.85)'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.ellipse(x + w / 2, y, w / 2 - col, 5, 0, 0, Math.PI); ctx.stroke();
+  const rg = ctx.createLinearGradient(x + 8, 0, x + 28, 0); rg.addColorStop(0, 'rgba(255,255,255,0)'); rg.addColorStop(.45, 'rgba(255,255,255,.3)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = rg; rr(ctx, x + 8, ep + 4, 20, h - 60, 10); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.12)'; rr(ctx, x + w - 16, ep + 10, 5, h - 76, 3); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.beginPath(); ctx.moveTo(x + 34, ep + 6); ctx.lineTo(x + 50, ep + 4); ctx.lineTo(x + 48, ep + 26); ctx.lineTo(x + 34, ep + 30); ctx.closePath(); ctx.fill();
+  // le couvercle à vis (bocal fermé) : il descend et se visse
+  if (o.couvercle > 0) {
+    const c = o.couvercle, dy = -(1 - c) * 52, cx0 = x + col - 6, cw = w - 2 * col + 12;
+    ctx.save(); ctx.globalAlpha *= Math.min(1, c * 3); ctx.translate(0, dy);
+    const gc = ctx.createLinearGradient(cx0, 0, cx0 + cw, 0); gc.addColorStop(0, 'rgb(122,30,26)'); gc.addColorStop(.25, 'rgb(240,98,74)'); gc.addColorStop(.6, 'rgb(206,56,44)'); gc.addColorStop(1, 'rgb(104,22,20)');
+    ctx.fillStyle = gc; rr(ctx, cx0, y - 8, cw, 20, [5, 5, 2, 2]); ctx.fill(); ctx.strokeStyle = 'rgba(50,10,8,.9)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = 'rgba(60,12,10,.5)'; for (let i = 1; i < 16; i++) { const xx = cx0 + cw * i / 16 + ((1 - c) * 40 % (cw / 16)); if (xx < cx0 + cw - 2) { ctx.beginPath(); ctx.moveTo(xx, y - 2); ctx.lineTo(xx, y + 11); ctx.stroke(); } }
+    ctx.fillStyle = 'rgba(255,220,200,.55)'; rr(ctx, cx0 + 4, y - 6.5, cw - 8, 2.6, 1.3); ctx.fill();
+    ctx.fillStyle = 'rgb(236,100,78)'; ctx.beginPath(); ctx.ellipse(cx0 + cw / 2, y - 8, cw / 2 - 1, 3.6, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(80,16,12,.7)'; ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+/** Les molécules de dioxygène de l'air (Lexique.o2) : elles entrent dans le bocal ouvert, rebondissent sur le couvercle du bocal fermé. */
+function air(ctx, J, e, n, ferme, a) {
+  const hh = e.horloge, cx = J.x + J.w / 2, niveau = J.y + J.h * .42, pts = [];
+  for (let i = 0; i < n; i++) {
+    const u = (hh * .16 + i / 7 + (i % 2) * .09) % 1, cote = i % 2 ? 1 : -1, x0 = cx + cote * (J.w * (.55 + .12 * (i % 3))), y0 = J.y - 50 + (i % 3) * 14;
+    let x, y, al = Math.min(1, u * 6) * a, ech = .72;
+    if (!ferme) {
+      const xe = cx + cote * J.w * .16 * ((i % 3) / 2 + .2), v = borne(u / .5), w = borne((u - .5) / .5);
+      x = mix(x0, xe, doux(v)) + (w > 0 ? Math.sin(w * 5 + i) * 6 : 0); y = mix(y0, J.y + 4, v * v) + w * (niveau + 44 - J.y - 4 + (i % 3) * 16);
+      if (w > 0) { ech = mix(.72, .56, w); al *= w > .45 ? 1 - (w - .45) / .55 * .35 : 1; al *= Math.min(1, (1 - u) * 8); }
+    } else {
+      const xe = cx + cote * J.w * .2 * ((i % 3) / 2 + .2), v = borne(u / .5), w = borne((u - .5) / .5);
+      x = mix(x0, xe, doux(v)) + w * cote * J.w * (.5 + .1 * (i % 3)); y = mix(y0, J.y - 18, v * v) - Math.sin(w * Math.PI * .5) * (30 + 8 * (i % 3));
+      al *= Math.min(1, (1 - u) * 5);
+    }
+    if (al > 0) { LX.o2(ctx, x, y, { echelle: ech, alpha: al }); pts.push([x, y]); }
+  }
+  return pts;
+}
+
+/* ════════════════════════════ L'état, le dessin ════════════════════════════ */
+function etat(e) {
+  const S = {};
+  S.scope = e.d('microscope', 0, .12); S.lameA = e.d('microscope', .08, .16);
+  S.pip = e.d('microscope', .14, .2) * (1 - e.d('microscope', .4, .47)); S.pipY = e.d('microscope', .14, .26) * (1 - e.d('microscope', .38, .47));
+  S.pend = e.p('microscope', .26, .32) * (e.p('microscope', .32, .36) > 0 ? 0 : 1); S.chute = e.p('microscope', .32, .36); S.goutte = S.chute >= 1 ? 1 : 0;
+  S.va = e.d('microscope', .46, .6); S.labels = e.p('microscope', .6, 1) > 0; S.lum = e.d('microscope', .86, .98);
+  S.champ = e.d('champ', 0, .22); S.net = e.d('champ', .16, .5); S.noms = e.p('champ', .5, 1) > 0; S.ech = e.d('champ', .74, .94);
+  S.range = e.d('leg_paroi', 0, .3);                       // le tableau 1 se range en bas à gauche
+  S.cell = e.d('leg_paroi', .1, .46);                      // la cellule agrandie arrive
+  S.t2 = 1 - e.d('aerobie', 0, .12);                       // le tableau 2 s'efface
+  S.b1 = e.d('aerobie', .1, .26); S.air1 = e.p('aerobie', .24, .5);
+  S.b2 = e.d('anaerobie', 0, .16); S.couv = e.d('anaerobie', .16, .36); S.air2 = e.p('anaerobie', .3, .5);
+  return S;
+}
+const quandLeg = (e, id) => e.p('leg_' + id, id === 'paroi' ? .56 : .2, 1) > 0;
+function hlDe(e) { const hl = {}; for (const id of LEGS) { const a = id === 'paroi' ? .5 : .04, p = e.p('leg_' + id, a, 1); if (p > 0 && p < 1) hl[id] = Math.pow(Math.sin(p * Math.PI), .6); } return hl; }
+
+function tableau1(c, e, G, S) {
+  const ctx = c.ctx, { mx, my } = G, u = S.range, a1 = e.compact ? (1 - u) * S.t2 : S.t2 * (1 - .12 * u);
+  if (a1 <= 0) return;
+  ctx.save(); ctx.globalAlpha = a1;
+  if (u > 0 && !e.compact) { ctx.translate(mix(0, G.vig.x, u), mix(0, G.vig.y, u)); const f = mix(1, G.vig.f, u); ctx.scale(f, f); }
+  // la paillasse
+  if (u < 1) { const gt = ctx.createLinearGradient(0, G.table, 0, G.table + 10); gt.addColorStop(0, `rgba(226,232,240,${.36 * (1 - u)})`); gt.addColorStop(.25, `rgba(226,232,240,${.1 * (1 - u)})`); gt.addColorStop(1, 'rgba(226,232,240,0)'); ctx.fillStyle = gt; ctx.fillRect(6, G.table, e.L - 12, 10); }
+  // du champ à l'oculaire : deux traits pointillés
+  if (S.champ > 0) {
+    const r = G.rF * (.3 + .7 * S.champ), a = Math.atan2(G.ocu[1] - G.cyF, G.ocu[0] - G.cxF);
+    ctx.save(); ctx.globalAlpha *= S.champ; ctx.strokeStyle = 'rgba(226,232,240,.5)'; ctx.lineWidth = 1.4; ctx.setLineDash([6, 5]);
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(G.ocu[0] + 6, G.ocu[1] + s * 3 + 2); ctx.lineTo(G.cxF + Math.cos(a + s * 1.15) * (r + 6), G.cyF + Math.sin(a + s * 1.15) * (r + 6)); ctx.stroke(); }
+    ctx.restore();
+  }
+  microscope(ctx, mx, my, 1, { alpha: S.scope, lumiere: S.lum, lame: S.va >= 1, goutte: 1 });
+  // la lame sur la paillasse, la goutte, le trajet jusqu'à la platine
+  if (S.lameA > 0 && S.va < 1) {
+    const x = mix(G.lameT[0], G.lameP[0], S.va), y = mix(G.lameT[1], G.lameP[1], S.va) - Math.sin(S.va * Math.PI) * 46;
+    ctx.save(); ctx.globalAlpha *= S.lameA; ctx.translate(x, y); ctx.scale(-1, 1); lameDessin(ctx, S.goutte); ctx.restore();
+    if (S.chute > 0 && S.chute < 1) { ctx.fillStyle = 'rgba(226,198,134,.95)'; ctx.beginPath(); ctx.ellipse(G.lameT[0], mix(G.lameT[1] - 20, G.lameT[1] - 2, S.chute * S.chute), 2.8, 3.8, 0, 0, TAU); ctx.fill(); }
+    if (S.pip > 0) pipette(ctx, G.lameT[0], G.lameT[1] - 76 + 52 * S.pipY, S.pip, S.pend);
+  }
+  if (S.champ > 0) champ(ctx, G.cxF, G.cyF, G.rF * (.3 + .7 * S.champ), e, { alpha: S.champ, net: S.net, echelle: S.ech, texte: u < .1 });
+  ctx.restore();
+}
+
+function dessiner(c, e) {
+  const G = geo(e.L, e.compact), S = etat(e), { mx, my, X, Y, k } = G, tf = e.tf(17), hl = hlDe(e);
+  const enT1 = !e.des('leg_paroi'), enT3 = e.p('aerobie', .1, 1) > 0;
+  let pAir = [];
+  c.direct(() => {
+    const ctx = c.ctx;
+    if (!enT3 || S.t2 > 0) tableau1(c, e, G, S);
+    if (S.cell > 0 && S.t2 > 0) {
+      const v = S.cell, f = G.vig.f, dep = e.compact ? [G.cxF, G.cyF] : [G.vig.x + G.cxF * f, G.vig.y + G.cyF * f];
+      ctx.save(); ctx.translate(mix(dep[0], X, v), mix(dep[1], Y, v)); ctx.scale(.06 + .94 * v, .06 + .94 * v); levureCoupe(ctx, 0, 0, k, { alpha: Math.min(1, v * 2.5) * S.t2, hl }); ctx.restore();
+    }
+    if (S.b1 > 0) {
+      const B = G.boc[0], J = B.jar;
+      ctx.fillStyle = `rgba(226,232,240,${.3 * S.b1})`; ctx.fillRect(B.x0 + 10, J.y + J.h + 1, e.L / 2 - 20, 1.6);
+      bocal(ctx, J, e, { alpha: S.b1, dedans: (cx, z) => R.bulles(cx, { x0: z.x0, x1: z.x1, haut: z.haut - 6, bas: z.bas }, Math.round(7 * S.air1), e.horloge, { graine: 12, rayon: 1.8, variation: 2.4, vitesse: 20 }) });
+      if (S.air1 > 0) pAir = air(ctx, J, e, Math.round(7 * S.air1), false, 1);
+    }
+    if (S.b2 > 0) {
+      const B = G.boc[1], J = B.jar;
+      ctx.fillStyle = `rgba(226,232,240,${.3 * S.b2})`; ctx.fillRect(B.x0 + 10, J.y + J.h + 1, e.L / 2 - 20, 1.6);
+      bocal(ctx, J, e, { alpha: S.b2, couvercle: S.couv });
+      if (S.air2 > 0) air(ctx, J, e, Math.round(6 * S.air2), true, 1);
+    }
+  });
+
+  /* ── Tableau 1 : ce qui s'écrit ── */
+  const aT1 = (1 - borne(S.range * 5)) * .96;
+  if (aT1 > 0 && !e.compact) {
+    const nom = (s, x, y, cx, cy, o = {}) => { c.texte(s, x, y, { couleur: 'blanc', taille: 17, align: o.align || 'right', alpha: aT1, duree: .32 }); c.ligne(x + (o.align ? -2 : 5), y - tf * .32 + (o.dy || 0), cx, cy, { couleur: 'blanc', largeur: 1.3, alpha: .7 * aT1, duree: .12 }); };
+    const xg = mx - 12;
+    if (S.labels) e.ecrire(c, 't1_noms', () => {
+      nom('oculaire', xg, my - 266, mx + 58, my - 274);
+      nom('objectifs', xg, my - 160, mx + 44, my - 158);
+      nom('lame', xg, my - 127, mx + 34, my - 119);
+      nom('platine', xg, my - 94, mx + 2, my - 107);
+      nom('lumière', xg, my - 40, mx + 56, my - 36);
+      c.texte('mise au point', mx + 212, my - 30, { couleur: 'blanc', taille: 17, alpha: aT1, duree: .4 }); c.ligne(mx + 216, my - 30 - tf, mx + 176, my - 80, { couleur: 'blanc', largeur: 1.3, alpha: .7 * aT1, duree: .12 });
+    });
+    if (e.p('microscope', .36, 1) > 0) e.ecrire(c, 't1_cap1', () => c.texte(CAP1, e.L / 2, 372, { couleur: 'blanc', taille: 18, align: 'center', alpha: aT1 }));
+    if (S.noms) {
+      const xd = G.cxF + G.rF + 12, l1 = CHAMP[3], l2 = CHAMP[8], p = (l, bud) => { const r = l[2] * G.rF, an = l[4]; return bud ? [G.cxF + l[0] * G.rF + (r * 1.25 * Math.cos(an) + r * .35 * Math.sin(an)), G.cyF + l[1] * G.rF + (r * 1.25 * Math.sin(an) - r * .35 * Math.cos(an))] : [G.cxF + l[0] * G.rF + r * .7, G.cyF + l[1] * G.rF]; };
+      e.ecrire(c, 't1_lev', () => {
+        const a = p(l1, false), b = p(l2, true);
+        c.texte('levure', xd, G.cyF - 46, { couleur: COUL.levure, taille: 17, alpha: aT1, gras: true }); c.ligne(xd - 3, G.cyF - 46 - tf * .3, a[0], a[1], { couleur: '#0b1f2a', largeur: 1.5, alpha: .85 * aT1 });
+        c.texte('bourgeon', xd, G.cyF + 66, { couleur: COUL.levure, taille: 17, alpha: aT1, gras: true }); c.ligne(xd - 3, G.cyF + 66 - tf * .3, b[0], b[1], { couleur: '#0b1f2a', largeur: 1.5, alpha: .85 * aT1 });
+      });
+      e.ecrire(c, 't1_cap2', () => c.texte(CAP2, e.L / 2, 400, { couleur: 'blanc', taille: 18, align: 'center', alpha: aT1 }));
+    }
+  }
+  if (e.compact && enT1) { if (S.noms) e.bandeau = { texte: CAP2, couleur: 'blanc' }; else if (e.p('microscope', .36, 1) > 0) e.bandeau = { texte: CAP1, couleur: 'blanc' }; }
+  if (S.t2 > .5 && S.scope > .5) {
+    if (S.range <= 0) {
+      c.repere('microscope', mx - 4, my - 294, 212, 298, 'le microscope optique');
+      if (S.lameA > .5) { const p = S.va >= 1 ? G.lameP : G.lameT; if (S.va <= 0 || S.va >= 1) c.repere('lame', p[0] - 42, p[1] - 12, 84, 22, 'la lame et sa goutte de suspension de levures'); }
+      if (S.champ > .9) c.repere('champ', G.cxF - G.rF - 6, G.cyF - G.rF - 6, 2 * G.rF + 12, 2 * G.rF + 12, 'le champ du microscope : des levures bourgeonnantes');
+      if (S.ech > .9) c.repere('echelle', G.cxF + G.rF * .06 - G.rF * .12 - 22, G.cyF + G.rF * .74 - 28, G.rF * .24 + 44, 38, 'la barre d’échelle : 1,5 µm');
+    } else if (S.range >= 1 && !e.compact) {
+      const f = G.vig.f, vx = G.vig.x, vy = G.vig.y;
+      c.repere('microscope', vx + (mx - 4) * f, vy + (my - 294) * f, 212 * f, 298 * f, 'le microscope (rangé)');
+      c.repere('champ', vx + (G.cxF - G.rF) * f, vy + (G.cyF - G.rF) * f, 2 * G.rF * f, 2 * G.rF * f, 'le champ du microscope (rangé)');
+    }
+  }
+
+  /* ── Tableau 2 : les six noms, un par moment, puis « unicellulaire » ── */
+  if (S.cell >= 1 && S.t2 > 0) {
+    const tl = e.L > 900 ? 21 : 19, tlf = e.tf(tl), aT2 = S.t2 * .96, pas = e.compact ? 1.12 : 1;
+    for (const id of LEGS) {
+      if (!quandLeg(e, id)) continue;
+      const [cote, ly, tx, ty] = PLACES[id], x = cote < 0 ? G.xl : G.xr, y = Y + ly * k * pas + tlf * .34, px = X + tx * k, py = Y + ty * k, w = c.largeurTexte(NOMS[id], tlf) * 1.08;
+      e.ecrire(c, 'leg_' + id, () => {
+        c.texte(NOMS[id], x, y, { couleur: COUL[id], taille: tl, align: cote < 0 ? 'right' : 'left', gras: true, alpha: aT2 });
+        c.ligne(x + cote * -6, y - tlf * .34, px, py, { couleur: COUL[id], largeur: 1.8, alpha: .9 * S.t2 });
+        c.point(px, py, 3.2, COUL[id]);
+      });
+      if (S.t2 > .5) c.repere('nom_' + id, cote < 0 ? x - w - 4 : x - 4, y - tlf, w + 8, tlf * 1.3, 'le nom écrit : ' + NOMS[id]);
+    }
+    if (S.t2 > .5) {
+      const B = (x, y, w, h) => [X + x * k, Y + y * k, w * k, h * k], [vx, vy, vrx, vry] = ORG.vac, [nx, ny, nr] = ORG.noy, m = ORG.mitos[0];
+      c.repere('cellule', ...B(-172, -150, 344, 284), 'la levure agrandie, en coupe');
+      c.repere('paroi', ...B(-172, -70, 30, 140), 'la paroi (l’enveloppe épaisse, à l’extérieur)');
+      c.repere('membrane', ...B(104, 44, 44, 44), 'la membrane (le liseré doré sous la paroi)');
+      c.repere('noyau', ...B(nx - nr - 3, ny - nr - 3, 2 * nr + 6, 2 * nr + 6), 'le noyau (violet)');
+      c.repere('vacuole', ...B(vx - vrx - 3, vy - vry - 3, 2 * vrx + 6, 2 * vry + 6), 'la vacuole (gris-bleu)');
+      c.repere('hyaloplasme', ...B(-136, -66, 44, 44), 'le hyaloplasme (le liquide vert de la cellule)');
+      c.repere('mitochondrie', ...B(m[0] - 19, m[1] - 36, 38, 72), 'une mitochondrie (deux membranes, des crêtes)');
+      ORG.mitos.slice(1).forEach((q, i) => c.repere('mitochondrie_' + (i + 2), ...B(q[0] - 40, q[1] - 22, 80, 44), 'une autre mitochondrie'));
+    }
+    if (e.des('une_cellule')) {
+      if (e.compact) { if (!e.des('aerobie')) e.bandeau = { texte: UNI, couleur: 'vert', repere: 'unicellulaire', label: UNI }; }
+      else {
+        const t = 20, w = c.largeurTexte(UNI, e.tf(t)) * 1.06 + 28, y = 400;
+        e.ecrire(c, 'uni', () => { c.texte(UNI, X, y, { couleur: 'vert', taille: t, align: 'center', gras: true, alpha: aT2 }); c.rect(X - w / 2, y - 23, w, 33, { couleur: 'vert', largeur: 1.8, arrondi: 8, fond: 'vert', fondAlpha: .09 * S.t2, alpha: .9 * S.t2 }); });
+        if (S.t2 > .5) c.repere('unicellulaire', X - w / 2, y - 23, w, 33, UNI);
+      }
+    }
+  }
+  if (e.compact && e.des('leg_paroi') && !e.des('une_cellule') && S.cell >= 1) { const id = [...LEGS].reverse().find(k2 => quandLeg(e, k2)); if (id) e.bandeau = { texte: MOMENTS.find(m => m[0] === 'leg_' + id)[2], couleur: COUL[id] }; }
+
+  /* ── Tableau 3 : les deux mots découpés ── */
+  const mot = (i, parts, sens, pid, t0) => {
+    const B = G.boc[i], M_ = B.mot, tm = e.tf(M_.t), esp = M_.t * .42, ws = parts.map(s => c.largeurTexte(s, tm) * 1.07), total = ws.reduce((a, b) => a + b, 0) + esp * (parts.length - 1);
+    let x = M_.x - total / 2; const xs = parts.map((s, j) => { const x0 = x; x += ws[j] + esp; return x0; });
+    if (e.p(pid, t0, 1) > 0) e.ecrire(c, 'mot_' + i, () => parts.forEach((s, j) => c.texte(s, xs[j], M_.y, { couleur: 'jaune', taille: M_.t, gras: true, duree: .3 })));
+    if (e.p(pid, t0 + .13, 1) > 0) e.ecrire(c, 'coupe_' + i, () => parts.slice(1).forEach((s, j) => c.texte('·', xs[j + 1] - esp / 2, M_.y - tm * .06, { couleur: 'blanc', taille: M_.t, align: 'center', gras: true, duree: .12 })));
+    if (e.p(pid, t0, 1) > 0) c.repere(i ? 'mot_anaerobie' : 'mot_aerobie', M_.x - total / 2 - 6, M_.y - tm, total + 12, tm * 1.3, i ? 'le mot an·aéro·bie' : 'le mot aéro·bie');
+    sens.forEach(([txt, quand, coul], j) => {
+      if (e.p(pid, quand, 1) <= 0) return;
+      const P_ = B.sens[j], xm = xs[j] + ws[j] / 2, yb = M_.y + tm * .2;
+      e.ecrire(c, `sens_${i}_${j}`, () => {
+        if (!B.colonne) { c.trait([[xs[j] + 2, yb], [xs[j] + 2, yb + 5], [xs[j] + ws[j] - 2, yb + 5], [xs[j] + ws[j] - 2, yb]], { couleur: coul, largeur: 1.6, duree: .15 }); c.ligne(xm, yb + 5, P_.x, P_.y - tf - 1, { couleur: coul, largeur: 1.4, alpha: .8, duree: .1 }); }
+        c.texte(txt, P_.x, P_.y, { couleur: coul, taille: 18, align: 'center' });
+      });
+    });
+    const C_ = e.p(pid, .84, 1) > 0;
+    if (C_ && e.compact) e.bandeau = { texte: (i ? 'anaérobie : ' : 'aérobie : ') + CONCL[i], couleur: 'vert', repere: i ? 'sens_anaerobie' : 'sens_aerobie', label: CONCL[i] };
+    else if (C_ || (!e.compact && i === 0 && e.des('anaerobie'))) {
+      const s = '→ ' + CONCL[i], t = 21, w = c.largeurTexte(s, e.tf(t)) * 1.07 + 26, y = B.concl.y;
+      e.ecrire(c, 'concl_' + i, () => { c.texte(s, B.concl.x, y, { couleur: 'vert', taille: t, align: 'center', gras: true }); c.rect(B.concl.x - w / 2, y - 24, w, 35, { couleur: 'vert', largeur: 1.8, arrondi: 8, fond: 'vert', fondAlpha: .09 }); });
+      c.repere(i ? 'sens_anaerobie' : 'sens_aerobie', B.concl.x - w / 2, y - 24, w, 35, (i ? 'anaérobie : ' : 'aérobie : ') + CONCL[i]);
+    }
+  };
+  if (enT3) {
+    const J0 = G.boc[0].jar, J1 = G.boc[1].jar;
+    if (S.b1 > .9) c.repere('bocal_ouvert', J0.x - 4, J0.y - 8, J0.w + 8, J0.h + 12, 'le bocal ouvert : l’air, donc le dioxygène, entre');
+    if (S.b2 > .9) c.repere('bocal_ferme', J1.x - 4, J1.y - 14, J1.w + 8, J1.h + 18, S.couv >= 1 ? 'le bocal fermé par un couvercle : le dioxygène n’entre plus' : 'le deuxième bocal');
+    if (!e.compact) {
+      if (S.air1 >= 1) e.ecrire(c, 'n_air', () => { c.texte('air :', J0.x - 12, J0.y + 2, { couleur: 'blanc', taille: 18, align: 'right' }); c.texte('dioxygène O_{2}', J0.x - 12, J0.y + 2 + tf * 1.3, { couleur: 'rouge', taille: 18, align: 'right', gras: true }); c.fleche(J0.x - 40, J0.y - 22, J0.x + J0.w * .3, J0.y - 12, { couleur: 'rouge', largeur: 1.8 }); });
+      if (S.couv >= 1) e.ecrire(c, 'n_couv', () => { c.texte('couvercle :', J1.x - 12, J1.y + 2, { couleur: 'blanc', taille: 18, align: 'right' }); c.texte('pas d’air', J1.x - 12, J1.y + 2 + tf * 1.3, { couleur: 'blanc', taille: 18, align: 'right', gras: true }); });
+    }
+    mot(0, ['aéro', 'bie'], [['aéro = air', .6, 'blanc'], ['bie = vie', .72, 'blanc']], 'aerobie', .44);
+    if (e.des('anaerobie')) mot(1, ['an', 'aéro', 'bie'], [['an = sans', .56, 'jaune'], ['aéro = air', .68, 'blanc'], ['bie = vie', .76, 'blanc']], 'anaerobie', .4);
+  }
+}
+
+/* ── Téléphone : la boîte à montrer pour l'étape en cours ── */
+function foyer(e) {
+  const G = geo(e.L, true), id = e.etape(), { mx, my, X, Y, k } = G;
+  const scope = { x: mx - 108, y: 30, w: 440, h: 312 }, vue = { x: G.cxF - G.rF - 70, y: G.cyF - G.rF - 14, w: 2 * G.rF + 140, h: 2 * G.rF + 28 };
+  const cell = { x: X - 250, y: 36, w: 500, h: 330 };
+  if (id === 'microscope') return scope;
+  if (id === 'champ') return e.p('champ') < .12 ? scope : vue;
+  if (id.startsWith('leg_')) {
+    const nom = id.slice(4);
+    if (nom === 'paroi' && e.p(id) < .5) return e.p(id) < .1 ? vue : cell;
+    const [cote, ly, tx, ty] = PLACES[nom], cy = Y + (ly * 1.12 + ty) / 2 * k;
+    return { x: cote < 0 ? G.xl - 130 : G.xr + 136 - 420, y: Math.max(34, Math.min(420 - 204, cy - 102)), w: 420, h: 204 };
+  }
+  if (id === 'une_cellule') return cell;
+  const B = G.boc[id === 'anaerobie' && e.p('anaerobie') > 0 ? 1 : 0];
+  if (id === 'aerobie' && e.p('aerobie') < .1) return cell;
+  return { x: B.x0, y: 6, w: e.L / 2, h: 218 };
+}
+
+/* ── Ce qui se voit ── */
+function voit(e) {
+  const S = etat(e);
+  if (!e.des('leg_paroi')) {
+    if (S.scope < .5) return 'Tableau 1 : la paillasse est encore vide.';
+    let s = 'Tableau 1. Un microscope optique peint (pied, potence, platine, tourelle à trois objectifs, tube, oculaire, vis de mise au point, lampe)';
+    s += S.va >= 1 ? ` ; la lame, avec sa goutte de suspension de levures, est sur la platine, sous les valets${S.lum > .5 ? ' ; la lampe est allumée' : ''}.`
+      : S.goutte ? ' ; à sa droite, sur la paillasse, une lame porte une goutte de suspension de levures.' : S.pip > 0 ? ' ; un compte-gouttes dépose une goutte de suspension de levures sur une lame posée sur la paillasse.' : ' ; une lame de verre est posée sur la paillasse.';
+    if (S.labels) s += ' Noms écrits : oculaire, objectifs, lame, platine, lumière, mise au point.';
+    if (S.champ > .5) s += ` À droite, le champ rond du microscope${S.net >= 1 ? ' : treize levures (cellules ovales beiges), la plupart avec un bourgeon' : ' (la mise au point se fait)'}${S.noms ? ' ; « levure » et « bourgeon » sont écrits à côté' : ''}${S.ech >= 1 ? ' ; en bas du champ, la barre d’échelle « 1,5 µm »' : ''}.`;
+    return s;
+  }
+  if (!e.des('aerobie') || S.t2 > .5) {
+    if (S.cell < 1) return 'Le microscope et son champ se rangent en petit, en bas à gauche ; une levure du champ s’agrandit au centre.';
+    const faits = LEGS.filter(id => quandLeg(e, id)).map(id => NOMS[id]);
+    return `Tableau 2. Une levure agrandie, peinte en coupe, avec son bourgeon : paroi épaisse beige, membrane dorée dessous, hyaloplasme vert, grande vacuole gris-bleu, noyau violet, trois mitochondries (deux membranes et des crêtes). Noms déjà écrits, avec leur trait de rappel : ${faits.length ? faits.join(', ') : 'aucun encore'}.${e.des('une_cellule') ? ` En bas, encadré en vert : « ${UNI} ».` : ''} Le microscope est rangé en petit, en bas à gauche.`;
+  }
+  let s = 'Tableau 3. ';
+  s += S.b1 < .5 ? 'La levure s’efface.' : `À gauche, un bocal ouvert contient une suspension de levures${S.air1 > 0 ? ' ; des molécules de dioxygène (deux billes rouges) de l’air y entrent, des bulles montent dans le liquide' : ''}.`;
+  if (e.p('aerobie', .44, 1) > 0) s += ` Dessous, le mot « aéro·bie » en jaune${e.p('aerobie', .6, 1) > 0 ? ', découpé : aéro = air' : ''}${e.p('aerobie', .72, 1) > 0 ? ', bie = vie' : ''}${e.p('aerobie', .84, 1) > 0 ? ' ; encadré en vert : « vit avec dioxygène »' : ''}.`;
+  if (e.des('anaerobie')) {
+    s += S.b2 < .5 ? '' : ` À droite, un deuxième bocal${S.couv >= 1 ? ' fermé par un couvercle rouge vissé : les molécules de dioxygène rebondissent dessus, aucune n’entre' : S.couv > 0 ? ' : le couvercle se visse' : ''}.`;
+    if (e.p('anaerobie', .4, 1) > 0) s += ` Dessous, le mot « an·aéro·bie »${e.p('anaerobie', .56, 1) > 0 ? ', découpé : an = sans' : ''}${e.p('anaerobie', .68, 1) > 0 ? ', aéro = air' : ''}${e.p('anaerobie', .76, 1) > 0 ? ', bie = vie' : ''}${e.p('anaerobie', .84, 1) > 0 ? ' ; encadré en vert : « vit sans dioxygène »' : ''}.`;
+  }
+  return s;
+}
+
+R.page({
+  id: 'svt_reference_levure', vue: 'levure', titre: 'La levure : une seule cellule', moments: MOMENTS, dessiner, foyer, voit, vivant: () => true,
+  texte: 'La levure est un champignon fait d’une seule cellule (unicellulaire). Au microscope optique : des cellules ovales qui bourgeonnent (barre d’échelle 1,5 µm). Une levure en coupe : paroi, membrane, noyau, vacuole, hyaloplasme, mitochondries. Elle peut vivre avec dioxygène (milieu aérobie : aéro = air, bie = vie) ou sans dioxygène (milieu anaérobie : an = sans).',
+  explications: [{ repere: 'microscope', texte: 'Un microscope optique ; sur la lame, une goutte de suspension de levures.' }, { repere: 'champ', texte: 'Dans le champ : des levures, certaines bourgeonnent.' }, { repere: 'echelle', texte: 'La barre d’échelle : 1,5 micromètre.' },
+    { repere: 'paroi', texte: 'La paroi, à l’extérieur.' }, { repere: 'membrane', texte: 'La membrane, juste dessous.' }, { repere: 'noyau', texte: 'Le noyau.' }, { repere: 'vacuole', texte: 'La vacuole.' }, { repere: 'hyaloplasme', texte: 'Le hyaloplasme, le liquide de la cellule.' }, { repere: 'mitochondrie', texte: 'Les mitochondries.' },
+    { repere: 'bocal_ouvert', texte: 'Bocal ouvert : le dioxygène de l’air entre.' }, { repere: 'mot_aerobie', texte: 'Aérobie : aéro, l’air ; bie, la vie.' }, { repere: 'bocal_ferme', texte: 'Bocal fermé : plus de dioxygène.' }, { repere: 'mot_anaerobie', texte: 'Anaérobie : an veut dire sans.' }],
+  accueil: 'Un microscope, une goutte de levures…', fini: 'La levure : une seule cellule, qui vit avec ou sans dioxygène.',
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
