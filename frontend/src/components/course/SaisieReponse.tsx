@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ChangeEvent } from 'react';
 import ClavierScientifique, { BoutonSymboles } from './ClavierScientifique';
 import { clavier, useChampClavier, useClavier, type CleSuggestions } from './ClavierFlottant';
 import { BoutonTelephone, useChampTelephone } from './photoTelephone';
@@ -46,7 +46,7 @@ async function lireLaPhoto(f: File, contexte: ContexteOcr): Promise<string> {
   return (texte || '').trim();
 }
 
-/** « 📷 Photo » : prise de vue (téléphone) ou fichier ; le texte lu est ajouté au champ. */
+/** « 📷 Photo » : appareil photo direct ; « 🖼️ » : image déjà prise ; le texte lu est ajouté au champ. */
 export function BoutonPhoto({ contexte, onTexte, onErreur, disabled, petit = false, relais = true }: {
   contexte: ContexteOcr; onTexte: (t: string) => void; onErreur?: (m: string | undefined) => void; disabled?: boolean; petit?: boolean;
   /** liens libres : le texte rendu depuis le téléphone arrive ici (faux quand le champ qui l'entoure s'en charge) */
@@ -65,16 +65,23 @@ export function BoutonPhoto({ contexte, onTexte, onErreur, disabled, petit = fal
   };
   // liens libres (24/11/2026) : la réponse écrite ou photographiée sur le téléphone de l'élève est ajoutée au champ
   useChampTelephone({ enonce: contexte.enonce || contexte.title || '', texte: '', ajouter: onTexte }, relais && !disabled);
+  const choisi = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (f) void lire(() => lireLaPhoto(f, contexte));
+  };
+  const forme = `shrink-0 cursor-pointer rounded-full ${petit ? 'px-3 py-1 text-xs' : 'px-4 py-2 text-sm'} ${disabled ? 'pointer-events-none opacity-40' : ''}`;
   return (<>
-    <label className={`shrink-0 cursor-pointer rounded-full ${petit ? 'px-3 py-1 text-xs' : 'px-4 py-2 text-sm'} ${lecture ? 'bg-sky-500/40 animate-pulse' : 'bg-white/10 hover:bg-white/20'} ${disabled ? 'pointer-events-none opacity-40' : ''}`}
+    {/* 27/11/2026 (user) : « 📷 Photo » ouvre l'appareil photo DIRECTEMENT (capture) ; une image déjà prise passe par « 🖼️ ».
+        Sur ordinateur, `capture` est ignoré : les deux ouvrent le choix de fichier. */}
+    <label className={`${forme} ${lecture ? 'bg-sky-500/40 animate-pulse' : 'bg-white/10 hover:bg-white/20'}`}
       style={{ fontFamily: 'system-ui, sans-serif' }} title="Photographie ta feuille : le texte lu s'écrit dans le champ, tu le corriges avant d'envoyer">
       {lecture ? '📷 Lecture…' : '📷 Photo'}
-      {/* sans `capture` : le téléphone propose l'appareil photo OU un fichier */}
-      <input type="file" accept="image/*" className="hidden" disabled={disabled || lecture}
-        onChange={e => {
-          const f = e.target.files?.[0]; e.target.value = '';
-          if (f) void lire(() => lireLaPhoto(f, contexte));
-        }} />
+      <input type="file" accept="image/*" capture="environment" className="hidden" disabled={disabled || lecture} onChange={choisi} />
+    </label>
+    <label className={`${forme} bg-white/10 hover:bg-white/20 ${lecture ? 'pointer-events-none opacity-40' : ''}`}
+      style={{ fontFamily: 'system-ui, sans-serif' }} title="Choisir une photo déjà prise (galerie, fichier)">
+      🖼️
+      <input type="file" accept="image/*" className="hidden" disabled={disabled || lecture} onChange={choisi} />
     </label>
     <BoutonTelephone petit={petit} disabled={disabled || lecture} />
   </>);
