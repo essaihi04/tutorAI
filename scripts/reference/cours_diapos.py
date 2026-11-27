@@ -655,19 +655,19 @@ diapo(
            "écrite) ; puis l'énergie revient, le phosphate se rattache (phosphorylation écrite).",
     fr="Avant d'entrer dans la glycolyse, il faut connaître l'ATP. Rappelle-toi : le glucose est un billet de cent "
        "dirhams, et tu ne peux pas payer une petite chose avec. La cellule paie avec la petite monnaie : l'ATP. "
-       "Regarde cette molécule : elle a trois phosphates. Quand un phosphate se détache, de l'énergie sort, et la "
-       "cellule travaille avec. Il reste l'ADP, et le phosphate qu'on écrit Pi. On écrit : ATP plus eau donne ADP "
+       "Regarde cette molécule : elle a trois phosphates. Quand un phosphate se détache, de l'énergie sort, et "
+       "elle va au muscle, qui travaille. Il reste l'ADP, et le phosphate qu'on écrit Pi. On écrit : ATP plus eau donne ADP "
        "plus phosphate, plus de l'énergie. Et à l'inverse : si de l'énergie arrive, le phosphate revient sur l'ADP, "
        "et on a de nouveau l'ATP. On écrit : ADP plus phosphate plus énergie donne ATP. Donc : l'ATP utilisé devient "
        "ADP, et l'ADP rechargé redevient ATP.",
     mx="قبل ما ندخلو ل la glycolyse من الداخل، خاصنا نتعرفو على l'ATP. تفكر: le glucose هو ورقة ديال مية درهم، وما "
        "تقدرش تخلص بيها حاجة صغيرة. la cellule كتخلص ب الدراهم الصغار: l'ATP. <m:atp_entier>شوف هاد la molécule: "
        "<r:phosphates>فيها trois phosphates. <m:liaison_rompue>ملي كيتحيد واحد le phosphate، "
-       "<m:energie_liberee:1.8>كتخرج l'énergie، <r:travail>وبيها كتخدم la cellule. <m:adp_pi>وكيبقى l'ADP، "
+       "<m:energie_liberee:1.8>كتخرج l'énergie، <r:travail>وكتمشي للعضلة باش تخدم. <m:adp_pi>وكيبقى l'ADP، "
        "<r:phosphate_libre>و le phosphate اللي كنكتبوه Pi. <m:hydrolyse>كنكتبو: <r:ecrit_hydrolyse>A T P plus eau, "
        "donne A D P plus phosphate, plus de l'énergie. <m:recharge:2.2>وبالعكس: يلا جات l'énergie، <m:atp_reforme>le "
-       "phosphate كيرجع ل l'ADP، <r:atp>وكيولي l'ATP من جديد. <m:phosphorylation>كنكتبو: <r:ecrit_phosphorylation>A "
-       "D P plus phosphate plus énergie, donne A T P. يعني: l'ATP اللي تخدم كيولي ADP، و l'ADP ملي كيولي عامر كيرجع ATP.",
+       "phosphate كيرجع ل l'ADP، <r:atp>وكيولي l'ATP من جديد. <m:phosphorylation>كنكتبو: A "
+       "D P plus phosphate plus énergie, <r:ecrit_phosphorylation>donne A T P. يعني: l'ATP اللي تخدم كيولي ADP، و l'ADP ملي كيولي عامر كيرجع ATP.",
     bullets=["ATP + H₂O → ADP + Pi + énergie", "ADP + Pi + énergie → ATP"],
     cahier="Rappel : ATP + H₂O → ADP + Pi + énergie ; ADP + Pi + énergie → ATP.",
 )
@@ -690,7 +690,7 @@ diapo(
        "organique. <m:deux_h_arraches:1.6>la cellule كتحيد منها <r:hydrogenes>deux hydrogènes. شكون غادي ياخدهم؟ "
        "<m:taxi_vide_arrive:1.8>جا واحد le transporteur، <r:taxi>سميتو N A D plus: بحال طاكسي خاوي. "
        "<m:taxi_charge:1.6>هز deux hydrogènes، وولا عامر: دابا سميتو N A D H, H plus. <m:deux_h_egal>كل hydrogène "
-       "فيه proton و électron، <r:ecrit_2h>يعني deux protons و deux électrons. <m:reduit>كنكتبو: <r:equation>N A D "
+       "فيه proton و électron، <r:ecrit_2h>يعني deux protons و deux électrons. <m:reduit>كنكتبو <r:equation>l'équation: N A D "
        "plus, plus deux protons, plus deux électrons, donne N A D H, H plus. والطاكسي العامر كنقولو عليه réduit. "
        "يعني ببساطة: N A D plus طاكسي خاوي، والآخر طاكسي عامر، réduit.",
     question="rf_g0_taxi",
@@ -966,7 +966,7 @@ diapo(
        "externe. <m:membrane_interne>الغشاء اللي لداخل: <r:membrane_interne>la membrane interne. <m:cretes>وهي كتدخل "
        "وتخرج: <r:cretes>هادو les crêtes. <m:espace_intermembranaire>بين جوج الأغشية: "
        "<r:espace_intermembranaire>l'espace intermembranaire. <m:matrice>وكل اللي ف الوسط: <r:matrice>la matrice، "
-       "وفيها حتى l'ADN ديال la mitochondrie. <r:medaillon>وف الدائرة، <m:spheres_pedonculees>الكورات الصغار: "
+       "وفيها حتى l'ADN ديال la mitochondrie. <r:medaillon>وف الدائرة الصغيرة، <m:spheres_pedonculees>الكورات الصغار: "
        "<r:spheres_pedonculees>les sphères pédonculées، لاصقين ف la membrane interne. بطريقة أخرى: les crêtes بحال "
        "des étagères: كيزيدو البلاصة ف la centrale. <c:Mitochondrie : membrane externe · espace intermembranaire · "
        "membrane interne · crêtes · matrice · sphères pédonculées>نعاود نقرا: membrane externe, espace "
