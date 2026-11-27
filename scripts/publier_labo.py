@@ -34,6 +34,7 @@ PAGES = {
     "chimie-dosage-acide-base.html": "chimie-dosage-acide-base.html",
     "chimie-linalyle.html": "chimie-linalyle.html",
     "svt-oignon.html": "svt-oignon.html",
+    "svt-osmose.html": "svt-osmose.html",
     "svt-exao-levures.html": "svt-exao-levures.html",
     "svt-sol-retention.html": "svt-sol-retention.html",
     "svt-sol-ph.html": "svt-sol-ph.html",
