@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu'il faut retenir — consommation de la matière organique</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Fiche de révision écrite à la craie sur une page : pour chaque partie du cours « Consommation de la matière organique et flux d'énergie », la définition à apprendre, les formules et le point d'attention ; deuxième page : ce que l'élève doit retravailler"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="suiv" data-professor-control="next previous start reset play_until">Ma page →</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <span class="lecture" id="page"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script src="demarche.js"></script>
+<script>
+/*
+ * « Ce qu'il faut retenir » du cours de référence SVT « Consommation de la matière organique et flux d'énergie »
+ * (diapositive rf_b1_bilan, 27 novembre 2026), repris de ../reactions_responsables_liberation_energie-tableau/bilan.html :
+ * neuf blocs sur UNE page (ce qu'il faut savoir, formule encadrée, point d'attention), écrits bloc par bloc au rythme de la
+ * voix (play_until {moment: <bloc>}), puis la page de l'élève (set_parameters {lacunes, acquis, acquis_ids}).
+ * Compétences C1 à C8 (ARCHITECTURE § 6). Moments = repères : respiration, fermentation, localisation, devenir, glycolyse,
+ * centrifugation, pyruvate, ultrastructure, composition ; puis fiche (tout) et lacunes (page de l'élève).
+ * Téléphone en paysage : le bloc en cours seul, sur toute la page, texte de 15 px au moins.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+const BLOCS = [
+  { id: 'respiration', titre: '1 · La respiration cellulaire', comps: ['C1', 'C2'], formules: ['C_{6}H_{12}O_{6} + 6 O_{2} → 6 CO_{2} + 6 H_{2}O + énergie'],
+    def: "Oxydation complète du glucose, en milieu aérobie, dans la mitochondrie : beaucoup d’énergie.",
+    attention: "ExAO : décrire avec les valeurs (O2 baisse, CO2 monte), puis déduire." },
+  { id: 'fermentation', titre: '2 · La fermentation alcoolique', comps: ['C1', 'C2'], formules: ['C_{6}H_{12}O_{6} → 2 C_{2}H_{5}OH + 2 CO_{2} + énergie'],
+    def: "Oxydation incomplète du glucose, en milieu anaérobie, dans le hyaloplasme : peu d’énergie.",
+    attention: "L’éthanol, déchet organique, garde encore de l’énergie." },
+  { id: 'localisation', titre: '3 · Où ?', comps: ['C3'], formules: ['respiration ↔ mitochondries', 'fermentation ↔ hyaloplasme'],
+    def: "Levure en milieu aérobie : mitochondries nombreuses et développées ; en milieu anaérobie : rares et réduites.",
+    attention: "La fermentation n’a pas besoin de mitochondries." },
+  { id: 'devenir', titre: '4 · Le voyage du glucose', comps: ['C4'], formules: ['glucose → 2 acides pyruviques'],
+    def: "La glycolyse, dans le hyaloplasme, est commune aux deux voies. Avec O2 : l’acide pyruvique entre dans la mitochondrie. Sans O2 : éthanol + CO2.",
+    attention: "L’acide pyruvique est au carrefour des deux voies." },
+  { id: 'glycolyse', titre: '5 · La glycolyse', comps: ['C5'], formules: ['→ 2 CH_{3}–CO–COOH + 2 ATP + 2 NADH,H+'],
+    def: "Trois phases : activation (2 ATP payés), scission (deux chaînes de 3 C, 2 NADH,H+), oxydation (4 ATP reçus).",
+    attention: "4 − 2 = 2 ATP. À gauche : 2 ADP, 2 Pi et 2 NAD+." },
+  { id: 'centrifugation', titre: '6 · Isoler les mitochondries', comps: ['C6'], formules: ['culot 1 : noyaux', 'culot 2 : mitochondries'],
+    def: "Centrifugation fractionnée : après broyage, on sépare les constituants de la cellule selon leur densité.",
+    attention: "Le plus lourd se dépose en premier." },
+  { id: 'pyruvate', titre: '7 · Ce qu’utilise la mitochondrie', comps: ['C6'], formules: ['acide pyruvique : O_{2} consommé'],
+    def: "Des mitochondries isolées consomment le dioxygène avec l’acide pyruvique, pas avec le glucose.",
+    attention: "Le glucose doit d’abord passer par la glycolyse." },
+  { id: 'ultrastructure', titre: '8 · La mitochondrie', comps: ['C7'], formules: ['diamètre : 0,5 à 1 µm'],
+    def: "Deux membranes, un espace intermembranaire, des crêtes portant des sphères pédonculées, la matrice, de l’ADN.",
+    attention: "Les crêtes augmentent la surface de la membrane interne." },
+  { id: 'composition', titre: '9 · Membranes et matrice', comps: ['C8'], formules: ['externe : 40 % lipides, 60 % protéines', 'interne : 20 %, 80 %'],
+    def: "Membrane interne : enzymes, transporteurs d’électrons, ATP synthase. Matrice : décarboxylases, déshydrogénases.",
+    attention: "Pas de glucose dans la matrice." },
+];
+const STATUTS = { non_acquis: ['à reprendre', 'rouge'], partiel: ['à revoir', 'orange'], acquis: ['acquis', 'vert'] };
+const DEM = new URLSearchParams(location.search).has('demarche');   // le fil de la démarche prend le coin haut droit
+const AVANT = -1e9;   // instant d'un bloc déjà dit : il est écrit d'un coup
+// apparu[i] : null = pas encore dit (pas écrit) ; un nombre = l'instant (s de la scène) où il commence à s'écrire.
+const S = { page: 1, focus: null, lacunes: null, acquis: null, acquis_ids: null, apparu: [] };
+window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse son cadre
+
+/* Coupe un texte en lignes qui tiennent dans `max` px (mesure sans les « _ » des indices). */
+function lignes(c, texte, taille, max) {
+  const ctx = c.ctx; ctx.font = `${taille}px ${window.Tableau.POLICE}`;
+  const out = []; let ligne = '';
+  for (const mot of String(texte).split(/\s+/)) {
+    const essai = ligne ? ligne + ' ' + mot : mot;
+    if (ctx.measureText(essai.replace(/_/g, '')).width > max && ligne) { out.push(ligne); ligne = mot; } else ligne = essai;
+  }
+  if (ligne) out.push(ligne);
+  return out;
+}
+function paragraphe(c, texte, x, y, taille, max, o = {}) {
+  // la taille vraiment écrite : la craie ne descend pas sous 15 px à l'écran (c.tailleMin / c.echelle)
+  const te = c.echelle && c.tailleMin ? Math.max(taille, c.tailleMin / c.echelle) : taille, pas = te * (LARG > 760 ? 1.1 : 1.2);   // l’interligne suit la taille vraiment écrite
+  for (const l of lignes(c, texte, te, max)) { c.texte(l, x, y, { taille, ...o }); y += pas; }
+  return y;
+}
+
+// Trois colonnes de trois blocs, dans le cadre 760 × 420 ; tableau large (portable, scene.L ≥ 1000) : les colonnes
+// s'étirent sur toute la largeur et le texte grossit (titres 18, définitions 15, pièges 14 au lieu de 14 / 11,5 / 11).
+let COL = [{ x: 18, w: 228 }, { x: 264, w: 228 }, { x: 510, w: 228 }], LARG = 760, TEL = false, TRIO = false;
+const HAUT = 48, HBLOC = 122;
+let T = { titre: 14, formule: 13, hf: 19, def: 11.5, att: 11, pas: 17 };
+function regler(L, c) {
+  TEL = !!c && (c.W < 640 || c.H < 290);
+  if (TEL) { LARG = L; COL = [{ x: 24, w: L - 48 }]; T = { titre: 18, formule: 15.5, hf: 22, def: 15, att: 15, pas: 21 };
+    c.tailleMin = 15 / Math.min(1, Math.max(.45, Math.min(c.W / 900, c.H / 400))); T.pas = c.tailleMin / c.echelle * 1.25; T.hf = c.tailleMin / c.echelle * 1.35; T.formule = T.def = T.att = T.titre = c.tailleMin / c.echelle; return; }
+  TRIO = !!c && c.W < 1000;   // tableau moyen (760 × 420) : les neuf blocs ne tiennent pas à 15 px : trois blocs à la fois, ceux de la partie en cours
+  LARG = L >= 1000 || TRIO ? L : 760;
+  const g = 18, e = LARG > 760 ? 30 : 18, w = (LARG - 2 * g - 2 * e - 12) / 3;
+  COL = [0, 1, 2].map(k => ({ x: g + 6 + k * (w + e), w }));
+  T = L >= 1000 || TRIO ? { titre: 18, formule: 15.5, hf: 22, def: 15, att: 15, pas: 21 } : { titre: 14, formule: 13, hf: 19, def: 11.5, att: 11, pas: 17 };
+}
+/* Hauteur d'un bloc, mesurée aux tailles vraiment écrites (le kit agrandit la craie pour rester ≥ 15 px à l'écran) :
+ * les blocs d'une colonne coulent l'un sous l'autre au lieu de rangées fixes de HBLOC, où un bloc agrandi
+ * débordait sur le suivant. */
+function hauteurBloc(c, b, w) {
+  const te = t => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t), pas = t => te(t) * (LARG > 760 ? 1.1 : 1.2);
+  let y = 12 + T.pas;
+  if (b.formules) {
+    let fx = 0;
+    for (const f of b.formules) {
+      c.ctx.font = `${T.formule}px ${window.Tableau.POLICE}`;
+      const l = Math.min(w, c.ctx.measureText(f.replace(/_/g, '')).width + 14);
+      if (fx > 0 && fx + l > w) { fx = 0; y += T.hf + 2; }
+      fx += l + 7;
+    }
+    y += T.hf + 1;
+  }
+  y += lignes(c, b.def, te(T.def), w).length * pas(T.def);
+  y += (lignes(c, b.attention, te(T.att), w - T.att - 3).length - 1) * pas(T.att) + te(T.att) * .35;
+  return y + 12;
+}
+let HB = null;
+function mesurerBlocs(c) {
+  if (TEL || TRIO) { HB = BLOCS.map(() => 420 - HAUT - 8); return; }
+  const dispo = 420 - HAUT - 4;
+  HB = BLOCS.map((b, i) => hauteurBloc(c, b, COL[Math.floor(i / 3)].w));
+  for (let k = 0; k < 3; k++) {   // la place libre d'une colonne se partage entre ses trois blocs
+    const ids = [3 * k, 3 * k + 1, 3 * k + 2], libre = dispo - ids.reduce((a, i) => a + HB[i], 0);
+    if (libre > 0) ids.forEach(i => { HB[i] += libre / 3; });
+  }
+}
+const place = i => {
+  if (TEL) return { x: COL[0].x, w: COL[0].w, y0: HAUT + 8, h: 420 - HAUT - 8 };
+  if (TRIO) return { x: COL[i % 3].x, w: COL[i % 3].w, y0: HAUT + 8, h: 420 - HAUT - 8 };
+  const k = Math.floor(i / 3), h = HB ? HB[i] : HBLOC;
+  let y0 = HAUT; if (HB) for (let j = 3 * k; j < i; j++) y0 += HB[j]; else y0 += (i % 3) * HBLOC;
+  return { x: COL[k].x, w: COL[k].w, y0, h };
+};
+function bloc(c, b, i) {
+  const { x, w, y0, h } = place(i), enLumiere = S.focus === b.id, st = statut(b);
+  const cx = x - 6, cy = y0 - 6, cw = w + 12, ch = h - 6;
+  // Le cadre de lumière et l'état de l'élève apparaissent d'un coup : ils ne décalent pas l'écriture du bloc.
+  c.direct(() => {
+    if (enLumiere) c.rect(cx, cy, cw, ch, { couleur: 'jaune', arrondi: 10, largeur: 1.6, alpha: .7 });
+    else if (st && STATUTS[st] && st !== 'acquis') c.rect(cx, cy, cw, ch, { couleur: STATUTS[st][1], arrondi: 10, largeur: 1.4, pointille: [5, 6], alpha: .8 });
+    if (st === 'acquis') c.texte('✓', x + w - 10, y0 + 12, { couleur: 'vert', taille: 15 });
+    else if (st && STATUTS[st]) c.texte(STATUTS[st][0], x + w, y0 + 12, { couleur: STATUTS[st][1], taille: 11, align: 'right' });
+  });
+  let y = y0 + 12;
+  c.texte(b.titre, x, y, { couleur: 'jaune', taille: T.titre, max: st ? w - 62 : w });
+  y += T.pas;
+  if (b.formules) {
+    // formules encadrées, à la ligne quand la suivante ne tient plus
+    let fx = x;
+    for (const f of b.formules) {
+      c.ctx.font = `${T.formule}px ${window.Tableau.POLICE}`;
+      const l = Math.min(w, c.ctx.measureText(f.replace(/_/g, '')).width + 14);
+      if (fx > x && fx + l > x + w) { fx = x; y += T.hf + 2; }
+      c.rect(fx, y - T.formule, l, T.hf, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+      c.texte(f, fx + 7, y + 1, { couleur: 'jaune', taille: T.formule, max: l - 10 });
+      fx += l + 7;
+    }
+    y += T.hf + 1;
+  }
+  y = paragraphe(c, b.def, x, y, T.def, w, { couleur: 'blanc' });
+  c.texte('⚠', x, y, { couleur: 'orange', taille: T.att });
+  y = paragraphe(c, b.attention, x + T.att + 3, y, T.att, w - T.att - 3, { couleur: 'orange', alpha: .92 });
+  if (y - T.att > cy + ch && !window.__debordeBlocs.includes(b.id)) window.__debordeBlocs.push(b.id);
+  c.repere(b.id, cx, cy, cw, ch, b.titre.replace(/^\d+ · /, ''));
+}
+
+function dessinerFiche(c) {
+  if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
+  c.texte('Ce qu’il faut retenir', 18, 30, { couleur: 'jaune', taille: 22 });
+  if (!TEL && !DEM) c.texte('à savoir · formule · ⚠ attention', LARG - 18, 28, { couleur: 'faible', taille: LARG > 760 ? 15 : 12, align: 'right' });
+  c.ligne(18, 38, LARG - 18, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  mesurerBlocs(c);
+  const debut = c.cur;
+  let fin = c.cur;
+  const seul = TEL || TRIO ? (S.focus ? BLOCS.findIndex(b => b.id === S.focus) : S.apparu.reduce((a, v, i) => (v == null ? a : i), 0)) : -1;
+  BLOCS.forEach((b, i) => {
+    if (S.apparu[i] == null) return;   // pas encore dit : il attend son moment
+    if (TEL && i !== seul) return;      // téléphone : le bloc en cours seul
+    if (TRIO && Math.floor(i / 3) !== Math.floor(seul / 3)) return;   // tableau moyen : les trois blocs de la partie en cours
+    // déjà dit : écrit d'un coup ; dit maintenant : s'écrit dès cet instant (le premier attend la fin du titre)
+    c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(debut, S.apparu[i]); bloc(c, b, i); fin = Math.max(fin, c.cur);
+  });
+  c.cur = fin;
+}
+
+function dessinerLacunes(c) {
+  c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'jaune', taille: 22 });
+  c.ligne(22, 38, LARG - 20, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  let y = 70;
+  const lac = S.lacunes, acq = S.acquis || [];
+  if (!lac) {
+    c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: 18 }); y += 28;
+    paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 16, 700, { couleur: 'faible' });
+    return;
+  }
+  if (!lac.length) {
+    c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: 20 }); y += 30;
+  } else {
+    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: 15 }); y += 24;
+    const y0 = y - 18;
+    for (const l of lac.slice(0, 5)) {
+      const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
+      c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 17 });
+      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, LARG - 70, { couleur: 'blanc' });
+      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, LARG - 70, { couleur: coul, alpha: .85 });
+      y += 4;
+    }
+    if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += 18; }
+    c.repere('lacunes', 18, y0, 720, y - y0, 'ce qu’il reste à retravailler');
+  }
+  if (acq.length) {
+    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += 20;
+    paragraphe(c, acq.join(" · "), 22, y, 14, LARG - 60, { couleur: 'vert', alpha: .85 });
+  }
+}
+
+const canvas = $('canvas');
+const scene = window.SVTTableau.Scene(canvas, (c) => { scene.cadre(41 + S.page); regler(scene.L, c); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); const f = c.fin(); if (window.Demarche) window.Demarche.dessiner(c); return f; }, { large: true });
+const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+
+/* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */
+function aller(n, par, focus, tout) {
+  n = n === 2 ? 2 : 1;
+  if (par === 'start' || par === 'reset') { scene.reecrire(); S.apparu = []; }   // rejouer : la fiche se réécrit depuis le début
+  else if (n !== S.page) {
+    // changement de page : on repart d'une page vierge, mais les blocs déjà dits restent écrits (d'un coup)
+    scene.reecrire(); S.apparu = S.apparu.map(a => (a == null ? null : AVANT));
+  }
+  if (n === 1) {
+    const k = focus ? BLOCS.findIndex(b => b.id === focus) : -1;
+    if (tout) BLOCS.forEach((b, i) => { if (S.apparu[i] == null) S.apparu[i] = AVANT; });
+    if (k >= 0) {
+      for (let i = 0; i < k; i++) if (S.apparu[i] == null) S.apparu[i] = AVANT;   // sautés : écrits d'un coup
+      if (S.apparu[k] == null) S.apparu[k] = par === 'start' || par === 'reset' ? 0 : maintenant();
+    }
+  }
+  S.page = n; S.focus = n === 1 ? (focus || null) : null; scene.sale = true;
+  $('page').textContent = `${n} / 2`; $('suiv').textContent = n === 1 ? 'Ma page →' : '← La fiche';
+  bulle($('feedback'), n === 2 ? 'Ta page à toi.' : focus ? BLOCS.find(b => b.id === focus).titre.replace(/^\d+ · /, '') : 'La fiche du chapitre.');
+  pont.noter(par || 'page', { page: n, moment: focus || (n === 2 ? 'lacunes' : 'fiche') }); pont.emettre();
+}
+function statut(b) {
+  if (!S.lacunes) return null;
+  const lac = S.lacunes.filter(l => b.comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
+}
+/* (17 novembre 2026) Un instant par bloc, dans l'ordre de la fiche (avant : tous à 1, et la garde du kit, qui refuse un
+ * play_until vers un instant déjà atteint, refusait tous les blocs après le premier : la fiche ne s'écrivait plus). */
+function moments() { const m = {}; BLOCS.forEach((b, i) => { m[b.id] = i + 1; }); m.fiche = BLOCS.length + .5; m.lacunes = BLOCS.length + 1; return m; }
+const avance = () => (S.page === 2 ? BLOCS.length + 1 : S.apparu.reduce((a, v, i) => (v == null ? a : Math.max(a, i + 1)), 0));
+const PILOTE = new URLSearchParams(location.search).has('depart') || DEM || (() => { try { return window.parent !== window; } catch (_) { return true; } })();   // diapositive pilotée : la fiche s'ouvre vierge
+function playUntil(p) {
+  const nom = p.moment in moments() ? p.moment : null;
+  if (!nom && !Number.isFinite(+p.time_s)) return;
+  if (!nom && +p.time_s === 0) return aller(1, 'reset', null);   // ?depart=0 : la fiche s'ouvre vierge
+  if (nom === 'lacunes' || (!nom && +p.time_s === 2)) aller(2, 'play_until');
+  else if (nom === 'fiche' || !nom) aller(1, 'play_until', null, true);
+  else aller(1, 'play_until', nom);
+}
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || l.id || ''), statut: String(l.statut || 'non_acquis'), reprendre_avec: Array.isArray(l.reprendre_avec) ? l.reprendre_avec.map(String) : [] }));
+  if (Array.isArray(p.acquis)) S.acquis = p.acquis.map(String);
+  if (Array.isArray(p.acquis_ids)) S.acquis_ids = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length, acquis: (S.acquis || []).length }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
+  const f = S.focus && BLOCS.find(b => b.id === S.focus);
+  const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length;
+  return `Page 1/2, la fiche du chapitre « Consommation de la matière organique et flux d’énergie » : ${ecrits}/9 blocs écrits (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${f.def}${f.formules ? ' Formules : ' + f.formules.join(' ; ') + '.' : ''} Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
+}
+$('suiv').onclick = () => (S.page === 1 ? aller(2, 'next') : aller(1, 'previous', null, true));
+// Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { page: S.page, focus: S.focus, apparu: S.apparu.slice() };
+  window.Tableau.imprimer({ titre: 'Ce qu’il faut retenir — consommation de la matière organique et flux d’énergie', scene,
+    pages: [{ nom: 'la fiche', preparer: () => { S.page = 1; S.focus = null; S.apparu = BLOCS.map(() => AVANT); } },
+            { nom: 'ta page : à retravailler', preparer: () => { S.page = 2; S.focus = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 2 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  if (S.page !== 1) return;
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const vus = (k) => { const q = S.focus ? BLOCS.findIndex(b => b.id === S.focus) : S.apparu.reduce((a, v, j) => (v == null ? a : j), 0); return TEL ? k === q : TRIO ? Math.floor(k / 3) === Math.floor(q / 3) : true; };
+  const i = BLOCS.findIndex((b, k) => { const p = place(k); return vus(k) && S.apparu[k] != null && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + p.h - 12; });
+  if (i < 0) return;
+  S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), BLOCS[i].def);
+  pont.noter('touche', { moment: BLOCS[i].id }); pont.emettre();
+});
+
+window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: b.def })) });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters', 'next', 'previous'];
+const config = { id: 'svt_reference_bilan', version: '1.0', title: 'Ce qu’il faut retenir — consommation de la matière organique', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (écrit ce bloc de la fiche et le met en lumière ; fiche = toute la fiche ; lacunes = la page de l’élève)' },
+    set_parameters: { lacunes: '[{id: C1..C8, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Fiche « Ce qu’il faut retenir » du chapitre « Consommation de la matière organique et flux d’énergie », sur une page (neuf blocs : respiration, fermentation, où, le voyage du glucose, glycolyse, isoler les mitochondries, ce qu’utilise la mitochondrie, la mitochondrie, membranes et matrice ; chacun avec ce qu’il faut savoir, la formule, le point d’attention), puis la page de l’élève (ce qu’il lui reste à retravailler).',
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: avance(), parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => S.page / 2,
+  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'respiration'), reset: () => aller(1, 'reset', PILOTE ? null : 'respiration'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
+    next: () => aller(2, 'next'), previous: () => aller(1, 'previous', null, true) })[cmd]?.() });
+aller(1, 'start', PILOTE ? null : 'respiration');   // la voix commence par la définition : le premier bloc s'écrit et est en lumière (pilotée : vierge)
+window.__bilan = { S, scene, BLOCS };
+window.__sim = { M: moments(), DEB: {}, ORDRE: BLOCS.map(b => b.id) };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
