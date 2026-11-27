@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Suivre le glucose marqué au ¹⁴C — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css">
+<style>@media (max-height: 340px) { .scene { padding-bottom: .2em; } .tableau { padding: .2em .5em; } }</style></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="D’abord une molécule de glucose (chaîne de six carbones) dont un carbone radioactif clignote, et un compteur de radioactivité. Puis deux cultures de levures côte à côte, sans dioxygène et avec dioxygène : les molécules marquées passent du milieu dans la cellule, se coupent en acides pyruviques, puis deviennent éthanol et CO₂ (sans dioxygène) ou entrent dans la mitochondrie (avec dioxygène). À la fin, les résultats rangés dans le tableau du document."></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference.js"></script>
+<script>
+/*
+ * Le glucose marqué au ¹⁴C — cours de référence SVT (docs/reference-svt/ARCHITECTURE.md § 2 et § 3), 27 novembre 2026.
+ * Le document (le nombre de + suit la quantité de molécules radioactives ; G glucose, P acide pyruvique, K acides du cycle
+ * de Krebs, E éthanol) :
+ *        │ sans O2, dehors │ sans O2, dedans      │ avec O2, dehors │ avec O2, dedans
+ *     T0 │ G+++            │                      │ G+++            │
+ *     T1 │ G++             │ G++                  │ G++             │ G++
+ *     T2 │                 │ P++++                │                 │ P++++
+ *     T3 │                 │ E++, P++, CO2++      │                 │ CO2+, K+, P++
+ *     T4 │ E+, CO2++       │ E+, CO2+             │ CO2+            │ CO2+, K+
+ *     T5 │ E++, CO2++      │                      │ CO2++++         │
+ * L'animation montre exactement ces quantités : une molécule dessinée par « + » (dessins du lexique : glucose = chaîne de
+ * 6 billes jaunes, acide pyruvique = 3, éthanol = 2 + 2 H, CO2, acides de Krebs = chaîne de 4), chacune avec sa balise qui
+ * clignote. Le document ne conserve pas toujours le compte d'un temps au suivant : les molécules en trop s'estompent.
+ * Moments : principe, deux_cultures, t0, t1, t2, glycolyse, t3_sans, t4_sans, t5_sans ║ arrêt pour l'observation ║
+ * t3_avec, t4_avec, t5_avec, tableau. Les deux cultures avancent ensemble de T0 à T2 (le début est le même), puis l'une
+ * après l'autre.
+ */
+const R = window.Ref, LX = window.Lexique, P = window.SVTPeinture, { doux, mix, borne, rgba, TAU } = R;
+const MOMENTS = [
+  ['principe', 6, 'le principe : un glucose dont un carbone est radioactif (¹⁴C), repéré par le compteur'],
+  ['deux_cultures', 11, 'deux cultures de levures : sans dioxygène, avec dioxygène'],
+  ['t0', 14.5, 'T0 : le glucose marqué est dehors, dans les deux cultures (G+++)'],
+  ['t1', 18.5, 'T1 : le glucose entre dans la cellule (dehors G++, dedans G++)'],
+  ['t2', 23, 'T2 : dans le hyaloplasme, chaque glucose est coupé en deux acides pyruviques (P++++), des deux côtés'],
+  ['glycolyse', 28, 'la glycolyse : glucose → 2 acides pyruviques, dans le hyaloplasme'],
+  ['t3_sans', 33, 'T3 sans O2 : éthanol ++, acide pyruvique ++, CO2 ++, dans la cellule'],
+  ['t4_sans', 37.5, 'T4 sans O2 : l’éthanol et le CO2 sortent (dehors E+, CO2++ ; dedans E+, CO2+)'],
+  ['t5_sans', 43, 'T5 sans O2 : dehors éthanol ++ et CO2 ++ ; plus rien dedans'],
+  ['t3_avec', 48, 'T3 avec O2 : l’acide pyruvique entre dans la mitochondrie (CO2+, acides de Krebs +, P++)'],
+  ['t4_avec', 52.5, 'T4 avec O2 : dehors CO2+ ; dedans CO2+ et acides de Krebs +'],
+  ['t5_avec', 58, 'T5 avec O2 : dehors CO2 ++++ ; plus rien dedans'],
+  ['tableau', 68, 'le tableau du document, de T0 à T5'],
+];
+/* Le document, tel quel. */
+const DOC = {
+  sans: { dehors: ['G+++', 'G++', '', '', 'E+, CO_{2}++', 'E++, CO_{2}++'], dedans: ['', 'G++', 'P++++', 'E++, P++, CO_{2}++', 'E+, CO_{2}+', ''] },
+  avec: { dehors: ['G+++', 'G++', '', '', 'CO_{2}+', 'CO_{2}++++'], dedans: ['', 'G++', 'P++++', 'CO_{2}+, K+, P++', 'CO_{2}+, K+', ''] },
+};
+const MOTS = { G: 'glucose ', P: 'ac. pyruvique ', E: 'éthanol ', K: 'ac. de Krebs ', CO: 'CO_{2} ' };
+const enMots = (s) => (s ? s.replace(/CO_\{2\}/g, '§').replace(/([GPEK§])(\++)/g, (m, l, p) => (l === '§' ? MOTS.CO : MOTS[l]) + p) : 'rien');
+const plat = (s) => s.replace(/_\{([^}]*)\}/g, '$1');
+
+/* ── Les molécules suivies : positions (repère du panneau, largeur 368) à chaque temps T0…T5 ── */
+const O = [[68, 108], [68, 158], [68, 208], [68, 258]];
+const PISTES = {
+  sans: [
+    { t: 'G', k: { 0: O[0], 1: O[0] }, vers: [150, 128] }, { t: 'G', k: { 0: O[1], 1: O[1] }, vers: [150, 172] },
+    { t: 'G', k: { 0: O[2], 1: [222, 128] }, coupe: 1 }, { t: 'G', k: { 1: [228, 208] }, de: [14, 262], coupe: 1 },
+    { t: 'P', k: { 2: [186, 122] }, de: [200, 128] }, { t: 'P', k: { 2: [272, 112] }, de: [250, 128] },
+    { t: 'P', k: { 2: [192, 222], 3: [192, 222] }, de: [206, 208] }, { t: 'P', k: { 2: [276, 212], 3: [276, 212] }, de: [252, 208] },
+    { t: 'E', k: { 3: [175, 126], 4: [66, 112], 5: [66, 112] }, de: [186, 122] }, { t: 'C', k: { 3: [240, 100], 4: [62, 214], 5: [62, 214] }, de: [200, 122] },
+    { t: 'E', k: { 3: [268, 152], 4: [268, 152], 5: [70, 162] }, de: [272, 112] }, { t: 'C', k: { 3: [318, 128], 4: [86, 262], 5: [86, 262] }, de: [286, 112] },
+    { t: 'C', k: { 4: [214, 226] }, de: [192, 222], vers: [60, 70] },
+  ],
+  avec: [
+    { t: 'G', k: { 0: O[0], 1: O[0] }, vers: [150, 124] }, { t: 'G', k: { 0: O[1], 1: O[1] }, vers: [150, 160] },
+    { t: 'G', k: { 0: O[2], 1: [222, 112] }, coupe: 1 }, { t: 'G', k: { 1: [232, 160] }, de: [14, 262], coupe: 1 },
+    { t: 'P', k: { 2: [186, 116] }, de: [200, 112], vers: [236, 218] }, { t: 'P', k: { 2: [264, 104] }, de: [250, 112], vers: [276, 220] },
+    { t: 'P', k: { 2: [178, 164], 3: [178, 164] }, de: [210, 160], vers: [240, 220] }, { t: 'P', k: { 2: [296, 142], 3: [296, 142] }, de: [256, 160], vers: [282, 220] },
+    { t: 'K', k: { 3: [252, 224] }, de: [252, 220] }, { t: 'C', k: { 3: [318, 184], 4: [66, 112], 5: [66, 112] }, de: [286, 214] },
+    { t: 'K', k: { 4: [258, 224] }, de: [258, 220] }, { t: 'C', k: { 4: [206, 150], 5: [66, 162] }, de: [240, 216] },
+    { t: 'C', k: { 5: [66, 212] }, de: [246, 222] }, { t: 'C', k: { 5: [66, 262] }, de: [272, 222] },
+  ],
+};
+const ECH = { G: .52, P: .56, E: .62, C: .9, K: .5 };
+function molecule(ctx, t, x, y, a, h, phase, coupe = 0) {
+  if (a <= .02) return;
+  const e = ECH[t], dx = t === 'G' ? -70 * e - coupe * 28 * e : t === 'P' ? -28 * e : t === 'K' ? -42 * e : t === 'E' ? -14 * e : 0;
+  // la balise : le carbone radioactif clignote
+  const puls = .55 + .45 * Math.sin(h * 5 + phase), rr = 13 + 4 * puls, g = ctx.createRadialGradient(x + dx, y, 0, x + dx, y, rr);
+  g.addColorStop(0, `rgba(190,255,150,${.75 * a * puls})`); g.addColorStop(.5, `rgba(130,240,110,${.3 * a * puls})`); g.addColorStop(1, 'rgba(130,240,110,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + dx, y, rr, 0, TAU); ctx.fill();
+  if (t === 'G') LX.glucose(ctx, x, y, { echelle: e, alpha: a, coupe });
+  else if (t === 'P') LX.acidePyruvique(ctx, x, y, { echelle: e, alpha: a });
+  else if (t === 'E') LX.ethanol(ctx, x, y, { echelle: e, alpha: a });
+  else if (t === 'K') LX.moleculeOrganique(ctx, x, y, { n: 4, echelle: e, alpha: a });
+  else LX.co2(ctx, x, y, { echelle: e, alpha: a });
+}
+function pistes(ctx, liste, tau, X, h) {
+  if (tau <= -1) return;
+  const i = Math.max(0, Math.floor(tau + 1e-9)), u = tau < 0 ? 0 : borne(tau - i), ap = tau < 0 ? tau + 1 : 1;
+  liste.forEach((s, n) => {
+    const a = s.k[i], b = s.k[i + 1];
+    if (!a && !(b && u > 0)) return;
+    let p, al = 1, coupe = 0;
+    if (a && (b || u === 0)) p = b ? [mix(a[0], b[0], u), mix(a[1], b[1], u)] : a;
+    else if (a) { const v = s.vers || a; p = [mix(a[0], v[0], u), mix(a[1], v[1], u)]; if (s.coupe) { coupe = borne(u * 1.7); al = 1 - borne((u - .5) * 2.4); } else al = 1 - u; }
+    else { const d = s.de || b, uu = s.t === 'P' || liste.some(q => q.coupe) && i >= 1 && (s.t !== 'G') ? borne((u - .42) * 1.8) : u; p = [mix(d[0], b[0], doux(uu)), mix(d[1], b[1], doux(uu))]; al = borne(uu * 1.6); }
+    molecule(ctx, s.t, X(p[0]), p[1], al * ap, h, n * 1.3, coupe);
+  });
+}
+
+/* ── Les panneaux ── */
+function geo(L) {
+  const w = (L - 20) / 2, k = w / 368;
+  const pan = (x0) => ({ x0, w, k, X: (x) => x0 + x * k, cel: { cx: x0 + 246 * k, cy: 180, rx: 110 * Math.min(k, 1.25), ry: 104 } });
+  return { sans: pan(6), avec: pan(L / 2 + 4), w, k };
+}
+function panneau(ctx, G, mode, a) {
+  if (a <= 0) return;
+  const x0 = G.X(4), x1 = G.X(364), y0 = 50, y1 = 304, c = G.cel;
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, mode === 'avec' ? 'rgba(96,176,226,.34)' : 'rgba(110,150,170,.30)'); g.addColorStop(1, mode === 'avec' ? 'rgba(40,116,176,.22)' : 'rgba(60,96,116,.22)');
+  ctx.fillStyle = g; R.rr(ctx, x0, y0, x1 - x0, y1 - y0, 16); ctx.fill(); ctx.strokeStyle = 'rgba(160,205,240,.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+  const r = P.graine(mode === 'avec' ? 5 : 9); ctx.fillStyle = 'rgba(220,240,255,.16)';
+  for (let i = 0; i < 46; i++) { const x = x0 + 6 + r() * (x1 - x0 - 12), y = y0 + 6 + r() * (y1 - y0 - 12); ctx.beginPath(); ctx.arc(x, y, .8 + r() * 1.4, 0, TAU); ctx.fill(); }
+  // la levure : paroi épaisse, puis la cellule (membrane, hyaloplasme), sa mitochondrie
+  ctx.strokeStyle = 'rgba(214,190,140,.9)'; ctx.lineWidth = 7; ctx.beginPath(); ctx.ellipse(c.cx, c.cy, c.rx + 4, c.ry + 4, 0, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = 'rgba(120,96,58,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(c.cx, c.cy, c.rx + 8, c.ry + 8, 0, 0, TAU); ctx.stroke();
+  P.cellule(ctx, c.cx, c.cy, c.rx, c.ry, { grains: 110, graine: mode === 'avec' ? 23 : 31 });
+  if (mode === 'avec') P.mitochondrie(ctx, G.X(262), 222, 62, 29, { cretes: 7, graine: 9 });
+  else P.mitochondrie(ctx, G.X(304), 252, 24, 12, { cretes: 3, graine: 4 });
+  ctx.restore();
+}
+
+/* ── Le compteur de radioactivité (principe) ── */
+function compteur(ctx, x, y, w, h, act, hor, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h + 3, w * .52, 5, 0, 0, TAU); ctx.fill();
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f2cf62'); g.addColorStop(.5, '#d8a936'); g.addColorStop(1, '#8f6a14');
+  ctx.fillStyle = g; R.rr(ctx, x, y, w, h, 10); ctx.fill(); ctx.strokeStyle = 'rgba(60,40,6,.9)'; ctx.lineWidth = 1.4; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.28)'; R.rr(ctx, x + 6, y + 4, w - 12, 5, 2.5); ctx.fill();
+  // la poignée
+  ctx.strokeStyle = '#3b3f4c'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x + w * .25, y); ctx.quadraticCurveTo(x + w * .5, y - 22, x + w * .75, y); ctx.stroke();
+  // le cadran
+  const cx = x + w * .36, cy = y + h * .66, rc = Math.min(w * .28, h * .5);
+  ctx.fillStyle = '#f8f5e6'; ctx.beginPath(); ctx.arc(cx, cy, rc, Math.PI, TAU); ctx.lineTo(cx + rc, cy + 6); ctx.lineTo(cx - rc, cy + 6); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.strokeStyle = '#444'; ctx.lineWidth = 1;
+  for (let k = 0; k <= 8; k++) { const an = Math.PI + k / 8 * Math.PI; ctx.beginPath(); ctx.moveTo(cx + Math.cos(an) * rc * .78, cy + Math.sin(an) * rc * .78); ctx.lineTo(cx + Math.cos(an) * rc * .92, cy + Math.sin(an) * rc * .92); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(220,60,50,.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, rc * .85, Math.PI * 1.72, Math.PI * 1.98); ctx.stroke();
+  const an = Math.PI * (1.08 + .78 * act) + Math.sin(hor * 17) * .05 * act;
+  ctx.strokeStyle = '#b91c1c'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(an) * rc * .86, cy + Math.sin(an) * rc * .86); ctx.stroke();
+  ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, TAU); ctx.fill();
+  // le haut-parleur et le voyant
+  ctx.fillStyle = 'rgba(40,30,8,.75)';
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { ctx.beginPath(); ctx.arc(x + w * .72 + i * 8, y + h * .34 + j * 8, 2.2, 0, TAU); ctx.fill(); }
+  const on = act > .3 && Math.sin(hor * 14) > 0;
+  ctx.fillStyle = on ? '#ef4444' : '#5b1f1f'; ctx.beginPath(); ctx.arc(x + w * .84, y + h * .82, 4.5, 0, TAU); ctx.fill();
+  if (on) { const gl = ctx.createRadialGradient(x + w * .84, y + h * .82, 0, x + w * .84, y + h * .82, 13); gl.addColorStop(0, 'rgba(239,68,68,.7)'); gl.addColorStop(1, 'rgba(239,68,68,0)'); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x + w * .84, y + h * .82, 13, 0, TAU); ctx.fill(); }
+  ctx.restore();
+}
+/** La sonde du compteur (tube métallique) de (x1, y1) vers (x2, y2), reliée au boîtier par un fil. */
+function sondeCompteur(ctx, x1, y1, x2, y2, bx, by, a) {
+  ctx.save(); ctx.globalAlpha = a;
+  R.cable(ctx, [bx, by, bx - 30, by + 40, x1 + 50, y1 + 50, x1, y1], [40, 42, 52], { epaisseur: 3 });
+  const an = Math.atan2(y2 - y1, x2 - x1), len = Math.hypot(x2 - x1, y2 - y1);
+  ctx.translate(x1, y1); ctx.rotate(an);
+  const g = ctx.createLinearGradient(0, -8, 0, 8); g.addColorStop(0, '#eef1f5'); g.addColorStop(.5, '#a3abb8'); g.addColorStop(1, '#545b68');
+  ctx.fillStyle = g; R.rr(ctx, 0, -8, len, 16, 7); ctx.fill(); ctx.strokeStyle = 'rgba(20,22,30,.8)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = '#2b2f3a'; R.rr(ctx, 0, -9, 20, 18, 4); ctx.fill();
+  ctx.fillStyle = 'rgba(30,34,44,.55)'; for (let k = 0; k < 4; k++) ctx.fillRect(len - 34 + k * 7, -6, 3, 12);
+  ctx.restore();
+}
+
+/* ── Les lignes écrites sous les cultures ── */
+const PHRASES = {
+  glycolyse: ['glyco·lyse', ' (glyco : sucre ; lyse : couper) : glucose → 2 acides pyruviques, dans le hyaloplasme'],
+  sans: 'sans O_{2} : acide pyruvique → éthanol + CO_{2}, dans le hyaloplasme',
+  avec: 'avec O_{2} : acide pyruvique → mitochondrie → acides de Krebs + CO_{2}',
+  principe: 'un carbone radioactif (¹⁴C) : le compteur le repère partout où il va',
+};
+const YL = [369, 390, 411];
+
+function tauDe(e, mode) {
+  const s = e.p('t0', .1, .7) + e.d('t1', 0, .75) + e.d('t2', 0, .8);
+  return -1 + s + (mode === 'sans' ? e.d('t3_sans', 0, .75) + e.d('t4_sans', 0, .75) + e.d('t5_sans', 0, .55) : e.d('t3_avec', 0, .75) + e.d('t4_avec', 0, .75) + e.d('t5_avec', 0, .55));
+}
+const indice = (tau) => Math.max(-1, Math.min(5, Math.floor(tau + .22)));
+
+function tableau(c, e, G, a) {
+  const L = e.L, tf = e.tf(17), p0 = e.p('tableau'), cmp = e.compact;
+  // téléphone : une culture à la fois (Temps | dehors | dedans), d'abord sans O2, puis avec O2
+  const moitie = cmp ? (p0 < .58 ? 'sans' : 'avec') : null, p = !cmp ? p0 : p0 < .58 ? .12 + (p0 / .58) * .88 : .12 + ((p0 - .58) / .42) * .88;
+  const CEL = cmp ? [[moitie, 'dehors'], [moitie, 'dedans']] : [['sans', 'dehors'], ['sans', 'dedans'], ['avec', 'dehors'], ['avec', 'dedans']], nc = CEL.length;
+  const cT = c.largeurTexte('Temps', tf) + 22, cW = Math.max(c.largeurTexte('E++, P++, CO2++', tf) + 18, Math.min(190, (L - 24 - cT) / 4)), W = cT + nc * cW, x0 = (L - W) / 2;
+  const hL = cmp ? tf * 1.38 : Math.max(34, tf * 1.75), y0 = 34, yR = y0 + 2 * hL, H = 8 * hL;
+  TAB = { x0, W, y0, hL, cT, cW, yR, H };
+  if (a <= 0) return TAB;
+  c.direct(() => {
+    const ctx = c.ctx; ctx.save(); ctx.globalAlpha = a;
+    P.carte(ctx, x0, y0, W, H, { arrondi: 12, rayures: [0, 1, 2, 3, 4, 5].map(k => yR + k * hL), pas: hL });
+    ctx.strokeStyle = 'rgba(250,204,21,.45)'; ctx.lineWidth = 1.2; ctx.beginPath();
+    for (let k = 0; k < nc; k++) { const x = x0 + cT + k * cW; ctx.moveTo(x, k % 2 ? y0 + hL : y0); ctx.lineTo(x, y0 + H); }
+    ctx.moveTo(x0, yR); ctx.lineTo(x0 + W, yR); ctx.moveTo(x0 + cT, y0 + hL); ctx.lineTo(x0 + W, y0 + hL); ctx.stroke();
+    ctx.restore();
+  });
+  const mid = (k) => x0 + cT + (k + .5) * cW, base = (y) => y + hL / 2 + tf * .34;
+  if (p > .12) e.ecrire(c, 'tab_entetes' + (moitie || ''), () => {
+    c.texte('Temps', x0 + cT / 2, base(y0 + hL / 2), { couleur: 'jaune', taille: 17, align: 'center', gras: true });
+    for (let k = 0; k < nc; k += 2) c.texte(CEL[k][0] === 'sans' ? 'Sans O_{2}' : 'Avec O_{2}', x0 + cT + (k + 1) * cW, base(y0), { couleur: 'jaune', taille: 18, align: 'center', gras: true });
+    CEL.forEach(([, z], k) => c.texte(z, mid(k), base(y0 + hL), { couleur: 'blanc', taille: 17, align: 'center' }));
+  });
+  // les lignes : les valeurs volent des cultures vers leurs cases
+  for (let k = 0; k < 6; k++) {
+    const u = borne((p - (.2 + k * .125)) / .11), y = yR + k * hL;
+    if (u <= 0) continue;
+    c.direct(() => {
+      c.texte('T' + k, x0 + cT / 2, base(y), { couleur: 'jaune', taille: 18, align: 'center', gras: true, alpha: borne(u * 3) });
+      CEL.forEach(([m, z], j) => {
+        const s = DOC[m][z][k] || '—', v = doux(borne(u * 1.25 - j * .06)), xd = cmp ? mid(j) : G[m].X(z === 'dehors' ? 66 : 246), yd = cmp ? base(y) - 30 : 180;
+        c.texte(s, mix(xd, mid(j), v), mix(yd, base(y), v), { couleur: s === '—' ? 'faible' : 'blanc', taille: 17, align: 'center', alpha: borne(v * 2.2) });
+      });
+    });
+    if (u >= 1) c.repere('t' + k, x0, y, W, hL, `la ligne T${k} du tableau : sans O2 dehors ${plat(DOC.sans.dehors[k]) || 'rien'}, dedans ${plat(DOC.sans.dedans[k]) || 'rien'} ; avec O2 dehors ${plat(DOC.avec.dehors[k]) || 'rien'}, dedans ${plat(DOC.avec.dedans[k]) || 'rien'}`);
+  }
+  if (p0 > .95 && !cmp) { e.ecrire(c, 'tab_cle', () => c.texte('G : glucose   P : acide pyruvique   K : acides de Krebs   E : éthanol   + : quantité de radioactivité', L / 2, Math.min(YL[0] - 22, y0 + H + tf + 6), { couleur: 'faible', taille: 17, align: 'center', max: L - 20 })); }
+  if (p > .15) { c.repere('tableau', x0, y0, W, H, 'le tableau du document');
+    if (!cmp) { c.repere('colonne_sans', x0 + cT, y0, 2 * cW, H, 'les colonnes sans dioxygène'); c.repere('colonne_avec', x0 + cT + 2 * cW, y0, 2 * cW, H, 'les colonnes avec dioxygène'); } }
+  return TAB;
+}
+
+function dessiner(c, e) {
+  const L = e.L, G = geo(L), h = e.horloge, tf = e.tf(17);
+  const aPrin = 1 - e.d('deux_cultures', 0, .35), aPan = e.d('deux_cultures', .25, .7) * (1 - e.d('tableau', 0, .14)), aTab = e.d('tableau', .06, .2);
+  const tS = tauDe(e, 'sans'), tA = tauDe(e, 'avec');
+  /* 1. le principe */
+  if (aPrin > 0) {
+    const gx = L / 2 - 150, gy = 196, k = 1.45, xm = gx + 70 * k, bx = L / 2 + 96, by = 96, act = e.d('principe', .45, .8);
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save(); ctx.globalAlpha = aPrin * e.d('principe', 0, .2);
+      // la balise : le dernier carbone clignote
+      const puls = .5 + .5 * Math.sin(h * 5), tag = e.d('principe', .2, .4);
+      if (tag > 0) { const g = ctx.createRadialGradient(xm, gy, 0, xm, gy, 44 + 10 * puls); g.addColorStop(0, `rgba(190,255,150,${.8 * tag * (.5 + .5 * puls)})`); g.addColorStop(.5, `rgba(130,240,110,${.3 * tag})`); g.addColorStop(1, 'rgba(130,240,110,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(xm, gy, 54, 0, TAU); ctx.fill(); }
+      LX.glucose(ctx, gx, gy, { echelle: k });
+      // les « clics » : des ondes qui partent du carbone marqué vers la sonde
+      if (act > 0) { ctx.strokeStyle = 'rgba(190,255,150,.8)'; ctx.lineWidth = 2; for (let i = 0; i < 3; i++) { const u = (h * 1.3 + i / 3) % 1; ctx.globalAlpha = aPrin * act * (1 - u); ctx.beginPath(); ctx.arc(xm, gy, 22 + 46 * u, -.9, .35); ctx.stroke(); } }
+      ctx.restore();
+      if (e.p('principe', .4, .6) > 0) { const a = aPrin * e.d('principe', .4, .6); compteur(ctx, bx, by, 168, 104, act, h, a); sondeCompteur(ctx, xm + 150 - 30 * act, gy + 74 - 18 * act, xm + 62 - 30 * act, gy + 24 - 18 * act, bx + 30, by + 104, a); }
+    });
+    if (aPrin > .9) {
+      if (e.p('principe', .12, 1) > 0) e.ecrire(c, 'pr_glu', () => c.texte('glucose : 6 carbones', gx, gy + 52, { couleur: 'jaune', taille: 20, align: 'center' }));
+      if (e.p('principe', .3, 1) > 0) e.ecrire(c, 'pr_c14', () => { c.texte('¹⁴C', xm, gy - 46, { couleur: 'vert', taille: 24, align: 'center', gras: true }); c.texte('carbone radioactif', xm - 6, gy - 74, { couleur: 'vert', taille: 18, align: 'center' }); });
+      if (e.p('principe', .6, 1) > 0) e.ecrire(c, 'pr_cpt', () => c.texte('compteur de radioactivité', bx + 84, by - 34, { couleur: 'blanc', taille: 18, align: 'center' }));
+      if (e.p('principe', .8, 1) > 0) { if (e.compact) e.bandeau = { texte: PHRASES.principe, couleur: 'blanc' }; else e.ecrire(c, 'pr_phrase', () => c.texte(PHRASES.principe, L / 2, 330, { couleur: 'blanc', taille: 19, align: 'center', max: L - 24 })); }
+      c.repere('glucose', gx - 120, gy - 26, 240, 52, 'le glucose marqué : une chaîne de 6 carbones');
+      if (e.p('principe', .3, 1) > 0) c.repere('carbone_marque', xm - 26, gy - 26, 52, 52, 'le carbone radioactif (¹⁴C) : la balise');
+      if (e.p('principe', .6, 1) > 0) c.repere('compteur', bx - 6, by - 26, 180, 136, 'le compteur de radioactivité');
+    }
+  }
+  /* 2. les deux cultures */
+  if (aPan > 0) {
+    c.direct(() => { const ctx = c.ctx; for (const m of ['sans', 'avec']) { panneau(ctx, G[m], m, aPan); ctx.save(); ctx.globalAlpha = aPan; pistes(ctx, PISTES[m], m === 'sans' ? tS : tA, G[m].X, h); ctx.restore(); } });
+    const actif = e.des('t3_avec') ? 'avec' : 'sans';
+    if (aPan > .9) {
+      for (const m of ['sans', 'avec']) {
+        const g = G[m], tau = m === 'sans' ? tS : tA, i = indice(tau);
+        e.ecrire(c, 'titre_' + m, () => c.texte(m === 'sans' ? 'culture 1 : sans O_{2}' : 'culture 2 : avec O_{2}', g.x0 + 6, 38, { couleur: 'jaune', taille: 19, gras: true }));
+        if (!e.compact) e.ecrire(c, 'zones_' + m, () => { c.texte('dehors', g.X(14), 296, { couleur: 'blanc', taille: 17 }); c.texte('dedans', g.cel.cx - g.cel.rx + 12, 186, { couleur: 'blanc', taille: 17 }); });
+        // l'horloge et les deux lectures (le document, en mots)
+        if (i >= 0) c.direct(() => {
+          c.texte('T' + i, g.X(358), 76, { couleur: 'jaune', taille: 24, align: 'right', gras: true });
+          if (e.compact) return;
+          c.texte('dehors : ' + enMots(DOC[m].dehors[i]), g.x0 + 6, 322, { couleur: 'blanc', taille: 17, max: g.w - 8 });
+          c.texte('dedans : ' + enMots(DOC[m].dedans[i]), g.x0 + 6, 342, { couleur: 'blanc', taille: 17, max: g.w - 8 });
+        });
+        const suf = '_' + m;
+        c.repere('culture' + suf, g.X(0), 44, g.w, 264, m === 'sans' ? 'la culture sans dioxygène' : 'la culture avec dioxygène');
+        c.repere('dehors' + suf, g.X(8), 60, g.X(130) - g.X(8), 240, 'le milieu, dehors');
+        c.repere('hyaloplasme' + suf, g.cel.cx - g.cel.rx * .8, 86, g.cel.rx * 1.6, 100, 'le hyaloplasme (dans la cellule)');
+        c.repere('mitochondrie' + suf, m === 'avec' ? g.X(262) - 66 : g.X(304) - 28, m === 'avec' ? 190 : 238, m === 'avec' ? 132 : 56, m === 'avec' ? 64 : 28, m === 'avec' ? 'la mitochondrie' : 'une mitochondrie, petite et rare sans dioxygène');
+        if (i >= 0) { c.repere('horloge' + suf, g.X(358) - 40, 54, 44, 28, 'le temps de l’expérience : T' + i); c.repere('lecture' + suf, g.x0 + 2, 306, g.w - 4, 44, `T${i} : dehors ${plat(enMots(DOC[m].dehors[i]))} ; dedans ${plat(enMots(DOC[m].dedans[i]))}`); }
+        if (m === actif) { c.repere('dehors', g.X(8), 60, g.X(130) - g.X(8), 240, 'le milieu, dehors'); c.repere('hyaloplasme', g.cel.cx - g.cel.rx * .8, 86, g.cel.rx * 1.6, 100, 'le hyaloplasme (dans la cellule)'); }
+      }
+      c.repere('mitochondrie', G.avec.X(262) - 66, 190, 132, 64, 'la mitochondrie');
+      // les repères des molécules, là où elles sont (culture en cours)
+      const g = G[actif], i = indice(actif === 'sans' ? tS : tA), boite = (id, t, label) => {
+        const pts = PISTES[actif].filter(s => s.t === t && s.k[i]).map(s => s.k[i]); if (!pts.length) return;
+        const xs = pts.map(q => g.X(q[0])), ys = pts.map(q => q[1]);
+        c.repere(id, Math.min(...xs) - 40, Math.min(...ys) - 18, Math.max(...xs) - Math.min(...xs) + 80, Math.max(...ys) - Math.min(...ys) + 36, label);
+      };
+      if (i >= 0) { boite('glucose', 'G', 'le glucose marqué'); boite('pyruvate', 'P', 'l’acide pyruvique (chaînes de 3 carbones)'); boite('ethanol', 'E', 'l’éthanol'); boite('co2', 'C', 'le CO2'); boite('krebs', 'K', 'les acides du cycle de Krebs'); }
+      // le nom de chaque molécule, écrit quand elle apparaît
+      if (!e.compact) {
+        const nom = (cle, de, jusqua, fn) => { if (e.p(de, .5, 1) > 0 && !(jusqua && e.des(jusqua))) e.ecrire(c, cle, fn); };
+        for (const m of ['sans', 'avec']) nom('n_glu_' + m, 't0', 't1', () => c.texte('glucose', G[m].X(66), 250, { couleur: 'jaune', taille: 17, align: 'center' }));
+        nom('n_pyr_sans', 't2', 't3_sans', () => c.texte('acide pyruvique', G.sans.X(234), 172, { couleur: 'jaune', taille: 17, align: 'center' }));
+        nom('n_pyr_avec', 't2', 't3_avec', () => c.texte('acide pyruvique', G.avec.X(240), 142, { couleur: 'jaune', taille: 17, align: 'center' }));
+        nom('n_eth', 't3_sans', 't4_sans', () => { c.texte('éthanol', G.sans.X(268), 180, { couleur: 'jaune', taille: 17, align: 'center' }); c.texte('CO_{2}', G.sans.X(240), 124, { couleur: 'jaune', taille: 17, align: 'center' }); });
+        nom('n_krebs', 't3_avec', 't5_avec', () => c.texte('acides de Krebs', G.avec.X(258), 271, { couleur: 'jaune', taille: 17, align: 'center' }));
+        nom('n_mito', 'deux_cultures', 't1', () => c.texte('mitochondrie', G.avec.X(262), 271, { couleur: 'orange', taille: 17, align: 'center' }));
+      }
+    }
+  }
+  /* 3. le tableau */
+  if (e.des('tableau')) tableau(c, e, G, aTab);
+  /* 4. ce qui s'écrit dessous */
+  const lignes = [];
+  if (e.p('glycolyse', .1, 1) > 0) lignes.push(['glycolyse', PHRASES.glycolyse[0] + PHRASES.glycolyse[1], 'jaune']);
+  if (e.p('t5_sans', .62, 1) > 0) lignes.push(['sans', PHRASES.sans, 'vert']);
+  if (e.p('t5_avec', .62, 1) > 0) lignes.push(['avec', PHRASES.avec, 'vert']);
+  if (e.compact) {
+    // téléphone : la phrase de l'étape en cours seulement, sinon la lecture de la culture montrée
+    const id = e.etape(), l = id === 'glycolyse' ? lignes[0] : id === 't5_sans' ? lignes.find(q => q[0] === 'sans') : id === 't5_avec' ? lignes.find(q => q[0] === 'avec') : null;
+    if (l && !e.bandeau) e.bandeau = { texte: l[1], couleur: l[2] === 'jaune' ? 'blanc' : l[2], repere: l[0] === 'glycolyse' ? 'glycolyse' : 'conclusion_' + l[0] };
+    else if (!e.bandeau && aPan > .9 && !e.des('tableau')) { const m = cultureMontree(e), i = indice(m === 'sans' ? tS : tA); if (i >= 0) e.bandeau = { texte: `T${i} ${m === 'sans' ? 'sans' : 'avec'} O_{2} — dehors : ${enMots(DOC[m].dehors[i])} ; dedans : ${enMots(DOC[m].dedans[i])}`, couleur: 'blanc', repere: 'lecture' }; }
+    return;
+  }
+  lignes.forEach(([id, s, coul], n) => {
+    if (id === 'glycolyse') {
+      const w0 = c.largeurTexte(PHRASES.glycolyse[0], Math.max(21, tf));
+      e.ecrire(c, 'l_gly', () => { c.texte(PHRASES.glycolyse[0], 10, YL[0], { couleur: 'jaune', taille: 21, gras: true }); c.texte(PHRASES.glycolyse[1], 10 + w0 + 4, YL[0], { couleur: 'blanc', taille: 17, max: L - 24 - w0 }); });
+      c.repere('glycolyse', 6, YL[0] - 20, w0 + 10, 26, 'le mot glycolyse, découpé : glyco (sucre), lyse (couper)');
+      c.repere('definition_glycolyse', 6, YL[0] - 20, L - 12, 26, 'glycolyse : glucose → 2 acides pyruviques, dans le hyaloplasme');
+    } else {
+      e.ecrire(c, 'l_' + id, () => c.texte(s, 10, YL[n], { couleur: coul, taille: 17 }));
+      c.repere('conclusion_' + id, 6, YL[n] - tf, c.largeurTexte(plat(s), tf) + 10, tf + 6, plat(s));
+    }
+  });
+}
+
+const cultureMontree = (e) => (e.des('t3_avec') ? 'avec' : (['t0', 't1', 't2', 'glycolyse'].includes(e.etape()) && Math.floor(e.horloge / 4) % 2 ? 'avec' : 'sans'));
+let TAB = null;
+function foyer(e) {
+  const G = geo(e.L), id = e.etape();
+  if (id === 'principe' || (id === 'deux_cultures' && e.p('deux_cultures') < .3)) return { x: e.L / 2 - 290, y: 50, w: 580, h: 260 };
+  if (id === 'tableau' && e.p('tableau') > .1 && TAB) return { x: TAB.x0 - 4, y: TAB.y0 - 4, w: TAB.W + 8, h: TAB.H + 8 };
+  if (id === 'deux_cultures') return { x: 0, y: 20, w: e.L, h: 300 };
+  const m = cultureMontree(e);
+  return { x: G[m].x0 - 4, y: 18, w: G[m].w + 8, h: 294 };
+}
+
+function voit(e) {
+  const tS = tauDe(e, 'sans'), tA = tauDe(e, 'avec'), iS = indice(tS), iA = indice(tA);
+  if (!e.des('deux_cultures')) return `Le principe du marquage : une grande molécule de glucose (chaîne de 6 billes jaunes)${e.p('principe', .2, 1) > 0 ? ', son dernier carbone clignote en vert : c’est le carbone radioactif ¹⁴C (la balise)' : ''}${e.p('principe', .45, 1) > 0 ? ' ; un compteur de radioactivité peint, sa sonde tournée vers ce carbone, l’aiguille monte et le voyant clignote' : ''}.`;
+  if (e.des('tableau')) return `Le tableau du document se remplit ligne par ligne (les valeurs volent des cultures vers leurs cases) : colonnes Sans O2 (dehors, dedans) et Avec O2 (dehors, dedans), lignes T0 à T5. Lignes déjà remplies : ${[0, 1, 2, 3, 4, 5].filter(k => e.p('tableau') >= .2 + k * .125 + .11).map(k => 'T' + k).join(', ') || 'aucune encore'}. ${e.vu('tableau') ? 'Tableau complet : T0 G+++ dehors des deux côtés ; T1 G++ dehors et dedans ; T2 P++++ dedans ; T3 sans O2 : E++, P++, CO2++ dedans, avec O2 : CO2+, K+, P++ dedans ; T4 sans O2 : E+, CO2++ dehors, E+, CO2+ dedans, avec O2 : CO2+ dehors, CO2+, K+ dedans ; T5 sans O2 : E++, CO2++ dehors, avec O2 : CO2++++ dehors.' : ''}`;
+  const lire = (m, i) => (i < 0 ? 'pas encore de glucose marqué' : `T${i} — dehors : ${plat(enMots(DOC[m].dehors[i]))} ; dedans : ${plat(enMots(DOC[m].dedans[i]))}`);
+  const ecrits = [e.p('glycolyse', .1, 1) > 0 ? '« glyco·lyse (glyco : sucre ; lyse : couper) : glucose → 2 acides pyruviques, dans le hyaloplasme »' : '', e.p('t5_sans', .62, 1) > 0 ? '« ' + plat(PHRASES.sans) + ' »' : '', e.p('t5_avec', .62, 1) > 0 ? '« ' + plat(PHRASES.avec) + ' »' : ''].filter(Boolean);
+  return `Deux cultures de levures côte à côte, chacune avec son milieu (dehors) et une cellule peinte (dedans : hyaloplasme, mitochondrie — grande à droite, petite à gauche). Chaque molécule marquée porte une balise verte qui clignote. Culture 1, sans O2 : ${lire('sans', iS)}. Culture 2, avec O2 : ${lire('avec', iA)}.${e.vu('t5_sans') && !e.des('t3_avec') ? ' La culture avec O2 est restée à T2 (acide pyruvique dans le hyaloplasme) : la suite n’est pas montrée.' : ''}${ecrits.length ? ' Écrit dessous : ' + ecrits.join(' ') : ''}`;
+}
+
+R.page({
+  id: 'svt_reference_marquage', vue: 'marquage', titre: 'Le glucose marqué au ¹⁴C', moments: MOMENTS, dessiner, foyer, voit, vivant: () => true,
+  texte: 'Glucose marqué au ¹⁴C donné à deux cultures de levures (sans O2, avec O2) ; on suit la radioactivité dehors (milieu) et dedans (cellule) de T0 à T5. T0 : G+++ dehors. T1 : G++ dehors, G++ dedans. T2 : P++++ dedans (acide pyruvique, dans le hyaloplasme, dans les deux cultures : glycolyse). Sans O2 : T3 E++, P++, CO2++ dedans ; T4 E+, CO2++ dehors, E+, CO2+ dedans ; T5 E++, CO2++ dehors. Avec O2 : T3 CO2+, K+, P++ dedans (mitochondrie) ; T4 CO2+ dehors, CO2+, K+ dedans ; T5 CO2++++ dehors.',
+  explications: [{ repere: 'carbone_marque', texte: 'Un carbone du glucose est radioactif : c’est une balise.' }, { repere: 'culture_sans', texte: 'Une culture sans dioxygène.' }, { repere: 'culture_avec', texte: 'Une culture avec dioxygène.' },
+    { repere: 'pyruvate', texte: 'Dans les deux cultures, le glucose devient acide pyruvique dans le hyaloplasme : la glycolyse.' }, { repere: 'ethanol', texte: 'Sans dioxygène : éthanol et CO2.' }, { repere: 'mitochondrie', texte: 'Avec dioxygène : l’acide pyruvique entre dans la mitochondrie.' }, { repere: 'tableau', texte: 'Le tableau du document.' }],
+  accueil: 'Suivre le glucose à la trace : une balise radioactive…', fini: 'Le début est le même (glycolyse) ; ensuite deux routes : éthanol + CO2 sans O2, mitochondrie avec O2.',
+  etat: (e) => ({ temps_sans_o2: 'T' + Math.max(0, indice(tauDe(e, 'sans'))), temps_avec_o2: 'T' + Math.max(0, indice(tauDe(e, 'avec'))), document: DOC }),
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
