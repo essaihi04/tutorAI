@@ -6,7 +6,9 @@
  *  - « Explication animée » : la diapositive du cours qui explique cette question, jouée par le même lecteur ;
  *  - « Plus facile » : la même notion en QCM, vrai/faux ou association, avec une réaction préparée par réponse ;
  *  - « Ma feuille » : la copie, où il rédige toute sa réponse (clavier, photo), gardée dans le navigateur ;
- *  - à la fin, un exercice SEMBLABLE (autres données) : sans aide ni version facile, le tuteur corrige seulement.
+ *  - à la fin, un exercice SEMBLABLE (autres données) : sans aide ni version facile, le tuteur corrige seulement ;
+ *  - « 📱 Avec mon téléphone » et « 📷 Toute ma feuille » (27/11/2026, comme l'évaluation du Tronc Commun) : le téléphone
+ *    suit la question du PC ; une seule photo de la feuille, découpée question par question, et chaque question corrigée.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -20,6 +22,8 @@ import { Touches, type MatiereClavier } from '../components/course/ClavierScient
 import { inscrireVoix, taireTout } from '../components/course/voixUnique';
 import { CLE_PROGRES, lireProgresLocal, pointsDe, pts, type EnonceExercice, type Exercice, type QuestionExercice } from '../components/exercice/types';
 import { jugerValeur } from '../components/exercice/juger';
+import { decouperParQuestions } from '../components/exercice/decouper';
+import { activerPhotoTelephone, BoutonTelephone, reduireImage, octets, suspendrePhotoTelephone, useVueTelephone, type VueTelephone } from '../components/course/photoTelephone';
 
 const CRAIE = "'Patrick Hand', 'Caveat', cursive";
 /** le sujet imprimé de l'examen (22 novembre 2026 : feuille blanche, écriture noire) */
@@ -57,7 +61,28 @@ type Etat = { essais: number; juste: boolean | null; retour?: string; note?: str
   verdict?: 'juste' | 'partiel' | 'faux' | 'nonjuge' | 'lecture'; partiel?: boolean;
   /** la note de cet essai et où les points sont perdus (barème réparti sur les éléments de la correction) */
   noteObtenue?: number; details?: Detail[] };
-type Ouvert = null | { genre: 'explication' | 'facile'; slide: CourseSlide } | { genre: 'feuille' };
+type Ouvert = null | { genre: 'explication' | 'facile'; slide: CourseSlide } | { genre: 'feuille' }
+  /** toute la feuille photographiée : `texte` déjà lu quand il vient du téléphone */
+  | { genre: 'toute'; texte?: string };
+
+/** « 1) … | 2) … » : toutes les questions, pour lire une feuille entière */
+const questionsDe = (en: EnonceExercice) => en.questions.map(x => `${x.id}) ${x.texte}`).join(' | ');
+/** les mots, symboles et grandeurs de l'exercice (comme `motsDuSujet` du mode classe) : pour lire une écriture difficile */
+function motsDeLExercice(en: EnonceExercice): string {
+  const sources = en.questions.flatMap(x => [x.texte, x.reponse.attendu, x.reponse.grandeur || '', x.reponse.unite || '',
+    ...x.correction.lignes.map(l => l.texte), ...(x.clavier?.aides || [])]);
+  const vus = new Set<string>();
+  const mots: string[] = [];
+  for (const m of sources.join(' ').split(/[\s,;:.!?«»"“”()[\]$\\{}]+/)) {
+    const t = m.replace(/^['’]+|['’]+$/g, '');
+    if (t.length < 2 || /^\d+([.,]\d+)?$/.test(t) || vus.has(t.toLowerCase())) continue;
+    vus.add(t.toLowerCase()); mots.push(t);
+  }
+  return mots.join(' ').slice(0, 1900);
+}
+/** la réponse découpée commence par son repère (« 2) », « Q3-a : ») : il ne doit pas être lu comme un nombre */
+const sansRepere = (id: string, t: string) =>
+  t.replace(new RegExp(`^\\s*(?:q(?:uestion)?\\s*)?${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[)\\]:.–-]?\\s*`, 'i'), '').trim();
 
 function deckDe(ex: Exercice, genre: 'explication' | 'facile', slide: CourseSlide): CourseDeck {
   return { id: `${ex.id}__${genre}__${slide.id}`, lesson_id: ex.id, title: ex.titre, mode: 'concentration', language: 'mixed',
@@ -101,8 +126,11 @@ export default function ExercicePage() {
   const diapo = useCallback((deck: 'explication' | 'facile', id?: string) =>
     ex?.[deck].activities.flatMap(a => a.slides).find(s => s.id === id), [ex]);
 
-  const repondre = async (texte: string) => {
-    if (!ex || !enonce || !q) return;
+  const repondre = (texte: string) => (q ? repondreA(q, texte) : Promise.resolve());
+  /** une réponse à la question `q` (la question ouverte, ou une question de la feuille entière) */
+  const repondreA = async (q: QuestionExercice, texte: string, silencieux = false) => {
+    if (!ex || !enonce) return;
+    const etat: Etat = etats[cle(q.id)] || { essais: 0, juste: null, correction: false };
     const essais = etat.essais + 1;
     const similaire = mode === 'similaire';
     if (q.reponse.type === 'valeur') {
@@ -118,7 +146,7 @@ export default function ExercicePage() {
         verdict: v.juste ? 'juste' : v.lu == null && !finie ? undefined : 'faux',
         retour: v.juste ? 'Le résultat est bon.' : finie ? `Pas tout à fait : la réponse est ${q.reponse.attendu}.`
           : (v.lu == null ? (v.note || 'Écris la valeur.') : 'Pas encore juste. Relis la question ; tu peux demander l’aide du tuteur.') });
-      if (finie) jouer(q.correction.audio);
+      if (finie && !silencieux) jouer(q.correction.audio);
       return;
     }
     poser(q.id, { essais, texte, retour: 'Le tuteur lit ta réponse…', verdict: 'lecture' });
@@ -131,7 +159,7 @@ export default function ExercicePage() {
     } catch {
       // sans le tuteur en ligne : l'élève compare lui-même avec la réponse attendue
       poser(q.id, { retour: '', autoEval: true, correction: true });
-      jouer(q.correction.audio);
+      if (!silencieux) jouer(q.correction.audio);
     }
   };
 
@@ -187,6 +215,24 @@ export default function ExercicePage() {
     return { finies, justes, total: enonce.questions.length, aidesTotal };
   }, [enonce, etats, aides, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // « 📱 Avec mon téléphone » (27/11/2026) : le téléphone ouvre moalim.online/telephone?t=CODE, sans compte
+  const [, setTelPret] = useState(false);
+  useEffect(() => { activerPhotoTelephone(`${location.origin}/telephone`); setTelPret(true); return () => suspendrePhotoTelephone(); }, []);
+  const vueTel: VueTelephone | null = ex && enonce && q ? {
+    titre: mode === 'similaire' ? ex.similaire.titre : ex.titre,
+    questions: enonce.questions.map(x => { const e = etats[cle(x.id)]; return { id: x.id, fait: !!e && (e.juste !== null || e.correction) }; }),
+    courante: { id: q.id, texte: q.texte, points: pointsDe(q), genre: q.reponse.type === 'valeur' ? 'valeur' : 'texte', matiere: ex.matiere,
+      aide: q.reponse.type === 'valeur' ? `${q.reponse.grandeur || 'résultat'} = … ${q.reponse.unite || ''}` : undefined },
+    resultat: etat.verdict && etat.verdict !== 'lecture' ? { verdict: etat.verdict, sur: pointsDe(q), retour: etat.retour, details: etat.details,
+      note: typeof etat.noteObtenue === 'number' ? etat.noteObtenue : etat.juste === true ? pointsDe(q) : etat.juste === false ? 0 : undefined } : null,
+    occupe: etat.verdict === 'lecture' ? 'Le tuteur lit ta réponse…' : undefined,
+    feuille: { n: enonce.questions.length, enonce: questionsDe(enonce).slice(0, 1300), vocabulaire: motsDeLExercice(enonce), matiere: ex.matiere },
+  } : null;
+  useVueTelephone(vueTel, m => {
+    if (m.type === 'aller') { const k = enonce?.questions.findIndex(x => x.id === m.question) ?? -1; if (k >= 0) { jouer(undefined); setQi(k); } }
+    else if (m.type === 'feuille') { jouer(undefined); setOuvert({ genre: 'toute', texte: m.texte }); }
+  });
+
   if (erreur) return <Plein><p className="text-slate-700">{erreur}</p><button className="mt-4 underline" onClick={() => navigate('/exercices')}>Retour aux exercices</button></Plein>;
   if (!ex || !enonce || !q || !bilan) return <Plein><p className="text-slate-600">Chargement de l’exercice…</p></Plein>;
   const nbAides = aides[cle(q.id)] || 0;
@@ -212,6 +258,9 @@ export default function ExercicePage() {
         {mode === 'similaire' && <span className="rounded border border-violet-700 px-2 py-0.5 text-sm text-violet-800">Exercice semblable : le tuteur corrige seulement</span>}
         <span className="rounded border border-black px-2 py-0.5 text-sm font-semibold">Note : {pts(note)} / {pts(total)}</span>
         <button onClick={() => setOuvert({ genre: 'feuille' })} className={BTN}>📝 Ma copie</button>
+        <button onClick={() => { jouer(undefined); setOuvert({ genre: 'toute' }); }} className={BTN}
+          title="Une seule photo de ta feuille : elle est découpée question par question, et chaque question est corrigée">📷 Toute ma feuille</button>
+        <BoutonTelephone clair />
         <button onClick={() => setSombre(x => !x)} className={BTN} aria-pressed={sombre} title={sombre ? 'Passer en mode clair' : 'Passer en mode sombre'}>
           <span style={sombre ? { filter: 'invert(1) hue-rotate(180deg)' } : undefined}>{sombre ? '☀️' : '🌙'}</span> {sombre ? 'Clair' : 'Sombre'}</button>
       </header>
@@ -383,7 +432,7 @@ export default function ExercicePage() {
       </div>
 
       {/* L'explication animée ou la version facile : le lecteur des cours, sur une seule diapositive */}
-      {ouvert && ouvert.genre !== 'feuille' && (
+      {(ouvert?.genre === 'explication' || ouvert?.genre === 'facile') && (
         <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0a18]/95 p-1 text-white sm:p-2">
           <div className="flex shrink-0 items-center gap-2 px-2 py-1">
             <p className="flex-1 truncate text-sm text-white/70">{ouvert.genre === 'explication' ? '🎬 Explication animée' : '🎯 Plus facile'} — question {q.id}</p>
@@ -395,6 +444,10 @@ export default function ExercicePage() {
         </div>)}
 
       {ouvert?.genre === 'feuille' && <div className="fixed inset-0 z-50" style={NUIT}><Feuille ex={ex} enonce={enonce} mode={mode} onFermer={() => setOuvert(null)} /></div>}
+      {ouvert?.genre === 'toute' && <div className="fixed inset-0 z-50" style={NUIT}>
+        <ToutLaFeuille key={ouvert.texte || 'pc'} ex={ex} enonce={enonce} texteLu={ouvert.texte} etatDe={id => etats[cle(id)]}
+          corriger={(x, t) => repondreA(x, t, true)} onFermer={() => setOuvert(null)}
+          onVoir={i => { setOuvert(null); setQi(i); }} /></div>}
       {!ouvert && <ClavierFlottant droite={0} bas={16} />}
     </div>
   );
@@ -445,6 +498,147 @@ function Feuille({ ex, enonce, mode, onFermer }: { ex: Exercice; enonce: EnonceE
             <button key={s} onClick={() => inserer(s)} className="rounded bg-white/15 px-2 py-0.5 text-sm hover:bg-white/25">{s}</button>))}</div>
           {clavierVu && <div className="max-h-[38vh] overflow-y-auto"><Touches matiere={MATIERE_CLAVIER[ex.matiere]} onTaper={inserer} /></div>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** 27/11/2026 : une seule photo de la feuille pour TOUT l'exercice (comme `PhotoExercice` du mode classe). Lue une fois
+ *  (sur ce PC, ou sur le téléphone relié qui envoie le texte), découpée entre les questions (repères « 1) », « 2-a : »…),
+ *  relue par l'élève, puis chaque question est corrigée comme une réponse tapée ; les notes s'affichent les unes sous les
+ *  autres. Une question déjà corrigée n'est pas renvoyée. */
+function ToutLaFeuille({ ex, enonce, texteLu, etatDe, corriger, onFermer, onVoir }: {
+  ex: Exercice; enonce: EnonceExercice; texteLu?: string; etatDe: (id: string) => Etat | undefined;
+  corriger: (q: QuestionExercice, texte: string) => Promise<void>; onFermer: () => void; onVoir: (i: number) => void;
+}) {
+  const qs = enonce.questions;
+  const decouper = (t: string) => {
+    const p = decouperParQuestions(t, qs.map(x => x.id));
+    return Object.fromEntries(qs.map(x => [x.id, sansRepere(x.id, p[x.id] || '')]));
+  };
+  const [phase, setPhase] = useState<'vide' | 'lecture' | 'relire' | 'envoi' | 'fini'>(texteLu ? 'relire' : 'vide');
+  const [mini, setMini] = useState('');
+  const [rep, setRep] = useState<Record<string, string>>(() => (texteLu ? decouper(texteLu) : {}));
+  const [erreur, setErreur] = useState('');
+  const [encours, setEncours] = useState('');
+  const dejaCorrigee = (x: QuestionExercice) => { const e = etatDe(x.id); return !!e && (e.correction || e.juste === true); };
+
+  const lire = async (f: File) => {
+    setPhase('lecture'); setErreur('');
+    try {
+      setMini(await reduireImage(f, 480, 0.6));
+      let img = await reduireImage(f, 1600, 0.82);
+      if (octets(img) > 2_500_000) img = await reduireImage(f, 1200, 0.7);
+      const r = await fetch('/api/v1/course-player/ocr-reponse', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton()}` },
+        body: JSON.stringify({ image_b64: img, image_mime: 'image/jpeg', title: ex.titre, matiere: ex.matiere, chapitre: ex.chapitre || '',
+          enonce: `Toutes les questions de l'exercice, chaque réponse commence par son numéro : ${questionsDe(enonce)}`.slice(0, 1500),
+          vocabulaire: motsDeLExercice(enonce) }),
+      });
+      if (!r.ok) {
+        const d = await r.json().then((x: { detail?: unknown }) => (typeof x?.detail === 'string' ? x.detail : '')).catch(() => '');
+        throw new Error(d || 'La photo n’a pas pu être lue : réessaie, bien éclairée, toute la feuille dans le cadre.');
+      }
+      const { texte } = await r.json() as { texte: string };
+      setRep(decouper(texte || ''));
+      setPhase('relire');
+    } catch (err) {
+      setPhase('vide');
+      setErreur((err as Error).message);
+    }
+  };
+
+  const toutCorriger = async () => {
+    setPhase('envoi');
+    for (const x of qs) {
+      const t = (rep[x.id] || '').trim();
+      if (!t || dejaCorrigee(x)) continue;
+      setEncours(x.id);
+      try { await corriger(x, t); } catch { /* la question garde son état : l'élève la reprend seule */ }
+    }
+    setEncours('');
+    setPhase('fini');
+  };
+
+  const BTN = 'rounded-md border border-slate-400 bg-white px-3 py-1.5 text-sm text-slate-900 hover:bg-slate-100';
+  const VERDICT: Record<string, [string, string]> = {
+    juste: ['✔ Juste', 'text-emerald-700'], partiel: ['◐ Juste en partie', 'text-amber-700'], faux: ['✘ Pas encore juste', 'text-rose-700'],
+    nonjuge: ['? Pas jugé : précise ta réponse', 'text-slate-600'], lecture: ['Le tuteur lit ta réponse…', 'text-sky-700'],
+  };
+  const note = (x: QuestionExercice, e?: Etat) => !e ? null : typeof e.noteObtenue === 'number' ? e.noteObtenue : e.juste === true ? pointsDe(x) : e.juste === false ? 0 : null;
+  const total = qs.reduce((n, x) => n + (note(x, etatDe(x.id)) || 0), 0);
+  const sur = qs.reduce((n, x) => n + pointsDe(x), 0);
+  const aEnvoyer = qs.filter(x => (rep[x.id] || '').trim() && !dejaCorrigee(x)).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/70 p-2 sm:p-4" style={{ fontFamily: 'system-ui, sans-serif' }}>
+      <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-2">
+          <p className="flex-1 font-semibold">📷 Toute ma feuille — {ex.titre}</p>
+          <BoutonTelephone petit clair />
+          <button onClick={onFermer} disabled={phase === 'envoi'} className="rounded-full bg-slate-200 px-3 py-1 text-sm hover:bg-slate-300 disabled:opacity-40">Fermer</button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {(phase === 'vide' || phase === 'lecture') && (<>
+            <div className="flex flex-wrap gap-2">
+              <label className={`flex-1 cursor-pointer rounded-xl px-4 py-4 text-center text-lg font-bold text-white ${phase === 'lecture' ? 'animate-pulse bg-sky-700' : 'bg-indigo-800 hover:bg-indigo-900'}`}>
+                {phase === 'lecture' ? '📷 Lecture de toute la feuille…' : `📷 Photographier ma feuille (${qs.length} questions)`}
+                <input type="file" accept="image/*" capture="environment" className="hidden" disabled={phase === 'lecture'}
+                  onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void lire(f); }} />
+              </label>
+              <label className={`cursor-pointer rounded-xl border-2 border-indigo-800 px-4 py-4 text-center text-lg font-semibold text-indigo-900 hover:bg-indigo-50 ${phase === 'lecture' ? 'pointer-events-none opacity-40' : ''}`}
+                title="Choisir une photo déjà prise (galerie, fichier)">📁
+                <input type="file" accept="image/*" className="hidden" disabled={phase === 'lecture'}
+                  onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void lire(f); }} />
+              </label>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">Écris toutes tes réponses sur ta feuille ; <b>chaque réponse commence par son numéro</b> ({qs.slice(0, 3).map(x => `${x.id})`).join(', ')}…). La feuille est découpée question par question, tu vérifies, puis chaque question est corrigée.</p>
+            <p className="mt-1 text-sm text-slate-600">Sur ordinateur : relie ton téléphone (📱) et photographie la feuille avec lui.</p>
+          </>)}
+          {erreur && <p className="mt-2 rounded-md bg-rose-50 p-2 text-sm text-rose-800">{erreur}</p>}
+
+          {phase !== 'vide' && phase !== 'lecture' && (<>
+            <div className="mb-3 flex items-start gap-3">
+              {mini && <img src={mini} alt="Ta feuille" className="h-24 w-20 shrink-0 rounded border object-cover" />}
+              <p className="text-[15px] text-slate-700">{phase === 'relire' ? (texteLu ? 'Ta feuille, photographiée avec ton téléphone, découpée question par question : corrige si besoin, puis lance la correction.' : 'Voici ta feuille découpée question par question : corrige si besoin, puis lance la correction.')
+                : phase === 'envoi' ? 'Le tuteur corrige chaque question…' : <>Note de l’exercice : <b className="text-lg">{pts(total)} / {pts(sur)}</b></>}</p>
+            </div>
+            <ol className="space-y-3">
+              {qs.map((x, i) => {
+                const e = etatDe(x.id);
+                const deja = dejaCorrigee(x);
+                const n = note(x, e);
+                const v = e?.verdict ? VERDICT[e.verdict] : undefined;
+                return (
+                  <li key={x.id} className="rounded-lg border border-slate-300 p-2">
+                    <div className="flex items-start gap-2">
+                      <p className="flex-1 text-[15px]"><b>Question {x.id}</b> <span className="text-slate-500">({pts(pointsDe(x))} pt)</span> — <Formule t={x.texte} /></p>
+                      {phase !== 'relire' && n !== null && <b className={`text-lg ${n > 0 ? 'text-emerald-700' : 'text-rose-700'}`} style={{ fontFamily: CRAIE }}>{pts(n)} / {pts(pointsDe(x))}</b>}
+                    </div>
+                    {phase === 'relire' && (deja
+                      ? <p className="mt-1 text-sm text-slate-500">Déjà corrigée : elle ne sera pas renvoyée.</p>
+                      : <textarea value={rep[x.id] || ''} onChange={ev => setRep(s => ({ ...s, [x.id]: ev.target.value }))} dir="auto"
+                          rows={Math.min(8, Math.max(2, (rep[x.id] || '').split('\n').length + 1))} placeholder="Rien trouvé pour cette question sur la feuille : écris-la, ou laisse vide"
+                          className="mt-1 w-full rounded-md border border-slate-400 p-2 text-[18px]" style={{ fontFamily: CRAIE }} />)}
+                    {phase !== 'relire' && (encours === x.id
+                      ? <p className="mt-1 animate-pulse text-sm text-sky-800">Le tuteur corrige…</p>
+                      : v ? (<>
+                        <p className={`mt-1 text-[15px] font-semibold ${v[1]}`}>{v[0]}</p>
+                        {e?.retour && e.verdict !== 'lecture' && <p className="text-[16px]" style={{ fontFamily: CRAIE }}><Formule t={e.retour} /></p>}
+                      </>) : !(rep[x.id] || '').trim() && <p className="mt-1 text-sm text-slate-500">Pas de réponse sur la feuille.</p>)}
+                    {phase === 'fini' && <button onClick={() => onVoir(i)} className="mt-1 text-sm text-sky-800 underline">Voir la question{e?.correction ? ' et sa correction' : ' (réessayer, aide du tuteur)'}</button>}
+                  </li>);
+              })}
+            </ol>
+          </>)}
+        </div>
+        {(phase === 'relire' || phase === 'fini') && (
+          <div className="flex flex-wrap gap-2 border-t border-slate-200 p-3">
+            {phase === 'relire' && <button disabled={!aEnvoyer} onClick={() => void toutCorriger()} className="rounded-lg bg-black px-5 py-2 font-semibold text-white disabled:opacity-40">
+              Corriger {aEnvoyer > 1 ? `les ${aEnvoyer} réponses` : 'la réponse'}</button>}
+            <button onClick={() => { setPhase('vide'); setRep({}); setMini(''); setErreur(''); }} className={BTN}>{phase === 'fini' ? 'Nouvelle photo' : 'Reprendre la photo'}</button>
+            {phase === 'fini' && <button onClick={onFermer} className={`ml-auto ${BTN}`}>Revenir à l’exercice</button>}
+          </div>)}
       </div>
     </div>
   );

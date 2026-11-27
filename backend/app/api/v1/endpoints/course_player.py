@@ -315,7 +315,10 @@ class OcrReponseRequest(BaseModel):
     lead: str = Field(default="", max_length=500)
     matiere: str = Field(default="", max_length=60)
     chapitre: str = Field(default="", max_length=300)
-    enonce: str = Field(default="", max_length=600)        # la question à laquelle il répond, s'il y en a une
+    # la question à laquelle il répond ; 1500 : toutes les questions d'un exercice photographié en une fois (27/11/2026)
+    enonce: str = Field(default="", max_length=1500)
+    #: les mots, symboles et grandeurs du sujet (comme le mode classe), quand la question n'est pas dans un cours
+    vocabulaire: str = Field(default="", max_length=2000)
 
 
 def matiere_du_cours(deck_id: str, deck: Optional[dict]) -> str:
@@ -373,7 +376,7 @@ def _textes(x, sortie: list[str]) -> None:
 def mots_du_sujet(body: OcrReponseRequest, deck: Optional[dict]) -> str:
     """Les mots de la question (énoncé, choix, réponse attendue), comme `motsDuSujet` du mode classe : pour lire une
     écriture difficile. La question est retrouvée dans le cours par son énoncé, sinon par le titre de sa diapositive."""
-    sources = [body.title, body.lead, body.enonce]
+    sources = [body.title, body.lead, body.enonce, body.vocabulaire]
     cible = " ".join(body.enonce.split())
     titre = " ".join(body.title.split())
 

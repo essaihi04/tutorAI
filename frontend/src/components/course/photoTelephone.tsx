@@ -48,6 +48,8 @@ async function json<T>(r: Response): Promise<T> {
 let LIEN = '';
 /** à appeler par la page d'un lien libre ; `lien` : l'adresse de la page (location.origin + location.pathname) */
 export function activerPhotoTelephone(lien: string) { LIEN = lien; if (canal) setTimeout(demarrer, 0); }
+/** 27/11/2026 : une page du site principal (les exercices) quitte : le bouton disparaît, le canal reste pour la suivante */
+export function suspendrePhotoTelephone() { LIEN = ''; window.clearInterval(minuteur); minuteur = undefined; }
 export const photoTelephoneActive = () => !!LIEN;
 /** « moalim.online/tronc-commun/?t=K7P4QX » (sans https:// : c'est ce qu'on tape) */
 export const lienCourt = (code: string, base = LIEN, cle = 't') => `${base.replace(/^https?:\/\//, '').replace(/\?.*$/, '')}?${cle}=${code}`;
@@ -86,11 +88,15 @@ export type VueTelephone = {
   occupe?: string;
   /** un champ de réponse est ouvert sur le PC (le texte du téléphone s'y écrit) */
   champ?: boolean;
+  /** 27/11/2026 : « 📷 Photographier toute ma feuille » — une seule photo pour toutes les questions de l'exercice */
+  feuille?: { n: number; enonce: string; vocabulaire?: string; matiere?: string };
 };
 export type MessageTelephone =
   | { type: 'aller'; question: string }
   | { type: 'texte'; texte: string; rendre?: boolean }
-  | { type: 'choix'; choix: (number | boolean | null)[]; rendre?: boolean; question?: string };
+  | { type: 'choix'; choix: (number | boolean | null)[]; rendre?: boolean; question?: string }
+  /** la feuille de tout l'exercice, lue sur le téléphone : le PC la découpe question par question */
+  | { type: 'feuille'; texte: string };
 
 // ── Le PC : un canal par page ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -281,12 +287,13 @@ const VERDICTS: Record<string, [string, string]> = {
 };
 const virgule = (x: number) => String(Math.round(x * 100) / 100).replace('.', ',');
 
-/** La photo de la feuille, lue sur le téléphone : la page du lien libre envoie `/course-player/ocr-reponse` à sa route publique. */
-async function lireFeuille(f: File, enonce: string, matiere?: string): Promise<string> {
+/** La photo de la feuille, lue pour le téléphone par le relais (`/public/relais/{code}/lire`, même lecture que
+ *  `/course-player/ocr-reponse`) : marche sur les liens libres comme sur le site principal, sans compte (27/11/2026). */
+async function lireFeuille(code: string, f: File, enonce: string, matiere?: string, vocabulaire?: string): Promise<string> {
   let img = await reduireImage(f, 1600, 0.82);
   if (octets(img) > 2_500_000) img = await reduireImage(f, 1200, 0.7);
-  const d = await json<{ texte: string }>(await fetch('/api/v1/course-player/ocr-reponse', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image_b64: img, image_mime: 'image/jpeg', enonce: enonce.slice(0, 600), matiere: matiere || '' }) }));
+  const d = await json<{ texte: string }>(await fetch(`${API}/${code}/lire`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image_b64: img, image_mime: 'image/jpeg', enonce: enonce.slice(0, 1500), matiere: matiere || '', vocabulaire: (vocabulaire || '').slice(0, 2000) }) }));
   return (d.texte || '').trim();
 }
 
@@ -300,6 +307,7 @@ export function PageTelephone({ code: initial, titre = 'Moalim' }: { code: strin
   const [choix, setChoix] = useState<(number | boolean | null)[]>([]);
   const [lecture, setLecture] = useState(false);
   const [rendu, setRendu] = useState('');
+  const [feuilleLue, setFeuilleLue] = useState<'' | 'lecture' | 'envoyee'>('');
   const version = useRef(0);
   const champ = useRef<HTMLTextAreaElement>(null);
   const attente = useRef<number | undefined>(undefined);
@@ -355,7 +363,7 @@ export function PageTelephone({ code: initial, titre = 'Moalim' }: { code: strin
     setLecture(true); setErreur('');
     try {
       const items = (q?.items || []).map((it, j) => `${String.fromCharCode(97 + j)}) ${it.texte}${it.choix ? ' ' + it.choix.map((c, m) => `${String.fromCharCode(65 + m)}. ${c}`).join(' ') : ''}`).join(' ');
-      const lu = await lireFeuille(f, [q?.texte || '', items].filter(Boolean).join(' '), q?.matiere);
+      const lu = await lireFeuille(code, f, [q?.texte || '', items].filter(Boolean).join(' '), q?.matiere);
       if (!lu) { setErreur('Rien de lisible sur la photo : reprends-la de plus près, bien éclairée.'); return; }
       if (q?.genre === 'qcm' || q?.genre === 'vf') {
         const c = choixDuTexte(q.genre, q.items?.length || 0, lu);
@@ -364,6 +372,20 @@ export function PageTelephone({ code: initial, titre = 'Moalim' }: { code: strin
     } catch (e) {
       setErreur((e as Error).message.replace(/^\d+$/, 'La photo n’a pas pu être lue : réessaie, ou écris ta réponse.'));
     } finally { setLecture(false); }
+  };
+  const photoFeuille = async (f: File) => {
+    const fe = vue?.feuille;
+    if (!fe) return;
+    setFeuilleLue('lecture'); setErreur('');
+    try {
+      const lu = await lireFeuille(code, f, `Toutes les questions de l'exercice, chaque réponse commence par son numéro : ${fe.enonce}`, fe.matiere, fe.vocabulaire);
+      if (!lu) { setFeuilleLue(''); setErreur('Rien de lisible sur la photo : reprends-la bien éclairée, toute la feuille dans le cadre.'); return; }
+      await envoyer({ type: 'feuille', texte: lu.slice(0, 4000) });
+      setFeuilleLue('envoyee');
+    } catch (e) {
+      setFeuilleLue('');
+      setErreur((e as Error).message.replace(/^\d+$/, 'La photo n’a pas pu être lue : réessaie, bien éclairée.'));
+    }
   };
   const rendre = () => {
     window.clearTimeout(attente.current); attente.current = undefined;
@@ -398,6 +420,17 @@ export function PageTelephone({ code: initial, titre = 'Moalim' }: { code: strin
             {qs.map(x => <option key={x.id} value={x.id}>Question {x.id}{x.fait ? ' ✔' : ''}</option>)}
           </select>
           <button disabled={k < 0 || k >= qs.length - 1} onClick={() => void envoyer({ type: 'aller', question: qs[k + 1].id })} className="rounded-lg border border-white/30 px-3 py-1.5 disabled:opacity-30" aria-label="Question suivante">→</button>
+        </div>)}
+      {vue?.feuille && (
+        <div className="mt-2 rounded-xl border border-indigo-300/50 bg-indigo-900/40 p-2">
+          <label className={`block cursor-pointer rounded-xl px-4 py-3 text-center text-[17px] font-bold ${feuilleLue === 'lecture' ? 'animate-pulse bg-sky-700' : 'bg-indigo-600 active:bg-indigo-800'}`}>
+            {feuilleLue === 'lecture' ? '📷 Lecture de toute la feuille…' : `📷 Photographier toute ma feuille (${vue.feuille.n} questions)`}
+            <input type="file" accept="image/*" capture="environment" className="hidden" disabled={feuilleLue === 'lecture'}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void photoFeuille(f); }} />
+          </label>
+          <p className="mt-1 text-xs text-white/70">{feuilleLue === 'envoyee'
+            ? '✓ Feuille envoyée à ton PC : vérifie le découpage question par question, puis lance la correction.'
+            : 'Chaque réponse commence par son numéro (1, 2, 3-a…) : le PC découpe la feuille et corrige chaque question.'}</p>
         </div>)}
       <div className="mt-2 grid gap-2 [@media(orientation:landscape)_and_(max-height:520px)]:grid-cols-2">
         <div className="rounded-xl border border-white/15 bg-white/5 p-3">

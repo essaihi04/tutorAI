@@ -42,8 +42,8 @@ MAX_MESSAGE = 5_000
 MAX_EN_ATTENTE = 60
 #: le téléphone est « relié » s'il est venu dans ces dernières secondes
 PRESENCE = 15
-LIMITES_CANAL = {"message": (3000, 3600), "vue": (6000, 3600)}
-LIMITES_IP = {"ouvrir": (60, 3600), "message": (20000, 3600), "inconnu": (120, 3600)}
+LIMITES_CANAL = {"message": (3000, 3600), "vue": (6000, 3600), "lire": (40, 3600)}
+LIMITES_IP = {"ouvrir": (60, 3600), "message": (20000, 3600), "inconnu": (120, 3600), "lire": (300, 3600)}
 
 _appels: dict[tuple[str, str], deque] = defaultdict(deque)
 
@@ -203,6 +203,25 @@ async def message(code: str, body: Message, request: Request):
     k.telephone_vu = time.monotonic()
     k.toucher()
     return {"ok": True, "n": k.numero}
+
+
+@router.post("/{code}/lire")
+async def lire(code: str, request: Request):
+    """27/11/2026 : le téléphone relié photographie la feuille (une réponse, ou tout l'exercice) ; la photo est lue ici,
+    comme `/course-player/ocr-reponse` (Claude, règles du mode classe), et le texte revient au téléphone.
+    Seulement pour le téléphone d'un canal ouvert (le code sert de clé), plafonné par canal et par adresse."""
+    from app.api.v1.endpoints import course_player as cp
+
+    k = _canal(code, request)
+    _plafond("c:" + k.code, "lire", LIMITES_CANAL["lire"])
+    _plafond("ip:" + _ip(request), "lire", LIMITES_IP["lire"])
+    try:
+        body = cp.OcrReponseRequest(**(await request.json()))
+    except Exception:  # noqa: BLE001
+        raise HTTPException(422, "Photo illisible.") from None
+    k.telephone_vu = time.monotonic()
+    k.toucher()
+    return await cp.ocr_reponse(body, {"id": f"relais-{k.code}"})
 
 
 @router.delete("/{code}")

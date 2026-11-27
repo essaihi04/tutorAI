@@ -15,6 +15,7 @@ const Progress = lazy(() => import('./pages/Progress'));
 const CourseLibrary = lazy(() => import('./pages/CourseLibrary'));
 const ExercicesHub = lazy(() => import('./pages/ExercicesHub'));
 const ExercicePage = lazy(() => import('./pages/ExercicePage'));
+const TelephoneExercice = lazy(() => import('./pages/TelephoneExercice'));
 const LearningSession = lazy(() => import('./pages/LearningSession'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const ExamExtractor = lazy(() => import('./pages/ExamExtractor'));
@@ -78,6 +79,8 @@ export default function App() {
           {import.meta.env.DEV && <Route path="/dev/memoire" element={<MemoireAudit />} />}
           {import.meta.env.DEV && <Route path="/dev/professeur-labo" element={<ProfesseurLaboAudit />} />}
           {import.meta.env.DEV && <Route path="/dev/exercices/:exerciceId" element={<ExercicePage />} />}
+          {/* le téléphone relié à la page d'un exercice (27/11/2026) : sans compte, le code du canal suffit */}
+          <Route path="/telephone" element={<TelephoneExercice />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/inscription" element={<RegisterInterest />} />
