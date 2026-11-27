@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La centrifugation fractionnée — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Vue principe : une essoreuse à salade peinte qui tourne et chasse l'eau vers le bord, puis un tube qui tourne autour d'un axe, ses grains lourds se déposent au fond (le culot), le liquide au-dessus est le surnageant. Vue étapes : des fragments de foie dans une solution de saccharose, le piston du broyeur fait éclater les cellules, la centrifugeuse tourne à faible vitesse et les noyaux forment un culot, le surnageant est versé dans un nouveau tube, centrifugé à grande vitesse : culot riche en mitochondries"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference2.js"></script>
+<script>
+/*
+ * La centrifugation (cours de référence SVT, diapositives rf_m1_principe et rf_m1_etapes), 27 novembre 2026.
+ *   ?vue=principe (défaut) : manege (l'essoreuse à salade : en tournant vite, l'eau est chassée vers le bord) → tube (un tube
+ *     qui tourne autour d'un axe, grains lourds et légers) → culot (les lourds au fond = culot, le liquide = surnageant).
+ *   ?vue=etapes : foie (fragments de foie dans la solution de saccharose) → broyage (le piston écrase, les cellules éclatent :
+ *     noyaux et mitochondries libérés, dans la loupe) → centri1 (la centrifugeuse tourne à faible vitesse, le compteur monte)
+ *     → culot_noyaux (les noyaux se déposent un à un au fond du tube agrandi) — ARRÊT pour l'observation : les petits grains
+ *     orange restent en suspension, rien ne les nomme dans le tube — → surnageant (versé dans un nouveau tube) → centri2
+ *     (grande vitesse) → culot_mitochondries (elles se déposent une à une) → bilan (les deux culots, comptés 1 et 2).
+ * Document du professeur : aucune valeur chiffrée (« faible vitesse », « grande vitesse ») ; les tours par minute de
+ * l'afficheur (1 000 puis 12 000) ne sont qu'un ordre de grandeur pour l'œil. Les rotations sont calculées sur t : une image
+ * figée est stable. Noyau = violet du lexique, mitochondrie = Lexique.mitochondrie. La verrerie (tube conique de
+ * centrifugation qui s'incline, broyeur à piston) est peinte ici : Lexique.chimie.tube est un tube à essais droit, sans culot.
+ */
+const R2 = window.Ref2, P = window.SVTPeinture, LX = window.Lexique, { mix, doux, borne, rgba, TAU } = R2;
+const VUE = R2.QS.get('vue') === 'etapes' ? 'etapes' : 'principe';
+const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+/* Profil de vitesse en trapèze (monte sur [0, a], plein sur [a, b], redescend sur [b, 1]) et son intégrale. */
+const trapV = (u, a, b) => (u <= 0 || u >= 1 ? 0 : u < a ? u / a : u > b ? (1 - u) / (1 - b) : 1);
+const trapI = (u, a, b) => { u = borne(u); if (u < a) return u * u / (2 * a); if (u <= b) return a / 2 + (u - a); const d = 1 - b, x = u - b; return a / 2 + (b - a) + x - x * x / (2 * d); };
+
+/* ── La verrerie peinte ─────────────────────────────────────────────────────────────────────────── */
+const fond = (w, rond) => (rond ? .5 : .95) * w;
+function formeTube(ctx, w, h, rond) {
+  const b = fond(w, rond); ctx.beginPath(); ctx.moveTo(-w / 2, 0); ctx.lineTo(-w / 2, h - b);
+  ctx.bezierCurveTo(-w / 2, h - b * .35, -w * .2, h, 0, h); ctx.bezierCurveTo(w * .2, h, w / 2, h - b * .35, w / 2, h - b); ctx.lineTo(w / 2, 0);
+}
+/** Demi-largeur intérieure du tube à la profondeur y. */
+function demi(y, w, h, rond) { const b = fond(w, rond); if (y <= h - b) return w / 2; const v = (y - (h - b)) / b; return w / 2 * Math.sqrt(Math.max(0, 1 - v * v * .97)); }
+/**
+ * Un tube de verre : (x, y) = milieu de l'ouverture, o.ang (rotation autour de l'ouverture), o.liq (teinte), o.niveau
+ * (ligne de surface, relative à l'ouverture : horizontale dans le monde, ou le long du tube si o.local), contenu(ctx) dessiné
+ * dans le verre (coordonnées du tube : x de −w/2 à w/2, y de 0 à h).
+ */
+function tube(ctx, x, y, w, h, o = {}, contenu) {
+  const a = o.alpha ?? 1; if (a <= .02) return;
+  ctx.save(); ctx.globalAlpha *= a; ctx.translate(x, y); if (o.ang) ctx.rotate(o.ang);
+  ctx.fillStyle = 'rgba(200,225,240,.10)'; formeTube(ctx, w, h, o.rond); ctx.fill();
+  ctx.save(); formeTube(ctx, w, h, o.rond); ctx.closePath(); ctx.clip();
+  if (o.liq) {
+    ctx.save(); if (o.ang && !o.local) ctx.rotate(-o.ang);
+    const g = ctx.createLinearGradient(0, o.niveau, 0, o.niveau + h), la = o.la ?? .5;
+    g.addColorStop(0, rgba(o.liq.map(v => Math.min(255, v + 30)), la)); g.addColorStop(1, rgba(o.liq, la + .2));
+    ctx.fillStyle = g; ctx.fillRect(-h * 1.3, o.niveau, h * 2.6, h * 2.6);
+    ctx.fillStyle = 'rgba(240,248,255,.55)'; ctx.fillRect(-h * 1.3, o.niveau - .8, h * 2.6, 1.6);
+    ctx.restore();
+  }
+  contenu && contenu(ctx);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(225,240,252,.9)'; ctx.lineWidth = o.trait ?? 2; formeTube(ctx, w, h, o.rond); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(0, 0, w / 2 + 2, Math.max(1.5, w * .06), 0, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = Math.max(1, w * .09); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-w / 2 + w * .17, w * .2); ctx.lineTo(-w / 2 + w * .17, h - w * 1.05); ctx.stroke();
+  if (o.grad) { ctx.strokeStyle = 'rgba(225,240,252,.4)'; ctx.lineWidth = 1; for (let i = 1; i < 6; i++) { const yy = h * i / 7 + 6; ctx.beginPath(); ctx.moveTo(w / 2 - 9, yy); ctx.lineTo(w / 2 - 2, yy); ctx.stroke(); } }
+  ctx.restore();
+}
+/** Les places d'un dépôt de n grains de rayon r au fond du tube (du fond vers le haut). */
+function pile(n, r, w, h, rond, serre = 1.72) {
+  const out = []; let y = h - r - 3;
+  while (out.length < n && y > 0) {
+    const hw = Math.max(0, demi(y + r * .7, w, h, rond) - r - 2.5), k = Math.floor(hw / r) + 1, pas = k > 1 ? 2 * hw / (k - 1) : 0;
+    for (let i = 0; i < k && out.length < n; i++) out.push([k > 1 ? -hw + i * pas : 0, y]);
+    y -= r * serre;
+  }
+  return out;
+}
+/** n places au hasard (fixe) dans le liquide du tube. */
+function semis(n, graine, r, w, h, rond, haut) {
+  const g = P.graine(graine), out = [];
+  for (let i = 0; i < n; i++) { const y = haut + r + g() * (h - haut - 3 * r - 6), hw = Math.max(0, demi(y + r, w, h, rond) - r - 3); out.push([(g() * 2 - 1) * hw, y, g() * TAU]); }
+  return out;
+}
+/** Un noyau libre : boule violette du lexique, avec son nucléole. */
+function noyau(ctx, x, y, r, a = 1) {
+  if (a <= .02) return;
+  ctx.save(); ctx.globalAlpha *= a;
+  const g = ctx.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r);
+  g.addColorStop(0, rgba([210, 180, 255], .98)); g.addColorStop(.6, rgba(P.T.noyau, .96)); g.addColorStop(1, rgba([78, 50, 150], .98));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.strokeStyle = rgba([60, 36, 120], .9); ctx.lineWidth = Math.max(.8, r * .12); ctx.stroke();
+  ctx.fillStyle = rgba([60, 30, 120], .7); ctx.beginPath(); ctx.arc(x + r * .25, y + r * .18, r * .3, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+/** Une petite mitochondrie libre (celle du lexique, en petit). */
+function mito(ctx, x, y, rx, ang, a = 1) {
+  if (a <= .02) return;
+  ctx.save(); ctx.globalAlpha *= a; LX.mitochondrie(ctx, x, y, rx, rx * .52, { angle: ang, cretes: rx > 9 ? 4 : 3, grains: 0 }); ctx.restore();
+}
+
+/* ══ Vue « principe » ══════════════════════════════════════════════════════════════════════════════ */
+const FEUILLES = (() => { const g = P.graine(5), out = []; for (let i = 0; i < 11; i++) out.push([.15 + g() * .45, g() * TAU, 13 + g() * 9, g() * TAU, g()]); return out; })();
+function essoreuse(ctx, cx, cy, R, ang, k, t) {
+  ctx.save();
+  // le bol transparent, son ombre
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(cx + 4, cy + 8, R * 1.02, R * 1.02, 0, 0, TAU); ctx.fill();
+  const gb = ctx.createRadialGradient(cx - R * .3, cy - R * .35, R * .1, cx, cy, R);
+  gb.addColorStop(0, 'rgba(225,240,248,.30)'); gb.addColorStop(.8, 'rgba(170,205,225,.20)'); gb.addColorStop(1, 'rgba(235,245,252,.45)');
+  ctx.fillStyle = gb; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(235,245,252,.85)'; ctx.lineWidth = 3; ctx.stroke();
+  // l'eau chassée contre la paroi du bol
+  if (k > 0) { ctx.strokeStyle = rgba([90, 180, 240], .3 + .6 * k); ctx.lineWidth = 2 + 7 * k; ctx.beginPath(); ctx.arc(cx, cy, R - 5, 0, TAU); ctx.stroke(); }
+  // le panier à fentes (il tourne)
+  const rp = R * .8;
+  ctx.fillStyle = 'rgba(70,170,90,.22)'; ctx.beginPath(); ctx.arc(cx, cy, rp, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(96,205,120,.95)'; ctx.lineWidth = 7; ctx.stroke();
+  ctx.strokeStyle = 'rgba(12,50,26,.85)'; ctx.lineWidth = 2.6;
+  for (let i = 0; i < 28; i++) { const a = ang + i * TAU / 28; ctx.beginPath(); ctx.moveTo(cx + (rp - 3.4) * Math.cos(a), cy + (rp - 3.4) * Math.sin(a)); ctx.lineTo(cx + (rp + 3.4) * Math.cos(a), cy + (rp + 3.4) * Math.sin(a)); ctx.stroke(); }
+  // la salade : des feuilles plaquées vers le panier quand ça tourne
+  for (const [d, a0, s, rot, v] of FEUILLES) {
+    const d2 = mix(d, .5 + .22 * v, k) * rp, a = a0 + ang, x = cx + d2 * Math.cos(a), y = cy + d2 * Math.sin(a);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot + ang);
+    const g = ctx.createRadialGradient(-s * .3, -s * .3, 1, 0, 0, s); g.addColorStop(0, rgba([190, 235, 120], .98)); g.addColorStop(1, rgba([60 + 40 * v, 150 + 30 * v, 60], .96));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-s, 0); ctx.bezierCurveTo(-s * .6, -s * .9, s * .5, -s * .8, s, -s * .1); ctx.bezierCurveTo(s * .7, s * .7, -s * .4, s * .9, -s, 0); ctx.fill();
+    ctx.strokeStyle = 'rgba(225,250,190,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-s * .8, 0); ctx.quadraticCurveTo(0, -s * .15, s * .8, -s * .05); ctx.stroke();
+    ctx.restore();
+  }
+  // les gouttes d'eau qui traversent le panier et filent vers le bord
+  if (k > 0) for (let i = 0; i < 30; i++) {
+    const p = (t * 1.25 + i * .618) % 1, a = i * 2.399 + ang * .55 + p * .7, rr = mix(rp * .92, R - 7, p);
+    LX.bille(ctx, cx + rr * Math.cos(a), cy + rr * Math.sin(a), 3.6, [150, 215, 255], { alpha: k * (1 - p * .5) });
+  }
+  // le couvercle : le bouton et sa manivelle
+  ctx.fillStyle = 'rgba(40,46,56,.95)'; ctx.beginPath(); ctx.arc(cx, cy, R * .17, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(190,200,214,.95)'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + R * .34 * Math.cos(ang * 1.0), cy + R * .34 * Math.sin(ang * 1.0)); ctx.stroke();
+  LX.bille(ctx, cx + R * .34 * Math.cos(ang), cy + R * .34 * Math.sin(ang), 6.5, [230, 90, 70]);
+  LX.bille(ctx, cx, cy, 5, [150, 158, 172]);
+  ctx.restore();
+}
+const TP = { w: 40, h: 130, r0: 20, niv: 18 };
+const LOURDS = semis(9, 31, 4.6, TP.w, TP.h, false, TP.niv), LEGERS = semis(16, 47, 2.4, TP.w, TP.h, false, TP.niv), PILE_L = pile(9, 4.6, TP.w, TP.h, false);
+function principe(c, t, e) {
+  const { ctx, sx, M, DEB } = e, tt = e.tel ? e.taille(17) : e.taille(17);
+  const S = { x: sx(150), y: 215, R: 105 }, A = { x: sx(540), y: 228 };
+  // l'essoreuse : elle accélère pendant « manege », puis continue de tourner
+  const tau = Math.max(0, t - .4), rampe = 2.2, w = 7.5, ang = tau < rampe ? w * tau * tau / (2 * rampe) : w * (tau - rampe / 2), k = doux(borne(tau / rampe));
+  c.direct(() => essoreuse(ctx, S.x, S.y, S.R, ang, k, t));
+  c.repere('essoreuse', S.x - S.R - 4, S.y - S.R - 4, 2 * S.R + 8, 2 * S.R + 8, 'l’essoreuse à salade');
+  e.si('manege', .05, 'n_ess', () => c.texte('l’essoreuse à salade', S.x, 92, { couleur: 'jaune', taille: 18, align: 'center' }));
+  e.si('manege', .55, 'eau', () => c.texte('l’eau est chassée vers le bord', S.x, 334 + tt, { couleur: 'blanc', taille: 17, align: 'center' }));
+  if (e.vu('manege', .55)) c.repere('bord', S.x - e.larg('l’eau est chassée vers le bord', 17) / 2 - 4, 334, e.larg('l’eau est chassée vers le bord', 17) + 8, tt * 1.4, 'l’eau est chassée vers le bord');
+
+  // le tube qui tourne autour de son axe
+  if (!e.vu('tube', .02)) return;
+  const tStop = DEB.culot + .45 * (M.culot - DEB.culot), uT = borne((t - DEB.tube) / (tStop - DEB.tube));
+  const th = Math.PI / 2 - TAU * 6 * (1 - trapI(uT, .25, .7) / trapI(1, .25, .7)), v = trapV(uT, .25, .7), sd = doux(borne((uT - .18) / .62));
+  const ap = e.d('tube', .02, .15), rB = TP.r0 + TP.h;
+  const unTube = (a, al) => tube(ctx, A.x + TP.r0 * Math.cos(a), A.y + TP.r0 * Math.sin(a), TP.w, TP.h, { ang: a - Math.PI / 2, liq: [150, 200, 235], niveau: TP.niv, local: true, alpha: al }, al > .5 ? (g) => {
+    LEGERS.forEach(([x, y, ph], i) => LX.bille(g, x + 1.5 * Math.sin(t * 2 + ph), y + 1.5 * Math.cos(t * 1.7 + ph), 2.4, [250, 236, 180]));
+    LOURDS.forEach(([x, y], i) => { const s = doux(borne(sd * 1.6 - i * .06)); LX.bille(g, mix(x, PILE_L[i][0], s), mix(y, PILE_L[i][1], s), 4.6, [150, 84, 56]); });
+  } : null);
+  c.direct(() => {
+    ctx.save(); ctx.globalAlpha = ap;
+    ctx.setLineDash([4, 7]); ctx.strokeStyle = 'rgba(226,232,240,.22)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(A.x, A.y, rB + 2, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    for (let g = 3; g >= 1; g--) if (v > .15) unTube(th - g * .16 * v, .1 * v);      // la traînée du mouvement
+    ctx.strokeStyle = 'rgba(170,178,192,.95)'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(A.x + TP.r0 * Math.cos(th), A.y + TP.r0 * Math.sin(th)); ctx.stroke();
+    unTube(th, 1);
+    LX.bille(ctx, A.x, A.y, 9, [150, 158, 172]);
+    ctx.restore();
+  });
+  e.si('tube', .1, 'n_tube', () => c.texte('un tube qui tourne très vite', A.x, 64, { couleur: 'jaune', taille: 18, align: 'center' }));
+  if (v > 0) e.si('tube', .2, 'sens', () => { const pts = []; for (let i = 0; i <= 10; i++) { const a = -2.5 + i * .1; pts.push([A.x + (rB + 12) * Math.cos(a), A.y + (rB + 12) * Math.sin(a)]); } c.trait(pts, { couleur: 'faible', largeur: 2 }); const [x, y] = pts[10]; c.trait([[x - 11, y - 2], [x, y], [x - 5, y + 10]], { couleur: 'faible', largeur: 2, duree: .1 }); });
+  const arrete = uT >= 1;
+  if (arrete) c.repere('tube', A.x - TP.w / 2 - 5, A.y + TP.r0 - 5, TP.w + 10, TP.h + 10, 'le tube, à l’arrêt');
+  else c.repere('tube', A.x - rB - 4, A.y - rB - 4, 2 * rB + 8, 2 * rB + 8, 'le tube qui tourne autour de l’axe');
+  // la clé des grains : entre l'essoreuse et le tube (téléphone : à droite du cercle, la fenêtre ne montre pas l'essoreuse)
+  if (e.S.legendes && e.vu('tube', .55)) {
+    const xg = e.tel ? A.x + rB + 30 : A.x - rB - 14 - e.larg('grains lourds', 17), y1 = (e.tel ? 300 : 340) + tt * .2, y2 = y1 + tt * 1.25;
+    e.ecrire('n_grains', () => { c.texte('grains lourds', xg, y1, { couleur: 'blanc', taille: 17 }); c.texte('grains légers', xg, y2, { couleur: 'blanc', taille: 17 }); });
+    c.direct(() => { LX.bille(ctx, xg - 12, y1 - tt * .3, 4.6, [150, 84, 56]); LX.bille(ctx, xg - 12, y2 - tt * .3, 2.6, [250, 236, 180]); });
+  }
+  // les deux mots : le culot (au fond), le surnageant (le liquide au-dessus)
+  const yT = A.y + TP.r0, xl = A.x + TP.w / 2 + 26;
+  if (e.si('culot', .5, 'm_culot', () => { c.ligne(A.x + TP.w / 2 - 2, yT + TP.h - 14, xl - 5, yT + TP.h - 14, { couleur: 'jaune', largeur: 1.6 }); c.texte('culot', xl, yT + TP.h - 8, { couleur: 'jaune', taille: 19 }); }))
+    c.repere('culot', A.x - TP.w / 2 - 4, yT + TP.h - 34, TP.w + 34 + e.larg('culot', 19), 38, 'le culot : ce qui est lourd, au fond');
+  if (e.si('culot', .72, 'm_surn', () => { c.ligne(A.x + TP.w / 2 - 2, yT + 52, xl - 5, yT + 52, { couleur: 'jaune', largeur: 1.6 }); c.texte('surnageant', xl, yT + 58, { couleur: 'jaune', taille: 19 }); }))
+    c.repere('surnageant', A.x - TP.w / 2 - 4, yT + 18, TP.w + 34 + e.larg('surnageant', 19), 64, 'le surnageant : le liquide au-dessus du culot');
+  if (e.si('culot', .88, 'concl', () => R2.encadre(c, 'le plus lourd va au fond', A.x, 407, { taille: 18 })))
+    c.repere('conclusion', A.x - e.larg('le plus lourd va au fond', 18) / 2 - 12, 387, e.larg('le plus lourd va au fond', 18) + 24, 32, 'le plus lourd va au fond');
+}
+function phasePrincipe(t, e) {
+  if (!e.vu('manege')) return 'Une essoreuse à salade peinte, vue de dessus, à l’arrêt : le bol, le panier vert à fentes, les feuilles de salade.';
+  if (!e.vu('tube', .02)) return 'L’essoreuse à salade tourne vite : les feuilles sont plaquées contre le panier, les gouttes d’eau traversent le panier et filent vers le bord du bol' + (e.vu('manege', .55) ? ' ; écrit : « l’eau est chassée vers le bord ».' : '.');
+  if (!e.vu('culot')) return 'À droite, un tube rempli d’un liquide tourne très vite autour d’un axe ; dedans, des grains lourds (gros, bruns) et des grains légers (petits, clairs) : les grains lourds glissent vers le fond du tube, les légers restent dans le liquide.';
+  if (!e.vu('culot', .5)) return 'Le tube ralentit et s’arrête, le fond vers le bas : tous les grains lourds sont tassés au fond.';
+  return 'Le tube est à l’arrêt. Les grains lourds, au fond, forment le « culot »' + (e.vu('culot', .72) ? ' ; le liquide au-dessus, avec les grains légers, est le « surnageant »' : '') + (e.vu('culot', .88) ? ' ; encadré : « le plus lourd va au fond ».' : '.');
+}
+
+/* ══ Vue « étapes » ════════════════════════════════════════════════════════════════════════════════ */
+const TA = { y: 110, w: 64, h: 220, niv: 40 }, TC = { y: 110, w: 56, h: 200, niv: 34 }, LOUPE = { y: 262, r: 58 };
+const SACC = [150, 200, 235], BROYAT = [208, 150, 122], SURN = [226, 190, 140], CLAIR = [196, 214, 228];
+const MORCEAUX = (() => { const g = P.graine(12), out = []; for (let i = 0; i < 7; i++) { const pts = [], n = 6; for (let j = 0; j < n; j++) pts.push([Math.cos(j * TAU / n) * (.7 + g() * .5), Math.sin(j * TAU / n) * (.7 + g() * .5)]); out.push({ x: (g() * 2 - 1) * 16, y: TA.h - 22 - (i % 4) * 15 - g() * 6, s: 9 + g() * 4, pts, rot: g() * TAU }); } return out; })();
+const POUSSIERE = (() => { const g = P.graine(8), out = []; for (let i = 0; i < 60; i++) out.push([(g() * 2 - 1) * 25, TA.niv + 8 + g() * (TA.h - TA.niv - 26), g()]); return out; })();
+const N_NOY = 9, N_MIT = 14;
+const NOY = semis(N_NOY, 21, 6.6, TC.w, TC.h, false, TC.niv), PILE_N = pile(N_NOY, 6.6, TC.w, TC.h, false);
+const MIT = semis(N_MIT, 77, 5.5, TC.w, TC.h - 44, false, TC.niv), MIT2 = semis(N_MIT, 53, 5.5, TC.w, TC.h, false, TC.niv), PILE_M = pile(N_MIT, 5.2, TC.w, TC.h, false, 1.5);
+
+function morceauFoie(ctx, x, y, m, k, a = 1) {
+  if (k <= .05 || a <= .02) return;
+  ctx.save(); ctx.globalAlpha *= a; ctx.translate(x, y); ctx.rotate(m.rot); ctx.scale(m.s * k, m.s * k);
+  const g = ctx.createRadialGradient(-.3, -.3, .1, 0, 0, 1.2); g.addColorStop(0, 'rgb(196,84,70)'); g.addColorStop(1, 'rgb(118,34,34)');
+  ctx.fillStyle = g; ctx.beginPath(); m.pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(70,14,16,.9)'; ctx.lineWidth = .12; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,190,170,.35)'; ctx.beginPath(); ctx.ellipse(-.25, -.3, .3, .16, .5, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+/** Le piston du broyeur : tige de métal, poignée, tête de téflon rainurée (yT : le haut de la tête). */
+function piston(ctx, x, yT, w, a) {
+  if (a <= .02) return;
+  ctx.save(); ctx.globalAlpha *= a;
+  const gt = ctx.createLinearGradient(x - 4, 0, x + 4, 0); gt.addColorStop(0, '#6b7280'); gt.addColorStop(.45, '#e5e7eb'); gt.addColorStop(1, '#4b5563');
+  ctx.fillStyle = gt; ctx.fillRect(x - 3.5, yT - 62, 7, 64);
+  ctx.fillStyle = '#374151'; ctx.beginPath(); ctx.roundRect(x - 17, yT - 70, 34, 10, 5); ctx.fill();
+  const gh = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0); gh.addColorStop(0, '#9ca3af'); gh.addColorStop(.35, '#f8fafc'); gh.addColorStop(1, '#8b93a1');
+  ctx.fillStyle = gh; ctx.beginPath(); ctx.roundRect(x - w / 2, yT, w, 46, [6, 6, 14, 14]); ctx.fill();
+  ctx.strokeStyle = 'rgba(60,66,80,.7)'; ctx.lineWidth = 1.4; ctx.stroke();
+  for (let i = 1; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(x - w / 2 + 2, yT + 9 * i); ctx.lineTo(x + w / 2 - 2, yT + 9 * i); ctx.stroke(); }
+  ctx.restore();
+}
+/** La centrifugeuse de paillasse : corps de métal, cuve, rotor à six tubes inclinés (angle th), couvercle transparent, afficheur. */
+function centrifugeuse(ctx, cx, th, v, o) {
+  ctx.save();
+  // le corps et ses pieds
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(cx, 346, 92, 7, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#1f2937'; ctx.fillRect(cx - 66, 336, 22, 9); ctx.fillRect(cx + 44, 336, 22, 9);
+  const gc = ctx.createLinearGradient(cx - 80, 0, cx + 80, 0); gc.addColorStop(0, '#5b6577'); gc.addColorStop(.3, '#c3cad6'); gc.addColorStop(.62, '#9aa3b2'); gc.addColorStop(1, '#4a5263');
+  ctx.fillStyle = gc; ctx.beginPath(); ctx.roundRect(cx - 80, 214, 160, 124, [22, 22, 12, 12]); ctx.fill();
+  ctx.strokeStyle = 'rgba(30,36,48,.9)'; ctx.lineWidth = 1.6; ctx.stroke();
+  // la cuve
+  const gv = ctx.createLinearGradient(0, 204, 0, 244); gv.addColorStop(0, '#0b0f17'); gv.addColorStop(1, '#3b4352');
+  ctx.fillStyle = gv; ctx.beginPath(); ctx.ellipse(cx, 224, 72, 20, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = '#dfe5ee'; ctx.lineWidth = 2.4; ctx.stroke();
+  // le rotor : un cône de métal, six tubes inclinés (le haut près de l'axe, le fond vers l'extérieur)
+  const yH = 174, yB = 216, r1 = 17, r2 = 54, ap = .3;
+  const gr = ctx.createLinearGradient(cx - r2, 0, cx + r2, 0); gr.addColorStop(0, '#6b7280'); gr.addColorStop(.4, '#e5e7eb'); gr.addColorStop(1, '#565e6c');
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(cx - r1 - 6, yH - 2); ctx.lineTo(cx + r1 + 6, yH - 2); ctx.lineTo(cx + r2 + 8, yB + 4); ctx.ellipse(cx, yB + 4, r2 + 8, (r2 + 8) * ap, 0, 0, Math.PI); ctx.closePath(); ctx.fill();
+  const flou = v * (o.flou ?? .5), tubes = [];
+  for (let i = 0; i < 6; i++) for (let g = flou > .12 ? 2 : 0; g >= 0; g--) { const a = th + i * TAU / 6 - g * .2 * flou; tubes.push([a, g]); }
+  tubes.sort((p, q) => Math.sin(p[0]) - Math.sin(q[0]) || q[1] - p[1]);
+  ctx.lineCap = 'round';
+  for (const [a, g] of tubes) {
+    const x1 = cx + r1 * Math.cos(a), y1 = yH + r1 * ap * Math.sin(a), x2 = cx + r2 * Math.cos(a), y2 = yB + r2 * ap * Math.sin(a), al = (g ? .16 : 1) * (Math.sin(a) < 0 ? .7 : 1);
+    ctx.globalAlpha = al;
+    ctx.strokeStyle = 'rgba(214,232,246,.95)'; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(28,36,48,.85)'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    if (o.liq) { ctx.strokeStyle = rgba(o.liq, .95); ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(mix(x1, x2, .3), mix(y1, y2, .3)); ctx.lineTo(x2, y2); ctx.stroke(); }
+    if (o.liq && o.culot > 0) { ctx.globalAlpha = al * o.culot; ctx.strokeStyle = rgba(o.teinteCulot, 1); ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(mix(x1, x2, .88), mix(y1, y2, .88)); ctx.lineTo(x2, y2); ctx.stroke(); }
+    if (!g) { ctx.globalAlpha = al; ctx.fillStyle = '#374151'; ctx.beginPath(); ctx.ellipse(x1, y1, 6.5, 3, 0, 0, TAU); ctx.fill(); }
+  }
+  ctx.globalAlpha = 1;
+  const gm = ctx.createLinearGradient(cx - 12, 0, cx + 12, 0); gm.addColorStop(0, '#4b5563'); gm.addColorStop(.4, '#f3f4f6'); gm.addColorStop(1, '#374151');
+  ctx.fillStyle = gm; ctx.beginPath(); ctx.roundRect(cx - 11, yH - 14, 22, 15, 5); ctx.fill();
+  ctx.strokeStyle = '#111827'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, yH - 7); ctx.lineTo(cx + 8 * Math.cos(th), yH - 7 + 3 * Math.sin(th)); ctx.stroke();
+  // le couvercle transparent, fermé pendant que ça tourne
+  if (o.couvercle > .02) {
+    ctx.globalAlpha = o.couvercle;
+    ctx.beginPath(); ctx.ellipse(cx, 224, 76, 84, 0, Math.PI, TAU); ctx.ellipse(cx, 224, 76, 21, 0, 0, Math.PI); ctx.closePath();
+    const gd = ctx.createLinearGradient(cx - 76, 140, cx + 76, 240); gd.addColorStop(0, 'rgba(235,246,255,.26)'); gd.addColorStop(.5, 'rgba(200,228,246,.07)'); gd.addColorStop(1, 'rgba(225,240,252,.2)');
+    ctx.fillStyle = gd; ctx.fill(); ctx.strokeStyle = 'rgba(235,246,255,.75)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(cx, 224, 62, 70, 0, Math.PI * 1.12, Math.PI * 1.38); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  // l'afficheur : les tours par minute
+  ctx.fillStyle = '#07130e'; ctx.beginPath(); ctx.roundRect(cx - 52, 258, 104, 62, 7); ctx.fill(); ctx.strokeStyle = '#111827'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.save(); ctx.shadowColor = 'rgba(120,255,170,.8)'; ctx.shadowBlur = v > 0 ? 8 : 2;
+  LX.etiquette(ctx, fmt(o.tours), cx, 277, { taille: o.taille * 1.15, couleur: '#86ffb5' });
+  ctx.restore();
+  LX.etiquette(ctx, 'tr/min', cx, 277 + o.taille * 1.25, { taille: o.taille, couleur: '#b9f3cf', gras: false });
+  LX.bille(ctx, cx + 64, 268, 4, v > 0 ? [110, 240, 140] : [200, 80, 70]);
+  ctx.restore();
+}
+
+function etapes(c, t, e) {
+  const { ctx, sx, M, DEB } = e, X = { A: sx(70), L: sx(190), B: sx(350), C: sx(560), D: sx(690) }, tt = e.taille(17), leg = e.S.legendes;
+  // ── l'état de chaque passage en centrifugeuse : de l'arrivée du tube (30 % du segment) à l'arrêt (30 % du segment suivant) ──
+  const passage = (n1, n2, omega) => {
+    const t0 = DEB[n1] + .3 * (M[n1] - DEB[n1]), t1 = DEB[n2] + .3 * (M[n2] - DEB[n2]), u = borne((t - t0) / (t1 - t0));
+    return { u, v: trapV(u, .5, .74), th: omega * (t1 - t0) * trapI(u, .5, .74), en: t > t0 && t < t1 };
+  };
+  const p1 = passage('centri1', 'culot_noyaux', 9), p2 = passage('centri2', 'culot_mitochondries', 21);
+  const v = Math.max(p1.v, p2.v), tours = Math.round((p1.v * 1000 + p2.v * 12000) / 10) * 10;
+  const dansRotor = p2.en || e.vu('centri2', .3) && !e.vu('culot_mitochondries', .3) ? 2 : p1.en || e.vu('centri1', .3) && !e.vu('culot_noyaux', .3) ? 1 : 0;
+  const broye = e.d('broyage', .15, .85), ub = e.u('broyage');
+
+  // ── la centrifugeuse ──
+  c.direct(() => centrifugeuse(ctx, X.B, p1.th + p2.th, v, { tours, taille: e.taille(16), couvercle: Math.max(doux(borne(p1.u * 8)) * (1 - doux(borne((p1.u - .93) * 14))), doux(borne(p2.u * 8)) * (1 - doux(borne((p2.u - .93) * 14)))),
+    liq: dansRotor === 2 ? SURN : dansRotor === 1 ? BROYAT : null, culot: dansRotor === 2 ? p2.u : p1.u, teinteCulot: dansRotor === 2 ? P.T.mitoExt : [96, 64, 170], flou: dansRotor === 2 || p2.en ? 1 : .45 }));
+  c.repere('centrifugeuse', X.B - 84, 136, 168, 212, 'la centrifugeuse');
+  c.repere('compteur', X.B - 54, 256, 108, 66, 'le compteur de tours par minute');
+  if (!e.vu('centri2', .3)) e.si('centri1', .45, 'faible', () => c.texte('faible vitesse', X.B, 118, { couleur: 'jaune', taille: 18, align: 'center' }));
+  else e.si('centri2', .45, 'grande', () => c.texte('grande vitesse', X.B, 118, { couleur: 'jaune', taille: 18, align: 'center' }));
+  if (e.vu('centri1', .45)) c.repere('vitesse', X.B - 64, 98, 128, 28, e.vu('centri2', .45) ? 'grande vitesse' : 'faible vitesse');
+
+  // ── le petit tube qui va à la centrifugeuse et en revient ──
+  const vol = (u, x1, y1, x2, y2, haut, liq) => { if (u <= 0 || u >= 1) return; const s = doux(u); c.direct(() => tube(ctx, mix(x1, x2, s), mix(y1, y2, s) - haut * Math.sin(Math.PI * s), 11, 32, { liq, niveau: 8, trait: 1.3, la: .8 })); };
+  vol(e.u('centri1', .04, .3), X.A, 118, X.B, 150, 78, BROYAT);
+  vol(e.u('culot_noyaux', .22, .42), X.B, 160, X.C, 150, 30, BROYAT);
+  vol(e.u('centri2', .04, .3), X.D, 200, X.B + 30, 190, 0, SURN);
+  vol(e.u('culot_mitochondries', .22, .42), X.B + 30, 190, X.D, 200, 0, SURN);
+
+  // ── le broyeur : tube de verre, solution de saccharose, fragments de foie, piston ──
+  const strokes = borne((ub - .12) / .73), yTete = !e.vu('broyage') ? -200 : ub < .12 ? mix(-10, TA.y + 16, doux(ub / .12)) : ub < .85 ? TA.y + 16 + (TA.h - 46 - 50) * (1 - Math.cos(TAU * 3 * strokes)) / 2 : mix(TA.y + 16, 56, doux((ub - .85) / .15));
+  c.direct(() => {
+    tube(ctx, X.A, TA.y, TA.w, TA.h, { rond: true, liq: [0, 1, 2].map(i => mix(SACC[i], BROYAT[i], broye)), niveau: TA.niv, la: mix(.45, .62, broye), grad: true }, (g) => {
+      POUSSIERE.forEach(([x, y, k], i) => { if (k < broye) { g.fillStyle = i % 5 === 0 ? rgba(P.T.noyau, .8) : i % 2 ? rgba(P.T.mitoExt, .7) : 'rgba(120,40,40,.6)'; g.beginPath(); g.arc(x + 2 * Math.sin(t * 1.3 + i), y + 2 * Math.cos(t * 1.1 + i * 2), i % 5 === 0 ? 2 : 1.3, 0, TAU); g.fill(); } });
+      MORCEAUX.forEach((m, i) => { const f = e.d('foie', .15 + i * .09, .5 + i * .09); if (f <= 0) return; morceauFoie(g, m.x, mix(-30, m.y, f * f) + (ub > .12 && ub < .85 ? 3 * Math.sin(t * 9 + i) : 0), m, 1 - broye); });
+    });
+    piston(ctx, X.A, yTete, TA.w - 10, e.vu('broyage') ? 1 : 0);
+  });
+  c.repere('broyeur', X.A - TA.w / 2 - 5, e.vu('broyage') ? 44 : TA.y - 6, TA.w + 10, TA.y + TA.h + 6 - (e.vu('broyage') ? 44 : TA.y - 6), 'le broyeur : un tube de verre et son piston');
+  if (e.vu('foie', .5)) c.repere('foie', X.A - 28, TA.y + TA.h - 84, 56, 82, broye > .9 ? 'les fragments de foie, broyés' : 'les fragments de foie');
+  if (leg) {
+    const xl = X.A + TA.w / 2 + 12;
+    e.si('foie', .05, 'n_sacc', () => { c.texte('solution de', xl, 132, { couleur: 'blanc', taille: 17 }); c.texte('saccharose', xl, 132 + tt * 1.15, { couleur: 'blanc', taille: 17 }); });
+    e.si('foie', .6, 'n_foie', () => { const y = 132 + tt * 2.55; c.texte('fragments de foie', xl, y, { couleur: 'jaune', taille: 17 }); c.ligne(xl + 4, y + 5, X.A + 16, TA.y + TA.h - 60, { couleur: 'faible', largeur: 1.4 }); });
+  }
+
+  // ── la loupe : les cellules éclatent, noyaux et mitochondries libérés ──
+  if (e.vu('broyage', .1)) {
+    const al = e.d('broyage', .1, .25), ec = e.d('broyage', .45, .68), cy = LOUPE.y, r = LOUPE.r;
+    const cells = [[-22, -14, 27, 22, .3], [22, 18, 26, 21, -.4]];
+    c.direct(() => {
+      ctx.save(); ctx.globalAlpha = al; ctx.beginPath(); ctx.arc(X.L, cy, r, 0, TAU);
+      const g = ctx.createRadialGradient(X.L - 14, cy - 16, 4, X.L, cy, r); g.addColorStop(0, 'rgba(150,196,226,.42)'); g.addColorStop(1, 'rgba(60,100,140,.4)'); ctx.fillStyle = g; ctx.fill(); ctx.clip();
+      cells.forEach(([dx, dy, rx, ry, an], i) => {
+        const x = X.L + dx, y = cy + dy, s = i ? 1 : -1;
+        if (ec < 1) { ctx.save(); ctx.globalAlpha = al * (1 - ec); LX.cellule(ctx, x, y, rx * (1 + .25 * ec), ry * (1 + .25 * ec), { angle: an, grains: 14, graine: 3 + i }); ctx.restore(); }
+        if (ec > 0 && ec < 1) P.eclat(ctx, x, y, 14 + 26 * ec, 1 - ec);
+        noyau(ctx, x - 6 * s + s * 9 * ec, y - 2 + 6 * ec * s + 1.5 * Math.sin(t * 1.3 + i), 9.5);
+        [[12, -8, .5], [8, 10, -.7], [-14, 9, 1.2]].forEach(([mx, my, ma], j) => mito(ctx, x + s * mx * (1 + .9 * ec), y + my * (1 + .8 * ec) + 1.5 * Math.sin(t * 1.6 + j + i), 9, ma + ec * (j - 1) * .8));
+      });
+      ctx.restore();
+    });
+    e.si('broyage', .1, 'loupe', () => { c.cercle(X.L, cy, r, { couleur: 'blanc', largeur: 2.4 }); c.ligne(X.A + TA.w / 2 + 2, TA.y + TA.h - 46, X.L - r * .86, cy + r * .5, { couleur: 'faible', largeur: 1.4 }); });
+    c.repere('loupe', X.L - r - 3, cy - r - 3, 2 * r + 6, 2 * r + 6, e.vu('broyage', .68) ? 'à la loupe : les cellules ont éclaté' : 'à la loupe : les cellules du foie');
+    const yc = cy + r + 4 + tt;
+    e.si('broyage', .6, 'eclate', () => c.texte('cellules éclatées', X.L, yc, { couleur: 'jaune', taille: 17, align: 'center' }));
+    // la clé : les deux organites libérés
+    if (e.vu('broyage', .78) && !(e.tel && e.vu('centri1'))) {   // téléphone : la clé n’est montrée que pendant le broyage (ensuite la fenêtre la couperait)
+      const yk = yc + tt * 1.4, wn = e.larg('noyau', 17), wm = e.larg('mitochondrie', 17), x0 = Math.max(10, X.L - (wn + wm + 66) / 2);
+      c.direct(() => { noyau(ctx, x0 + 8, yk - tt * .3, 7.5); mito(ctx, x0 + 22 + wn + 22, yk - tt * .3, 10, 0); });
+      e.ecrire('cle', () => { c.texte('noyau', x0 + 20, yk, { couleur: 'blanc', taille: 17 }); c.texte('mitochondrie', x0 + 22 + wn + 37, yk, { couleur: 'blanc', taille: 17 }); });
+      c.repere('cle', x0 - 2, yk - tt, wn + wm + 66, tt * 1.4, 'un noyau (gros, violet), une mitochondrie (petite, orange)');
+    }
+  }
+
+  // ── le tube 1, agrandi : les noyaux se déposent un à un ; puis son surnageant est versé ──
+  const aC = e.d('culot_noyaux', .34, .46);
+  const pv = e.d('surnageant', .15, .36) * (1 - e.d('surnageant', .78, .96)), q = 1 - e.d('surnageant', .4, .74), ang = 1.4 * pv;   // q : la part du surnageant encore dans le tube 1
+  const aD = e.d('surnageant', .04, .14) * (e.vu('centri2', .3) && !e.vu('culot_mitochondries', .22) ? .32 : e.vu('centri2', .04) && !e.vu('centri2', .3) ? mix(1, .32, e.u('centri2', .04, .3)) : e.vu('culot_mitochondries', .22) ? mix(.32, 1, e.u('culot_mitochondries', .22, .42)) : 1);
+  const dep2 = e.u('culot_mitochondries', .45, .98);
+  if (aD > 0) c.direct(() => tube(ctx, X.D, TC.y, TC.w, TC.h, { liq: [0, 1, 2].map(i => mix(SURN[i], CLAIR[i], doux(dep2))), niveau: mix(TC.h - 6, TC.niv, 1 - q), alpha: aD, grad: true }, (g) => {
+    MIT2.forEach(([x, y, ph], i) => { const s = doux(borne(dep2 * (N_MIT + 3) / 4 - i / 4)); mito(g, mix(x + 2 * Math.sin(t * 1.2 + ph), PILE_M[i][0], s), mix(y + 2 * Math.cos(t * .9 + ph), PILE_M[i][1], s), 6, mix(ph, 0, s), borne((1 - q) * 1.4 - (TC.h - y) / TC.h * .4 + (q <= 0 ? 1 : 0))); });
+  }));
+  if (aC > 0) {
+    const dep = e.u('culot_noyaux', .46, .98), xp = mix(X.C, X.D - 6, pv), yp = mix(TC.y, 66, pv);
+    const niveau = mix(mix(TC.h - 74, TC.niv, q), mix(27.6, -20, q), pv);
+    c.direct(() => {
+      if (pv > .97 && q > 0 && q < 1) {   // le filet de liquide qui coule dans le nouveau tube
+        const xl = xp + TC.w / 2 * Math.cos(ang) - 2, yl = yp + TC.w / 2 * Math.sin(ang) - 1, yb = TC.y + mix(TC.h - 6, TC.niv, 1 - q);
+        const g = ctx.createLinearGradient(xl - 3, 0, xl + 4, 0); g.addColorStop(0, rgba(SURN, .5)); g.addColorStop(.5, rgba([250, 225, 180], .95)); g.addColorStop(1, rgba(SURN, .55));
+        ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(xl - 3.4, yl); ctx.quadraticCurveTo(xl + 1, yl + 10, xl + 1.2, yb); ctx.lineTo(xl + 4.4, yb); ctx.quadraticCurveTo(xl + 5, yl + 8, xl + 3.6, yl); ctx.closePath(); ctx.fill();
+        for (let i = 0; i < 3; i++) { const k = (t * 2 + i / 3) % 1; LX.bulleGaz(ctx, xl + 3 + 9 * Math.sin(i * 2.1 + t * 3), yb + 4 + 10 * k, 2.2 * (1 - k) + .6); }
+      }
+      tube(ctx, xp, yp, TC.w, TC.h, { ang, liq: [0, 1, 2].map(i => mix(BROYAT[i], SURN[i], doux(dep))), niveau, alpha: aC, grad: true }, (g) => {
+        MIT.forEach(([x, y, ph], i) => mito(g, x + 2 * Math.sin(t * 1.2 + ph), y + 2 * Math.cos(t * .9 + ph), 6, ph, borne(q * 1.6 - i / N_MIT * .6)));
+        NOY.forEach(([x, y], i) => { const s = doux(borne(dep * (N_NOY + 2) / 3 - i / 3)); noyau(g, mix(x, PILE_N[i][0], s), mix(y, PILE_N[i][1], s), 6.6); });
+      });
+    });
+    const ecrisCulot = (nom, a, cle, x, l2, id, label) => {
+      if (e.vu(nom, a)) c.repere(id, x - TC.w / 2 - 3, TC.y + TC.h - 62, TC.w + 6, 66, label);
+      if (leg) e.si(nom, a, cle, () => { c.texte('culot riche', x, TC.y + TC.h + 10 + tt, { couleur: 'jaune', taille: 17, align: 'center' }); c.texte(l2, x, TC.y + TC.h + 10 + tt * 2.18, { couleur: 'jaune', taille: 17, align: 'center' }); });
+    };
+    if (pv < .02) ecrisCulot('culot_noyaux', .9, 'n_culot1', X.C, 'en noyaux', 'culot_noyaux', 'le 1er culot : riche en noyaux');
+    else if (leg && e.fait('culot_noyaux')) e.ecrire('n_culot1', () => { c.texte('culot riche', X.C, TC.y + TC.h + 10 + tt, { couleur: 'jaune', taille: 17, align: 'center' }); c.texte('en noyaux', X.C, TC.y + TC.h + 10 + tt * 2.18, { couleur: 'jaune', taille: 17, align: 'center' }); });
+    ecrisCulot('culot_mitochondries', .9, 'n_culot2', X.D, 'en mitochondries', 'culot_mitochondries', 'le 2e culot : riche en mitochondries');
+    // le surnageant : le liquide au-dessus du culot (dans le tube 1, puis dans le nouveau tube une fois versé)
+    if (e.vu('culot_noyaux', .6)) {
+      if (q > .5 && pv < .02) c.repere('surnageant', X.C - TC.w / 2 - 3, TC.y + TC.niv - 4, TC.w + 6, TC.h - TC.niv - 62, 'le surnageant : le liquide au-dessus du culot');
+      else if (q <= .5 && !e.vu('culot_mitochondries', .45)) c.repere('surnageant', X.D - TC.w / 2 - 3, TC.y + TC.niv - 4, TC.w + 6, TC.h - TC.niv - 8, 'le surnageant, versé dans un nouveau tube');
+      else if (e.vu('culot_mitochondries', .45)) c.repere('surnageant', X.D - TC.w / 2 - 3, TC.y + TC.niv - 4, TC.w + 6, TC.h - TC.niv - 62, 'le dernier surnageant');
+    }
+    if (!(e.tel && e.etape === 'centri2')) e.si('surnageant', .9, 'm_surn', () => c.texte('surnageant', X.D, TC.y - 14, { couleur: 'jaune', taille: 18, align: 'center' }));
+  }
+  // ── le bilan ──
+  if (e.vu('bilan', .35)) {
+    const s = 'du plus lourd (noyaux) au plus léger (mitochondries)', x = e.tel ? 729 : Math.min(sx(500), e.L - e.larg(s, 18) / 2 - 22);
+    e.ecrire('bilan', () => R2.encadre(c, s, x, 404, { taille: 18 }));
+    c.repere('conclusion', x - e.larg(s, 18) / 2 - 12, 384, e.larg(s, 18) + 24, 32, 'on sépare les organites du plus lourd au plus léger');
+  }
+}
+function comptesEtapes(t, e) { return e.vu('bilan', .05) ? [{ id: 'culot_noyaux', n: 1, fort: e.u('bilan') < .3 }, { id: 'culot_mitochondries', n: 2, fort: e.u('bilan') >= .3 }] : []; }
+function phaseEtapes(t, e) {
+  if (!e.vu('foie')) return 'À gauche le broyeur (un tube de verre rempli d’une solution de saccharose), au centre la centrifugeuse à l’arrêt (compteur à 0 tr/min).';
+  if (!e.vu('broyage')) return 'Des fragments de foie, rouge sombre, tombent dans la solution de saccharose du tube de verre.';
+  if (!e.vu('centri1')) return 'Le piston du broyeur descend et remonte dans le tube : les fragments de foie sont écrasés, le liquide devient un broyat trouble. À la loupe, les cellules éclatent : leurs noyaux (gros, violets) et leurs mitochondries (petites, orange) sont libérés dans le liquide.';
+  if (!e.vu('culot_noyaux')) return `Un tube de broyat est placé dans la centrifugeuse ; le couvercle se ferme, le rotor et ses tubes inclinés tournent : « faible vitesse », le compteur monte jusqu’à ${fmt(1000)} tr/min (il affiche ${fmt(Math.round(trapV(borne((t - e.DEB.centri1 - 1.5) / 4.85), .5, .74) * 100) * 10)}).`;
+  if (!e.vu('surnageant')) return 'La centrifugeuse ralentit et s’arrête. Le tube, agrandi à droite : les noyaux (gros grains violets) se déposent un à un au fond et forment un culot ; écrit « culot riche en noyaux ». De petits grains orange restent en suspension dans le liquide au-dessus (rien ne les nomme dans le tube : à l’élève de dire où sont les mitochondries).';
+  if (!e.vu('centri2')) return 'Le tube est penché : son liquide, le surnageant, coule dans un nouveau tube, avec les petits grains orange ; le culot de noyaux reste au fond du premier tube. Écrit au-dessus du nouveau tube : « surnageant ».';
+  if (!e.vu('culot_mitochondries')) return `Le nouveau tube est placé dans la centrifugeuse, qui tourne beaucoup plus vite : « grande vitesse », le compteur monte jusqu’à ${fmt(12000)} tr/min.`;
+  if (!e.vu('bilan')) return 'La centrifugeuse s’arrête. Dans le second tube, les mitochondries (petits grains orange) se déposent une à une au fond : « culot riche en mitochondries ».';
+  return 'Bilan : les deux culots sont allumés et comptés — 1 : culot riche en noyaux (faible vitesse) ; 2 : culot riche en mitochondries (grande vitesse). Encadré : « du plus lourd (noyaux) au plus léger (mitochondries) ».';
+}
+
+const VUES = {
+  principe: {
+    titre: 'La centrifugation : le principe', graine: 31, dessiner: principe, phase: phasePrincipe,
+    moments: [
+      ['manege', 5, 'l’essoreuse à salade tourne : l’eau est chassée vers le bord'],
+      ['tube', 5, 'un tube tourne très vite : les grains lourds vont vers le fond'],
+      ['culot', 4.6, 'à l’arrêt : le culot au fond, le surnageant au-dessus'],
+    ],
+    cadrages: { manege: [-180, 56, 660, 314], tube: [304, 40, 710, 338], culot: [396, 206, 460, 218] },
+    accroche: 'Une essoreuse à salade : que fait-elle à l’eau ?', fini: 'Centrifuger : en tournant vite, le plus lourd va au fond (le culot) ; le reste est le surnageant.',
+    texte: 'Le principe de la centrifugation. Image du quotidien : l’essoreuse à salade tourne vite, l’eau est chassée vers le bord. Un tube qui tourne très vite autour d’un axe : ses grains lourds vont au fond, c’est le culot ; le liquide au-dessus, avec les grains légers, est le surnageant.',
+    explication: [
+      { repere: 'essoreuse', texte: 'L’essoreuse à salade : quand elle tourne vite, l’eau est chassée vers le bord.' },
+      { repere: 'tube', texte: 'Un tube qui tourne très vite : ce qui est lourd va vers le fond.' },
+      { repere: 'culot', texte: 'Au fond, le culot : ce qui est le plus lourd.' },
+      { repere: 'surnageant', texte: 'Au-dessus, le surnageant : le liquide et ce qui est plus léger.' } ],
+  },
+  etapes: {
+    titre: 'La centrifugation fractionnée : les étapes', graine: 37, dessiner: etapes, phase: phaseEtapes, comptes: comptesEtapes,
+    moments: [
+      ['foie', 4, 'des fragments de foie dans une solution de saccharose'],
+      ['broyage', 5.5, 'le broyage : les cellules éclatent, noyaux et mitochondries libérés'],
+      ['centri1', 5, '1re centrifugation, à faible vitesse'],
+      ['culot_noyaux', 5, 'un culot riche en noyaux se dépose'],
+      ['surnageant', 5.5, 'le surnageant est versé dans un nouveau tube'],
+      ['centri2', 5, '2e centrifugation, à grande vitesse'],
+      ['culot_mitochondries', 5, 'un culot riche en mitochondries se dépose'],
+      ['bilan', 4, 'deux culots : les noyaux, puis les mitochondries'],
+    ],
+    cadrages: { foie: [-6, 108, 574, 272], broyage: [-6, 108, 574, 272], centri1: [10, 66, 620, 296], culot_noyaux: [262, 92, 590, 282],
+      surnageant: [446, 30, 700, 334], centri2: [262, 92, 600, 286], culot_mitochondries: [446, 96, 590, 282], bilan: [446, 150, 566, 270] },
+    accroche: 'Comment sortir les mitochondries des cellules du foie ?', fini: 'Centrifugation fractionnée : broyage, faible vitesse (culot de noyaux), puis grande vitesse (culot de mitochondries).',
+    texte: 'La centrifugation fractionnée. Des fragments de foie dans une solution de saccharose ; broyage mécanique (les cellules éclatent, noyaux et mitochondries sont libérés) ; 1re centrifugation à faible vitesse : culot riche en noyaux ; le surnageant est repris dans un nouveau tube ; 2e centrifugation à grande vitesse : culot riche en mitochondries.',
+    explication: [
+      { repere: 'foie', texte: 'Des fragments de foie dans une solution de saccharose.' },
+      { repere: 'broyeur', texte: 'Le broyeur : son piston écrase les fragments, les cellules éclatent.' },
+      { repere: 'centrifugeuse', texte: 'La centrifugeuse : d’abord à faible vitesse, puis à grande vitesse.' },
+      { repere: 'culot_noyaux', texte: 'Le premier culot est riche en noyaux.' },
+      { repere: 'surnageant', texte: 'Le surnageant est versé dans un nouveau tube.' },
+      { repere: 'culot_mitochondries', texte: 'Le second culot est riche en mitochondries.' } ],
+  },
+};
+const V = VUES[VUE];
+R2.page({ id: 'svt_reference_centrifugation_' + VUE, variante: VUE, vueNom: 'Vue ' + VUE, ...V });
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

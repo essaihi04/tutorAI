@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>De la cellule à la mitochondrie : deux zooms — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un champ de microscope électronique peint : une cellule entière au grossissement 8 000 (noyau, hyaloplasme, mitochondries) ; un cadre rouge se pose sur une mitochondrie et la vue grossit jusqu'à 45 000 fois (double membrane, crêtes, matrice, diamètre de 0,5 à 1 micromètre) ; un second cadre rouge sur une crête et la vue grossit encore : la membrane interne et ses sphères pédonculées tournées vers la matrice"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference2.js"></script>
+<script>
+/*
+ * De la cellule à la mitochondrie (cours de référence SVT, diapositive rf_m3_zoom), 27 novembre 2026.
+ * Document « ultrastructure » recréé en animation peinte (aucune photo) : un champ de microscope électronique.
+ *   niveau 1  cellule × 8 000 : noyau, hyaloplasme, mitochondries (dessins du lexique) ;
+ *   niveau 2  × 45 000 : UNE mitochondrie emplit le champ (double membrane, crêtes, matrice) ; diamètre 0,5 à 1 µm ;
+ *   niveau 3  une crête de près : la membrane interne (bicouche) et ses sphères pédonculées, côté matrice.
+ * Les deux zooms sont de vrais zooms : le monde est redessiné à chaque image à l'échelle z (z va de 1 à 45 000 / 8 000 = 5,625,
+ * puis × 15), autour du point visé ; le grossissement affiché et la barre d'échelle suivent z (1 µm = 42 px à z = 1 : la
+ * mitochondrie visée fait 38 px de diamètre, soit 0,9 µm). Le niveau 3 n'a pas de grossissement dans le document : la page
+ * écrit « encore plus près » et garde seulement la barre d'échelle (10 nm : l'ordre de grandeur donné pour l'espace
+ * intermembranaire). Fin du 2e zoom : le dessin du lexique de la membrane interne (bicouche, sphères pédonculées) remplace
+ * en fondu la crête devenue trop grosse.
+ * Moments : cellule, cadre, mitochondrie, taille, cadre2, spheres. Paramètre legendes: false = schéma muet.
+ */
+const R2 = window.Ref2, P = window.SVTPeinture, LX = window.Lexique, { mix, TAU } = R2;
+const Z1 = 45000 / 8000, Z2 = Z1 * 15, UM = 42;           // 1 µm = 42 px du monde à × 8 000
+const CELL = { rx: 232, ry: 136 }, NOY = { x: -78, y: -8, r: 50 };
+const M0 = { x: 100, y: 46, rx: 42, ry: 19 };              // la mitochondrie visée (horizontale)
+const MITOS = [[30, -92, .3], [148, -50, -.6], [-150, 70, .5], [-30, 98, -.1], [-172, -40, 1.2], [192, 14, 1.35]];
+const F1 = [M0.x, M0.y];
+/* le point visé par le 2e zoom : le milieu d'une crête du haut (3e crête du dessin du lexique, calculée à z = Z1) */
+const CRETE = (() => { const rx = M0.rx * Z1, ry = M0.ry * Z1, ix = rx - 9, iy = ry - 9; return [-.286 * ix / Z1, (-iy * .958 + iy * .78 * .857 * .55) / Z1]; })();
+const F2 = [M0.x + CRETE[0], M0.y + CRETE[1]];
+const RETIC = [[-128, -64, 60, .5, 1.6], [-20, 44, 50, 3.4, 4.6], [-110, 50, 44, 5.2, 6.4], [20, -30, 40, -.6, .5], [80, 104, 46, 3.6, 4.7]];
+const VESIC = [[-200, 20], [-120, 108], [60, 10], [10, 70], [176, -84], [-60, -110], [130, 100], [-215, -10], [70, -112]];
+
+function page() {
+  /* Un zoom vrai : z croît géométriquement, le point visé vient au centre comme si l'on approchait l'objectif. */
+  const zoomer = (za, fa, zb, fb, u) => { const z = za * Math.pow(zb / za, u), w = (za / z - za / zb) / (1 - za / zb); return { z, fx: fb[0] + (fa[0] - fb[0]) * w, fy: fb[1] + (fa[1] - fb[1]) * w }; };
+  function camera(e) {
+    if (e.vu('spheres')) return zoomer(Z1, F1, Z2, F2, e.d('spheres', .05, .85));
+    if (e.vu('mitochondrie')) return zoomer(1, [0, 0], Z1, F1, e.d('mitochondrie', .05, .85));
+    return { z: 1, fx: 0, fy: 0 };
+  }
+  const nombre = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+  /* Le niveau 3, dessiné avec le lexique : la membrane interne (bicouche) d'une crête, ses protéines, ses sphères pédonculées. */
+  function detail(ctx, V, a, q, e) {
+    const cx = V.x + V.w / 2, cy = V.y + V.h / 2;
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(cx, cy); ctx.scale(q, q); ctx.translate(-cx, -cy);
+    const ym = V.y + V.h * .36, ep = 30, x0 = V.x - V.w, w = V.w * 3;
+    ctx.fillStyle = '#0c1c22'; ctx.fillRect(x0, V.y - V.h, w, V.h * 3);
+    const g = ctx.createLinearGradient(0, V.y - 40, 0, ym); g.addColorStop(0, P.rgba(LX.T.mitoExt, .55)); g.addColorStop(1, P.rgba(LX.T.mitoEsp, .62));
+    ctx.fillStyle = g; ctx.fillRect(x0, V.y - V.h, w, ym - V.y + V.h);                                   // l'intérieur de la crête : l'espace intermembranaire
+    P.fondMatrice(ctx, x0, ym + ep / 2, w, V.h * 2, { cx, cy: ym + 120 });                               // la matrice
+    LX.membrane(ctx, x0, ym - ep / 2, w, ep, { pas: 11 });
+    const xs = detail.xs(V);
+    [.5, 2.5].forEach((i) => LX.proteine(ctx, (xs[Math.floor(i)] + xs[Math.ceil(i)]) / 2, ym, 26, ep + 12));
+    xs.forEach((x) => LX.spherePedonculee(ctx, x, ym, ep, 1, { r: 17 }));
+    ctx.restore();
+    return { ym, ep };
+  }
+  detail.xs = (V) => [.14, .34, .54, .74, .92].map((f) => V.x + V.w * f);
+
+  function dessiner(c, t, e) {
+    const { ctx, L } = e, tt = e.taille(17);
+    const colX = L - (e.tel ? 232 : 196), V = { x: 14, y: 48, w: colX - 30, h: e.tel ? 300 : 350 }, cx = V.x + V.w / 2, cy = V.y + V.h / 2;
+    const cam = camera(e), z = cam.z, S = (x, y) => [cx + (x - cam.fx) * z, cy + (y - cam.fy) * z];
+    const apparu = e.d('cellule', 0, .3), fondu = e.d('spheres', .5, .9), niveau = e.fait('spheres') ? 3 : e.fait('mitochondrie') && !e.vu('spheres', .05) ? 2 : !e.vu('mitochondrie', .05) ? 1 : 0;
+
+    // ── le champ du microscope ──
+    c.direct(() => {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(V.x, V.y, V.w, V.h, 12); ctx.clip();
+      ctx.fillStyle = '#0b1a1c'; ctx.fillRect(V.x, V.y, V.w, V.h);
+      if (apparu > 0 && fondu < 1) {
+        ctx.save(); ctx.globalAlpha = apparu;
+        // le tissu : deux cellules voisines, puis la cellule
+        for (const s of [-1, 1]) { const [x, y] = S(s * 2.07 * CELL.rx, s * 24); LX.cellule(ctx, x, y, CELL.rx * z, CELL.ry * z * 1.05, { graine: 5 + s, grains: 60 }); }
+        const [x0, y0] = S(0, 0), [xn, yn] = S(NOY.x, NOY.y);
+        LX.cellule(ctx, x0, y0, CELL.rx * z, CELL.ry * z, { noyau: { x: xn, y: yn, r: NOY.r * z }, grains: 120, graine: 17 });
+        // réticulum (traits fins) et vésicules : le grain d'une image de microscope électronique
+        ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(215,245,225,.34)'; ctx.lineWidth = Math.min(5, 1.2 * Math.sqrt(z));
+        for (const [x, y, r, a0, a1] of RETIC) { const [px, py] = S(x, y); for (const k of [0, 5]) { ctx.beginPath(); ctx.arc(px, py, (r + k) * z, a0, a1); ctx.stroke(); } }
+        for (const [x, y] of VESIC) { const [px, py] = S(x, y), r = 4.2 * z; if (px < V.x - r || px > V.x + V.w + r) continue;
+          ctx.fillStyle = 'rgba(200,235,225,.22)'; ctx.strokeStyle = 'rgba(225,250,235,.5)'; ctx.lineWidth = Math.min(3, .9 * Math.sqrt(z)); ctx.beginPath(); ctx.arc(px, py, r, 0, TAU); ctx.fill(); ctx.stroke(); }
+        for (const [x, y, a] of MITOS) { const [px, py] = S(x, y); if (px < V.x - 60 * z || px > V.x + V.w + 60 * z || py < V.y - 60 * z || py > V.y + V.h + 60 * z) continue;
+          LX.mitochondrie(ctx, px, py, 36 * z, 15.5 * z, { angle: a, cretes: 6, graine: 3 + Math.round(x), grains: 14 }); }
+        const [mx, my] = S(M0.x, M0.y);
+        LX.mitochondrie(ctx, mx, my, M0.rx * z, M0.ry * z, { cretes: 7, graine: 9, grains: 40 });
+        ctx.restore();
+      }
+      if (fondu > 0) detail(ctx, V, fondu, mix(.5, 1, e.d('spheres', .45, .9)), e);
+      // les cadres rouges (dans le monde : ils grandissent avec le zoom jusqu'à devenir le bord du champ)
+      const cadre = (nom, suivant, f, zc) => {
+        if (!e.vu(nom, .05)) return null;
+        const a = e.d(nom, .05, .5) * (1 - e.u(suivant, .6, .9)); if (a <= 0) return null;
+        const [px, py] = S(f[0], f[1]), w = V.w / zc * z, h = V.h / zc * z;
+        ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#ff5a52'; ctx.lineWidth = 3; ctx.shadowColor = 'rgba(255,60,50,.9)'; ctx.shadowBlur = 8;
+        ctx.strokeRect(px - w / 2, py - h / 2, w, h); ctx.restore();
+        return [px - w / 2, py - h / 2, w, h];
+      };
+      dessiner.c1 = cadre('cadre', 'mitochondrie', F1, Z1);
+      dessiner.c2 = fondu < .6 ? cadre('cadre2', 'spheres', F2, Z2 / Z1 * Z1) : null;
+      // vignette du microscope
+      const vg = ctx.createRadialGradient(cx, cy, Math.min(V.w, V.h) * .42, cx, cy, Math.max(V.w, V.h) * .74);
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)'); ctx.fillStyle = vg; ctx.fillRect(V.x, V.y, V.w, V.h);
+      // le grossissement (plaque en haut à gauche) et la barre d'échelle (en bas à gauche)
+      if (apparu > .5) {
+        const ta = e.taille(19), s = z <= Z1 * 1.02 ? '× ' + nombre(z >= Z1 * .98 ? 45000 : z <= 1.01 ? 8000 : Math.round(8000 * z / 500) * 500) : 'encore plus près';
+        ctx.font = `700 ${ta}px ${LX.POLICE}`; const lw = ctx.measureText(s).width + 22;
+        ctx.fillStyle = 'rgba(6,12,16,.8)'; ctx.beginPath(); ctx.roundRect(V.x + 10, V.y + 10, lw, ta * 1.5, 8); ctx.fill();
+        LX.etiquette(ctx, s, V.x + 10 + lw / 2, V.y + 10 + ta * .75, { taille: ta, couleur: '#f8fafc' });
+        dessiner.plaque = [V.x + 10, V.y + 10, lw, ta * 1.5];
+        const [val, lab] = UM * z <= 190 ? [UM * z, '1 µm'] : UM * z / 10 <= 190 ? [UM * z / 10, '0,1 µm'] : [UM * z / 100, '10 nm'];
+        const tb = e.taille(17), bx = V.x + 16, by = V.y + V.h - 16;
+        ctx.font = `700 ${tb}px ${LX.POLICE}`; const lb = Math.max(val, ctx.measureText(lab).width) + 16;
+        ctx.fillStyle = 'rgba(6,12,16,.8)'; ctx.beginPath(); ctx.roundRect(bx - 8, by - tb * 1.35 - 8, lb, tb * 1.35 + 18, 8); ctx.fill();
+        ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 3; ctx.lineCap = 'butt'; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + val, by); ctx.moveTo(bx, by - 6); ctx.lineTo(bx, by + 6); ctx.moveTo(bx + val, by - 6); ctx.lineTo(bx + val, by + 6); ctx.stroke();
+        LX.etiquette(ctx, lab, bx + ctx.measureText(lab).width / 2, by - tb * .8, { taille: tb, couleur: '#f8fafc' });
+        dessiner.echelle = [bx - 8, by - tb * 1.35 - 8, lb, tb * 1.35 + 18];
+      }
+      ctx.restore();
+      ctx.save(); ctx.strokeStyle = 'rgba(200,215,225,.75)'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.roundRect(V.x, V.y, V.w, V.h, 12); ctx.stroke(); ctx.restore();
+    });
+    c.repere('champ', V.x, V.y, V.w, V.h, 'le champ du microscope électronique');
+    if (apparu > .5 && dessiner.plaque) { c.repere('grossissement', ...dessiner.plaque, 'le grossissement'); c.repere('echelle', ...dessiner.echelle, 'la barre d’échelle'); }
+    const dans = (r) => { const x0 = Math.max(V.x, r[0]), y0 = Math.max(V.y, r[1]), x1 = Math.min(V.x + V.w, r[0] + r[2]), y1 = Math.min(V.y + V.h, r[1] + r[3]); return [x0, y0, Math.max(4, x1 - x0), Math.max(4, y1 - y0)]; };
+    if (dessiner.c1) c.repere('cadre', ...dans(dessiner.c1), 'le cadre rouge : la mitochondrie que l’on va agrandir');
+    if (dessiner.c2) c.repere('cadre2', ...dans(dessiner.c2), 'le cadre rouge : une crête que l’on va agrandir');
+    if (apparu > .5 && niveau === 1) { const [x, y] = S(0, 0); c.repere('cellule', ...dans([x - CELL.rx, y - CELL.ry, 2 * CELL.rx, 2 * CELL.ry]), 'la cellule, grossie 8 000 fois'); }
+    if (apparu > .5 && fondu < .5) { const [x, y] = S(M0.x, M0.y); c.repere('mitochondrie', ...dans([x - M0.rx * z - 3, y - M0.ry * z - 3, 2 * M0.rx * z + 6, 2 * M0.ry * z + 6]), niveau === 2 ? 'la mitochondrie, grossie 45 000 fois' : 'une mitochondrie'); }
+    if (niveau === 2 || e.etape === 'cadre2' || e.etape === 'taille') { if (e.fait('mitochondrie') && fondu < .5) { const [x, y] = S(M0.x, M0.y); c.repere('cretes', x - M0.rx * z * .8, y - M0.ry * z * .82, M0.rx * z * 1.6, M0.ry * z * 1.64, 'les crêtes : les replis de la membrane interne'); } }
+
+    // ── la colonne de droite : les légendes du niveau en cours (trait de rappel vers l'objet), puis la taille ──
+    const pas = tt * 1.22, legendes = [];
+    if (niveau === 1 && e.vu('cellule', .5)) legendes.push(['l1a', ['noyau'], S(NOY.x + 34, NOY.y - 30), 'blanc'], ['l1b', ['mitochondrie'], S(148 + 26, -50 - 4), 'orange'], ['l1c', ['hyaloplasme'], S(140, 98), 'vert']);
+    if (e.vu('mitochondrie', .9) && !e.vu('spheres', .05)) { const [mx, my] = S(M0.x, M0.y), rx = M0.rx * z, ry = M0.ry * z;
+      legendes.push(['l2a', e.tel ? ['double', 'membrane'] : ['double membrane'], [mx + rx * .84, my - ry * .5], 'orange'], ['l2b', ['crêtes'], [mx + rx * .3, my - ry * .46], 'jaune'], ['l2c', ['matrice'], [mx + rx * .6, my + ry * .3], 'cyan']); }
+    if (e.vu('spheres', .92)) { const xs = detail.xs(V), ym = V.y + V.h / 2 + (V.y + V.h * .36 - (V.y + V.h / 2));
+      legendes.push(['l3a', e.tel ? ['sphères', 'pédonculées'] : ['sphères pédonculées'], [xs[4] + 14, ym + 60], 'jaune'], ['l3b', e.tel ? ['membrane', 'interne'] : ['membrane interne'], [V.x + V.w - 30, ym], 'orange'], ['l3c', ['matrice'], [V.x + V.w - 50, ym + 150], 'cyan']);
+      c.repere('spheres', xs[0] - 22, ym + 16, xs[4] - xs[0] + 44, 72, 'les sphères pédonculées, tournées vers la matrice');
+      c.repere('membrane_interne', V.x + 4, ym - 17, V.w - 8, 34, 'la membrane interne (une crête)'); }
+    const seulTaille = e.tel && e.vu('taille', .05) && !e.vu('spheres', .05);
+    let y = V.y + 16 + tt;
+    if (e.S.legendes && !seulTaille) for (const [cle, lignes, cible, couleur] of legendes) {
+      const y0 = y, ymil = y0 + (lignes.length - 1) * pas / 2 - tt * .32;
+      e.ecrire(cle, () => { c.ligne(colX - 6, ymil, cible[0], cible[1], { couleur: 'faible', largeur: 1.5 }); c.point(cible[0], cible[1], 3, couleur); lignes.forEach((s, i) => c.texte(s, colX, y0 + i * pas, { couleur, taille: 17 })); });
+      c.repere('legende_' + cle, colX - 2, y0 - tt, Math.max(...lignes.map(s => e.larg(s, 17))) + 6, lignes.length * pas + 4, lignes.join(' '));
+      y += lignes.length * pas + tt * .9;
+    }
+    // la taille : la cote sur la mitochondrie, la valeur et le rappel dans la colonne
+    if (e.vu('taille', .05) && !e.vu('spheres', .05)) {
+      const [mx, my] = S(M0.x, M0.y), ry = M0.ry * z, xc = mx - M0.rx * z * .52;
+      c.direct(() => { ctx.save(); ctx.strokeStyle = 'rgba(5,10,14,.6)'; ctx.lineWidth = 8; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(xc, my - ry + 4); ctx.lineTo(xc, my + ry - 4); ctx.stroke(); ctx.restore(); });
+      e.ecrire('cote', () => c.cote(xc, my - ry + 2, xc, my + ry - 2, '', { couleur: 'blanc', largeur: 2.6 }));
+      if (seulTaille) y = V.y + 16 + tt; else y += tt * .3;
+      const y0 = y, t20 = e.taille(20);
+      e.si('taille', .2, 'ta', () => { c.texte('diamètre :', colX, y0, { couleur: 'blanc', taille: 17 }); c.texte('0,5 à 1 µm', colX, y0 + t20 * 1.25, { couleur: 'jaune', taille: 20, gras: true }); });
+      e.si('taille', .6, 'tb', () => (e.tel ? ['1 µm = un', 'millième', 'de mm'] : ['1 µm = un millième', 'de millimètre']).forEach((s, i) => c.texte(s, colX, y0 + t20 * 1.25 + tt * .6 + (i + 1) * pas, { couleur: 'faible', taille: 17 })));
+      if (e.vu('taille', .2)) c.repere('taille', colX - 2, y0 - tt, 210, t20 * 1.25 + tt * 1.4, 'le diamètre de la mitochondrie : 0,5 à 1 µm');
+      c.repere('cote', xc - 12, my - ry, 24, 2 * ry, 'le diamètre, mesuré sur la mitochondrie');
+    }
+  }
+
+  function phase(t, e) {
+    const leg = e.S.legendes ? '' : ' (légendes cachées : schéma muet)';
+    if (!e.vu('cellule')) return 'Le champ du microscope est vide.';
+    if (!e.vu('cadre')) return 'Champ de microscope électronique, grossissement × 8 000, barre d’échelle 1 µm : une cellule entière avec son noyau violet, son hyaloplasme et sept mitochondries (ovales corail à crêtes). Légendes à droite : noyau, mitochondrie, hyaloplasme' + leg + '.';
+    if (!e.vu('mitochondrie')) return 'Un cadre rouge entoure une mitochondrie de la cellule (× 8 000).';
+    if (!e.fait('mitochondrie')) return 'La vue grossit sur la mitochondrie encadrée : le grossissement affiché monte de × 8 000 vers × 45 000.';
+    if (!e.vu('taille')) return 'Grossissement × 45 000 : une seule mitochondrie emplit le champ ; on voit sa double membrane, les crêtes (replis de la membrane interne) et la matrice au centre' + leg + '.';
+    if (!e.vu('cadre2')) return 'Une cote traverse la mitochondrie : « diamètre : 0,5 à 1 µm », et le rappel « 1 µm = un millième de millimètre ».';
+    if (!e.vu('spheres')) return 'Un petit cadre rouge se pose sur une crête de la mitochondrie (× 45 000).';
+    if (!e.fait('spheres')) return 'La vue grossit encore sur la crête encadrée (« encore plus près »).';
+    return 'De très près (barre d’échelle 10 nm) : la membrane interne d’une crête, en bicouche, porte cinq sphères pédonculées dorées tournées vers la matrice (en bas, bleue)' + leg + '.';
+  }
+
+  const F = [4, 40, 672, 318];
+  R2.page({
+    id: 'svt_reference_zoom_mitochondrie', titre: 'De la cellule à la mitochondrie : deux zooms', variante: 'zoom', graine: 37,
+    moments: [
+      ['cellule', 4, 'une cellule au microscope électronique, grossie 8 000 fois'],
+      ['cadre', 2.5, 'un cadre rouge sur une mitochondrie'],
+      ['mitochondrie', 5.5, 'zoom : la mitochondrie grossie 45 000 fois (double membrane, crêtes, matrice)'],
+      ['taille', 4.5, 'son diamètre : 0,5 à 1 µm (1 µm = un millième de mm)'],
+      ['cadre2', 2.5, 'un cadre rouge sur une crête'],
+      ['spheres', 6, 'zoom : les sphères pédonculées sur la crête, côté matrice'],
+    ],
+    dessiner, phase,
+    cadrages: { cellule: F, cadre: F, mitochondrie: F, taille: F, cadre2: F, spheres: F },
+    accroche: 'Une cellule au microscope électronique : on va zoomer deux fois…',
+    fini: 'Cellule (× 8 000) → mitochondrie (× 45 000, diamètre 0,5 à 1 µm) → sphères pédonculées de la membrane interne.',
+    texte: 'Deux zooms, peints façon microscope électronique. Cellule × 8 000 : noyau, hyaloplasme, mitochondries. Zoom sur une mitochondrie, × 45 000 : bâtonnet de 0,5 à 1 µm de diamètre (1 µm = un millième de mm), double membrane, la membrane interne forme des crêtes, matrice au centre. Zoom sur une crête : la membrane interne porte des sphères pédonculées tournées vers la matrice.',
+    explication: [
+      { repere: 'cellule', texte: 'Une cellule entière, grossie huit mille fois : le noyau, le hyaloplasme, et les mitochondries.' },
+      { repere: 'mitochondrie', texte: 'Grossie quarante-cinq mille fois, une mitochondrie montre sa double membrane et sa matrice.' },
+      { repere: 'cretes', texte: 'La membrane interne se replie : ce sont les crêtes.' },
+      { repere: 'taille', texte: 'Son diamètre : entre un demi-micromètre et un micromètre.' },
+      { repere: 'spheres', texte: 'De très près, la crête porte des sphères pédonculées, tournées vers la matrice.' } ],
+  });
+}
+page();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La composition des membranes et de la matrice de la mitochondrie — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une coupe peinte de la mitochondrie, de haut en bas : hyaloplasme, membrane externe en bicouche, espace intermembranaire, membrane interne riche en protéines avec une sphère pédonculée, matrice. À droite, deux barres par membrane : 40 % de lipides et 60 % de protéines pour l'externe, 20 % et 80 % pour l'interne ; puis les trois familles de protéines de la membrane interne, le contenu de la matrice (acide pyruvique, transporteurs d'hydrogène, ATP, ADP, Pi, pas de glucose), ses deux familles d'enzymes et l'hypothèse"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference2.js"></script>
+<script>
+/*
+ * La composition des membranes et de la matrice (cours de référence SVT, diapositives rf_m4_membranes et rf_m4_matrice),
+ * 27 novembre 2026. Document « composition » recréé en animation peinte : une coupe, de haut en bas
+ *   hyaloplasme | membrane externe | espace intermembranaire | membrane interne (sphère pédonculée) | matrice.
+ * Données du document, au chiffre près :
+ *   membrane externe : 40 % de lipides, 60 % de protéines, comparable à la membrane de la cellule (échanges) ;
+ *   membrane interne : 20 % de lipides, 80 % de protéines : enzymes d'oxydoréduction, transporteurs d'électrons,
+ *                      ATP synthase (les sphères pédonculées) ;
+ *   matrice : acide pyruvique, transporteurs d'hydrogène (TH2), ATP, ADP, Pi ; PAS de glucose ; déshydrogénases et
+ *             décarboxylases.
+ * Lexique : bicouche (Lexique.membrane), protéines violettes, sphère pédonculée dorée, acide pyruvique = 3 billes jaunes,
+ * glucose = 6 billes jaunes, taxi cyan NAD+ / NADH,H+ (un transporteur d'hydrogène TH2), ATP carte dorée, ADP carte grise,
+ * Pi bille orange, CO2 = O–C–O, hydrogène = petite bille blanche, électron = bille bleu ciel.
+ * Moments : externe, comme_cellule, interne, enzymes_interne, atp_synthase, matrice, enzymes_matrice, hypothese.
+ * La 2e diapositive ouvre ?depart=atp_synthase. Compter = allumer : les trois familles de la membrane interne (1, 2, 3).
+ */
+const R2 = window.Ref2, P = window.SVTPeinture, LX = window.Lexique, { mix, TAU } = R2;
+const Y = { hyalo: 48, ext: 92, esp: 120, int: 156, mat: 184, bas: 402 }, EP = 28;
+const OXY = [.10, .36, .62], TRANS = [.23, .49, .75], SPH = .925, EXT = [.14, .40, .66, .88];   // places le long des membranes (parts de la largeur)
+const CLAIR = [196, 170, 252];
+const SEC = (tel) => ({ externe: 66, comme: tel ? 150 : 148, interne: 206, enzymes: 284, hypo: tel ? 364 : 360 });
+
+function barres(c, e, nom, x0, y0, valeurs, id) {
+  const { ctx } = e, tt = e.taille(17), pas = tt * 1.3, xb = x0 + e.larg('protéines', 17) + 10, plein = Math.min(112, 262 - (xb - x0) - e.larg('00 %', 17) - 8);
+  [['lipides', valeurs[0], LX.T.membrane, .12, .5], ['protéines', valeurs[1], LX.T.proteine, .5, .9]].forEach(([lab, v, col, a, b], i) => {
+    const y = y0 + (i + 1) * pas;
+    if (!e.si(nom, a, id + lab, () => c.texte(lab, x0, y, { couleur: 'blanc', taille: 17 }))) return;
+    const u = e.d(nom, a + .05, b), h = tt * .72;
+    c.direct(() => {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,.10)'; ctx.beginPath(); ctx.roundRect(xb, y - h, plein, h, h / 2); ctx.fill();
+      if (u > 0) { const g = ctx.createLinearGradient(0, y - h, 0, y); g.addColorStop(0, P.rgba(col.map(k => Math.min(255, k + 60)), 1)); g.addColorStop(1, P.rgba(col.map(k => k * .7), 1));
+        ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(xb, y - h, Math.max(h, plein * v / 100 * u), h, h / 2); ctx.fill(); }
+      ctx.restore();
+      if (u > 0) c.texte(`${Math.round(v * u)} %`, xb + plein + 8, y, { couleur: 'jaune', taille: 17, gras: true });
+    });
+  });
+  if (e.vu(nom, .12)) c.repere(id, x0 - 4, y0 + pas - tt - 2, 268, 2 * pas + 8, `${valeurs[0]} % de lipides, ${valeurs[1]} % de protéines`);
+}
+
+function dessiner(c, t, e) {
+  const { ctx, sx, L } = e, tt = e.taille(17), pas = tt * 1.25, leg = e.S.legendes;
+  const x0 = 14, w = sx(470) - x0, xc = sx(490), X = (f) => x0 + w * f, xS = X(SPH), S = SEC(e.tel);
+  const yE = Y.ext + EP / 2, yI = Y.int + EP / 2;
+  const famille = (i) => e.vu('enzymes_interne', (i - 1) / 3 + .04), pouls = (i) => { const u = e.u('enzymes_interne', (i - 1) / 3 + .04, i / 3); return u > 0 && u < 1 ? Math.sin(Math.PI * u) : 0; };
+
+  // ── la coupe peinte ──
+  c.direct(() => {
+    ctx.save(); ctx.beginPath(); ctx.roundRect(x0, Y.hyalo, w, Y.bas - Y.hyalo, 12); ctx.clip();
+    P.fondHyalo(ctx, x0, Y.hyalo, w, Y.ext - Y.hyalo + 4);
+    const g = ctx.createLinearGradient(0, Y.esp, 0, Y.int); g.addColorStop(0, P.rgba(LX.T.mitoExt, .42)); g.addColorStop(1, P.rgba(LX.T.mitoEsp, .46));
+    ctx.fillStyle = g; ctx.fillRect(x0, Y.esp - 4, w, Y.int - Y.esp + 8);
+    P.fondMatrice(ctx, x0, Y.mat - 4, w, Y.bas - Y.mat + 4, { cx: x0 + w * .4, cy: Y.mat + 90 });
+    LX.membrane(ctx, x0, Y.ext, w, EP, { pas: 9 });
+    LX.membrane(ctx, x0, Y.int, w, EP, { pas: 9 });
+    // membrane externe : des protéines d'échange (60 %) ; à comme_cellule, de petites molécules les traversent
+    EXT.forEach((f, i) => {
+      LX.proteine(ctx, X(f), yE, 22, EP + 8);
+      if (e.vu('comme_cellule') && !e.fait('comme_cellule')) { const u = (e.u('comme_cellule') * 2.4 + i * .27) % 1; LX.bille(ctx, X(f), mix(Y.ext - 16, Y.esp + 14, u), 3.6, [226, 232, 240], { alpha: Math.sin(Math.PI * u) }); }
+    });
+    // membrane interne (80 % de protéines) : enzymes d'oxydoréduction (grosses), transporteurs d'électrons (petits, clairs), sphère pédonculée
+    const halo = (x, y, r, a) => { if (a <= .02) return; const h = ctx.createRadialGradient(x, y, 2, x, y, r); h.addColorStop(0, `rgba(255,232,120,${.6 * a})`); h.addColorStop(1, 'rgba(255,232,120,0)'); ctx.fillStyle = h; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); };
+    OXY.forEach((f) => { halo(X(f), yI, 40, pouls(1)); LX.proteine(ctx, X(f), yI, 34, EP + 14); });
+    TRANS.forEach((f) => { halo(X(f), yI, 30, pouls(2)); LX.proteine(ctx, X(f), yI, 17, EP + 4, { couleur: CLAIR }); });
+    if (e.vu('enzymes_interne', 1 / 3 + .04) && !e.fait('enzymes_interne')) {   // un électron passe de transporteur en transporteur
+      const u = e.u('enzymes_interne', 1 / 3 + .06, 2 / 3 - .02); if (u > 0 && u < 1) { const k = Math.min(1.999, u * 2), i = Math.floor(k), f = k - i;
+        LX.electron(ctx, mix(X(TRANS[i]), X(TRANS[i + 1]), f), yI - 6 - 16 * Math.sin(Math.PI * f), { r: 6 }); }
+    }
+    const aS = Math.max(pouls(3), e.vu('atp_synthase') ? (e.fait('atp_synthase') ? .75 : .45 + .55 * Math.sin(Math.PI * e.u('atp_synthase') * 3) ** 2) : 0);
+    halo(xS, yI + 46, 46, aS);
+    LX.spherePedonculee(ctx, xS, yI, EP, 1, { r: 14 });
+    ctx.restore();
+    ctx.save(); ctx.strokeStyle = 'rgba(200,215,225,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(x0, Y.hyalo, w, Y.bas - Y.hyalo, 12); ctx.stroke(); ctx.restore();
+  });
+  // les noms des compartiments (sur leur fond, pas sur les membranes)
+  if (leg) e.ecrire('noms', () => {
+    c.texte('hyaloplasme', x0 + 12, Y.hyalo + 14 + tt * .6, { couleur: 'vert', taille: 17 });
+    c.texte('espace intermembranaire', x0 + w - 12, (Y.esp + Y.int) / 2 + tt * .34, { couleur: 'blanc', taille: 17, align: 'right' });
+    c.texte('matrice', x0 + 12, Y.mat + 10 + tt * .8, { couleur: 'cyan', taille: 17 });
+  });
+  c.repere('hyaloplasme', x0, Y.hyalo, w, Y.ext - Y.hyalo, 'le hyaloplasme, hors de la mitochondrie');
+  c.repere('membrane_externe', x0, Y.ext - 4, w, EP + 8, 'la membrane externe');
+  c.repere('espace', x0, Y.esp, w, Y.int - Y.esp, 'l’espace intermembranaire');
+  c.repere('membrane_interne', x0, Y.int - 6, w, EP + 12, 'la membrane interne');
+  c.repere('matrice', x0, Y.mat + 46, w, Y.bas - Y.mat - 46, 'la matrice');
+  c.repere('sphere', xS - 18, Y.int - 4, 36, 84, 'la sphère pédonculée');
+  c.repere('famille_1', X(OXY[0]) - 19, Y.int - 8, 38, EP + 16, 'une enzyme d’oxydoréduction');
+  c.repere('famille_2', X(TRANS[0]) - 11, Y.int - 4, 22, EP + 8, 'un transporteur d’électrons');
+  c.repere('famille_3', xS - 17, Y.mat + 6, 34, 44, 'l’ATP synthase : la sphère pédonculée');
+
+  // ── la colonne de droite : les deux membranes en chiffres, les trois familles, l'hypothèse ──
+  const rappel = (y, ym) => c.ligne(xc - 6, y - tt * .3, x0 + w + 2, ym, { couleur: 'faible', largeur: 1.5 });
+  if (e.si('externe', .03, 't_ext', () => { c.texte('membrane externe', xc, S.externe, { couleur: 'orange', taille: 18, gras: true }); rappel(S.externe, yE); }))
+    c.repere('titre_externe', xc - 2, S.externe - tt, e.larg('membrane externe', 18) + 14, tt * 1.3, 'la membrane externe');
+  barres(c, e, 'externe', xc, S.externe, [40, 60], 'barres_externe');
+  e.si('comme_cellule', .08, 'cc1', () => c.texte('comme la membrane', xc, S.comme, { couleur: 'blanc', taille: 17 }));
+  if (e.si('comme_cellule', .4, 'cc2', () => c.texte('de la cellule : échanges', xc, S.comme + pas, { couleur: 'blanc', taille: 17 })))
+    c.repere('comme_cellule', xc - 2, S.comme - tt, 250, pas + tt * 1.3, 'comparable à la membrane de la cellule : des échanges');
+  if (e.si('interne', .03, 't_int', () => { c.texte('membrane interne', xc, S.interne, { couleur: 'orange', taille: 18, gras: true }); rappel(S.interne, yI); }))
+    c.repere('titre_interne', xc - 2, S.interne - tt, e.larg('membrane interne', 18) + 14, tt * 1.3, 'la membrane interne');
+  barres(c, e, 'interne', xc, S.interne, [20, 80], 'barres_interne');
+  [['enzymes d’oxydoréduction', 'blanc'], ['transporteurs d’électrons', 'blanc'], ['ATP synthase', 'jaune']].forEach(([s, couleur], i) => {
+    if (!famille(i + 1)) return;
+    // téléphone : la fenêtre ne montre que la membrane ; les trois noms s'écrivent dessous, dans la matrice encore vide
+    if (e.tel && e.vu('atp_synthase')) return;
+    const xn = e.tel ? x0 + 14 : xc, y = e.tel ? Y.mat + 52 + (i + 1) * pas : S.enzymes + i * pas;
+    e.ecrire('fam' + i, () => c.texte(`${i + 1} · ${s}`, xn, y, { couleur, taille: 17, max: 262 }));
+    c.repere('nom_famille_' + (i + 1), xn - 2, y - tt, Math.min(262, e.larg(`${i + 1} · ${s}`, 17)) + 6, tt * 1.3, s);
+  });
+  if (e.vu('atp_synthase', .2)) {
+    const s = 'sphère pédonculée', y = Y.mat + 34 + tt * .35;
+    e.ecrire('nomsphere', () => c.texte(s, xS - 24, y, { couleur: 'jaune', taille: 17, align: 'right' }));
+    c.repere('nom_sphere', xS - 26 - e.larg(s, 17), y - tt, e.larg(s, 17) + 6, tt * 1.3, 'la sphère pédonculée = l’ATP synthase');
+  }
+
+  // ── la matrice : ce qu'elle contient (un par un), pas de glucose ──
+  const yA = 252, yN = yA + 14 + tt * .95;
+  if (e.vu('matrice', .04)) {
+    const a = (i) => e.d('matrice', .04 + i * .2, .16 + i * .2), xg = sx(410);
+    c.direct(() => {
+      LX.acidePyruvique(ctx, sx(74), yA, { echelle: .72, alpha: a(0) });
+      LX.nad(ctx, sx(176), yA, { etat: 'reduit', echelle: .8, alpha: a(1) });
+      LX.atp(ctx, sx(246), yA, { echelle: .8, alpha: a(2) }); LX.atp(ctx, sx(292), yA, { etat: 'adp', echelle: .8, alpha: a(2) }); LX.pi(ctx, sx(326), yA, { alpha: a(2), r: 9 });
+      LX.glucose(ctx, xg, yA, { echelle: .5, alpha: a(3) * .9 });
+      const k = e.d('matrice', .8, .96);
+      if (k > 0) { ctx.save(); ctx.strokeStyle = '#ff5a52'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 3;
+        ctx.beginPath(); ctx.moveTo(xg - 46, yA - 14); ctx.lineTo(xg - 46 + 92 * Math.min(1, k * 2), yA - 14 + 28 * Math.min(1, k * 2)); ctx.stroke();
+        if (k > .5) { ctx.beginPath(); ctx.moveTo(xg + 46, yA - 14); ctx.lineTo(xg + 46 - 92 * (k * 2 - 1), yA - 14 + 28 * (k * 2 - 1)); ctx.stroke(); }
+        ctx.restore(); }
+    });
+    const noms = [['acide pyruvique', sx(74), 'jaune', 'acide_pyruvique', 'l’acide pyruvique (3 carbones)'], ['TH_{2}', sx(176), 'cyan', 'th2', 'un transporteur d’hydrogène chargé (TH2)'],
+      ['ATP, ADP, Pi', sx(286), 'blanc', 'atp_adp_pi', 'ATP, ADP et Pi'], ['pas de glucose', xg, 'rose', 'glucose_barre', 'pas de glucose dans la matrice']];
+    noms.forEach(([s, x, couleur, id, label], i) => {
+      const xt = Math.max(x0 + 8 + e.larg(s, 17) / 2, x);
+      if (leg || i === 3) e.si('matrice', .1 + i * .2 + (i === 3 ? .1 : 0), 'm' + i, () => c.texte(s, xt, yN, { couleur, taille: 17, align: 'center' }));
+      if (e.vu('matrice', .1 + i * .2)) c.repere(id, x - 48, yA - 16, 96, 32, label);
+    });
+  }
+
+  // ── les deux familles d'enzymes de la matrice ──
+  const yZ = 326, yM = yZ + 30 + tt * .9;
+  const scene = (ou, xo, id, mot, action, label, corps) => {
+    if (!e.vu('enzymes_matrice', ou)) return;
+    const u = (a, b) => e.u('enzymes_matrice', ou + a * .5, ou + b * .5), d = (a, b) => e.d('enzymes_matrice', ou + a * .5, ou + b * .5);
+    const xe = xo + 104, xs = xo + 34, xp = xo + 182;
+    c.direct(() => {
+      LX.proteine(ctx, xe, yZ, 66, 42, { alpha: .9 * d(0, .12) });
+      LX.acidePyruvique(ctx, xs, yZ, { echelle: .6, alpha: d(0, .12) * mix(1, .32, u(.2, .35)) });     // la molécule de départ reste, pâlie
+      corps(u, d, xs, xe, xp);
+    });
+    e.si('enzymes_matrice', ou + .3, 'mot' + id, () => c.texte(mot, xe, yM, { couleur: 'jaune', taille: 18, align: 'center' }));
+    if (leg) e.si('enzymes_matrice', ou + .38, 'act' + id, () => c.texte(action, xe, yM + pas, { couleur: 'blanc', taille: 17, align: 'center' }));
+    c.repere(id, xo + 4, yZ - 40, 222, 80, label);
+  };
+  const E6 = .6, PAS6 = 28 * E6;
+  scene(0, sx(120) - 110, 'decarboxylase', 'dé·carboxyl·ase', 'retire un CO_{2}', 'une décarboxylase : elle retire un CO2', (u, d, xs, xe, xp) => {
+    if (u(.18, 1) <= 0) return;
+    const v = d(.18, .4), s = d(.45, .8), x = mix(xs, xe, v);
+    if (s <= 0) LX.acidePyruvique(ctx, x, yZ, { echelle: E6 });
+    else {
+      LX.chaine(ctx, LX.positionsChaine(2, mix(xe - PAS6 / 2, xp - 6, s), mix(yZ, yZ + 10, s), { echelle: E6 }), { echelle: E6 });            // il reste 2 carbones
+      const xo2 = mix(xe + PAS6, xp, s), yo2 = mix(yZ, yZ - 24, s);
+      if (s < .35) LX.bille(ctx, xo2, yo2, 12 * E6, LX.C.carbone); else LX.co2(ctx, xo2, yo2, { echelle: 1.1, alpha: 1 });                     // le 3e carbone part en CO2
+      const f = u(.45, .7); if (f > 0 && f < 1) P.eclat(ctx, xe + PAS6 / 2, yZ, 8 + 16 * f, 1 - f);
+    }
+  });
+  scene(.5, sx(350) - 110, 'deshydrogenase', 'dé·hydrogén·ase', 'retire des H → taxi', 'une déshydrogénase : elle retire des hydrogènes, donnés à un taxi', (u, d, xs, xe, xp) => {
+    const at = d(.05, .25), charge = u(0, 1) >= .78;
+    LX.nad(ctx, xp, yZ - 24, { etat: charge ? 'reduit' : 'oxyde', echelle: .78, alpha: at });
+    if (u(.18, 1) <= 0) return;
+    const v = d(.18, .4), s = d(.8, 1);
+    LX.acidePyruvique(ctx, mix(mix(xs, xe, v), xp - 4, s), mix(yZ, yZ + 12, s), { echelle: E6 });
+    const h = u(.48, .78); if (h > 0 && h < 1) for (const dx of [-6, 6]) LX.hydrogene(ctx, mix(xe + dx, xp + dx, h), mix(yZ - 12, yZ - 24, h) - 12 * Math.sin(Math.PI * h));
+  });
+
+  // ── l'hypothèse, au conditionnel ──
+  if (e.vu('hypothese', .04)) {
+    const lignes = ['Hypothèse : l’acide pyruvique', 'serait dégradé dans la matrice', '(CO_{2} retiré, H donnés aux taxis).'];
+    lignes.forEach((s, i) => e.si('hypothese', .04 + i * .28, 'hy' + i, () => c.texte(s, xc, S.hypo + i * pas, { couleur: i ? 'blanc' : 'jaune', taille: 17, max: 264 })));
+    c.repere('hypothese', xc - 4, S.hypo - tt, 268, 2 * pas + tt * 1.4, 'l’hypothèse : l’acide pyruvique serait dégradé dans la matrice');
+  }
+}
+
+/* Compter = allumer : les trois familles de protéines de la membrane interne, une à une. */
+function comptes(t, e) {
+  const out = [];
+  if (!e.vu('enzymes_interne') || e.vu('matrice')) return out;
+  for (let i = 1; i <= 3; i++) if (e.vu('enzymes_interne', (i - 1) / 3 + .04)) out.push({ id: 'famille_' + i, n: i, fort: e.etape === 'enzymes_interne' && e.u('enzymes_interne') < i / 3 });
+  return out;
+}
+
+function phase(t, e) {
+  const coupe = 'Coupe peinte, de haut en bas : hyaloplasme, membrane externe (bicouche), espace intermembranaire, membrane interne (bicouche pleine de protéines, une sphère pédonculée vers la matrice), matrice.';
+  if (!e.vu('externe')) return coupe;
+  if (!e.vu('comme_cellule')) return coupe + ' À droite, « membrane externe » : deux barres se remplissent, lipides 40 %, protéines 60 %.';
+  if (!e.vu('interne')) return 'Membrane externe (40 % de lipides, 60 % de protéines) : de petites molécules traversent ses protéines ; écrit : « comme la membrane de la cellule : échanges ».';
+  if (!e.vu('enzymes_interne')) return '« membrane interne » : lipides 20 %, protéines 80 % (deux barres), à comparer aux 40 % et 60 % de la membrane externe écrits au-dessus.';
+  if (!e.vu('atp_synthase')) { const n = [1, 2, 3].filter(i => e.vu('enzymes_interne', (i - 1) / 3 + .04)).length;
+    return `Dans la membrane interne, les familles de protéines s’allument une à une avec leur numéro (${n} sur 3) : 1 enzymes d’oxydoréduction (grosses, violettes), 2 transporteurs d’électrons (petits ; un électron saute de l’un à l’autre), 3 ATP synthase.`; }
+  if (!e.vu('matrice')) return 'La sphère pédonculée s’allume, son nom s’écrit à côté : sphère pédonculée = ATP synthase (famille 3).';
+  if (!e.vu('enzymes_matrice')) return 'Dans la matrice apparaissent un par un : l’acide pyruvique (3 billes jaunes), un transporteur d’hydrogène chargé TH2 (taxi), ATP, ADP et Pi ; puis un glucose (6 billes) barré d’une croix rouge : « pas de glucose ».';
+  if (!e.vu('hypothese')) return (e.vu('enzymes_matrice', .5) ? 'À gauche, la décarboxylase a retiré un CO2 d’une chaîne de 3 carbones (il en reste 2). À droite, la déshydrogénase (dé·hydrogén·ase) retire deux hydrogènes à une chaîne et les donne à un taxi NAD+ qui devient NADH,H+.'
+    : 'En bas de la matrice, une enzyme, la décarboxylase (dé·carboxyl·ase) : une chaîne de 3 carbones y entre, un carbone en sort sous forme de CO2.');
+  return 'L’hypothèse s’écrit à droite, au conditionnel : « l’acide pyruvique serait dégradé dans la matrice (CO2 retiré, H donnés aux taxis) ».';
+}
+
+R2.page({
+  id: 'svt_reference_composition_mitochondrie', titre: 'Membranes et matrice de la mitochondrie : la composition', variante: 'composition', graine: 43,
+  moments: [
+    ['externe', 5.5, 'la membrane externe : 40 % de lipides, 60 % de protéines'],
+    ['comme_cellule', 4, 'comparable à la membrane de la cellule : des échanges'],
+    ['interne', 5.5, 'la membrane interne : 20 % de lipides, 80 % de protéines'],
+    ['enzymes_interne', 8, 'ses protéines : enzymes d’oxydoréduction, transporteurs d’électrons, ATP synthase'],
+    ['atp_synthase', 3.5, 'l’ATP synthase, c’est la sphère pédonculée'],
+    ['matrice', 7.5, 'la matrice : acide pyruvique, TH2, ATP, ADP, Pi ; pas de glucose'],
+    ['enzymes_matrice', 10, 'ses enzymes : décarboxylases (retirent un CO2), déshydrogénases (retirent des H)'],
+    ['hypothese', 5.5, 'l’hypothèse : l’acide pyruvique serait dégradé dans la matrice'],
+  ],
+  dessiner, comptes, phase,
+  cadrages: {   // téléphone : la fenêtre de l'étape en cours (rapport ≈ 2,1)
+    externe: [236, 36, 524, 246], comme_cellule: [236, 36, 524, 246], interne: [236, 100, 524, 246], enzymes_interne: [0, 118, 480, 228],
+    atp_synthase: [170, 128, 420, 198], matrice: [0, 180, 480, 226],
+    enzymes_matrice: (u) => (u < .5 ? [0, 270, 330, 156] : [222, 270, 330, 156]), hypothese: [290, 300, 470, 222],
+  },
+  accroche: 'Une coupe de la mitochondrie : de quoi sont faites ses membranes ?',
+  fini: 'Membrane externe 40 / 60, membrane interne 20 / 80 (enzymes, transporteurs d’électrons, ATP synthase) ; matrice : acide pyruvique, pas de glucose, décarboxylases et déshydrogénases.',
+  texte: 'Composition de la mitochondrie. Membrane externe : 40 % de lipides, 60 % de protéines, comparable à la membrane de la cellule (échanges). Membrane interne : 20 % de lipides, 80 % de protéines : enzymes d’oxydoréduction, transporteurs d’électrons, ATP synthase (les sphères pédonculées). Matrice : acide pyruvique, transporteurs d’hydrogène (TH2), ATP, ADP, Pi ; pas de glucose ; enzymes : décarboxylases (retirent un CO2) et déshydrogénases (retirent des hydrogènes, donnés aux transporteurs). Hypothèse : l’acide pyruvique serait dégradé dans la matrice.',
+  explication: [
+    { repere: 'barres_externe', texte: 'La membrane externe : quarante pour cent de lipides, soixante pour cent de protéines, comme la membrane de la cellule.' },
+    { repere: 'barres_interne', texte: 'La membrane interne : vingt pour cent de lipides seulement, quatre-vingts pour cent de protéines.' },
+    { repere: 'sphere', texte: 'Parmi ces protéines, l’ATP synthase : c’est la sphère pédonculée.' },
+    { repere: 'glucose_barre', texte: 'Dans la matrice, de l’acide pyruvique, mais pas de glucose.' },
+    { repere: 'decarboxylase', texte: 'Une décarboxylase retire un CO2.' },
+    { repere: 'deshydrogenase', texte: 'Une déshydrogénase retire des hydrogènes, qu’un taxi emporte.' } ],
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
