@@ -158,7 +158,8 @@ export default function ExercicePage() {
         verdict, partiel: !!r.partiel, details: r.details, noteObtenue: typeof r.note === 'number' ? r.note : undefined });
     } catch {
       // sans le tuteur en ligne : l'élève compare lui-même avec la réponse attendue
-      poser(q.id, { retour: '', autoEval: true, correction: true });
+      // verdict « nonjuge » : le téléphone relié ne reste pas sur « Le tuteur lit ta réponse… »
+      poser(q.id, { retour: '', autoEval: true, correction: true, verdict: 'nonjuge' });
       if (!silencieux) jouer(q.correction.audio);
     }
   };
@@ -231,6 +232,9 @@ export default function ExercicePage() {
   useVueTelephone(vueTel, m => {
     if (m.type === 'aller') { const k = enonce?.questions.findIndex(x => x.id === m.question) ?? -1; if (k >= 0) { jouer(undefined); setQi(k); } }
     else if (m.type === 'feuille') { jouer(undefined); setOuvert({ genre: 'toute', texte: m.texte }); }
+    // 27/11/2026 : une fenêtre ouverte sur le PC (toute la feuille, explication…) rend le champ inactif ; la réponse du
+    // téléphone arrive alors ici : la fenêtre se ferme pour que la correction se voie AUSSI sur le PC
+    else if (m.type === 'texte') { jouer(undefined); setOuvert(null); if (m.rendre && q && m.texte.trim()) void repondreA(q, m.texte.trim()); }
   });
 
   if (erreur) return <Plein><p className="text-slate-700">{erreur}</p><button className="mt-4 underline" onClick={() => navigate('/exercices')}>Retour aux exercices</button></Plein>;
@@ -344,7 +348,7 @@ export default function ExercicePage() {
               {/* La réponse, sur les lignes de la copie */}
               {!etat.correction && etat.juste !== true && (
                 <div className="mt-3">
-                  <ChampReponse key={cle(q.id)} papier onEnvoyer={t => void repondre(t)} libelle="Vérifier" lignes={q.reponse.type === 'valeur' ? 4 : 7}
+                  <ChampReponse key={cle(q.id)} papier actif={!ouvert} onEnvoyer={t => void repondre(t)} libelle="Vérifier" lignes={q.reponse.type === 'valeur' ? 4 : 7}
                     placeholder={q.reponse.type === 'valeur' ? `${q.reponse.grandeur || 'résultat'} = … ${q.reponse.unite || ''}` : 'Ta réponse, rédigée et justifiée…'}
                     contexte={{ deck_id: ex.id, title: ex.titre, enonce: q.texte, matiere: ex.matiere, chapitre: ex.chapitre }}
                     suggestions={{ deck_id: ex.id, slide_id: `${mode}_${q.id}`, enonce: q.texte, clavier: q.clavier }} />
@@ -478,7 +482,7 @@ function Feuille({ ex, enonce, mode, onFermer }: { ex: Exercice; enonce: EnonceE
       <div className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-[#fdfcf6] text-slate-900 shadow-2xl">
         <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-2">
           <p className="flex-1 font-semibold">📝 Ma feuille — {ex.titre}</p>
-          <BoutonPhoto petit contexte={{ deck_id: ex.id, title: ex.titre, enonce: qa?.texte, matiere: ex.matiere }} onTexte={t => inserer(t)} />
+          <BoutonPhoto petit relais={false} contexte={{ deck_id: ex.id, title: ex.titre, enonce: qa?.texte, matiere: ex.matiere }} onTexte={t => inserer(t)} />
           <button onClick={onFermer} className="rounded-full bg-slate-200 px-3 py-1 text-sm hover:bg-slate-300">Fermer</button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3" style={{ backgroundImage: 'repeating-linear-gradient(#fdfcf6 0 31px, #c7d7ee 31px 32px)', fontFamily: CRAIE }}>
