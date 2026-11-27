@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ExAO : des levures, du glucose, deux sondes — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="../reactions_responsables_liberation_energie-tableau/svt.css">
+<style>@media (max-height: 340px) { .scene { padding-bottom: .2em; } .tableau { padding: .2em .5em; } }</style></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche, le montage peint : un bioréacteur en verre posé sur un agitateur magnétique, une suspension de levures, deux sondes, une seringue de glucose, une loupe qui montre les levures de près, une interface. À droite, l’écran de l’ordinateur où les courbes se tracent en même temps que le phénomène dans la cuve."></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="../reactions_responsables_liberation_energie-tableau/peinture.js"></script>
+<script src="demarche.js"></script>
+<script src="reference.js"></script>
+<script>
+/*
+ * ExAO sur des levures — cours de référence SVT (docs/reference-svt/ARCHITECTURE.md § 2 et § 3), 27 novembre 2026.
+ * Trois vues (?vue=) ; le temps de la page (time_s, moments) est en secondes de la SCÈNE, le temps de l'expérience est
+ * affiché sur l'écran de l'ordinateur (curseur) et dans la ligne des valeurs lues.
+ *
+ *   montage : un élément à la fois — bioreacteur, suspension, agitateur, sonde_o2, sonde_co2, seringue, interface,
+ *             ordinateur, complet.
+ *   exp1    : cuve bien oxygénée, injection de glucose à 1,8 min (document : temps 0 à 7 min ; O2 en mg/L, CO2 en mmol/L).
+ *             O2  : 5,3 stable jusqu'à 1,8 (léger maximum 5,4 vers 2), 4,7 à 3 ; 3,8 à 4 ; 2,6 à 5 ; 1,2 à 6 ; 0 à 6,8 min.
+ *             CO2 : 0,16 stable jusqu'à 3 ; 0,18 à 4 ; 0,20 à 5 ; 0,25 à 6 ; 0,31 à 6,8 min.
+ *             axe_temps, axe_o2, axes, avant, injection ║ arrêt pour l'observation ║ o2_baisse, co2_monte, decrire_avant,
+ *             decrire, deduire.
+ *   exp2    : cuve fermée par un bouchon, glucose déjà présent (temps 0 à 700 s ; mg/mL ; glucose en unités arbitraires).
+ *             O2 : 6 → 0 à 190 s. Glucose : 42 ; 28 à 175 ; 22 à 400 ; 19 à 500 ; 15,5 à 700. CO2 : 3 jusqu'à 60 ; 5 à 100 ;
+ *             10 à 200 ; 20 à 400 ; 30 à 500 ; 44 à 700. Éthanol : 0 jusqu'à 190 ; 10 à 300 ; 20 à 480 ; 34 à 700.
+ *             axe_temps, axe_gauche, axes, depart_valeurs, phase1, o2_zero ║ arrêt pour l'observation ║ co2_monte,
+ *             ethanol_apparait, glucose_continue, fin, decrire_avant, decrire, deduire.
+ * Après l'arrêt pour l'observation, les voies sont montrées UNE À UNE (le curseur de temps revient à l'instant de départ
+ * et rejoue) : une chose à la fois. Dans la loupe, les levures font ce que la courbe trace : elles avalent les O2 (deux
+ * billes rouges) un à un quand la courbe d'O2 descend, rejettent des CO2 quand celle du CO2 monte, l'éthanol s'accumule.
+ * Les courbes passent exactement par les points du document (Ref.pchip) : lire une valeur donne celle du document.
+ */
+const R = window.Ref, LX = window.Lexique, { fr } = window.Tableau, { doux, mix, borne, rgba, TAU } = R;
+const Q = new URLSearchParams(location.search);
+const vue = ['montage', 'exp1', 'exp2'].includes(Q.get('vue')) ? Q.get('vue') : 'exp1';
+const RGB = { o2: [248, 113, 113], co2: [192, 132, 252], glu: [250, 204, 21], eth: [34, 211, 238] };
+const CRAIE = { o2: 'rouge', co2: 'violet', glu: 'jaune', eth: 'cyan' };
+const HEX = { o2: '#f87171', co2: '#c084fc', glu: '#facc15', eth: '#22d3ee' };
+
+/* ── Les données des documents ── */
+const D1 = {
+  o2: R.pchip([[0, 5.3], [1.8, 5.3], [2, 5.4], [2.25, 5.3], [3, 4.7], [4, 3.8], [5, 2.6], [6, 1.2], [6.8, 0], [7, 0]]),
+  co2: R.pchip([[0, .16], [3, .16], [4, .18], [5, .20], [6, .25], [6.8, .31], [7, .325]]),
+  INJ: 1.8, FIN: 6.8, TMAX: 7,
+};
+const D2 = {
+  o2: R.pchip([[0, 6], [190, 0], [700, 0]]),
+  glu: R.pchip([[0, 42], [175, 28], [400, 22], [500, 19], [700, 15.5]]),
+  co2: R.pchip([[0, 3], [60, 3], [100, 5], [200, 10], [400, 20], [500, 30], [700, 44]]),
+  eth: R.pchip([[0, 0], [190, 0], [300, 10], [480, 20], [700, 34]]),
+  ZERO: 190, FIN: 700, TMAX: 700,
+};
+
+/* ── Les moments (s de la scène) ── */
+const MOMENTS = {
+  montage: [
+    ['bioreacteur', 2.6, 'le bioréacteur : une cuve en verre'], ['suspension', 6.2, 'la suspension de levures (la loupe les montre de près)'],
+    ['agitateur', 9.4, 'l’agitateur magnétique : le barreau tourne'], ['sonde_o2', 12.6, 'la sonde à dioxygène'], ['sonde_co2', 15.8, 'la sonde à dioxyde de carbone'],
+    ['seringue', 19, 'la seringue de glucose'], ['interface', 22.6, 'l’interface, reliée aux sondes'], ['ordinateur', 26.6, 'l’ordinateur : écran allumé, axes vides'],
+    ['complet', 30, 'le montage complet : ExAO'] ],
+  exp1: [
+    ['axe_temps', 3.6, 'l’axe horizontal : le temps, en minutes'], ['axe_o2', 7.6, 'l’axe du dioxygène dissous, en mg/L'], ['axes', 11.4, 'l’axe du CO2, en mmol/L : les deux axes sont lus'],
+    ['avant', 17, 'avant le glucose : deux paliers, 5,3 mg/L et 0,16 mmol/L'], ['injection', 21, 'injection du glucose à 1,8 min'],
+    ['o2_baisse', 31, 'le dioxygène baisse jusqu’à 0 vers 6,8 min'], ['co2_monte', 39, 'le CO2 monte de 0,16 à 0,31 mmol/L'],
+    ['decrire_avant', 43.5, 'description : avant l’injection'], ['decrire', 48.5, 'description : après l’injection'], ['deduire', 53, 'déduction : respiration cellulaire'] ],
+  exp2: [
+    ['axe_temps', 4.2, 'l’axe horizontal : le temps, en secondes (60 s = 1 min)'], ['axe_gauche', 7.8, 'l’axe de gauche, en mg/mL'], ['axes', 11.4, 'l’axe de droite : le glucose ; les axes sont lus'],
+    ['depart_valeurs', 18, 'les valeurs de départ : O2 6, glucose 42, CO2 3, éthanol 0'], ['phase1', 27, 'de 0 à 190 s : O2 tombe à 0, CO2 presque constant, pas d’éthanol'],
+    ['o2_zero', 30, 'à 190 s (environ 3 min) : plus de dioxygène'], ['co2_monte', 38, 'après 190 s, le CO2 monte jusqu’à 44 mg/mL'],
+    ['ethanol_apparait', 46, 'l’éthanol apparaît et monte jusqu’à 34 mg/mL'], ['glucose_continue', 53, 'le glucose continue de baisser'], ['fin', 57, 'à 700 s : CO2 44, éthanol 34'],
+    ['decrire_avant', 61.5, 'description : de 0 à 190 s'], ['decrire', 66.5, 'description : après 190 s'], ['deduire', 71, 'déduction : fermentation alcoolique'] ],
+}[vue];
+
+/* ── La géométrie (cadre 760 × 420, plus large : l'écran s'étire) ── */
+function geo(L) {
+  const lg = Math.max(0, Math.min(70, (L - 760) * .22));       // tableau large : un peu d'air entre le montage et l'écran
+  return { cu: { x: 34, y: 112, w: 158, h: 186 }, ag: { x: 20, y: 300, w: 186, h: 34 }, so2: { x: 62, yH: 50, yB: 258 }, sco2: { x: 118, yH: 62, yB: 258 },
+    ser: { x: 162, yH: 46, yB: 92, yA: 166 }, lp: { cx: 296 + lg * .4, cy: 182, r: 64 }, bt: { x: 238 + lg * .4, y: 296, w: 100, h: 38 },
+    mon: { x: 366 + lg, y: 28, w: L - 372 - lg, h: 270 }, table: 336 };
+}
+
+/* ── L'état de la manip à l'instant t ── */
+function etatManip(e) {
+  const S = { cuve: 1, niveau: .78, trouble: 1, tourne: 1, so2: 1, sco2: 1, ser: 1, bt: 1, cabS: 1, mon: 1, cabM: 1, allume: 1, loupe: 1, enfonce: 0, nuage: 0, bouchon: vue === 'exp2' };
+  if (vue === 'montage') {
+    S.cuve = e.d('bioreacteur', 0, .5);
+    S.niveau = .78 * e.d('suspension', 0, .5); S.trouble = e.d('suspension', .1, .6); S.loupe = e.d('suspension', .5, .85);
+    S.tourne = e.d('agitateur', .1, .6);
+    S.so2 = e.d('sonde_o2', 0, .5); S.sco2 = e.d('sonde_co2', 0, .5); S.ser = e.d('seringue', 0, .5);
+    S.bt = e.d('interface', 0, .35); S.cabS = e.d('interface', .3, .8);
+    S.mon = e.d('ordinateur', 0, .3); S.cabM = e.d('ordinateur', .25, .5); S.allume = e.d('ordinateur', .5, .8);
+  }
+  if (vue === 'exp1') {
+    const pa = e.p('avant', .06, .8);
+    S.tO2 = D1.INJ * pa + (D1.FIN - D1.INJ) * e.p('o2_baisse', .06, .9);
+    S.tCO2 = D1.INJ * pa + (D1.FIN - D1.INJ) * e.p('co2_monte', .12, .88);
+    // le curseur de temps : il revient à 1,8 min au début de co2_monte, puis rejoue
+    S.tc = e.des('co2_monte') ? (e.p('co2_monte') < .12 ? mix(D1.FIN, D1.INJ, e.d('co2_monte', 0, .12)) : S.tCO2) : S.tO2;
+    S.enfonce = e.d('injection', .08, .45); S.nuage = e.p('injection', .3, 1);
+    S.glucose = e.d('injection', .35, .9);
+  }
+  if (vue === 'exp2') {
+    const p1 = e.p('phase1', .05, .92), seg = (id) => D2.ZERO + (D2.FIN - D2.ZERO) * e.p(id, .14, .9);
+    S.t1 = D2.ZERO * p1;
+    S.tO2 = e.des('co2_monte') ? seg('co2_monte') : S.t1;
+    S.tCO2 = e.des('co2_monte') ? seg('co2_monte') : S.t1;
+    S.tEth = e.des('ethanol_apparait') ? seg('ethanol_apparait') : S.t1;
+    S.tGlu = e.des('glucose_continue') ? seg('glucose_continue') : S.t1;
+    const retour = (id) => (e.p(id) < .14 ? mix(D2.FIN, D2.ZERO, e.d(id, 0, .14)) : seg(id));
+    S.voie = e.des('glucose_continue') ? 'glu' : e.des('ethanol_apparait') ? 'eth' : e.des('co2_monte') ? 'co2' : 'o2';
+    S.tc = e.des('glucose_continue') ? retour('glucose_continue') : e.des('ethanol_apparait') ? retour('ethanol_apparait') : e.des('co2_monte') ? seg('co2_monte') : S.t1;
+    S.depart = e.des('depart_valeurs');
+  }
+  return S;
+}
+
+/* ── Dans la loupe : des levures, et les molécules que les courbes comptent ── */
+const LEV = [[-30, -24, 15], [27, -30, 14], [-6, 25, 16], [37, 17, 13]];
+const PLACES = (() => {   // des places libres entre les levures, tirées une fois (déterministes)
+  const r = R.graine(137), out = [];
+  let garde = 0;
+  while (out.length < 30 && garde++ < 20000) {
+    const a = r() * TAU, d = Math.sqrt(r()) * 54, x = Math.cos(a) * d, y = Math.sin(a) * d;
+    if (LEV.some(([lx, ly, lr]) => Math.hypot(x - lx, y - ly) < lr + 7)) continue;
+    if (out.some(([px, py]) => Math.hypot(x - px, y - py) < (garde < 8000 ? 11 : 8))) continue;
+    out.push([x, y, r()]);
+  }
+  while (out.length < 30) out.push([(r() - .5) * 80, (r() - .5) * 80, r()]);
+  return out;
+})();
+const proche = ([x, y]) => LEV.reduce((m, l) => (Math.hypot(x - l[0], y - l[1]) < Math.hypot(x - m[0], y - m[1]) ? l : m), LEV[0]);
+const N_O2 = 9, N_CO2 = 8, N_GLU = 4, N_ETH = 7;
+function loupeDedans(ctx, lp, e, S) {
+  const h = e.horloge, flot = (k, amp = 2.2) => [Math.sin(h * .9 + k * 1.7) * amp, Math.cos(h * .7 + k * 2.3) * amp];
+  LEV.forEach(([x, y, r], i) => { const [dx, dy] = flot(i + 40, 1.2); LX.levure(ctx, lp.cx + x + dx, lp.cy + y + dy, r, { angle: -.4 + i * .5, mitos: 3, graine: 11 + i }); });
+  if (vue === 'montage') return;
+  // quantités montrées : celles que lisent les sondes à l'instant du curseur (une voie non encore montrée n'est pas montrée ici non plus)
+  let o2, co2, glu = 0, eth = 0;
+  if (vue === 'exp1') {
+    o2 = D1.o2(S.tc) / 5.3; co2 = (D1.co2(Math.min(S.tc, S.tCO2)) - .16) / .15;
+    glu = S.glucose * (1 - .75 * borne((5.3 - D1.o2(S.tc)) / 5.3));
+  } else {
+    o2 = D2.o2(S.tc) / 6; co2 = (D2.co2(Math.min(S.tc, S.tCO2)) - 3) / 41; eth = D2.eth(Math.min(S.tc, S.tEth)) / 34;
+    glu = (D2.glu(Math.min(S.tc, S.tGlu)) - 12) / 30;
+  }
+  // O2 : chaque molécule est avalée par la levure la plus proche quand la courbe passe son seuil
+  for (let k = 0; k < N_O2; k++) {
+    const pl = PLACES[k], lv = proche(pl), u = borne(((k + 1) / N_O2 - o2) * N_O2 + .15), [dx, dy] = flot(k);
+    if (u >= 1) continue;
+    const v = doux(u), x = lp.cx + mix(pl[0] + dx, lv[0], v), y = lp.cy + mix(pl[1] + dy, lv[1], v);
+    LX.o2(ctx, x, y, { echelle: .58, alpha: 1 - v * v });
+  }
+  // CO2 : chaque molécule sort d'une levure quand la courbe passe son seuil
+  for (let k = 0; k < N_CO2; k++) {
+    const pl = PLACES[N_O2 + k], lv = proche(pl), u = borne((co2 - k / N_CO2) * N_CO2), [dx, dy] = flot(k + 20);
+    if (u <= 0) continue;
+    const v = doux(u), x = lp.cx + mix(lv[0], pl[0] + dx, v), y = lp.cy + mix(lv[1], pl[1] + dy, v);
+    LX.co2(ctx, x, y, { echelle: .5, alpha: Math.min(1, u * 2.2) });
+  }
+  // éthanol (exp2) : il s'accumule dans le milieu
+  for (let k = 0; k < N_ETH; k++) {
+    const pl = PLACES[N_O2 + N_CO2 + k], lv = proche(pl), u = borne((eth - k / N_ETH) * N_ETH), [dx, dy] = flot(k + 60);
+    if (u <= 0) continue;
+    const v = doux(u); LX.ethanol(ctx, lp.cx + mix(lv[0], pl[0] + dx, v), lp.cy + mix(lv[1], pl[1] + dy, v), { echelle: .3, alpha: Math.min(1, u * 2.2), angle: pl[2] * 3 });
+  }
+  // glucose : des chaînes de 6 billes jaunes ; elles entrent une à une dans les levures
+  for (let k = 0; k < N_GLU; k++) {
+    const pl = PLACES[N_O2 + N_CO2 + N_ETH + k], lv = proche(pl), u = borne((k + 1) / N_GLU - glu + (vue === 'exp1' ? 0 : 0)) * N_GLU, [dx, dy] = flot(k + 80, 1.6);
+    const present = vue === 'exp1' ? S.glucose : 1; if (present <= 0 || u >= 1) continue;
+    const v = doux(borne(u));
+    LX.glucose(ctx, lp.cx + mix(pl[0] + dx, lv[0], v), lp.cy + mix(pl[1] + dy, lv[1], v) - (1 - present) * 40, { echelle: .2 * (1 - .4 * v), alpha: present * (1 - v * v), angle: pl[2] * 3 - 1 });
+  }
+}
+
+/* ── Le montage peint ── */
+function montage(c, e, G, S) {
+  const ctx = c.ctx, h = e.horloge, { cu, ag, so2, sco2, ser, lp, bt, mon } = G;
+  // la paillasse
+  const gt = ctx.createLinearGradient(0, G.table, 0, G.table + 10); gt.addColorStop(0, 'rgba(226,232,240,.34)'); gt.addColorStop(.25, 'rgba(226,232,240,.1)'); gt.addColorStop(1, 'rgba(226,232,240,0)');
+  ctx.fillStyle = gt; ctx.fillRect(6, G.table, e.L - 12, 10);
+  // les câbles des sondes vers l'interface (derrière tout)
+  const prise = [[bt.x + bt.w * .2, bt.y + bt.h * .59], [bt.x + bt.w * .42, bt.y + bt.h * .59]], couloir = cu.x + cu.w + 14;
+  if (S.cabS > 0) {
+    R.cable(ctx, [so2.x, so2.yH - 5, so2.x, 24, 150, 26, couloir + 2, 62, couloir + 12, 104, couloir + 12, 240, couloir + 2, bt.y + 8, couloir - 4, bt.y + 36, prise[0][0] - 14, prise[0][1] + 16, prise[0][0], prise[0][1] + 2], [62, 66, 80], { part: S.cabS, longueur: 600 });
+    R.cable(ctx, [sco2.x, sco2.yH - 5, sco2.x, 40, 160, 38, couloir - 8, 74, couloir, 112, couloir + 2, 240, couloir + 12, bt.y + 4, couloir + 20, bt.y + 40, prise[1][0] - 12, prise[1][1] + 20, prise[1][0], prise[1][1] + 2], [62, 66, 80], { part: S.cabS, longueur: 600 });
+  }
+  R.agitateur(ctx, ag.x, ag.y, ag.w, ag.h, { marche: S.tourne > .3, vitesse: S.tourne });
+  if (S.cuve > 0) {
+    ctx.save(); ctx.globalAlpha = S.cuve;
+    const teinte = vue === 'exp2' ? [mix(205, 150, S.ethTeinte || 0), mix(186, 200, S.ethTeinte || 0), mix(140, 196, S.ethTeinte || 0)] : [mix(205, 222, S.nuage || 0), mix(186, 196, S.nuage || 0), mix(140, 120, S.nuage || 0)];
+    R.cuve(ctx, cu.x, cu.y, cu.w, cu.h, { niveau: Math.max(.001, S.niveau), teinte, alpha: S.niveau > .01 ? .5 : 0, trouble: S.niveau > .05 ? S.trouble : 0, phase: h * (.3 + S.tourne), vortex: S.niveau > .5 ? S.tourne : 0,
+      couvercle: !S.bouchon, bouchon: S.bouchon,
+      derriere: (cx) => {
+        if (S.so2 > 0) R.sonde(cx, so2.x, so2.yH - (1 - S.so2) * 70, so2.yB - (1 - S.so2) * 70, { couleur: RGB.o2, alpha: Math.min(1, S.so2 * 2) });
+        if (S.sco2 > 0) R.sonde(cx, sco2.x, sco2.yH - (1 - S.sco2) * 70, sco2.yB - (1 - S.sco2) * 70, { couleur: RGB.co2, alpha: Math.min(1, S.sco2 * 2) });
+        if (S.ser > 0 && vue !== 'exp2') R.seringue(cx, ser.x, ser.yH - (1 - S.ser) * 50, ser.yB - (1 - S.ser) * 50, ser.yA - (1 - S.ser) * 50, S.enfonce, RGB.glu, { alpha: Math.min(1, S.ser * 2) });
+      } }, (cx, g) => {
+      // le nuage de glucose qui se disperse (exp1)
+      if (S.nuage > 0 && S.nuage < 1) { const u = S.nuage, rad = 8 + 60 * u, gn = cx.createRadialGradient(ser.x - 14 * u, ser.yA + 14 + 40 * u, 0, ser.x - 14 * u, ser.yA + 14 + 40 * u, rad); gn.addColorStop(0, rgba(RGB.glu, .55 * (1 - u))); gn.addColorStop(1, rgba(RGB.glu, 0)); cx.fillStyle = gn; cx.beginPath(); cx.arc(ser.x - 14 * u, ser.yA + 14 + 40 * u, rad, 0, TAU); cx.fill(); }
+      // les bulles : quelques-unes au repos, davantage quand le CO2 est rejeté
+      if (S.niveau > .5) R.bulles(cx, { x0: g.x0, x1: g.x1, haut: g.surface, bas: g.fond - 8 }, Math.round(3 + 16 * (S.gaz || 0)), h, { graine: 23, rayon: 1.6, variation: 2.2, vitesse: 22 });
+      R.barreau(cx, cu.x + cu.w / 2, g.fond - 6, 46, h * 9 * S.tourne, { tourne: S.tourne > .3 });
+    });
+    ctx.restore();
+  }
+  // la loupe : les levures de près
+  if (S.loupe > 0) {
+    ctx.save(); ctx.globalAlpha = S.loupe;
+    const px = cu.x + cu.w - 30, py = cu.y + cu.h * .62, a1 = Math.atan2(lp.cy - py, lp.cx - px);
+    ctx.strokeStyle = 'rgba(226,232,240,.45)'; ctx.lineWidth = 1.3; ctx.setLineDash([5, 4]);
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(px + Math.cos(a1 + s * 1.57) * 9, py + Math.sin(a1 + s * 1.57) * 9); ctx.lineTo(lp.cx + Math.cos(a1 + s * 1.57) * lp.r, lp.cy + Math.sin(a1 + s * 1.57) * lp.r); ctx.stroke(); }
+    ctx.setLineDash([]); ctx.strokeStyle = 'rgba(226,232,240,.7)'; ctx.beginPath(); ctx.arc(px, py, 9, 0, TAU); ctx.stroke();
+    ctx.restore();
+    R.loupe(ctx, lp.cx, lp.cy, lp.r, (cx) => loupeDedans(cx, lp, e, S), { alpha: S.loupe, fond: vue === 'exp2' ? [mix(150, 112, S.ethTeinte || 0), mix(136, 150, S.ethTeinte || 0), mix(100, 148, S.ethTeinte || 0)] : [150, 136, 100], manche: 1.02, longueur: 30 });
+  }
+  if (S.bt > 0) R.boitier(ctx, bt.x, bt.y, bt.w, bt.h, { alpha: S.bt, mesure: S.mesure, phase: h });
+  if (S.cabM > 0) R.cable(ctx, [bt.x + bt.w, bt.y + bt.h * .5, bt.x + bt.w + 16, bt.y + bt.h * .5, mon.x - 6, mon.y + mon.h + 26, mon.x + 30, mon.y + mon.h - 2], [62, 66, 80], { part: S.cabM, longueur: 120 });
+  return S.mon > 0 ? R.ordinateur(ctx, mon.x, mon.y, mon.w, mon.h, { alpha: S.mon, allume: S.allume, pied: 34 }) : null;
+}
+
+/* ── Le graphique sur l'écran ── */
+function repereGraphe(c, e, d) {
+  const tf = e.tf(16.5), lw = (s) => c.largeurTexte(s, tf);
+  const g = { tf, d };
+  g.Y1 = d.y + tf * 1.3 + 12; g.Y0 = d.y + d.h - (tf * 2.15 + 8);
+  if (vue === 'exp2') { g.X0 = d.x + 8 + lw('40') + 6; g.X1 = d.x + d.w - (lw('40') + 14); g.tmax = D2.TMAX; g.vmax = 52; g.xFin = g.X1; }
+  else { g.xA = d.x + 6 + lw('6,0') + 5; g.X0 = g.xA + 8 + lw('0,40') + 5; g.X1 = d.x + d.w - 12; g.tmax = D1.TMAX; g.xFin = g.X1 - 12; }
+  g.xT = (t) => g.X0 + t / g.tmax * (g.xFin - g.X0);
+  g.yO2 = (v) => g.Y0 - v / 7 * (g.Y0 - g.Y1); g.yCO2 = (v) => g.Y0 - v / .5 * (g.Y0 - g.Y1);
+  g.y = (v) => g.Y0 - v / g.vmax * (g.Y0 - g.Y1);
+  return g;
+}
+const ecranTexte = (c, s, x, y, o) => c.texte(s, x, y, { taille: 16.5, ...o });
+function ligneEcran(ctx, x1, y1, x2, y2, couleur = 'rgba(226,232,240,.8)', l = 1.5, tirets) {
+  ctx.save(); ctx.strokeStyle = couleur; ctx.lineWidth = l; ctx.lineCap = 'round'; if (tirets) ctx.setLineDash(tirets);
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+}
+/** Une courbe f de ta à tb, nette et lumineuse (c'est un écran) ; renvoie sa boîte. */
+function tracer(ctx, f, ta, tb, xT, yV, hex, o = {}) {
+  if (tb <= ta + 1e-9) return null;
+  const n = Math.max(2, Math.ceil((tb - ta) / (o.tmax || 7) * 180)), b = { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 };
+  ctx.save(); ctx.strokeStyle = hex; ctx.lineWidth = o.largeur ?? 2.8; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.globalAlpha = o.alpha ?? 1;
+  ctx.shadowColor = hex; ctx.shadowBlur = o.lueur ?? 8; ctx.beginPath();
+  for (let i = 0; i <= n; i++) { const t = ta + (tb - ta) * i / n, x = xT(t), y = yV(f(t)); b.x0 = Math.min(b.x0, x); b.x1 = Math.max(b.x1, x); b.y0 = Math.min(b.y0, y); b.y1 = Math.max(b.y1, y); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.stroke();
+  if (o.point !== false) { ctx.shadowBlur = 10; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(xT(tb), yV(f(tb)), 3.2, 0, TAU); ctx.fill(); ctx.fillStyle = hex; ctx.beginPath(); ctx.arc(xT(tb), yV(f(tb)), 2.2, 0, TAU); ctx.fill(); }
+  ctx.restore();
+  return b;
+}
+const boiteRepere = (c, id, b, label) => { if (b) c.repere(id, b.x0 - 6, b.y0 - 8, Math.max(22, b.x1 - b.x0 + 12), Math.max(20, b.y1 - b.y0 + 16), label); };
+/** Un halo doux derrière ce qui vient d'être lu (graduation, valeur). */
+function halo(ctx, x, y, r, a, rgb = [250, 204, 21]) { if (a <= 0) return; const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(rgb, .5 * a)); g.addColorStop(1, rgba(rgb, 0)); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
+/** L'apparition d'une graduation lue une à une : alpha 0..1, et l'éclat du moment où elle s'allume. */
+const lu = (p, k, n, a = .25, b = .95) => { const u = (p - (a + (b - a) * k / n)) / ((b - a) / n * .6); return { a: borne(u), eclat: u > 0 && u < 2.2 ? 1 - Math.abs(u - 1) / 1.2 : 0 }; };
+
+function axesTemps(c, e, g, unite, pas, etiquetteTous) {
+  const ctx = c.ctx, p = e.p('axe_temps'), n = Math.round(g.tmax / pas);
+  if (p <= 0) return;
+  ligneEcran(ctx, g.X0, g.Y0, mix(g.X0, g.X1 + 2, borne(p / .25)), g.Y0);
+  if (p >= .25) { ctx.save(); ctx.fillStyle = 'rgba(226,232,240,.8)'; ctx.beginPath(); ctx.moveTo(g.X1 + 8, g.Y0); ctx.lineTo(g.X1, g.Y0 - 4); ctx.lineTo(g.X1, g.Y0 + 4); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  const larg = c.largeurTexte(String(g.tmax), g.tf), saute = larg * 1.25 > (g.xFin - g.X0) / n ? 2 : 1;
+  for (let k = 0; k <= n; k++) {
+    const x = g.xT(k * pas), L = lu(p, k, n + 1.5);
+    if (L.a <= 0) continue;
+    ligneEcran(ctx, x, g.Y0 - 3, x, g.Y0 + 4, `rgba(226,232,240,${.8 * L.a})`);
+    if (k % saute) continue;
+    halo(ctx, x, g.Y0 + g.tf * .65 + 2, g.tf, L.eclat);
+    ecranTexte(c, String(k * pas), x, g.Y0 + g.tf * .95 + 4, { couleur: 'blanc', align: 'center', alpha: L.a });
+  }
+  const T = lu(p, n + .6, n + 1.5);
+  if (T.a > 0) { halo(ctx, g.X1 - g.tf * 1.4, g.Y0 + g.tf * 1.75 + 2, g.tf * 1.6, T.eclat); ecranTexte(c, `t (${unite})`, g.X1 + 4, g.Y0 + g.tf * 2 + 5, { couleur: 'blanc', align: 'right', alpha: T.a, gras: true }); }
+  c.repere('axe_temps', g.X0 - 6, g.Y0 - 6, g.X1 - g.X0 + 16, g.tf * 2.2 + 14, `l’axe horizontal : le temps, en ${unite === 'min' ? 'minutes' : 'secondes'}`);
+}
+function axeVertical(c, e, g, id, x, titre, xTitre, alignTitre, couleur, hex, ticks, yDe, fmt, cote, label) {
+  const ctx = c.ctx, p = e.p(id);
+  if (p <= 0) return;
+  ligneEcran(ctx, x, g.Y0, x, mix(g.Y0, g.Y1 - 6, borne(p / .22)), hex);
+  if (p >= .22) { ctx.save(); ctx.fillStyle = hex; ctx.beginPath(); ctx.moveTo(x, g.Y1 - 12); ctx.lineTo(x - 4, g.Y1 - 5); ctx.lineTo(x + 4, g.Y1 - 5); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  const T = lu(p, 0, ticks.length + 1, .2, .95);
+  if (T.a > 0) { ecranTexte(c, titre, xTitre, g.d.y + g.tf + 4, { couleur, align: alignTitre, alpha: T.a, gras: true }); }
+  ticks.forEach((v, k) => {
+    const L = lu(p, k + 1, ticks.length + 1, .2, .95), y = yDe(v);
+    if (L.a <= 0) return;
+    ligneEcran(ctx, x - 4, y, x + 4, y, hex);
+    halo(ctx, x + cote * (g.tf * .9 + 4), y, g.tf * 1.1, L.eclat, [250, 204, 21]);
+    ecranTexte(c, fmt(v), x + cote * 7, y + g.tf * .34, { couleur, align: cote < 0 ? 'right' : 'left', alpha: L.a });
+  });
+  const lt = c.largeurTexte(fmt(ticks[ticks.length - 1]), g.tf);
+  c.repere(id === 'axes' ? (vue === 'exp1' ? 'axe_co2' : 'axe_droit') : id, cote < 0 ? x - lt - 12 : x - 6, g.Y1 - 14, lt + 20, g.Y0 - g.Y1 + 20, label);
+}
+
+function graphe(c, e, d, S) {
+  const ctx = c.ctx, g = repereGraphe(c, e, d);
+  ctx.save(); ctx.beginPath(); ctx.rect(d.x, d.y, d.w, d.h); ctx.clip();
+  if (vue === 'montage') {            // écran allumé, axes vides
+    if (S.allume > .6) { const a = (S.allume - .6) / .4, X0 = d.x + 34, Y0 = d.y + d.h - 34;
+      ligneEcran(ctx, X0, Y0, X0 + (d.w - 60) * a, Y0); ligneEcran(ctx, X0, Y0, X0, Y0 - (d.h - 62) * a); }
+    ctx.restore(); return g;
+  }
+  if (vue === 'exp1') {
+    axesTemps(c, e, g, 'min', 1);
+    axeVertical(c, e, g, 'axe_o2', g.xA, 'O_{2} (mg/L)', d.x + 6, 'left', 'rouge', HEX.o2, [2, 4, 6], g.yO2, v => fr(v, 1), -1, 'l’axe du dioxygène dissous, en mg/L');
+    axeVertical(c, e, g, 'axes', g.X0, 'CO_{2} (mmol/L)', d.x + 16 + c.largeurTexte('O2 (mg/L)', g.tf), 'left', 'violet', HEX.co2, [.2, .4], g.yCO2, v => fr(v, 2), -1, 'l’axe du dioxyde de carbone, en mmol/L');
+    // le curseur de temps
+    if (e.des('avant') && !e.vu('decrire_avant')) ligneEcran(ctx, g.xT(S.tc), g.Y0, g.xT(S.tc), g.Y1, 'rgba(226,232,240,.22)', 1.2, [3, 4]);
+    const focus = e.des('co2_monte') && !e.vu('co2_monte') ? 'co2' : e.des('o2_baisse') && !e.vu('o2_baisse') ? 'o2' : '';
+    const bO = tracer(ctx, D1.o2, 0, S.tO2, g.xT, g.yO2, HEX.o2, { alpha: focus === 'co2' ? .5 : 1 });
+    const bC = tracer(ctx, D1.co2, 0, S.tCO2, g.xT, g.yCO2, HEX.co2, { alpha: focus === 'o2' ? .5 : 1 });
+    boiteRepere(c, 'courbe_o2', bO, 'la courbe du dioxygène (rouge)'); boiteRepere(c, 'courbe_co2', bC, 'la courbe du dioxyde de carbone (violette)');
+    // les deux paliers : valeurs écrites sous / sur chaque palier
+    const pv = e.p('avant', .78, 1);
+    if (pv > 0) {
+      const s1 = e.compact ? '5,3' : '5,3 mg/L', s2 = e.compact ? '0,16' : '0,16 mmol/L';
+      ecranTexte(c, s1, g.X0 + 5, g.yO2(5.3) + g.tf + 3, { couleur: 'rouge', alpha: borne(pv * 2.5) });
+      ecranTexte(c, s2, g.X0 + 5, g.yCO2(.16) - 7, { couleur: 'violet', alpha: borne(pv * 2.5 - 1) });
+      c.repere('valeur_o2', g.X0 + 2, g.yO2(5.3) + 2, c.largeurTexte(s1, g.tf) + 8, g.tf + 6, 'la valeur du palier du dioxygène : 5,3 mg/L');
+      c.repere('valeur_co2', g.X0 + 2, g.yCO2(.16) - g.tf - 8, c.largeurTexte(s2, g.tf) + 8, g.tf + 6, 'la valeur du palier du CO2 : 0,16 mmol/L');
+    }
+    // la flèche de l'injection, à 1,8 min
+    const pi = e.p('injection', .5, 1);
+    if (pi > 0) {
+      const x = g.xT(D1.INJ), yb = g.yO2(5.4) - 7, yh = g.Y1 - 2, a = borne(pi * 2);
+      ligneEcran(ctx, x, yh, x, mix(yh, yb, borne(pi * 2)), rgba(RGB.glu, 1), 2.2);
+      if (pi >= .5) { ctx.save(); ctx.fillStyle = HEX.glu; ctx.beginPath(); ctx.moveTo(x, yb + 5); ctx.lineTo(x - 5, yb - 4); ctx.lineTo(x + 5, yb - 4); ctx.closePath(); ctx.fill(); ctx.restore(); }
+      const txt = e.compact ? 'injection' : 'injection glucose';
+      ecranTexte(c, txt, x + 8, yh + g.tf * .9, { couleur: 'jaune', alpha: a, gras: true });
+      c.repere('fleche_injection', x - 8, yh - 4, c.largeurTexte(txt, g.tf) + 22, Math.max(yb - yh + 12, g.tf + 8), 'la flèche : injection du glucose à 1,8 min');
+    }
+    // fin de chaque voie : le point lu
+    if (e.p('o2_baisse', .9, 1) > 0) { const a = e.p('o2_baisse', .9, 1), x = g.xT(D1.FIN); ctx.save(); ctx.strokeStyle = rgba(RGB.o2, a); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, g.Y0, 7, 0, TAU); ctx.stroke(); ctx.restore(); c.repere('o2_nul', x - 12, g.Y0 - 12, 24, 24, 'le dioxygène est nul vers 6,8 min'); }
+    if (e.p('co2_monte', .88, 1) > 0) {
+      const a = e.p('co2_monte', .88, 1), x = g.xT(D1.FIN), y = g.yCO2(.31);
+      ligneEcran(ctx, g.X0, y, x, y, rgba(RGB.co2, .55 * a), 1.2, [4, 4]);
+      ctx.save(); ctx.strokeStyle = rgba(RGB.co2, a); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.stroke(); ctx.restore();
+      const s = e.compact ? '0,31' : '0,31 mmol/L';
+      ecranTexte(c, s, g.X1, y - 11, { couleur: 'violet', align: 'right', alpha: a });
+      c.repere('valeur_finale_co2', g.X1 - c.largeurTexte(s, g.tf) - 4, y - g.tf - 12, c.largeurTexte(s, g.tf) + 8, g.tf + 8, 'la valeur finale du CO2 : 0,31 mmol/L');
+    }
+  } else {
+    const etiq = (id) => !e.compact;
+    axesTemps(c, e, g, 's', 100);
+    axeVertical(c, e, g, 'axe_gauche', g.X0, 'mg/mL', d.x + 6, 'left', 'blanc', 'rgba(226,232,240,.85)', [10, 20, 30, 40], g.y, v => String(v), -1, 'l’axe de gauche : O2, CO2 et éthanol, en mg/mL');
+    axeVertical(c, e, g, 'axes', g.X1, e.compact ? 'glucose' : 'glucose (u.a.)', d.x + d.w - 6, 'right', 'jaune', HEX.glu, [10, 20, 30, 40], g.y, v => String(v), 1, 'l’axe de droite : le glucose, en unités arbitraires');
+    // les valeurs de départ, allumées une à une
+    const DEP = [['o2', 6, 'O_{2} : 6'], ['glu', 42, 'glucose : 42'], ['co2', 3, 'CO_{2} : 3'], ['eth', 0, 'éthanol : 0']];
+    if (S.depart) {
+      const pd = e.p('depart_valeurs'), fond = 1 - e.d('phase1', 0, .12);
+      DEP.forEach(([k, v, s], i) => {
+        const L = lu(pd, i, 4, .04, .96); if (L.a <= 0) return;
+        const y = g.y(v), x = g.X0;
+        halo(ctx, x, y, 16, L.eclat, RGB[k]);
+        ctx.save(); ctx.globalAlpha = L.a; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 4.4, 0, TAU); ctx.fill(); ctx.fillStyle = HEX[k]; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, TAU); ctx.fill(); ctx.restore();
+        if (fond > 0) {
+          const ly = k === 'glu' ? y + g.tf * .35 : g.y(31 - i * 5.2 + (i > 1 ? 5.2 : 0));     // étiquettes rangées dans la zone libre
+          const lx = g.X0 + 30 + (k === 'glu' ? 0 : 26);
+          if (k !== 'glu') ligneEcran(ctx, x + 6, y - 3, lx - 5, ly - g.tf * .3, rgba(RGB[k], .5 * L.a * fond), 1.1);
+          ecranTexte(c, s, lx, ly, { couleur: CRAIE[k], alpha: L.a * fond });
+          c.repere('depart_' + k, lx - 4, ly - g.tf, c.largeurTexte(s.replace(/_\{(\w)\}/g, '$1'), g.tf) + 8, g.tf + 6, `valeur de départ : ${s.replace(/_\{(\w)\}/g, '$1')}`);
+        }
+      });
+    }
+    if (e.des('phase1') && !e.vu('decrire_avant')) ligneEcran(ctx, g.xT(S.tc), g.Y0, g.xT(S.tc), g.Y1, 'rgba(226,232,240,.22)', 1.2, [3, 4]);
+    const enCours = !e.vu('fin') && e.des('co2_monte') ? S.voie : '', al = (k) => (enCours && enCours !== k && !(enCours === 'co2' && k === 'o2') ? .45 : 1);
+    const o = { tmax: 700 };
+    const bG = tracer(ctx, D2.glu, 0, S.tGlu, g.xT, g.y, HEX.glu, { ...o, alpha: al('glu') });
+    const bC = tracer(ctx, D2.co2, 0, S.tCO2, g.xT, g.y, HEX.co2, { ...o, alpha: al('co2') });
+    const bE = tracer(ctx, D2.eth, 0, S.tEth, g.xT, g.y, HEX.eth, { ...o, alpha: al('eth') });
+    const bO = tracer(ctx, D2.o2, 0, S.tO2, g.xT, g.y, HEX.o2, { ...o, alpha: al('o2') });
+    boiteRepere(c, 'courbe_glucose', bG, 'la courbe du glucose (jaune)'); boiteRepere(c, 'courbe_co2', bC, 'la courbe du CO2 (violette)');
+    boiteRepere(c, 'courbe_ethanol', bE, 'la courbe de l’éthanol (bleu clair)'); boiteRepere(c, 'courbe_o2', bO, 'la courbe du dioxygène (rouge)');
+    // le nom de chaque courbe, écrit sur elle quand elle est tracée
+    const nom = (k, s, t, v, dy, a) => { if (a > 0) ecranTexte(c, s, g.xT(t), g.y(v) + dy, { couleur: CRAIE[k], alpha: a, align: 'center', gras: true }); };
+    nom('glu', 'glucose', 330, D2.glu(330), -9, e.vu('phase1') ? e.p('glucose_continue', .5, .8) : 0);
+    nom('co2', 'CO_{2}', 548, D2.co2(548), -10, e.p('co2_monte', .75, .95));
+    nom('eth', 'éthanol', 610, D2.eth(610), g.tf + 6, e.p('ethanol_apparait', .8, 1));
+    // 190 s : plus de dioxygène
+    const pz = e.p('o2_zero');
+    if (pz > 0) {
+      const x = g.xT(D2.ZERO);
+      ligneEcran(ctx, x, g.Y0, x, mix(g.Y0, g.Y1 + 2, borne(pz * 2.5)), 'rgba(250,204,21,.85)', 1.6, [5, 4]);
+      halo(ctx, x, g.Y0, 18, pz < 1 ? Math.sin(pz * Math.PI) : 0, RGB.o2);
+      ctx.save(); ctx.strokeStyle = rgba(RGB.o2, borne(pz * 3)); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, g.Y0, 7, 0, TAU); ctx.stroke(); ctx.restore();
+      const s = e.compact ? '190 s' : '190 s ≈ 3 min', a = borne(pz * 2.5 - 1);
+      ecranTexte(c, s, x + 7, g.Y1 + g.tf * .8, { couleur: 'jaune', alpha: a, gras: true });
+      c.repere('instant_190', x - 10, g.Y1 - 4, c.largeurTexte(s, g.tf) + 24, g.tf + 12, 'l’instant 190 s (environ 3 min) : le dioxygène est nul');
+    }
+    // fin : la lecture des deux valeurs finales (traits de rappel vers l'axe)
+    const pf = e.p('fin');
+    if (pf > 0) [['co2', 44, 0], ['eth', 34, .45]].forEach(([k, v, dep]) => {
+      const a = borne((pf - dep) * 3), x = g.xT(700), y = g.y(v); if (a <= 0) return;
+      ligneEcran(ctx, x, y, mix(x, g.X0, borne((pf - dep) * 2.2)), y, rgba(RGB[k], .7), 1.3, [4, 4]);
+      halo(ctx, x, y, 16, 1 - Math.abs(borne((pf - dep) * 2.2) * 2 - 1), RGB[k]);
+      ctx.save(); ctx.strokeStyle = rgba(RGB[k], a); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.stroke(); ctx.restore();
+      const s = String(v), lx = g.xT(k === 'co2' ? 420 : 285);
+      if (borne((pf - dep) * 2.2) >= 1 && !(e.compact && e.des('decrire_avant'))) { ecranTexte(c, s, lx, y - 5, { couleur: CRAIE[k], gras: true, alpha: borne((pf - dep - .45) * 5) }); c.repere('final_' + k, lx - 4, y - g.tf - 6, c.largeurTexte(s, g.tf) + 8, g.tf + 8, `valeur finale à 700 s : ${v} mg/mL`); }
+    });
+  }
+  ctx.restore();
+  return g;
+}
+
+/* ── Ce qui s'écrit sous la manip ── */
+const LEGENDES = {
+  bioreacteur: ['le bioréacteur : une cuve en verre', 'blanc'], suspension: ['la suspension de levures : des levures dans l’eau (la loupe les montre de près)', 'blanc'],
+  agitateur: ['l’agitateur magnétique : son barreau tourne et mélange', 'blanc'], sonde_o2: ['la sonde à dioxygène : elle mesure O_{2} dissous dans l’eau', 'rouge'],
+  sonde_co2: ['la sonde à CO_{2} : elle mesure le dioxyde de carbone', 'violet'], seringue: ['la seringue : pour injecter le glucose', 'jaune'],
+  interface: ['l’interface : elle envoie les mesures des sondes à l’ordinateur', 'blanc'], ordinateur: ['l’ordinateur : il trace les courbes pendant l’expérience', 'blanc'],
+  complet: ['ExAO : Expérimentation Assistée par Ordinateur', 'jaune'],
+};
+const PHRASES = {
+  exp1: {
+    decrire_avant: ['Avant l’injection : O_{2} et CO_{2} restent stables (5,3 mg/L et 0,16 mmol/L).', 'blanc'],
+    decrire: ['Après l’injection : O_{2} diminue jusqu’à 0 ; CO_{2} augmente jusqu’à 0,31 mmol/L.', 'blanc'],
+    deduire: ['Donc les levures absorbent O_{2} et rejettent CO_{2} : c’est la ', 'vert', 'respiration cellulaire'],
+  },
+  exp2: {
+    decrire_avant: ['De 0 à 190 s : O_{2} tombe de 6 à 0 ; le CO_{2} change peu ; pas d’éthanol.', 'blanc'],
+    decrire: ['Après 190 s, sans O_{2} : le CO_{2} monte à 44, l’éthanol à 34 ; le glucose baisse encore.', 'blanc'],
+    deduire: ['Donc, sans O_{2}, les levures font de l’éthanol et du CO_{2} : c’est la ', 'vert', 'fermentation alcoolique'],
+  },
+}[vue] || {};
+const plat = (s) => s.replace(/_\{([^}]*)\}/g, '$1');
+
+function sousLaManip(c, e, S) {
+  const tf = e.tf(17), Y = [353, 373, 393, 412];
+  if (vue === 'montage') {
+    const id = [...e.ordre].reverse().find(k => e.p(k) > .3); if (!id) return;
+    const [s, coul] = LEGENDES[id];
+    if (e.compact) { e.bandeau = { texte: s, couleur: coul, repere: 'legende', label: plat(s) }; return; }
+    e.ecrire(c, 'leg_' + id, () => c.texte(s, e.L / 2, 368, { couleur: coul, taille: 19, align: 'center', max: e.L - 24, gras: id === 'complet' }));
+    c.repere('legende', 20, 348, e.L - 40, 28, plat(s));
+    return;
+  }
+  // les valeurs lues (comme sur le logiciel) : au temps du curseur
+  if (e.des(vue === 'exp1' ? 'avant' : 'depart_valeurs') && !e.compact) {
+    const t = S.tc ?? 0;
+    c.direct(() => {
+      let x = 12; const item = (s, coul, gras) => { c.texte(s, x, Y[0], { couleur: coul, taille: 17, gras }); x += c.largeurTexte(plat(s), tf) + 18; };
+      if (vue === 'exp1') {
+        item(`t = ${fr(t, 1)} min`, 'blanc');
+        item(`O_{2} = ${fr(D1.o2(Math.min(t, S.tO2)), 1)} mg/L`, 'rouge', true);
+        item(`CO_{2} = ${fr(D1.co2(Math.min(t, S.tCO2)), 2)} mmol/L`, 'violet', true);
+      } else {
+        item(`t = ${fr(t, 0)} s`, 'blanc');
+        item(`O_{2} = ${fr(D2.o2(Math.min(t, S.tO2)), 1)}`, 'rouge', true);
+        item(`glucose = ${fr(D2.glu(Math.min(t, S.tGlu)), 1)}`, 'jaune', true);
+        item(`CO_{2} = ${fr(D2.co2(Math.min(t, S.tCO2)), 1)}`, 'violet', true);
+        item(`éthanol = ${fr(D2.eth(Math.min(t, S.tEth)), 1)}`, 'cyan', true);
+        item('(mg/mL)', 'faible');
+      }
+      c.repere('valeurs_lues', 8, Y[0] - tf, x - 8, tf + 6, 'les valeurs lues par les sondes, à l’instant du curseur');
+    });
+  }
+  // exp2 : le rappel des unités de temps, jusqu'à la description
+  if (vue === 'exp2' && e.p('axe_temps', .7, 1) > 0 && !e.des('decrire_avant') && !e.compact) {
+    e.ecrire(c, 'rappel', () => c.texte('rappel : 60 s = 1 min, donc 180 s = 3 min', 12, Y[1], { couleur: 'faible', taille: 17 }));
+    c.repere('rappel_temps', 8, Y[1] - tf, c.largeurTexte('rappel : 60 s = 1 min, donc 180 s = 3 min', tf) + 8, tf + 6, 'rappel : 60 s = 1 min');
+  }
+  // décrire, puis déduire
+  const lignes = ['decrire_avant', 'decrire', 'deduire'].filter(id => e.des(id));
+  if (e.compact) {
+    const id = lignes[lignes.length - 1]; if (!id) { if (vue === 'exp2' && e.des('axe_temps') && !e.vu('axes')) e.bandeau = { texte: 'rappel : 60 s = 1 min, donc 180 s = 3 min', couleur: 'blanc' }; return; }
+    const [s, coul, mot] = PHRASES[id]; e.bandeau = { texte: s + (mot || ''), couleur: coul, repere: id === 'deduire' ? 'conclusion' : 'description', label: plat(s + (mot || '')) };
+    return;
+  }
+  lignes.forEach((id) => {
+    const [s, coul, mot] = PHRASES[id], y = Y[1 + ['decrire_avant', 'decrire', 'deduire'].indexOf(id)], w = c.largeurTexte(plat(s), tf), wm = mot ? c.largeurTexte(mot, tf) : 0;
+    e.ecrire(c, 'phrase_' + id, () => {
+      c.texte(s, 12, y, { couleur: coul, taille: 17 });
+      if (mot) { c.texte(mot, 12 + w + 2, y, { couleur: 'vert', taille: 17, gras: true }); c.rect(12 + w - 3, y - tf * .92, wm + 14, tf * 1.22, { couleur: 'vert', largeur: 1.8, arrondi: 6, fond: 'vert', fondAlpha: .1 }); }
+    });
+    if (mot) c.repere('conclusion', 12 + w - 4, y - tf, wm + 16, tf * 1.3, 'la conclusion : ' + mot);
+    else c.repere(id === 'decrire_avant' ? 'description_avant' : 'description_apres', 8, y - tf, w + 10, tf + 6, plat(s));
+  });
+}
+
+/* ── Le dessin ── */
+function dessiner(c, e) {
+  const G = geo(e.L), S = etatManip(e);
+  if (vue === 'exp1') { S.gaz = borne((D1.co2(Math.min(S.tc, S.tCO2)) - .16) / .15); S.mesure = e.des('avant'); }
+  if (vue === 'exp2') { S.gaz = borne((D2.co2(Math.min(S.tc, S.tCO2)) - 3) / 41); S.ethTeinte = borne(D2.eth(Math.min(S.tc, S.tEth)) / 34) * .8; S.mesure = e.des('depart_valeurs'); }
+  let dalle = null;
+  c.direct(() => { dalle = montage(c, e, G, S); if (dalle) graphe(c, e, dalle, S); });
+  const { cu, ag, so2, sco2, ser, lp, bt, mon } = G, tf = e.tf(17);
+  // les noms courts, sur le montage
+  const nom = (cle, quand, fn) => { if (quand) e.ecrire(c, cle, fn); };
+  if (!e.compact) {
+    nom('n_o2', S.so2 > .9, () => c.texte('O_{2}', so2.x - 12, so2.yH + 17, { couleur: 'rouge', taille: 17, align: 'right', gras: true }));
+    nom('n_co2', S.sco2 > .9, () => c.texte('CO_{2}', sco2.x - 10, sco2.yH + 17, { couleur: 'violet', taille: 17, align: 'right', gras: true }));
+    nom('n_glu', S.ser > .9 && vue !== 'exp2', () => c.texte('glucose', ser.x + 14, ser.yH - 24, { couleur: 'jaune', taille: 17 }));
+    nom('n_bouchon', vue === 'exp2', () => c.texte('bouchon', sco2.x + 14, cu.y - 25, { couleur: 'orange', taille: 17 }));
+    nom('n_loupe', S.loupe > .9, () => c.texte('levures, de près', lp.cx, lp.cy + lp.r + tf + 14, { couleur: 'blanc', taille: 17, align: 'center' }));
+  }
+  // les repères (ce que la voix nomme)
+  if (S.cuve > .5) c.repere('bioreacteur', cu.x - 6, cu.y - 14, cu.w + 12, cu.h + 18, 'le bioréacteur (la cuve en verre)');
+  if (S.niveau > .4) c.repere('suspension', cu.x + 8, cu.y + cu.h * .24, cu.w - 16, cu.h * .62, 'la suspension de levures');
+  c.repere('agitateur', ag.x, ag.y - 16, ag.w, ag.h + 18, S.tourne > .3 ? 'l’agitateur magnétique (le barreau tourne)' : 'l’agitateur magnétique (à l’arrêt)');
+  if (S.so2 > .9) c.repere('sonde_o2', so2.x - 12, so2.yH - 8, 24, so2.yB - so2.yH + 12, 'la sonde à dioxygène');
+  if (S.sco2 > .9) c.repere('sonde_co2', sco2.x - 12, sco2.yH - 8, 24, sco2.yB - sco2.yH + 12, 'la sonde à dioxyde de carbone');
+  if (S.ser > .9 && vue !== 'exp2') c.repere('seringue', ser.x - 13, 10, 26, ser.yA - 6, 'la seringue de glucose');
+  if (vue === 'exp2') c.repere('bouchon', cu.x - 8, cu.y - 24, cu.w + 16, 36, 'le bouchon : la cuve est fermée, sans dioxygène qui entre');
+  if (S.loupe > .9) c.repere('levures', lp.cx - lp.r - 4, lp.cy - lp.r - 4, 2 * lp.r + 8, 2 * lp.r + 8, 'les levures vues de près, dans la loupe');
+  if (S.bt > .9) c.repere('interface', bt.x - 4, bt.y - 4, bt.w + 8, bt.h + 8, 'l’interface, reliée aux deux sondes');
+  if (S.mon > .9) { c.repere('ordinateur', mon.x, mon.y, mon.w, mon.h + 40, 'l’ordinateur'); c.repere('ecran', mon.x + 9, mon.y + 9, mon.w - 18, mon.h - 24, 'l’écran : les courbes s’y tracent'); }
+  sousLaManip(c, e, S);
+}
+
+/* ── Téléphone : la boîte à montrer pour l'étape en cours ── */
+function foyer(e) {
+  const G = geo(e.L), { mon } = G, id = e.etape();
+  const M_ = { x: 0, y: 0, w: 366, h: 344 }, E = { x: mon.x - 4, y: mon.y - 4, w: mon.w + 8, h: mon.h + 8 }, C = { x: 0, y: 30, w: 372, h: 312 };
+  if (vue === 'montage') return id === 'ordinateur' || id === 'complet' ? { x: 226, y: 20, w: e.L - 226, h: 324 } : id === 'interface' ? { x: 40, y: 0, w: 360, h: 344 } : M_;
+  if (id === 'injection') return e.p('injection') < .62 ? C : E;
+  if ((id === 'o2_baisse' || id === 'co2_monte' || id === 'ethanol_apparait') && e.p(id) > 0 && e.p(id) < .42) return C;
+  return E;
+}
+
+/* ── Ce qui se voit ── */
+function voit(e) {
+  const S = etatManip(e), id = e.etape(), v1 = (v) => fr(v, 1);
+  if (vue === 'montage') {
+    const faits = e.ordre.filter(k => e.p(k) > .5).map(k => MOMENTS.find(m => m[0] === k)[2]);
+    return `Vue montage, un élément à la fois. Déjà présentés : ${faits.length ? faits.join(' ; ') : 'rien encore (seulement la paillasse et le socle de l’agitateur, à l’arrêt)'}. ${faits.length ? 'Sous le montage est écrit : « ' + plat(LEGENDES[[...e.ordre].reverse().find(k => e.p(k) > .3) || 'bioreacteur'][0]) + ' ».' : ''}`;
+  }
+  const base = 'À gauche le montage peint (cuve sur l’agitateur, barreau qui tourne, sondes O2 et CO2, loupe sur les levures), à droite l’écran de l’ordinateur.';
+  if (vue === 'exp1') {
+    const o = D1.o2(S.tO2), cc = D1.co2(S.tCO2);
+    let s;
+    if (!e.des('axe_temps')) s = 'L’écran est allumé, vide : aucun axe encore.';
+    else if (!e.vu('axes')) s = `Lecture des axes : ${e.vu('axe_temps') ? 'axe du temps en minutes (0 à 7) lu' : 'l’axe du temps (0 à 7 min) se trace'}${e.des('axe_o2') ? ' ; axe O2 en mg/L (2,0 ; 4,0 ; 6,0), rouge' : ''}${e.des('axes') ? ' ; axe CO2 en mmol/L (0,20 ; 0,40), violet' : ''}.`;
+    else if (!e.des('avant')) s = 'Les deux axes sont lus (O2 en mg/L, rouge ; CO2 en mmol/L, violet ; temps en min) ; aucune courbe encore.';
+    else if (!e.des('injection')) s = `Avant le glucose (t = ${v1(S.tO2)} min) : deux paliers — O2 stable à 5,3 mg/L, CO2 stable à 0,16 mmol/L${e.vu('avant') ? ' (valeurs écrites sur les paliers)' : ''}. Dans la loupe : les levures et des molécules d’O2 (deux billes rouges).`;
+    else if (!e.des('o2_baisse')) s = `Injection du glucose à 1,8 min : ${S.enfonce > .9 ? 'la seringue est poussée, un nuage jaune se disperse dans la cuve, des chaînes de 6 billes jaunes (glucose) arrivent dans la loupe' : 'la seringue se pousse'}${e.p('injection', .5, 1) > 0 ? ' ; sur l’écran, la flèche jaune « injection glucose » à 1,8 min' : ''}. Les courbes sont arrêtées à 1,8 min : rien de la suite n’est montré.`;
+    else if (!e.des('co2_monte')) s = `Après l’injection, la courbe d’O2 descend : O2 = ${v1(o)} mg/L à t = ${v1(S.tO2)} min${e.vu('o2_baisse') ? ' (nul vers 6,8 min)' : ''}. Dans la loupe, les levures avalent les molécules d’O2 une à une. La courbe du CO2 n’est pas encore prolongée.`;
+    else s = `La courbe du CO2 monte : CO2 = ${fr(cc, 2)} mmol/L à t = ${v1(S.tCO2)} min${e.vu('co2_monte') ? ' (0,16 → 0,31 mmol/L, valeur finale écrite)' : ''} ; O2 est descendu de 5,3 à 0 mg/L. Dans la loupe, les levures rejettent des CO2 ; des bulles montent dans la cuve.`;
+    const ecrits = ['decrire_avant', 'decrire', 'deduire'].filter(k => e.des(k)).map(k => '« ' + plat(PHRASES[k][0] + (PHRASES[k][2] || '')) + ' »');
+    return `Expérience 1 (cuve bien oxygénée). ${base} ${s}${ecrits.length ? ' Écrit sous la manip : ' + ecrits.join(' ') : ''}`;
+  }
+  let s;
+  if (!e.des('axe_temps')) s = 'L’écran est allumé, vide : aucun axe encore.';
+  else if (!e.vu('axes')) s = `Lecture des axes : temps en secondes (0 à 700 ; rappel 60 s = 1 min)${e.des('axe_gauche') ? ' ; axe gauche en mg/mL (O2, CO2, éthanol)' : ''}${e.des('axes') ? ' ; axe droit : glucose (unités arbitraires)' : ''}.`;
+  else if (!e.des('depart_valeurs')) s = 'Les axes sont lus ; aucune courbe encore.';
+  else if (!e.des('phase1')) s = 'Valeurs de départ allumées une à une sur l’axe : O2 6, glucose 42, CO2 3, éthanol 0.';
+  else if (!e.des('o2_zero')) s = `De 0 à 190 s (t = ${fr(S.t1, 0)} s) : O2 = ${v1(D2.o2(S.t1))}, glucose = ${v1(D2.glu(S.t1))}, CO2 = ${v1(D2.co2(S.t1))}, éthanol = ${v1(D2.eth(S.t1))} mg/mL. Dans la loupe, les levures avalent les derniers O2.`;
+  else if (!e.des('co2_monte')) s = 'À 190 s (environ 3 min), trait vertical jaune : O2 = 0. Les courbes sont arrêtées à 190 s : rien de la suite n’est montré (glucose 28, CO2 9,5, éthanol 0).';
+  else if (!e.des('ethanol_apparait')) s = `Après 190 s, la courbe du CO2 monte : ${v1(D2.co2(S.tCO2))} mg/mL à ${fr(S.tCO2, 0)} s (44 à 700 s) ; O2 reste à 0. Des bulles de CO2 montent dans la cuve fermée.`;
+  else if (!e.des('glucose_continue')) s = `La courbe de l’éthanol part de 0 à 190 s et monte : ${v1(D2.eth(S.tEth))} mg/mL à ${fr(S.tEth, 0)} s (34 à 700 s). Dans la loupe, des molécules d’éthanol (2 billes jaunes) s’accumulent ; le liquide se teinte.`;
+  else if (!e.des('fin')) s = `La courbe du glucose continue de baisser, plus lentement : ${v1(D2.glu(S.tGlu))} à ${fr(S.tGlu, 0)} s (15,5 à 700 s).`;
+  else s = 'À 700 s : CO2 = 44 mg/mL et éthanol = 34 mg/mL (traits de rappel vers l’axe de gauche) ; O2 = 0 ; glucose 15,5.';
+  const ecrits = ['decrire_avant', 'decrire', 'deduire'].filter(k => e.des(k)).map(k => '« ' + plat(PHRASES[k][0] + (PHRASES[k][2] || '')) + ' »');
+  return `Expérience 2 (cuve fermée par un bouchon, glucose déjà présent). ${base} ${s}${ecrits.length ? ' Écrit sous la manip : ' + ecrits.join(' ') : ''}`;
+}
+
+const EXPL = {
+  montage: [{ repere: 'bioreacteur', texte: 'Le bioréacteur : une cuve en verre.' }, { repere: 'suspension', texte: 'Dedans, une suspension de levures.' }, { repere: 'agitateur', texte: 'L’agitateur magnétique fait tourner le barreau : le milieu reste homogène.' },
+    { repere: 'sonde_o2', texte: 'La sonde à dioxygène mesure le dioxygène dissous.' }, { repere: 'sonde_co2', texte: 'La sonde à CO2 mesure le dioxyde de carbone.' }, { repere: 'seringue', texte: 'La seringue sert à injecter le glucose.' },
+    { repere: 'interface', texte: 'L’interface envoie les mesures à l’ordinateur.' }, { repere: 'ordinateur', texte: 'L’ordinateur trace les courbes pendant l’expérience.' }],
+  exp1: [{ repere: 'axe_temps', texte: 'D’abord les axes : le temps en minutes.' }, { repere: 'axe_o2', texte: 'Le dioxygène en mg/L, en rouge.' }, { repere: 'axe_co2', texte: 'Le CO2 en mmol/L, en violet.' },
+    { repere: 'fleche_injection', texte: 'À 1,8 min, on injecte le glucose.' }, { repere: 'courbe_o2', texte: 'Le dioxygène diminue jusqu’à zéro.' }, { repere: 'courbe_co2', texte: 'Le CO2 augmente.' }, { repere: 'conclusion', texte: 'C’est la respiration cellulaire.' }],
+  exp2: [{ repere: 'bouchon', texte: 'La cuve est fermée : le dioxygène ne se renouvelle pas.' }, { repere: 'courbe_o2', texte: 'Le dioxygène tombe à zéro en 190 secondes.' }, { repere: 'instant_190', texte: 'À partir de là, plus de dioxygène.' },
+    { repere: 'courbe_co2', texte: 'Le CO2 continue de monter.' }, { repere: 'courbe_ethanol', texte: 'L’éthanol apparaît.' }, { repere: 'courbe_glucose', texte: 'Le glucose baisse encore.' }, { repere: 'conclusion', texte: 'C’est la fermentation alcoolique.' }],
+};
+const TEXTES = {
+  montage: 'Le montage ExAO, un élément à la fois : bioréacteur, suspension de levures, agitateur magnétique, sonde à dioxygène, sonde à CO2, seringue de glucose, interface, ordinateur.',
+  exp1: 'ExAO, expérience 1 : levures dans une cuve bien oxygénée. Temps en min (0 à 7), O2 en mg/L, CO2 en mmol/L. Avant le glucose : O2 stable à 5,3 mg/L, CO2 stable à 0,16 mmol/L. Injection du glucose à 1,8 min. Ensuite O2 diminue (4,7 à 3 min ; 3,8 à 4 ; 2,6 à 5 ; 1,2 à 6) jusqu’à 0 vers 6,8 min et CO2 augmente (0,18 à 4 min ; 0,20 à 5 ; 0,25 à 6) jusqu’à 0,31 mmol/L : respiration cellulaire.',
+  exp2: 'ExAO, expérience 2 : levures dans une cuve fermée, glucose déjà présent. Temps en s (0 à 700), mg/mL, glucose en unités arbitraires. O2 : 6 → 0 à 190 s. Glucose : 42 → 28 à 175 s, 22 à 400 s, 19 à 500 s, 15,5 à 700 s. CO2 : 3 jusqu’à 60 s, 10 à 200 s, 20 à 400 s, 30 à 500 s, 44 à 700 s. Éthanol : 0 jusqu’à 190 s, 10 à 300 s, 20 à 480 s, 34 à 700 s. Tant qu’il reste du dioxygène : respiration ; ensuite : fermentation alcoolique.',
+};
+R.page({
+  id: 'svt_reference_exao_levures_' + vue, vue, titre: 'ExAO sur des levures — ' + vue, moments: MOMENTS, dessiner, foyer, voit, vivant: () => true,
+  texte: TEXTES[vue], explications: EXPL[vue],
+  accueil: { montage: 'Le montage ExAO : un élément à la fois…', exp1: 'Des levures, deux sondes : on lit d’abord les axes…', exp2: 'Une cuve fermée : on lit d’abord les axes…' }[vue],
+  fini: { montage: 'Le montage est complet : ExAO, Expérimentation Assistée par Ordinateur.', exp1: 'O2 absorbé, CO2 rejeté : respiration cellulaire.', exp2: 'Sans O2 : éthanol et CO2, c’est la fermentation alcoolique.' }[vue],
+  etat: (e) => { const S = etatManip(e); return vue === 'exp1' ? { temps_experience_min: +(+S.tc).toFixed(2), valeurs: { o2_mg_L: +D1.o2(S.tO2).toFixed(2), co2_mmol_L: +D1.co2(S.tCO2).toFixed(3) } }
+    : vue === 'exp2' ? { temps_experience_s: Math.round(S.tc), valeurs: { o2: +D2.o2(S.tO2).toFixed(1), glucose: +D2.glu(S.tGlu).toFixed(1), co2: +D2.co2(S.tCO2).toFixed(1), ethanol: +D2.eth(S.tEth).toFixed(1) } } : {}; },
+});
+window.__donnees = { D1, D2 };
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
