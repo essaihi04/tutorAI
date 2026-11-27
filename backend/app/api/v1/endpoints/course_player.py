@@ -344,14 +344,70 @@ def contexte_ocr(body: OcrReponseRequest, deck: Optional[dict]) -> tuple[str, st
         " exposants et indices en Unicode (m·s⁻¹, 10⁻³, x², y_M devient yM), flèches de réaction (→, ⇌), unités du SI (Hz, m, s, Ω, °C).",
         "Jamais de LaTeX ni de signe $. Garde les mots de l'élève, sa langue (français ou darija) et son raisonnement :"
         " ne corrige NI ses erreurs de physique NI ses résultats, ne complète rien, n'ajoute aucune explication.",
+        "Pour un QCM ou un vrai/faux, garde le repère de chaque proposition (a, b, c…) et la lettre ou le mot choisi (A, B, vrai, faux).",
+        (f"Mots, symboles et grandeurs de ce sujet : {vocabulaire}" if (vocabulaire := mots_du_sujet(body, deck)) else ""),
+        # 27/11/2026 : mêmes règles de lecture que l'évaluation du prof en classe (`public_classe.contexte_lecture`)
+        "Écriture difficile : l'élève écrit avec ces mots-là. Quand des lettres se ressemblent (P/Q/D, B/8/b/6, l/1/I, O/0, "
+        "u/v, n/r/h, a/o, S/5, Z/2, g/9, t/+, x/×), choisis la lecture qui a un sens dans ce sujet. "
+        "Mais un mot nettement écrit reste tel quel, même faux : tu lis, tu ne corriges pas.",
         "Rends le texte lu, prêt à être relu par l'élève, et pour chaque dessin (courbe, histogramme, schéma, tableau…) son bloc [Dessin de l'élève : …].",
     ]
     return matiere, "\n".join(x for x in lignes if x)
 
 
+_CLES_IGNOREES = {"type", "audio", "speech_text", "enonce_dit", "url", "id", "image", "simulation", "pointage", "concentration"}
+
+
+def _textes(x, sortie: list[str]) -> None:
+    if isinstance(x, str):
+        sortie.append(x)
+    elif isinstance(x, dict):
+        for k, v in x.items():
+            if k not in _CLES_IGNOREES:
+                _textes(v, sortie)
+    elif isinstance(x, list):
+        for v in x:
+            _textes(v, sortie)
+
+
+def mots_du_sujet(body: OcrReponseRequest, deck: Optional[dict]) -> str:
+    """Les mots de la question (énoncé, choix, réponse attendue), comme `motsDuSujet` du mode classe : pour lire une
+    écriture difficile. La question est retrouvée dans le cours par son énoncé, sinon par le titre de sa diapositive."""
+    sources = [body.title, body.lead, body.enonce]
+    cible = " ".join(body.enonce.split())
+    titre = " ".join(body.title.split())
+
+    def chercher(x) -> None:
+        if isinstance(x, dict):
+            textes = {" ".join(v.split()) for v in x.values() if isinstance(v, str)}
+            if cible and cible in textes:            # l'objet question / exercice lui-même
+                _textes(x, sources)
+                return
+            if titre and " ".join(str(x.get("title") or "").split()) == titre and x.get("question"):
+                _textes(x.get("question"), sources)  # la diapositive : seulement sa question
+            for v in x.values():
+                chercher(v)
+        elif isinstance(x, list):
+            for v in x:
+                chercher(v)
+
+    if deck and (cible or titre):
+        chercher(deck)
+    vus: set[str] = set()
+    mots: list[str] = []
+    for m in re.split(r"[\s,;:.!?«»\"“”()\[\]]+", " ".join(sources)):
+        t = m.strip("'’")
+        if len(t) < 2 or re.fullmatch(r"\d+([.,]\d+)?", t) or t.lower() in vus:
+            continue
+        vus.add(t.lower())
+        mots.append(t)
+    return " ".join(mots)[:1900]
+
+
 @router.post("/ocr-reponse")
 async def ocr_reponse(body: OcrReponseRequest, student: dict = Depends(get_current_student)):
-    """« 📷 Photo » : Mistral OCR puis DeepSeek (`ocr_service`) avec le contexte de la diapositive. Le texte revient dans
+    """« 📷 Photo » : Claude lit la photo (Mistral OCR + DeepSeek en secours, `ocr_service`) avec le contexte de la
+    diapositive et les règles de lecture de l'évaluation du prof en classe. Le texte revient dans
     le champ ; l'élève le corrige à la main avant d'envoyer (10 novembre 2026) — jamais d'envoi automatique."""
     from app.services import suivi_acquis
     from app.services.ocr_service import extract_text_from_image
