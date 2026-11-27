@@ -431,7 +431,7 @@ function fragOutline(seed, n = 48) {
   for (let i = 0; i < n; i++) { const t = (i / n) * Math.PI * 2, k = 1 + 0.09 * Math.sin(3 * t + f1) + 0.05 * Math.sin(7 * t + f2) + (R() - 0.5) * 0.06; const x = Math.cos(t) * a * k, y = Math.sin(t) * b * k; pts.push([x * Math.cos(rot) - y * Math.sin(rot), x * Math.sin(rot) + y * Math.cos(rot)]); }
   return pts;
 }
-function filmGeo(seed, thick) { const o = fragOutline(seed, 40), sc = thick ? 1.6e-6 : 1.5e-6, sh = new THREE.Shape(); o.forEach((p, i) => (i ? sh.lineTo(p[0] * sc, -p[1] * sc) : sh.moveTo(p[0] * sc, -p[1] * sc))); return thick ? new THREE.ExtrudeGeometry(sh, { depth: 0.0022, bevelEnabled: false }) : new THREE.ShapeGeometry(sh); }
+function filmGeo(seed, thick) { const o = fragOutline(seed, 40), sc = thick ? 2.2e-6 : 2.1e-6, sh = new THREE.Shape(); o.forEach((p, i) => (i ? sh.lineTo(p[0] * sc, -p[1] * sc) : sh.moveTo(p[0] * sc, -p[1] * sc))); return thick ? new THREE.ExtrudeGeometry(sh, { depth: 0.0022, bevelEnabled: false }) : new THREE.ShapeGeometry(sh); }
 
 /* ------------------------------------------------------------ matériel */
 function buildBench(g) {
@@ -443,7 +443,7 @@ function buildBench(g) {
   const noShadow = (m, ro) => { m.castShadow = false; if (ro) m.renderOrder = ro; return m; };
   const liq = (hex, op) => { const m = new THREE.MeshPhysicalMaterial({ color: hex, roughness: 0.25, reflectivity: 0.1, envMapIntensity: 0.3, transparent: true, opacity: op, clearcoat: 0, depthWrite: false }); LIQS.push(m); return m; };
   X.noShadow = noShadow; X.liq = liq;
-  X.filmM = new THREE.MeshPhysicalMaterial({ color: 0xa3376f, roughness: 0.5, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false, clearcoat: 0.4 });
+  X.filmM = new THREE.MeshPhysicalMaterial({ color: 0x8a2560, roughness: 0.45, transparent: true, opacity: 0.88, side: THREE.DoubleSide, depthWrite: false, clearcoat: 0.4 });
   X.thickM = std(0xe8cfd8, 0.6, 0, { side: THREE.DoubleSide });
 
   // --- planche, demi-oignon violet coupé, écaille détachée
@@ -457,13 +457,14 @@ function buildBench(g) {
   [1.0, 0.82, 0.64, 0.47, 0.31, 0.16].forEach((s, i) => { face(s, 0x9a2f63, 0.0004 + i * 0.0004); face(s - 0.035, i === 5 ? 0xf1e6ea : 0xf6eef0, 0.0006 + i * 0.0004); });
   const ec = new THREE.Group(); ec.position.set(0.055, 0.012, 0.035); ec.rotation.y = 0.35; bd.add(ec); X.ecaille = ec;
   const r = 0.034, th0 = Math.PI / 2 - 0.62;
-  const outS = mesh(new THREE.CylinderGeometry(r, r, 0.07, 24, 1, true, th0, 1.24), std(0xa23a6c, 0.5, 0, { side: THREE.DoubleSide }), ec, 0, 0, 0); outS.rotation.z = Math.PI / 2;
+  const ecTex = canvasTex(256, 256, (x, w, h) => { x.fillStyle = "#7c2150"; x.fillRect(0, 0, w, h); for (let i = 0; i < 70; i++) { const u = Math.random() * w; x.strokeStyle = `rgba(${Math.random() < 0.5 ? "170,70,120" : "95,20,60"},${0.25 + Math.random() * 0.35})`; x.lineWidth = 0.6 + Math.random() * 1.6; x.beginPath(); x.moveTo(u, 0); x.bezierCurveTo(u + (Math.random() - 0.5) * 10, h / 3, u + (Math.random() - 0.5) * 10, (2 * h) / 3, u + (Math.random() - 0.5) * 8, h); x.stroke(); } }); // nervures de l'écaille
+  const outS = mesh(new THREE.CylinderGeometry(r, r, 0.07, 24, 1, true, th0, 1.24), std(0xffffff, 0.45, 0, { side: THREE.DoubleSide, map: ecTex }), ec, 0, 0, 0); outS.rotation.z = Math.PI / 2;
   const inS = mesh(new THREE.CylinderGeometry(r - 0.004, r - 0.004, 0.07, 24, 1, true, th0, 1.24), std(0xf4ecef, 0.6, 0, { side: THREE.DoubleSide }), ec, 0, 0, 0); inS.rotation.z = Math.PI / 2;
   [-0.035, 0.035].forEach((x) => { const sh = new THREE.Shape(); for (let i = 0; i <= 12; i++) { const a = th0 + (1.24 * i) / 12; sh[i ? "lineTo" : "moveTo"](Math.sin(a) * r, Math.cos(a) * r); } for (let i = 12; i >= 0; i--) { const a = th0 + (1.24 * i) / 12; sh.lineTo(Math.sin(a) * (r - 0.004), Math.cos(a) * (r - 0.004)); } const m = mesh(new THREE.ShapeGeometry(sh), std(0xf2e4ea, 0.6, 0, { side: THREE.DoubleSide }), ec, x, 0, 0); m.rotation.y = Math.PI / 2; m.rotation.z = Math.PI / 2; m.rotation.x = 0; });
   ec.children.forEach((m) => (m.position.y -= r * Math.cos(0.62) - 0.0005));
   ec.position.y = 0.012 - (r - 0.004) * 0 + 0.0;
   X.ecTop = () => gpos(X.ecaille, [0, r - r * Math.cos(0.62) + 0.0015, 0]);
-  X.peel = mesh(new THREE.PlaneGeometry(0.012, 0.016), new THREE.MeshBasicMaterial({ color: 0xf6eef2, transparent: true, opacity: 0.9, side: THREE.DoubleSide }), g, 0, 0, 0); X.peel.visible = false; X.peel.castShadow = false; // zone déjà pelée
+  X.ecMarks = new THREE.Group(); ec.add(X.ecMarks); X.cutM = std(0x2a0c1c, 0.7); X.peelM = std(0x7c2150, 0.4, 0, { side: THREE.DoubleSide }); X.bareM = std(0xf6ecef, 0.45, 0, { side: THREE.DoubleSide }); // incisions, épiderme qui se décolle, chair mise à nu
   tool("oignon", bd, [-0.0, 0.11, 0]);
 
   // --- scalpel et pince fine
@@ -595,7 +596,7 @@ function resetState(keepAttempt) { /*fini-reset*/ ST.fini = false;
   for (const k in TOOLS) { const t = TOOLS[k]; if (!t || !t.home) continue; if (t.obj.parent !== L.g && (k === "lame1" || k === "lame2")) L.g.attach(t.obj); t.obj.position.copy(t.home); t.obj.rotation.copy(t.homeRot); t.obj.scale.set(1, 1, 1); }
   for (const c of [X.b2.userData.cap, X.b50.userData.cap]) { const u = c.userData; if (u.off && u.par) { u.par.attach(c); c.position.copy(u.p); c.rotation.copy(u.r); u.off = false; } }
   for (let i = 0; i < 2; i++) { const s = X["lame" + i]; s.userData.drop.visible = false; s.userData.lamP.visible = false; s.userData.lamP.rotation.set(0, 0, 0); }
-  X.wgLiqA.visible = X.wgLiqB.visible = false; X.arcPour.visible = false; X.drop.visible = false; X.peel.visible = false; X.pipA.userData.liq.visible = X.pipB.userData.liq.visible = false;
+  X.wgLiqA.visible = X.wgLiqB.visible = false; X.arcPour.visible = false; X.drop.visible = false; X.ecMarks.clear(); X.pipA.userData.liq.visible = X.pipB.userData.liq.visible = false;
   X.lampM.emissiveIntensity = 0.02; X.lcdA.set("A --:--"); X.lcdB.set("B --:--"); setObj3d(4); stage3d(); ocular3d();
   if (!keepAttempt) $("#events").innerHTML = ""; $("#btnEval").hidden = true; const sp = $("#btnSpeed"); if (sp) sp.textContent = "⏩ ×" + ST.acc;
   closeView(true); if (typeof renderTable === "function") renderTable();
@@ -652,7 +653,7 @@ const CAMS = {
   verres: { p: [-0.12, 0.27, 0.36], t: [-0.14, 0.01, 0.05] }, flac: { p: [-0.08, 0.3, 0.32], t: [-0.17, 0.07, -0.08] },
   lames: { p: [0.05, 0.22, 0.38], t: [0.04, 0.0, 0.17] }, lame0: { p: [-0.005, 0.1, 0.27], t: [-0.005, 0.0, 0.175] }, lame1: { p: [0.085, 0.1, 0.27], t: [0.085, 0.0, 0.175] },
   micro: { p: [0.5, 0.45, 0.32], t: [0.22, 0.17, -0.15] }, mview: { p: [0.5, 0.38, 0.38], t: [0.235, 0.165, -0.17] }, stage: { p: [0.33, 0.25, 0.04], t: [0.24, 0.14, -0.145] },
-  timer: { p: [0.38, 0.19, 0.38], t: [0.35, 0.03, 0.17] }, bin: { p: [-0.42, 0.4, 0.2], t: [-0.6, 0.06, -0.34] },
+  timer: { p: [0.38, 0.19, 0.38], t: [0.35, 0.03, 0.17] }, ecaille: () => { const c = gpos(X.ecaille, [ST.ecX || 0, 0.006, 0]); return { p: [c.x + 0.05, c.y + 0.1, c.z + 0.13], t: [c.x, c.y, c.z] }; }, bin: { p: [-0.42, 0.4, 0.2], t: [-0.6, 0.06, -0.34] },
 };
 let camFocus = null, camBusy = false;
 const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "function" ? c() : c); };
@@ -691,7 +692,7 @@ function legendTick() {
   el.querySelector("svg").innerHTML = it.map((i) => `<line x1="${i.a[0]}" y1="${i.a[1]}" x2="${i.x}" y2="${i.y}" stroke="${i.c || "#5d6670"}" stroke-width="2"/><circle cx="${i.a[0]}" cy="${i.a[1]}" r="4" fill="none" stroke="${i.c || "#5d6670"}" stroke-width="2"/>`).join("");
 }
 /*camera-produit*/ /* produit utilisé : la caméra montre d'abord son étiquette (nom lisible), puis le geste en entier */
-const CAM_FIX = new Set(["@lbl", "@pour", "@obs"]);
+const CAM_FIX = new Set(["@lbl", "@pour", "@obs", "ecaille"]);
 function camLabel(obj, side = null, up = 0.55) {
   const b = new THREE.Box3().setFromObject(obj), c = b.getCenter(new THREE.Vector3()), sz = b.getSize(new THREE.Vector3()); L.g.worldToLocal(c);
   const d = Math.max(sz.y, sz.x) * 1.5 + 0.11; c.y -= sz.y * 0.1;
@@ -857,32 +858,64 @@ function emptyGlass(k) {
 
 /* ------------------------------------------------------------ actions : prélèvement de l'épiderme */
 function newFilm(f) { const m = new THREE.Mesh(filmGeo(f.seed, f.thick), f.thick ? X.thickM : X.filmM); m.castShadow = false; m.renderOrder = 4; f.mesh = m; return m; }
+const toolAtR = (T, p, rot) => { const o = new THREE.Vector3(p[0], p[1], 0).applyEuler(new THREE.Euler(rot[0], rot[1], rot[2])); return [T.x - o.x, T.y - o.y, T.z - o.z]; }; // outil tourné (rotation complète) : origine pour que son point local p arrive en T
+/* prélèvement réaliste de l'épiderme : le scalpel trace un petit carré (incisions visibles) sur la face violette de l'écaille,
+   la pince saisit un bord, et l'épiderme se décolle progressivement (front de décollement qui avance), en laissant apparaître
+   la chair blanche de l'écaille ; la pellicule violette, fine et transparente, pend ensuite au bout de la pince */
+const EC_R = 0.034, EC_SH = 0.034 * Math.cos(0.62) - 0.0005, EC_H = 0.006, EC_L = 2 * EC_H;
+const ecY = (z) => Math.sqrt(EC_R * EC_R - z * z) - EC_SH; // hauteur de la face violette (repère de l'écaille)
+const ecPt = (x, z, lift = 0.0003) => [x, ecY(z) + lift, z];
+function gridMesh(mat, nu = 14, nv = 6) { // nappe (nu × nv sommets) dont on recalcule les sommets : pellicule qui se décolle, chair mise à nu
+  const g = new THREE.BufferGeometry(), pos = new Float32Array(nu * nv * 3), idx = [];
+  for (let i = 0; i < nu - 1; i++) for (let j = 0; j < nv - 1; j++) { const a = i * nv + j, b = a + nv; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setIndex(idx);
+  const m = new THREE.Mesh(g, mat); m.castShadow = false; m.frustumCulled = false;
+  m.set = (fn) => { for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) { const p = fn(i / (nu - 1), j / (nv - 1)); pos.set(p, (i * nv + j) * 3); } g.attributes.position.needsUpdate = true; g.computeVertexNormals(); g.computeBoundingSphere(); };
+  return m;
+}
+function cutLine(a, b) { // incision du scalpel : trait sombre qui s'allonge sur la surface courbe
+  const m = new THREE.Mesh(new THREE.BufferGeometry(), X.cutM); m.castShadow = false; X.ecMarks.add(m);
+  m.set = (k) => { if (k <= 0.01) { m.visible = false; return; } m.visible = true; const n = Math.max(2, Math.ceil(k * 12)), P = []; for (let i = 0; i <= n; i++) { const t = (k * i) / n; P.push(V3(ecPt(lerp(a[0], b[0], t), lerp(a[1], b[1], t), 0.00012))); } if (m.geometry) m.geometry.dispose(); m.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(P), n * 2, 0.00042, 5, false); };
+  m.set(0); return m;
+}
 function prelever(k, thick = false) {
   if (isBusy()) return busyToast(); const G = ST.gl[k];
   if (G.frag != null) return toast("Le verre " + k + " contient déjà un fragment.");
-  const sc = X.scalpel, pi = X.pince, e = X.ecTop(), dz = (ST.peels % 4) * 0.012 - 0.018; e.x += dz * 0.35; e.z += dz;
+  const sc = X.scalpel, pi = X.pince, x0 = 0.024 - (ST.peels % 4) * 0.016, xa = x0 + EC_H, xb = x0 - EC_H; ST.ecX = x0;
   const f = { id: ST.frags.length, seed: ST.seed + ST.frags.length * 101, thick, at: "pince", from: k, p: 0, tG: 0, lastC: null, ox: (Math.random() - 0.5) * 900, oy: (Math.random() - 0.5) * 700 }; ST.frags.push(f); newFilm(f); ST.peels++;
-  look("oignon"); const thS = -0.75, tipS = [0.066, -0.0005];
-  go(sc, [
-    { to: toolAt({ x: e.x - 0.004, y: e.y + 0.03, z: e.z - 0.008 }, tipS, thS), rot: [0, 0.35, thS], dur: 0.8, up: 0.05 },
-    { to: toolAt({ x: e.x - 0.004, y: e.y + 0.0012, z: e.z - 0.008 }, tipS, thS), dur: 0.35, up: 0 },
-    { to: toolAt({ x: e.x - 0.004, y: e.y + 0.0012, z: e.z + 0.008 }, tipS, thS), dur: 0.5, up: 0 },
-    { to: toolAt({ x: e.x + 0.006, y: e.y + 0.0012, z: e.z + 0.008 }, tipS, thS), dur: 0.35, up: 0.004 },
-    { to: toolAt({ x: e.x + 0.006, y: e.y + 0.0012, z: e.z - 0.008 }, tipS, thS), dur: 0.5, up: 0 },
-    Object.assign(homeOf("scalpel"), { dur: 0.8, up: 0.05 }),
-  ]);
-  const thP = -0.55, tipP = [0.055, 0];
-  const film = f.mesh;
+  look("ecaille");
+  // 1) quatre incisions au scalpel : le carré d'épiderme à prélever (1,2 cm de côté)
+  const thS = -0.9, tipS = [0.066, -0.0005], W = (p) => { const v = gpos(X.ecaille, p); return v; };
+  const corners = [[xa, -EC_H], [xa, EC_H], [xb, EC_H], [xb, -EC_H]], lines = corners.map((c, i) => cutLine(c, corners[(i + 1) % 4]));
+  const rS = [0, 0.35, thS], scAt = (x, z, up = 0) => toolAtR(W(ecPt(x, z, 0.0004 + up)), tipS, rS);
+  const steps = [{ to: () => scAt(xa, -EC_H, 0.03), rot: rS, dur: 0.8, up: 0.05 }, { to: () => scAt(xa, -EC_H), dur: 0.35, up: 0 }];
+  corners.forEach((c, i) => { const d = corners[(i + 1) % 4]; steps.push({ to: null, dur: 0.55, up: 0, tick: (kk) => { lines[i].set(kk); const p = scAt(lerp(c[0], d[0], kk), lerp(c[1], d[1], kk)); sc.position.set(p[0], p[1], p[2]); } }); });
+  steps.push({ to: () => scAt(xb, -EC_H, 0.02), dur: 0.3, up: 0, at: () => log("info", "Quatre incisions au scalpel délimitent un carré d'épiderme sur la face violette de l'écaille.", "oignon") }, Object.assign(homeOf("scalpel"), { dur: 0.8, up: 0.05 }));
+  go(sc, steps);
+  // 2) la pince saisit le bord et pèle l'épiderme
+  const film = f.mesh, peel = gridMesh(thick ? X.thickM : X.peelM), bare = gridMesh(X.bareM, 10, 6); X.ecMarks.add(bare); X.ecMarks.add(peel);
+  const TH = thick ? 0.0022 : 0.00035, ang = 2.25; // épaisseur (morceau épais : plusieurs couches de cellules) ; angle du pelage
+  const R = rng(f.seed + 3), wob = Array.from({ length: 14 }, () => (R() - 0.5) * 0.0006);
+  let front = 0; const endPt = () => { const a = ang - 0.25; return [xa - front - front * Math.cos(a), ecY(0) + 0.0003 + front * Math.sin(a), 0]; };
+  const setPeel = () => {
+    peel.set((u, v) => { const x = xa - u * EC_L, z = (v - 0.5) * 2 * EC_H * (1 - 0.06 * Math.sin(u * 9)), du = u * EC_L; if (du >= front) { const p = ecPt(x, z, 0.0003 + (thick ? TH * 0.5 : 0)); return p; } const d = front - du, xf = xa - front, a = ang - 0.25 * (d / Math.max(front, 1e-4)); return [xf - d * Math.cos(a), ecY(z) + 0.0003 + d * Math.sin(a) + wob[Math.round(u * 13)], z * (1 - 0.15 * (d / EC_L))]; });
+    bare.visible = front > 0.0004; if (bare.visible) bare.set((u, v) => ecPt(xa - u * front, (v - 0.5) * 2 * EC_H, 0.00012));
+  };
+  setPeel();
+  const thP = -0.6, tipP = [0.055, 0], rP = [0, 0.35, thP], piAt = (p, up = 0) => toolAtR(W([p[0], p[1] + up, p[2]]), tipP, rP);
   go(pi, [
-    { to: toolAt({ x: e.x - 0.004, y: e.y + 0.03, z: e.z }, tipP, thP), rot: [0, 0.2, thP], dur: 0.7, up: 0.05 },
-    { to: toolAt({ x: e.x - 0.004, y: e.y + 0.001, z: e.z }, tipP, thP), dur: 0.4, up: 0, at: () => { pi.add(film); film.position.set(tipP[0] + 0.004, -0.004, 0); film.rotation.set(0, Math.PI / 2, -0.4 - thP); film.scale.setScalar(0.25); } },
-    { to: toolAt({ x: e.x + 0.012, y: e.y + 0.012, z: e.z }, tipP, thP), dur: 0.8, up: 0, tick: (kk) => { film.scale.setScalar(0.25 + 0.75 * kk); X.peel.visible = true; X.peel.position.set(e.x + 0.003, e.y + 0.0004, e.z); X.peel.rotation.set(-Math.PI / 2, 0, 0.35); X.peel.scale.set(kk, kk, 1); }, at: () => { log("good", thick ? "Un morceau épais d'écaille est coupé (plusieurs couches de cellules)." : "Une pellicule violette, fine et transparente, est pelée : l'épiderme de l'écaille.", thick ? "thick" : "oignon"); if (thick) once("thick", "warn", "Fragment trop épais : il ne laissera pas passer la lumière.", "thick"); } },
+    { to: () => piAt(ecPt(xa + 0.001, 0), 0.03), rot: rP, dur: 0.8, up: 0.05 },
+    { to: () => piAt(ecPt(xa, 0), 0.0006), dur: 0.45, up: 0 },
+    { to: null, dur: thick ? 1.6 : 2.4, up: 0, tick: (kk) => { front = EC_L * (kk * kk * (3 - 2 * kk)); setPeel(); const e = endPt(); const p = piAt(e, 0.0004); pi.position.set(p[0], p[1], p[2]); },
+      at: () => { log("good", thick ? "Un morceau épais d'écaille est arraché (plusieurs couches de cellules, blanc et opaque)." : "L'épiderme se décolle : une pellicule violette, fine et transparente. Dessous, la chair de l'écaille est blanche.", thick ? "thick" : "oignon"); if (thick) once("thick", "warn", "Fragment trop épais : il ne laissera pas passer la lumière.", "thick"); } },
+    { to: () => { const p = pi.position; return [p.x, p.y + 0.02, p.z]; }, dur: 0.5, up: 0, pre: () => { pi.attach(peel); f.peelMesh = peel; } }, // la pellicule pelée reste pendue au bout de la pince
     { to: () => { const s = wgSurf(k); return toolAt({ x: s.x - 0.003, y: s.y + 0.03, z: s.z }, tipP, thP); }, dur: 1.0, up: 0.05, pre: () => look("verres") },
     { to: () => { const s = wgSurf(k); return toolAt({ x: s.x - 0.003, y: s.y + 0.006, z: s.z }, tipP, thP); }, dur: 0.5, up: 0, at: () => placeFilmGlass(f, k) },
     Object.assign(homeOf("pince"), { dur: 0.9, up: 0.06 }),
   ]);
 }
 function placeFilmGlass(f, k) {
+  if (f.peelMesh) { if (f.peelMesh.parent) f.peelMesh.parent.remove(f.peelMesh); f.peelMesh = null; } // posée à plat, la pellicule s'étale à la surface du liquide
   const G = ST.gl[k], w = X["wg" + k], m = f.mesh; w.add(m); m.scale.setScalar(1); m.rotation.set(-Math.PI / 2, 0, Math.random() * 6.28); m.position.set(0, 0.0012 + (G.v > 0.05 ? wgH(G.v) : 0) + 0.0004, 0);
   f.at = k; f.tG = 0; G.frag = f.id; ST.flags.anyFrag = true;
   if (G.v < 0.5) once("dryGlass" + k, "warn", "Le verre " + k + " est vide : le fragment se dessèche à l'air.", "noDrop");
