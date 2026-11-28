@@ -21,6 +21,7 @@ import AssociationDiapo, { type FinAssociation } from './AssociationDiapo';
 import GlisserCode, { type GlisserCodeData } from './GlisserCode';
 import { basculerPleinEcran, usePleinEcran } from './pleinEcran';
 import { taire as taireMemoire } from './memoire/voix';
+import { nombresDits } from './nombresDits';
 import { commandeReservee, dureeDuRejeuMs, momentsReserves, questionClose, rejeuxDe } from './parcours';
 
 /**
@@ -457,6 +458,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const prochainGeste = useRef(0);
   const gestesEnAttente = useRef<number[]>([]);
   const dejaFaits = useRef<Set<number>>(new Set());
+  /** Les nombres du texte parlé déjà allumés au tableau, et l'heure du dernier doigt posé sur un nombre. */
+  const dejaDits = useRef<Set<number>>(new Set());
+  const dernierDoigt = useRef(0);
   const demarree = useRef(false);
   // ── L'élève manipule lui-même : le tuteur interprète, parle et pose une question ──
   const voixRef = useRef<HTMLAudioElement>(null);
@@ -603,6 +607,18 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     () => (conc.pointage || []).map(p => ({ ...p, t: Math.max(0, instant(p.mot) - (p.commande ? (reperes ? 0.25 : AVANCE_COMMANDE) : 0)) })),
     [conc.pointage, instant, reperes],
   );
+  // (28/11/2026, « il doit mettre le doigt et indiquer ce qui est dit ; ce qui est dit doit être allumé, surtout les
+  // chiffres », puis « appliquer pour le reste des cours ») Chaque nombre que la voix prononce, avec son instant : la
+  // simulation l'allume là où il est écrit au tableau (`dit {nombre}`, shared/tableau/tableau.js). Rien à écrire dans
+  // les cours : les nombres sont lus dans le texte parlé (`nombresDits.ts`).
+  const nombresVoix = useMemo(() => {
+    if (!duree || lectureMuette || visuel?.kind !== 'simulation') return [];
+    return nombresDits(parole).map(n => ({
+      valeur: n.valeur,
+      t: reperes ? Math.max(0, Math.min(secondeDuCaractere(reperes, n.i), duree) - 0.1)
+        : Math.max(0, (n.i / Math.max(1, parole.length)) * duree - 0.3),
+    }));
+  }, [parole, duree, reperes, lectureMuette, visuel?.kind]);
   const centre = useMemo(
     () => (conc.centre || []).map(c => ({ ...c, t: instant(c.mot) })),
     [conc.centre, instant],
@@ -673,7 +689,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     if (visuel?.kind !== 'simulation' || visuel.url !== urlChargee.current) urlChargee.current = null;
     setIndexQuestion(0); setRelance(false); relanceFaite.current = false;
     setDuree((piste?.duration_ms || 0) / 1000);
-    dejaFaits.current = new Set(); demarree.current = false;
+    dejaFaits.current = new Set(); dejaDits.current = new Set(); demarree.current = false;
     setReaction(null); dernierEtat.current = null; dernierResultat.current = null; historique.current = [];
     setResultat(null); tourResultat.current += 1; tourDemo.current += 1; panneauAvant.current = null;
     coursEnPause.current = false; eleveATouche.current = false; varianteFaite.current = false; setLegendeMot(null);
@@ -800,6 +816,31 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       if (element && tuteur3D) focusProfessor(element);
     });
   }, [temps, enLecture, pointage, parTuteur, tuteur3D, reservee]);
+
+  // Le nombre que la voix dit s'allume au tableau ; le doigt du tuteur s'y pose (au plus un geste toutes les 2,5 s :
+  // la lueur suit chaque nombre, la main ne court pas après eux), et seulement si le nombre s'est vraiment allumé.
+  useEffect(() => {
+    if (!enLecture || !nombresVoix.length) return;
+    nombresVoix.forEach((n, i) => {
+      if (dejaDits.current.has(i) || temps < n.t) return;
+      dejaDits.current.add(i);
+      if (temps > n.t + 1.2) return;                       // la lecture a sauté plus loin : ce nombre n'est plus dit
+      envoyerASim('dit', { nombre: n.valeur });
+    });
+  }, [temps, enLecture, nombresVoix, envoyerASim]);
+  // La simulation confirme (`simulation_nombre_allume`) : le nombre est écrit au tableau et vient de s'allumer.
+  useEffect(() => {
+    if (!tuteur3D) return;
+    const ecouter = (e: MessageEvent) => {
+      if (e.source !== iframeRef.current?.contentWindow || e.data?.type !== 'simulation_nombre_allume') return;
+      const maintenant = performance.now();
+      if (maintenant - dernierDoigt.current < 2500 || maintenant < prochainGeste.current - 300) return;
+      dernierDoigt.current = maintenant;
+      parTuteur('highlight', { target: 'nombre_dit' });
+    };
+    window.addEventListener('message', ecouter);
+    return () => window.removeEventListener('message', ecouter);
+  }, [parTuteur, tuteur3D]);
 
   /** La voix du tuteur, générée à l'instant (même voix que le cours). Sans voix, le texte reste affiché. */
   /** La voix d'un texte, calculée d'avance (URL du son) : on la joue quand le tableau est prêt. */
@@ -2031,7 +2072,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     const audio = audioRef.current;
     if (predictionEnCours) { setPanneau('questions'); return; }
     if (!audio) return;
-    dejaFaits.current = new Set(); demarree.current = false; setFinie(false);
+    dejaFaits.current = new Set(); dejaDits.current = new Set(); demarree.current = false; setFinie(false);
     if (conc.demarrer) envoyerASim('reset');
     audio.currentTime = 0; void audio.play();
   }, [conc.demarrer, envoyerASim, predictionEnCours]);

@@ -53,6 +53,8 @@
       this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.W = 0; this.H = 0;
       this.onresize = options.onresize || null; this.r = graine(1);
       this.t = Infinity; this.cur = 0; this.tip = null; this.complet = true;
+      CRAIES.add(this);
+      CRAIE_DE.set(canvas, this); this._nbImage = [];
       this._ro = new ResizeObserver(() => this.resize()); this._ro.observe(canvas);
       this.resize();
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.onresize && this.onresize());
@@ -87,11 +89,19 @@
       c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, this.W, this.H);
       c.lineCap = 'round'; c.lineJoin = 'round'; c.globalAlpha = 1; this.r = graine(seed);
       this.t = REDUIT || temps === undefined ? Infinity : Math.max(0, temps); this.cur = 0; this.tip = null; this.complet = true;
+      this._nbImage = []; this._bord = null;   // les nombres écrits dans cette image (voir `_noterNombres`)
       this._reperesImage = new Set();   // les repères de cette image ; ceux de l'image précédente non redessinés seront oubliés à fin()
       return this;
     }
     /** Dessine le bout de craie au point d'écriture ; renvoie true quand tout est écrit. */
     fin() {
+      // Les nombres de l'image, avec l'instant où chacun a paru (le plus récent est celui que la voix est en train de dire).
+      if (this._nbImage) {
+        const avant = this._nbVus || new Map(), vus = new Map(), t = performance.now();
+        for (const n of this._nbImage) { n.vu = avant.get(n.cle) ?? t; vus.set(n.cle, n.vu); }
+        if (this._nbImage.length) this._nbVus = vus;   // une passe de mesure (aucun texte peint) ne fait pas oublier les instants
+        this._nombres = this._nbImage;
+      }
       // Un repère d'une variante précédente, non redessiné dans cette image, n'est plus pointable.
       if (this._reperesImage) for (const id of Object.keys(REPERES)) { if (REPERES[id].craie === this && !this._reperesImage.has(id)) delete REPERES[id]; }
       if (this.tip) {
@@ -296,6 +306,34 @@
       c.shadowBlur = 0; c.globalAlpha = 1; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
       return this;
     }
+    /**
+     * Relève la place de chaque nombre écrit (28 novembre 2026, « ce qui est dit doit être allumé, surtout les chiffres ») :
+     * quand la voix dit un nombre, le lecteur envoie `dit {nombre}` et le kit l'allume là où il est écrit (`direNombre`).
+     * Relevé au plus bas, sur `fillText` (voir `CRAIE_DE`) : le texte du kit, celui des modules qui le
+     * complètent (`exposants.js`, les noyaux ᴬ_Z X) et celui qu'une page peint elle-même sur ce tableau.
+     * Un nombre au bout d'un texte en cours d'écriture (« 23 » de « 238 ») porte `bout` : il attend d'être fini.
+     */
+    _noterNombres(s, x0, y) {
+      const nb = this._nbImage;
+      if (!nb || nb.length > 4000 || !/\d/.test(s)) return;
+      const c = this.ctx;
+      if (c.globalAlpha < .05) return;
+      const b = this._bord || (this._bord = this.canvas.getBoundingClientRect());
+      if (!b.width) return;
+      const taille = parseFloat((/([\d.]+)px/.exec(c.font) || [])[1]) || 16, m = c.getTransform(), d = devicePixelRatio || 1;
+      if (c.textAlign === 'center') x0 -= c.measureText(s).width / 2; else if (c.textAlign === 'right' || c.textAlign === 'end') x0 -= c.measureText(s).width;
+      const base = c.textBaseline, haut = base === 'middle' ? y - taille * .5 : base === 'top' || base === 'hanging' ? y : base === 'bottom' ? y - taille : y - taille * .84;
+      const re = /\d{1,3}(?:[  ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?/g, ligne = nb.ligne = (nb.ligne || 0) + 1;
+      let r;
+      while ((r = re.exec(s))) {
+        const v = normaliserNombre(r[0]); if (v == null) continue;
+        const fin = r.index + r[0].length, xa = x0 + c.measureText(s.slice(0, r.index)).width, w = c.measureText(r[0]).width;
+        const p1 = m.transformPoint(new DOMPoint(xa, haut)), p2 = m.transformPoint(new DOMPoint(xa + w, haut + taille * 1.05));
+        const x = b.left + Math.min(p1.x, p2.x) / d, yy = b.top + Math.min(p1.y, p2.y) / d;
+        nb.push({ v, x, y: yy, width: Math.abs(p2.x - p1.x) / d, height: Math.abs(p2.y - p1.y) / d, ligne, ordre: nb.length, bout: fin === s.length,
+          cle: `${s.slice(0, fin)}|${Math.round(x)}|${Math.round(yy)}` });
+      }
+    }
     /** Déclare un repère pointable par le professeur, en coordonnées du dessin courant (transformées en px de la page). */
     repere(id, x, y, w, h, label) {
       const m = this.ctx.getTransform(), d = devicePixelRatio || 1, b = this.canvas.getBoundingClientRect();
@@ -327,6 +365,29 @@
   }
 
   // ── Repères pointables et script d'explication ───────────────────────────
+  /*
+   * Tout texte peint sur le canvas d'une craie passe ici, quel que soit celui qui l'écrit (le kit, `exposants.js`, la
+   * caméra de `commun.js` qui remplace `ctx.fillText` par le sien, ou la page elle-même) : la place de ses nombres est
+   * relevée (`Craie._noterNombres`). Posé sur le prototype, avant tout autre module : ils l'appellent tous au bout.
+   */
+  const CRAIE_DE = new WeakMap();   // canvas → sa craie
+  {
+    const proto = CanvasRenderingContext2D.prototype, peindre = proto.fillText;
+    proto.fillText = function (txt, x, y, ...reste) {
+      const r = peindre.call(this, txt, x, y, ...reste);
+      const cr = CRAIE_DE.get(this.canvas);
+      if (cr && cr.ctx === this) { try { cr._noterNombres(String(txt), x, y); } catch (_) { /* le relevé ne gêne jamais le dessin */ } }
+      return r;
+    };
+  }
+  const CRAIES = new Set();     // toutes les craies de la page : leurs nombres écrits s'allument quand la voix les dit
+  /** « 86 400 », « 0,693 » → « 86400 », « 0.693 » (même forme que `nombresDits.ts` côté lecteur). */
+  function normaliserNombre(s) {
+    const t = String(s ?? '').replace(/[ \u00a0]/g, '').replace(',', '.');
+    if (!/^\d+(\.\d+)?$/.test(t)) return null;
+    const [e, d] = t.split('.');
+    return e.replace(/^0+(?=\d)/, '') + (d !== undefined ? '.' + d : '');
+  }
   const REPERES = {};           // id → { label, rect: {x,y,width,height} en px de la page | () => rect | HTMLElement }
   let EXPLICATION = null;       // [{ repere, texte, variante? }] ou { variante: [{ repere, texte }] }
   /** Enregistre des repères DOM ou calculés : `{ id: { label, rect: () => ({x,y,width,height}) | HTMLElement } }`. */
@@ -526,6 +587,49 @@
   setInterval(replacerAllumes, 250);
   addEventListener('resize', replacerAllumes);
 
+  /*
+   * Le nombre dit s'allume (28 novembre 2026, sur « Combien de α, combien de β⁻ ? » : « il doit mettre le doigt et
+   * indiquer ce qui est dit ; ce qui est dit doit être allumé, surtout les chiffres » ; puis « appliquer pour le reste des
+   * cours »). Le lecteur repère les nombres dans le texte parlé (`nombresDits.ts`) et envoie `dit {nombre: '238'}` à
+   * l'instant où la voix le prononce. Le kit allume ce nombre là où la craie l'a écrit : s'il est écrit plusieurs fois,
+   * c'est le dernier écrit (la ligne que le tuteur est en train d'expliquer). Un chiffre seul (0 à 9) ne s'allume que
+   * s'il vient d'être écrit (moins de 20 s) : « deux noyaux » ne doit pas allumer un vieux « 2 » du tableau.
+   * Un nombre pas encore écrit est attendu 1,5 s (la craie est en train d'y arriver). L'allumage dure 3 s. Le repère `nombre_dit` garde sa place : `highlight {target: 'nombre_dit'}` y amène le doigt du
+   * professeur (sans anneau de craie : la lueur suffit). Rien à coder dans les pages : tout texte écrit par `craie.texte`.
+   */
+  const RECENT_MS = 20000;
+  /** Les nombres écrits au tableau en ce moment (contrôles automatiques) : valeur, place, âge en secondes. */
+  function nombresEcrits() {
+    const t = performance.now(), out = [];
+    CRAIES.forEach((cr) => { for (const n of cr._nombres || cr._nbImage || []) out.push({ v: n.v, x: Math.round(n.x), y: Math.round(n.y), age_s: +((t - (n.vu ?? t)) / 1000).toFixed(1), ligne: n.ligne }); });
+    return out;
+  }
+  function direNombre(p, essai = 0) {
+    const v = normaliserNombre(p && (p.nombre ?? p.valeur ?? p.value)); if (v == null) return false;
+    const petit = /^\d$/.test(v), t = performance.now(); let mieux = null;
+    CRAIES.forEach((cr) => {
+      if (!cr.canvas || !cr.canvas.isConnected) return;
+      for (const n of cr._nombres || cr._nbImage || []) {
+        if (n.v !== v || !n.width) continue;
+        const vu = n.vu ?? t;
+        if (n.bout && t - vu < 150) continue;      // peut-être le début d'un nombre plus long, encore en train de s'écrire
+        if (petit && t - vu > RECENT_MS) continue;
+        if (!mieux || vu > mieux.vu + 60 || (Math.abs(vu - mieux.vu) <= 60 && (n.ligne > mieux.ligne || (n.ligne === mieux.ligne && n.ordre < mieux.ordre)))) mieux = { ...n, vu };
+      }
+    });
+    // pas encore écrit : la craie y arrive (la commande de l'étape vient de partir), on réessaie pendant 1,5 s
+    if (!mieux) { if (essai < 10) setTimeout(() => direNombre(p, essai + 1), 150); return false; }
+    const mg = 4, el = document.createElement('div');
+    el.className = 'nombre-dit'; el.setAttribute('aria-hidden', 'true');
+    Object.assign(el.style, { left: (mieux.x - mg + scrollX) + 'px', top: (mieux.y - mg + scrollY) + 'px', width: (mieux.width + 2 * mg) + 'px', height: (mieux.height + 2 * mg) + 'px' });
+    document.body.append(el);
+    setTimeout(() => el.remove(), 3200);
+    // le lecteur l'apprend : il n'envoie le doigt du tuteur que sur un nombre vraiment allumé
+    try { parent.postMessage({ type: 'simulation_nombre_allume', nombre: v }, '*'); } catch (_) { /* page ouverte seule */ }
+    REPERES.nombre_dit = { label: 'le nombre dit : ' + String(p.nombre ?? v).replace('.', ','), rect: { x: mieux.x, y: mieux.y, width: mieux.width, height: mieux.height } };
+    return true;
+  }
+
   const COMMANDES_POINTAGE = ['highlight', 'point', 'montrer', 'show'];
   const cibleDe = (p) => p && (p.target || p.repere || p.element || p.id || p.variant_id);
 
@@ -664,6 +768,9 @@
       p = p || {};
       main = 'tuteur';
       // Le professeur montre un repère du doigt : le kit l'entoure à la craie, le labo peut en faire plus.
+      if (cmd === 'dit') { direNombre(p); return; }   // la voix dit un nombre : il s'allume où il est écrit
+      // le doigt sur le nombre dit : la lueur le montre déjà, pas d'anneau de craie en plus
+      if (COMMANDES_POINTAGE.includes(cmd) && cibleDe(p) === 'nombre_dit') { noter('highlight', { target: 'nombre_dit' }); return; }
       let pointage = COMMANDES_POINTAGE.includes(cmd) && surligner(cibleDe(p));
       // Repère pas encore dessiné (la simulation court vers son moment) : on l'entoure dès qu'il paraît, jusqu'à 3 s
       // (17 novembre 2026 — jamais d'anneau ailleurs, jamais de bouton enfoncé à sa place).
@@ -741,7 +848,7 @@
   function bulle(el, texte, kind = '') { if (kind) el.dataset.kind = kind; else delete el.dataset.kind; ecrire(el, texte); }
 
   window.Tableau = { Craie, COULEURS, POLICE, ecrire, bouton, boutons, onglets, curseur, glisser, appuyer, protocole, bulle, fr, nombre, graine,
-    reperes, rectRepere, listeReperes, explication, surligner, REPERES, allumer, eteindre,
+    reperes, rectRepere, listeReperes, explication, surligner, REPERES, allumer, eteindre, direNombre, nombresEcrits,
     /** Une formule du tableau en texte d'une ligne (descriptions pour le tuteur, aria, bulles) : « ⟦d|Δt⟧ » → « d/Δt ». */
     lisible: s => String(s).replace(/⟦([^|⟧]*)\|([^⟧]*)⟧/g, (m, n, d) => `${/[\s+−-]/.test(n.trim()) ? `(${n})` : n}/${/[\s+−·×-]/.test(d.trim()) ? `(${d})` : d}`) };
 })();
